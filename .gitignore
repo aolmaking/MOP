@@ -1,0 +1,10 @@
+node_modules
+dist
+.angular
+.turbo
+.env
+.env.local
+coverage
+*.log
+*.tsbuildinfo
+packages/database/generated

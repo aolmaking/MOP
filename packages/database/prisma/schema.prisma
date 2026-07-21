@@ -1,0 +1,1529 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  TRIAL
+  PENDING_SETUP
+  FROZEN
+  READ_ONLY
+  ARCHIVED
+}
+
+enum AccountType {
+  PLATFORM
+  TENANT_STAFF
+  CUSTOMER
+  SYSTEM_AUTOMATION
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  INVITED
+  DISABLED
+  LOCKED
+}
+
+enum StaffStatus {
+  ACTIVE
+  SUSPENDED
+  INVITED
+}
+
+enum PortalStatus {
+  ENABLED
+  DISABLED
+  INVITED
+}
+
+enum CategoryCode {
+  CARS
+  MOTORCYCLES
+  HEAVY_EQUIPMENT
+}
+
+enum WorkOrderStatus {
+  DRAFT
+  INSPECTION
+  AWAITING_CUSTOMER_APPROVAL
+  IN_PROGRESS
+  WAITING_FOR_PARTS
+  READY_FOR_QC
+  PAYMENT_PENDING
+  READY_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum TaskStatus {
+  ASSIGNED
+  IN_PROGRESS
+  BLOCKED
+  AWAITING_CUSTOMER_APPROVAL
+  READY_FOR_QC
+  READY_FOR_DELIVERY
+  COMPLETED
+}
+
+enum Severity {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum InventoryItemStatus {
+  ACTIVE
+  WATCH
+  LOW_STOCK
+  DISABLED
+}
+
+enum PartRequestStatus {
+  DRAFT
+  REQUESTED
+  PENDING_WAREHOUSE
+  WAREHOUSE_REVIEWING
+  APPROVED
+  ISSUED
+  IN_TRANSIT
+  ARRIVED
+  RECEIVED_BY_TECHNICIAN
+  RETURN_REQUESTED
+  RETURN_ACCEPTED
+  RETURNED_TO_STOCK
+  RETURN_REJECTED
+  REJECTED
+  UNAVAILABLE
+  WAITING_TRANSFER
+  WAITING_SUPPLIER
+  USED
+  CANCELLED
+}
+
+enum BranchWarehouseAccessType {
+  PRIMARY
+  BACKUP
+  SHARED
+  TRANSFER_ONLY
+}
+
+enum IssuedItemStatus {
+  ISSUED
+  IN_TRANSIT
+  ARRIVED
+  RECEIVED_BY_TECHNICIAN
+  USED
+  RETURN_REQUESTED
+  RETURNED
+  CANCELLED
+}
+
+enum ReturnRequestStatus {
+  PENDING_INVENTORY_REVIEW
+  ACCEPTED_TO_STOCK
+  ACCEPTED_DAMAGED
+  REJECTED
+  CLARIFICATION_REQUESTED
+}
+
+enum InventoryTransferStatus {
+  DRAFT
+  REQUESTED
+  IN_TRANSIT
+  RECEIVED
+  CANCELLED
+}
+
+enum SupplierOrderStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  AWAITING_RESPONSE
+  PARTIALLY_APPROVED
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum QuotationItemStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CRITICAL_REJECTED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  READY_TO_ISSUE
+  ISSUED_LOCKED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  WALLET
+  DEPOSIT
+  OTHER
+}
+
+enum SellableItemType {
+  INSPECTION
+  SERVICE
+  LABOR
+  PART
+  PACKAGE
+  EXTRA_FEE
+}
+
+enum FinancialLineStatus {
+  DRAFT
+  PENDING_CUSTOMER_APPROVAL
+  APPROVED
+  REJECTED
+  ADDED_TO_WORK_ORDER
+  USED
+  COMPLETED
+  REMOVED
+  RETURNED
+  FINALIZED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum RefundStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  PAID
+  CANCELLED
+}
+
+enum DiscountStatus {
+  APPLIED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum StockMovementType {
+  OPENING_BALANCE
+  ADJUSTMENT
+  WORK_ORDER_CONSUMPTION
+  PART_REQUEST_ISSUE
+  REQUESTED
+  ISSUED_TO_TASK
+  ARRIVED_CONFIRMED
+  USED
+  RETURN_REQUESTED
+  RETURNED_TO_STOCK
+  DAMAGED_RETURN
+  STOCK_ADJUSTMENT
+  TRANSFER_IN
+  TRANSFER_OUT
+  SUPPLIER_RECEIPT
+  SUPPLIER_RECEIVING
+  DIRECT_SALE
+  MANUAL_CORRECTION
+}
+
+enum AuditActorType {
+  SYSTEM
+  PLATFORM
+  TENANT_STAFF
+  CUSTOMER
+}
+
+enum DecisionRequestStatus {
+  DRAFT
+  SENT
+  VIEWED
+  RESPONDED
+  EXPIRED
+  CANCELLED
+}
+
+enum DecisionItemStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DecisionImportance {
+  NORMAL
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum DecisionChannel {
+  WHATSAPP_LINK
+  MANUAL_INTERNAL
+}
+
+enum DecisionSource {
+  TECHNICIAN_TASK
+  INSPECTION_FINDING
+  WORK_ORDER
+}
+
+enum TimelineVisibility {
+  CUSTOMER_VISIBLE
+  STAFF_ONLY
+}
+
+model Tenant {
+  id                          String       @id @default(cuid())
+  name                        String
+  slug                        String       @unique
+  status                      TenantStatus @default(TRIAL)
+  timezone                    String       @default("Africa/Cairo")
+  currency                    String       @default("EGP")
+  portalEnabled               Boolean      @default(true)
+  customerRegistrationCode    String       @unique @default(cuid())
+  customerRegistrationEnabled Boolean      @default(true)
+  createdAt                   DateTime     @default(now())
+  updatedAt                   DateTime     @updatedAt
+
+  branches                 Branch[]
+  warehouses               Warehouse[]
+  accounts                 Account[]
+  staffUsers               StaffUser[]
+  customers                Customer[]
+  assets                   Asset[]
+  permissionTemplates      PermissionTemplate[]
+  rolePages                RolePage[]
+  rolePermissions          RolePermission[]
+  workOrders               WorkOrder[]
+  tasks                    Task[]
+  inventoryItems           InventoryItem[]
+  warehouseStockBalances   WarehouseStockBalance[]
+  partRequests             PartRequest[]
+  partReturnRequests       PartReturnRequest[]
+  inventoryTransfers       InventoryTransfer[]
+  supplierOrders           SupplierOrder[]
+  quotations               Quotation[]
+  sellableItems            SellableItem[]
+  priceCatalogEntries      PriceCatalogEntry[]
+  financeConfiguration     FinanceConfiguration?
+  runningInvoices          RunningInvoice[]
+  invoices                 Invoice[]
+  payments                 Payment[]
+  discountRequests         DiscountRequest[]
+  refundRequests           RefundRequest[]
+  creditNotes              CreditNote[]
+  financeAuditEvents       FinanceAuditEvent[]
+  customerDecisionRequests CustomerDecisionRequest[]
+  customerTimelineEvents   CustomerTimelineEvent[]
+  auditLogs                AuditLog[]
+  controlSettings          ControlSetting[]
+  builderConfigurations    TenantBuilderConfiguration[]
+  builderVersions          TenantBuilderVersion[]
+  builderAuditEvents       TenantBuilderAuditEvent[]
+
+  @@index([status])
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warehouses        Warehouse[]
+  warehouseAccesses BranchWarehouseAccess[]
+  customers         Customer[]
+  assets            Asset[]
+  workOrders        WorkOrder[]
+  tasks             Task[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model Warehouse {
+  id         String         @id @default(cuid())
+  tenantId   String
+  branchId   String
+  name       String
+  status     String         @default("active")
+  categories CategoryCode[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  tenant         Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch         Branch                  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  branchAccesses BranchWarehouseAccess[]
+  inventoryItems InventoryItem[]
+  stockBalances  WarehouseStockBalance[]
+  partRequests   PartRequest[]
+  issuedItems    IssuedItem[]
+  returnRequests PartReturnRequest[]
+  transfersFrom  InventoryTransfer[]     @relation("TransferFromWarehouse")
+  transfersTo    InventoryTransfer[]     @relation("TransferToWarehouse")
+  supplierOrders SupplierOrder[]
+  stockMovements StockMovement[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, branchId])
+}
+
+model BranchWarehouseAccess {
+  id          String                    @id @default(cuid())
+  tenantId    String
+  branchId    String
+  warehouseId String
+  accessType  BranchWarehouseAccessType @default(PRIMARY)
+  priority    Int                       @default(1)
+  active      Boolean                   @default(true)
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+
+  branch    Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, warehouseId])
+  @@index([tenantId, branchId, priority])
+  @@index([tenantId, warehouseId])
+}
+
+model Account {
+  id              String        @id @default(cuid())
+  tenantId        String?
+  accountType     AccountType
+  loginIdentifier String
+  passwordHash    String?
+  inviteTokenHash String?       @unique
+  inviteExpiresAt DateTime?
+  invitedBy       String?
+  status          AccountStatus @default(INVITED)
+  lastLoginAt     DateTime?
+  failedLoginAttempts Int       @default(0)
+  lockedUntil     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  tenant    Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffUser StaffUser?
+  customer  Customer?
+  sessions  Session[]
+
+  @@unique([loginIdentifier])
+  @@index([tenantId, accountType, status])
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  accountId        String
+  refreshTokenHash String?
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, expiresAt])
+}
+
+model StaffUser {
+  id                   String         @id @default(cuid())
+  tenantId             String?
+  accountId            String         @unique
+  name                 String
+  email                String
+  role                 String
+  isTenantOwner        Boolean        @default(false)
+  status               StaffStatus    @default(INVITED)
+  branchScope          String[]
+  warehouseScope       String[]
+  categoryScope        CategoryCode[]
+  teamScope            String[]       @default([])
+  managedTechnicianIds String[]       @default([])
+  userOverrides        Json?
+  permissionTemplateId String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  tenant                  Tenant?                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account                 Account                   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  permissionTemplate      PermissionTemplate?       @relation(fields: [permissionTemplateId], references: [id])
+  assignedTasks           TaskAssignment[]
+  assignedWorkOrders      WorkOrderAssignment[]
+  createdDecisionRequests CustomerDecisionRequest[]
+
+  @@index([tenantId, role, status])
+}
+
+model PermissionTemplate {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  code        String
+  label       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffUsers  StaffUser[]
+  permissions RolePermission[]
+
+  @@unique([tenantId, code])
+}
+
+model RolePage {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  role      String
+  pageId    String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, role, pageId])
+  @@index([tenantId, role])
+}
+
+model RolePermission {
+  id                   String   @id @default(cuid())
+  tenantId             String?
+  role                 String
+  permission           String
+  enabled              Boolean  @default(true)
+  permissionTemplateId String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  tenant             Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  permissionTemplate PermissionTemplate? @relation(fields: [permissionTemplateId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, role, permission])
+  @@index([tenantId, role])
+}
+
+model Customer {
+  id                   String       @id @default(cuid())
+  tenantId             String
+  accountId            String?      @unique
+  branchId             String?
+  fullName             String
+  phone                String
+  email                String?
+  preferredContact     String       @default("whatsapp")
+  portalStatus         PortalStatus @default(DISABLED)
+  communicationConsent Boolean      @default(false)
+  createdByStaffUserId String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  tenant           Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account          Account?                  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  branch           Branch?                   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  assets           Asset[]
+  workOrders       WorkOrder[]
+  invoices         Invoice[]
+  payments         Payment[]
+  decisionRequests CustomerDecisionRequest[]
+  timelineEvents   CustomerTimelineEvent[]
+
+  @@index([tenantId, phone])
+  @@index([tenantId, portalStatus])
+}
+
+model Asset {
+  id                     String       @id @default(cuid())
+  tenantId               String
+  branchId               String?
+  currentOwnerCustomerId String
+  category               CategoryCode
+  name                   String
+  primaryIdentifier      String
+  secondaryIdentifier    String?
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  tenant           Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch           Branch?                   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  currentOwner     Customer                  @relation(fields: [currentOwnerCustomerId], references: [id], onDelete: Restrict)
+  ownership        AssetOwnershipHistory[]
+  safeHistory      SafeTechnicalHistory[]
+  workOrders       WorkOrder[]
+  tasks            Task[]
+  decisionRequests CustomerDecisionRequest[]
+  timelineEvents   CustomerTimelineEvent[]
+
+  @@unique([tenantId, primaryIdentifier])
+  @@index([tenantId, currentOwnerCustomerId])
+  @@index([tenantId, category])
+}
+
+model AssetOwnershipHistory {
+  id             String    @id @default(cuid())
+  assetId        String
+  customerId     String
+  fromDate       DateTime
+  toDate         DateTime?
+  transferredBy  String?
+  transferReason String?
+  createdAt      DateTime  @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId, customerId])
+  @@index([fromDate, toDate])
+}
+
+model SafeTechnicalHistory {
+  id        String   @id @default(cuid())
+  assetId   String
+  dateLabel String
+  title     String
+  summary   String
+  severity  Severity @default(NORMAL)
+  createdAt DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId, createdAt])
+}
+
+model WorkOrder {
+  id              String          @id @default(cuid())
+  tenantId        String
+  branchId        String?
+  assetId         String
+  customerId      String
+  number          String
+  category        CategoryCode
+  status          WorkOrderStatus @default(DRAFT)
+  statusLabel     String
+  priority        Severity        @default(NORMAL)
+  complaint       String
+  total           Decimal         @default(0) @db.Decimal(12, 2)
+  paid            Decimal         @default(0) @db.Decimal(12, 2)
+  balance         Decimal         @default(0) @db.Decimal(12, 2)
+  customerVisible Boolean         @default(false)
+  customerSummary String?
+  internalNotes   String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  tenant           Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch           Branch?                   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  asset            Asset                     @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  customer         Customer                  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  tasks            Task[]
+  assignments      WorkOrderAssignment[]
+  partRequests     PartRequest[]
+  quotations       Quotation[]
+  invoices         Invoice[]
+  payments         Payment[]
+  discountRequests DiscountRequest[]
+  decisionRequests CustomerDecisionRequest[]
+  timelineEvents   CustomerTimelineEvent[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, customerId])
+  @@index([tenantId, branchId])
+}
+
+model WorkOrderAssignment {
+  id             String   @id @default(cuid())
+  workOrderId    String
+  staffUserId    String
+  assignmentRole String
+  createdAt      DateTime @default(now())
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  staffUser StaffUser @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@unique([workOrderId, staffUserId, assignmentRole])
+}
+
+model Task {
+  id              String       @id @default(cuid())
+  tenantId        String
+  branchId        String?
+  workOrderId     String
+  assetId         String
+  customerId      String
+  title           String
+  type            String
+  status          TaskStatus   @default(ASSIGNED)
+  severity        Severity     @default(NORMAL)
+  category        CategoryCode
+  estimateMinutes Int?
+  invoiceImpact   Decimal      @default(0) @db.Decimal(12, 2)
+  partsTotal      Decimal      @default(0) @db.Decimal(12, 2)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  tenant           Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch           Branch?                   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  workOrder        WorkOrder                 @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  asset            Asset                     @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  subtasks         Subtask[]
+  assignments      TaskAssignment[]
+  blockers         TaskBlocker[]
+  partRequests     PartRequest[]
+  decisionRequests CustomerDecisionRequest[]
+
+  @@index([tenantId, status])
+  @@index([workOrderId])
+}
+
+model TaskAssignment {
+  id          String   @id @default(cuid())
+  taskId      String
+  staffUserId String
+  createdAt   DateTime @default(now())
+
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  staffUser StaffUser @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, staffUserId])
+}
+
+model Subtask {
+  id        String   @id @default(cuid())
+  taskId    String
+  title     String
+  done      Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, sortOrder])
+}
+
+model TaskBlocker {
+  id         String    @id @default(cuid())
+  taskId     String
+  reason     String
+  resolved   Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, resolved])
+}
+
+model InventoryItem {
+  id                   String              @id @default(cuid())
+  tenantId             String
+  warehouseId          String
+  name                 String
+  sku                  String
+  barcode              String?
+  type                 String
+  catalogCategory      String
+  subCategory          String
+  compatibleCategories CategoryCode[]
+  imageUrl             String?
+  stock                Int                 @default(0)
+  minStock             Int                 @default(0)
+  criticalStock        Int                 @default(0)
+  price                Decimal             @default(0) @db.Decimal(12, 2)
+  cost                 Decimal             @default(0) @db.Decimal(12, 2)
+  status               InventoryItemStatus @default(ACTIVE)
+  posVisible           Boolean             @default(true)
+  workOrderUsable      Boolean             @default(true)
+  stockTracked         Boolean             @default(true)
+  supplierName         String?
+  notes                String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  tenant             Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warehouse          Warehouse               @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  stockBalances      WarehouseStockBalance[]
+  partRequests       PartRequest[]
+  issuedItems        IssuedItem[]
+  returnRequests     PartReturnRequest[]
+  inventoryTransfers InventoryTransfer[]
+  supplierOrders     SupplierOrder[]
+  stockMovements     StockMovement[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId, warehouseId])
+}
+
+model WarehouseStockBalance {
+  id                String   @id @default(cuid())
+  tenantId          String
+  warehouseId       String
+  itemId            String
+  availableQty      Int      @default(0)
+  issuedQty         Int      @default(0)
+  returnPendingQty  Int      @default(0)
+  damagedQty        Int      @default(0)
+  lowThreshold      Int      @default(0)
+  criticalThreshold Int      @default(0)
+  updatedAt         DateTime @updatedAt
+  createdAt         DateTime @default(now())
+
+  tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warehouse Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, itemId])
+  @@index([tenantId, warehouseId])
+  @@index([tenantId, itemId])
+}
+
+model PartRequest {
+  id                     String            @id @default(cuid())
+  tenantId               String
+  branchId               String?
+  workOrderId            String
+  taskId                 String?
+  technicianId           String?
+  itemId                 String
+  warehouseId            String
+  preferredWarehouseId   String?
+  fulfillmentWarehouseId String?
+  qty                    Int               @default(1)
+  urgency                Severity          @default(NORMAL)
+  reason                 String?
+  rejectionReason        String?
+  status                 PartRequestStatus @default(REQUESTED)
+  total                  Decimal           @default(0) @db.Decimal(12, 2)
+  issuedAt               DateTime?
+  arrivedAt              DateTime?
+  receivedAt             DateTime?
+  usedAt                 DateTime?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workOrder   WorkOrder     @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  task        Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  item        InventoryItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  warehouse   Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  issuedItems IssuedItem[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, branchId, status])
+  @@index([technicianId, status])
+  @@index([warehouseId, status])
+}
+
+model IssuedItem {
+  id                   String           @id @default(cuid())
+  tenantId             String
+  requestId            String
+  warehouseId          String
+  itemId               String
+  workOrderId          String
+  taskId               String?
+  technicianId         String?
+  qty                  Int              @default(1)
+  status               IssuedItemStatus @default(ISSUED)
+  issuedBy             String?
+  issuedAt             DateTime         @default(now())
+  technicianReceivedAt DateTime?
+  usedAt               DateTime?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  request   PartRequest         @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  warehouse Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  item      InventoryItem       @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  returns   PartReturnRequest[]
+
+  @@index([tenantId, status])
+  @@index([requestId])
+  @@index([technicianId, status])
+}
+
+model PartReturnRequest {
+  id           String              @id @default(cuid())
+  tenantId     String
+  issuedItemId String
+  warehouseId  String
+  itemId       String
+  workOrderId  String
+  taskId       String?
+  technicianId String?
+  qty          Int                 @default(1)
+  reason       String
+  condition    String
+  note         String?
+  status       ReturnRequestStatus @default(PENDING_INVENTORY_REVIEW)
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  issuedItem IssuedItem    @relation(fields: [issuedItemId], references: [id], onDelete: Cascade)
+  warehouse  Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  item       InventoryItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@index([technicianId, status])
+  @@index([warehouseId, status])
+}
+
+model StockMovement {
+  id          String            @id @default(cuid())
+  tenantId    String
+  warehouseId String
+  itemId      String
+  type        StockMovementType
+  qty         Int
+  beforeQty   Int?
+  afterQty    Int?
+  source      String?
+  reason      String?
+  createdBy   String?
+  createdAt   DateTime          @default(now())
+
+  warehouse Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, itemId, createdAt])
+}
+
+model InventoryTransfer {
+  id              String                  @id @default(cuid())
+  tenantId        String
+  itemId          String
+  qty             Int                     @default(1)
+  fromWarehouseId String
+  toWarehouseId   String
+  reason          String
+  linkedRequestId String?
+  workOrderId     String?
+  status          InventoryTransferStatus @default(REQUESTED)
+  createdBy       String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item          InventoryItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  fromWarehouse Warehouse     @relation("TransferFromWarehouse", fields: [fromWarehouseId], references: [id], onDelete: Restrict)
+  toWarehouse   Warehouse     @relation("TransferToWarehouse", fields: [toWarehouseId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@index([fromWarehouseId, status])
+  @@index([toWarehouseId, status])
+}
+
+model SupplierOrder {
+  id              String              @id @default(cuid())
+  tenantId        String
+  warehouseId     String
+  itemId          String
+  qty             Int                 @default(1)
+  reason          String
+  linkedRequestId String?
+  expectedDate    DateTime?
+  status          SupplierOrderStatus @default(PENDING_APPROVAL)
+  createdBy       String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warehouse Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@index([warehouseId, status])
+}
+
+model Quotation {
+  id          String          @id @default(cuid())
+  tenantId    String
+  workOrderId String
+  number      String
+  status      QuotationStatus @default(DRAFT)
+  branchId    String?
+  customerId  String?
+  subtotal    Decimal         @default(0) @db.Decimal(12, 2)
+  discount    Decimal         @default(0) @db.Decimal(12, 2)
+  tax         Decimal         @default(0) @db.Decimal(12, 2)
+  total       Decimal         @default(0) @db.Decimal(12, 2)
+  currency    String          @default("EGP")
+  priceLocked Boolean         @default(false)
+  expiresAt   DateTime?
+  sentAt      DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workOrder WorkOrder       @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  items     QuotationItem[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+}
+
+model QuotationItem {
+  id                   String              @id @default(cuid())
+  quotationId          String
+  title                String
+  sellableItemId       String?
+  lineType             SellableItemType    @default(SERVICE)
+  description          String?
+  severity             Severity            @default(NORMAL)
+  qty                  Int                 @default(1)
+  unitPrice            Decimal             @default(0) @db.Decimal(12, 2)
+  laborPrice           Decimal             @default(0) @db.Decimal(12, 2)
+  taxAmount            Decimal             @default(0) @db.Decimal(12, 2)
+  total                Decimal             @default(0) @db.Decimal(12, 2)
+  status               QuotationItemStatus @default(PENDING)
+  lineStatus           FinancialLineStatus @default(PENDING_CUSTOMER_APPROVAL)
+  catalogPriceSnapshot Decimal?            @db.Decimal(12, 2)
+  approvedPrice        Decimal?            @db.Decimal(12, 2)
+  approvalRequired     Boolean             @default(true)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@index([quotationId, status])
+}
+
+model Invoice {
+  id               String        @id @default(cuid())
+  tenantId         String
+  workOrderId      String
+  customerId       String
+  number           String
+  branchId         String?
+  status           InvoiceStatus @default(DRAFT)
+  locked           Boolean       @default(false)
+  currency         String        @default("EGP")
+  subtotal         Decimal       @default(0) @db.Decimal(12, 2)
+  discount         Decimal       @default(0) @db.Decimal(12, 2)
+  tax              Decimal       @default(0) @db.Decimal(12, 2)
+  total            Decimal       @default(0) @db.Decimal(12, 2)
+  paid             Decimal       @default(0) @db.Decimal(12, 2)
+  balance          Decimal       @default(0) @db.Decimal(12, 2)
+  terms            String?
+  issuedBy         String?
+  issuedAt         DateTime?
+  dueAt            DateTime?
+  immutableVersion Int           @default(0)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workOrder      WorkOrder       @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  customer       Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  lines          InvoiceLine[]
+  payments       Payment[]
+  refundRequests RefundRequest[]
+  discountRequests DiscountRequest[]
+  creditNotes    CreditNote[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+}
+
+model InvoiceLine {
+  id              String              @id @default(cuid())
+  invoiceId       String
+  title           String
+  sellableItemId  String?
+  lineType        SellableItemType    @default(SERVICE)
+  qty             Int                 @default(1)
+  source          String
+  unitPrice       Decimal             @default(0) @db.Decimal(12, 2)
+  discount        Decimal             @default(0) @db.Decimal(12, 2)
+  taxAmount       Decimal             @default(0) @db.Decimal(12, 2)
+  total           Decimal             @default(0) @db.Decimal(12, 2)
+  status          FinancialLineStatus @default(DRAFT)
+  lockedUnitPrice Decimal?            @db.Decimal(12, 2)
+  createdAt       DateTime            @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  tenantId    String
+  invoiceId   String?
+  workOrderId String?
+  branchId    String?
+  customerId  String
+  amount      Decimal       @db.Decimal(12, 2)
+  method      PaymentMethod
+  reference   String?
+  idempotencyKey        String?
+  providerTransactionId String?
+  createdBy   String?
+  note        String?
+  status      PaymentStatus @default(CONFIRMED)
+  receivedAt  DateTime      @default(now())
+  createdAt   DateTime      @default(now())
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoice  Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  workOrder WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  refundRequests RefundRequest[]
+
+  @@index([tenantId, customerId, createdAt])
+  @@unique([tenantId, idempotencyKey])
+  @@unique([tenantId, providerTransactionId])
+}
+
+model SellableItem {
+  id                       String           @id @default(cuid())
+  tenantId                 String
+  inventoryItemId          String?
+  type                     SellableItemType
+  name                     String
+  description              String?
+  category                 String?
+  basePrice                Decimal          @default(0) @db.Decimal(12, 2)
+  taxable                  Boolean          @default(false)
+  approvalRequired         Boolean          @default(true)
+  technicianCanAdd         Boolean          @default(false)
+  branchManagerCanDiscount Boolean          @default(false)
+  customerVisible          Boolean          @default(true)
+  active                   Boolean          @default(true)
+  archivedAt               DateTime?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+
+  tenant Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  prices PriceCatalogEntry[]
+
+  @@index([tenantId, type, active])
+  @@index([tenantId, inventoryItemId])
+}
+
+model PriceCatalogEntry {
+  id             String    @id @default(cuid())
+  tenantId       String
+  sellableItemId String
+  branchId       String?
+  price          Decimal   @db.Decimal(12, 2)
+  currency       String    @default("EGP")
+  effectiveFrom  DateTime  @default(now())
+  effectiveTo    DateTime?
+  active         Boolean   @default(true)
+  createdBy      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sellableItem SellableItem @relation(fields: [sellableItemId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, branchId, active])
+  @@index([sellableItemId, effectiveFrom])
+}
+
+model FinanceConfiguration {
+  id                        String   @id @default(cuid())
+  tenantId                  String   @unique
+  currency                  String   @default("EGP")
+  taxRate                   Decimal  @default(0) @db.Decimal(6, 3)
+  taxEnabled                Boolean  @default(false)
+  invoiceNumberPattern      String   @default("INV-{year}-{seq}")
+  invoiceTerms              String?
+  paymentMethods            Json
+  depositAllowed            Boolean  @default(true)
+  maxBranchDiscountPercent  Decimal  @default(10) @db.Decimal(5, 2)
+  discountApprovalThreshold Decimal  @default(10) @db.Decimal(5, 2)
+  allowUnpaidDelivery       Boolean  @default(false)
+  allowPartialPaidDelivery  Boolean  @default(false)
+  customerInvoiceVisible    Boolean  @default(true)
+  technicianPriceVisible    Boolean  @default(false)
+  inventoryPriceEditable    Boolean  @default(false)
+  updatedBy                 String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model RunningInvoice {
+  id          String   @id @default(cuid())
+  tenantId    String
+  workOrderId String   @unique
+  customerId  String
+  branchId    String?
+  currency    String   @default("EGP")
+  status      String   @default("ACTIVE")
+  subtotal    Decimal  @default(0) @db.Decimal(12, 2)
+  discount    Decimal  @default(0) @db.Decimal(12, 2)
+  tax         Decimal  @default(0) @db.Decimal(12, 2)
+  total       Decimal  @default(0) @db.Decimal(12, 2)
+  paid        Decimal  @default(0) @db.Decimal(12, 2)
+  remaining   Decimal  @default(0) @db.Decimal(12, 2)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines            RunningInvoiceLine[]
+  discountRequests DiscountRequest[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, branchId])
+}
+
+model RunningInvoiceLine {
+  id               String              @id @default(cuid())
+  runningInvoiceId String
+  sourceType       String
+  sourceId         String?
+  sellableItemId   String?
+  title            String
+  lineType         SellableItemType
+  quantity         Int                 @default(1)
+  unitPrice        Decimal             @default(0) @db.Decimal(12, 2)
+  laborPrice       Decimal             @default(0) @db.Decimal(12, 2)
+  discount         Decimal             @default(0) @db.Decimal(12, 2)
+  taxAmount        Decimal             @default(0) @db.Decimal(12, 2)
+  total            Decimal             @default(0) @db.Decimal(12, 2)
+  status           FinancialLineStatus @default(DRAFT)
+  priceLocked      Boolean             @default(false)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  runningInvoice RunningInvoice @relation(fields: [runningInvoiceId], references: [id], onDelete: Cascade)
+
+  @@index([runningInvoiceId, status])
+  @@index([sourceType, sourceId])
+}
+
+model DiscountRequest {
+  id               String         @id @default(cuid())
+  tenantId         String
+  workOrderId      String
+  runningInvoiceId String?
+  invoiceId        String?
+  amount           Decimal        @db.Decimal(12, 2)
+  percent          Decimal?       @db.Decimal(5, 2)
+  reason           String
+  status           DiscountStatus @default(PENDING_APPROVAL)
+  requestedBy      String
+  approvedBy       String?
+  decidedAt        DateTime?
+  createdAt        DateTime       @default(now())
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workOrder      WorkOrder       @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  runningInvoice RunningInvoice? @relation(fields: [runningInvoiceId], references: [id], onDelete: SetNull)
+  invoice        Invoice?        @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, status])
+  @@index([workOrderId])
+}
+
+model RefundRequest {
+  id          String       @id @default(cuid())
+  tenantId    String
+  invoiceId   String
+  paymentId   String?
+  amount      Decimal      @db.Decimal(12, 2)
+  reason      String
+  status      RefundStatus @default(REQUESTED)
+  requestedBy String
+  approvedBy  String?
+  paidAt      DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@index([invoiceId])
+}
+
+model CreditNote {
+  id        String   @id @default(cuid())
+  tenantId  String
+  invoiceId String
+  number    String
+  amount    Decimal  @db.Decimal(12, 2)
+  reason    String
+  issuedBy  String
+  issuedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, number])
+  @@index([invoiceId])
+}
+
+model FinanceAuditEvent {
+  id         String   @id @default(cuid())
+  tenantId   String
+  action     String
+  targetType String
+  targetId   String
+  actorId    String?
+  reason     String?
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([targetType, targetId])
+}
+
+model InvoiceSequence {
+  id        String   @id @default(cuid())
+  tenantId  String
+  branchKey String
+  year      Int
+  nextValue Int      @default(1)
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, branchKey, year])
+}
+
+model CustomerDecisionRequest {
+  id                   String                @id @default(cuid())
+  tenantId             String
+  workOrderId          String
+  taskId               String?
+  assetId              String
+  customerId           String
+  createdByStaffUserId String?
+  source               DecisionSource        @default(TECHNICIAN_TASK)
+  status               DecisionRequestStatus @default(DRAFT)
+  decisionToken        String                @unique
+  secureLink           String?
+  whatsappMessage      String?
+  customerNote         String?
+  channelEntry         DecisionChannel?
+  sentAt               DateTime?
+  viewedAt             DateTime?
+  respondedAt          DateTime?
+  expiresAt            DateTime
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  tenant         Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workOrder      WorkOrder               @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  task           Task?                   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  asset          Asset                   @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  customer       Customer                @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  createdBy      StaffUser?              @relation(fields: [createdByStaffUserId], references: [id], onDelete: SetNull)
+  items          CustomerDecisionItem[]
+  timelineEvents CustomerTimelineEvent[]
+
+  @@index([tenantId, status])
+  @@index([workOrderId, status])
+  @@index([customerId, status])
+  @@index([expiresAt])
+}
+
+model CustomerDecisionItem {
+  id                      String             @id @default(cuid())
+  decisionRequestId       String
+  title                   String
+  customerExplanation     String
+  importance              DecisionImportance @default(NORMAL)
+  estimatedPrice          Decimal            @default(0) @db.Decimal(12, 2)
+  quantity                Int                @default(1)
+  unitPrice               Decimal            @default(0) @db.Decimal(12, 2)
+  laborPrice              Decimal            @default(0) @db.Decimal(12, 2)
+  estimatedTotal          Decimal            @default(0) @db.Decimal(12, 2)
+  priceLocked             Boolean            @default(false)
+  decisionRequired        Boolean            @default(true)
+  criticalWarningRequired Boolean            @default(false)
+  criticalWarningText     String?
+  decisionStatus          DecisionItemStatus @default(PENDING)
+  warningAcknowledged     Boolean            @default(false)
+  customerDecisionNote    String?
+  respondedAt             DateTime?
+  sortOrder               Int                @default(0)
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  request CustomerDecisionRequest @relation(fields: [decisionRequestId], references: [id], onDelete: Cascade)
+
+  @@index([decisionRequestId, decisionStatus])
+  @@index([importance])
+}
+
+model CustomerTimelineEvent {
+  id                String             @id @default(cuid())
+  tenantId          String
+  customerId        String
+  assetId           String
+  workOrderId       String?
+  decisionRequestId String?
+  visibility        TimelineVisibility @default(CUSTOMER_VISIBLE)
+  title             String
+  message           String
+  source            String
+  occurredAt        DateTime           @default(now())
+  createdAt         DateTime           @default(now())
+
+  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer        Customer                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  asset           Asset                    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  workOrder       WorkOrder?               @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  decisionRequest CustomerDecisionRequest? @relation(fields: [decisionRequestId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, customerId, occurredAt])
+  @@index([assetId, visibility])
+  @@index([decisionRequestId])
+}
+
+model ControlSetting {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  key       String
+  value     Json
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+}
+
+model TenantBuilderConfiguration {
+  id                  String    @id @default(cuid())
+  tenantId            String
+  schemaVersion       Int       @default(2)
+  baseTemplateVersion String
+  lastMigratedAt      DateTime?
+  activeVersionId     String
+  draftVersionId      String
+  configPrecedence    Json
+  ownerModel          Json
+  previewIdentities   Json
+  designTokens        Json
+  pageTemplates       Json
+  roleExperiences     Json
+  featurePolicies     Json
+  workflowPolicies    Json
+  formSchemas         Json
+  messageTemplates    Json
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId])
+  @@index([tenantId, activeVersionId])
+  @@index([tenantId, draftVersionId])
+}
+
+model TenantBuilderVersion {
+  id                  String    @id @default(cuid())
+  tenantId            String
+  versionId           String
+  status              String
+  versionNumber       Int
+  schemaVersion       Int       @default(2)
+  baseTemplateVersion String
+  snapshot            Json
+  impact              Json?
+  riskLevel           String    @default("low")
+  reason              String?
+  publishedBy         String?
+  publishedAt         DateTime?
+  createdAt           DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, versionId])
+  @@index([tenantId, status, createdAt])
+}
+
+model TenantBuilderAuditEvent {
+  id            String   @id @default(cuid())
+  tenantId      String
+  actorId       String?
+  actorName     String
+  action        String
+  targetType    String
+  targetId      String?
+  reason        String?
+  before        Json?
+  after         Json?
+  affectedPages Json?
+  affectedRoles Json?
+  riskLevel     String?
+  impact        Json?
+  createdAt     DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, action])
+}
+
+model AuditLog {
+  id         String         @id @default(cuid())
+  tenantId   String?
+  actorType  AuditActorType
+  actorId    String?
+  actorName  String
+  action     String
+  targetType String
+  targetId   String?
+  reason     String?
+  before     Json?
+  after      Json?
+  createdAt  DateTime       @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([action, targetType])
+}

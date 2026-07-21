@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#f5f2ed] text-ink-950 antialiased;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+}
+
+@layer components {
+  .mop-shell {
+    @apply min-h-screen bg-[#f5f2ed];
+  }
+
+  .mop-panel {
+    @apply rounded-lg border border-black/10 bg-white/90 shadow-panel;
+  }
+
+  .mop-card {
+    @apply rounded-lg border border-black/10 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-panel;
+  }
+
+  .mop-button {
+    @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-signal-red/30;
+  }
+
+  .mop-button-primary {
+    @apply inline-flex items-center justify-center rounded-md bg-signal-red px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#a91f1f] focus:outline-none focus:ring-2 focus:ring-signal-red/30;
+  }
+
+  .mop-button-secondary {
+    @apply inline-flex items-center justify-center rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-ink-900 transition hover:bg-black/[0.04] focus:outline-none focus:ring-2 focus:ring-signal-red/30;
+  }
+
+  .mop-pill {
+    @apply inline-flex rounded-full border border-black/10 bg-black/[0.04] px-3 py-1 text-xs font-semibold uppercase tracking-normal text-ink-700;
+  }
+
+  .mop-grid {
+    @apply grid gap-4 md:grid-cols-2 xl:grid-cols-3;
+  }
+
+  .mop-adaptive-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .mop-adaptive-grid-sm {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+
+  .mop-adaptive-grid-lg {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .mop-resilient-row {
+    @apply grid gap-2 rounded-md bg-black/[0.04] p-3 text-sm;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  }
+
+  .mop-empty-state {
+    @apply rounded-lg border border-black/10 bg-white p-6 text-sm font-bold text-ink-500;
+  }
+}
