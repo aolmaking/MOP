@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mop
+      POSTGRES_PASSWORD: mop
+      POSTGRES_DB: mop_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - mop_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mop -d mop_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mop_postgres_data:
