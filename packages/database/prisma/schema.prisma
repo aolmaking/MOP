@@ -290,6 +290,8 @@ model Tenant {
   city                     String
   businessType             String
   primaryCategory          CategoryCode
+  currency                 String       // ISO 4217, e.g. "EGP", "USD", "AED" -- one currency per workshop
+  timezone                 String       // IANA identifier, e.g. "Africa/Cairo" -- all timestamps stored in UTC, converted for display using this
   createdAt                DateTime     @default(now())
   updatedAt                DateTime     @updatedAt
 

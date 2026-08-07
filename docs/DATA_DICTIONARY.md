@@ -9,6 +9,7 @@ Schema status: **draft, validated (`prisma validate` + `prisma format` pass), no
 | Spec concept | Table(s) | Notes |
 |---|---|---|
 | Workshop / tenant, 7-state status | `Tenant` | `status: TenantStatus` — Active/Trial/Pending Setup/Frozen/Suspended/Read-only/Archived, matches spec exactly |
+| Per-workshop currency and timezone (added 2026-08-07 — every workshop's numbers/calculations are fully independent, and the platform is meant for worldwide use, not one locale) | `Tenant.currency` (ISO 4217, fixed at creation), `Tenant.timezone` (IANA, editable later) | All amounts stored as `Decimal` with no embedded currency; the tenant's `currency` is the only source of truth for how to label/format them. All `DateTime` columns are stored UTC; `timezone` is purely a display-conversion setting |
 | Plan / package, entitlements | `Plan` | New as a real structured entity — `maxBranches`/`maxUsers`/`maxWarehouses`/`allowedModules`/`allowedFeatures`/`allowedReports` are real columns the resolver reads, not a JSON blob nothing consumes (gap-analysis fix) |
 | Branch | `Branch` | |
 | Warehouse, branch↔warehouse linkage | `Warehouse`, `BranchWarehouseAccess` | |

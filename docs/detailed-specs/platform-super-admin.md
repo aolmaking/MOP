@@ -29,6 +29,8 @@ Single-column form, max-width ~720px, centered in the platform shell. Four visua
 | Country | searchable select | yes | Must be a valid ISO-3166 country; no free text | `Tenant.country` | Full ISO country list, alphabetical, current selection pinned to top |
 | City | text | yes | 2–80 chars | `Tenant.city` | |
 | Business Type | select | yes | One of: `Independent Garage`, `Franchise / Chain`, `Dealership Service Center`, `Fleet Maintenance Operation`, `Other`. If `Other`, a second text field appears (required, 2–60 chars) | `Tenant.businessType` | |
+| Currency | searchable select | yes | ISO 4217 code (e.g. `EGP`, `USD`, `AED`); no free text | `Tenant.currency` | One currency per workshop, fixed at creation — not editable from this page later (changing it after real invoices exist is a data-migration problem, not a form edit). Drives every money display and every `PriceCatalogEntry`/`Invoice`/`Payment` amount for this tenant |
+| Timezone | searchable select | yes | IANA identifier (e.g. `Africa/Cairo`, `America/New_York`), grouped by region, defaulted from the selected Country | `Tenant.timezone` | All timestamps are stored in UTC in the database; this only controls display conversion, so unlike Currency it's safe to change later via Super Admin Control Center if the workshop relocates |
 | Initial Operating Category | radio-card group (3 large cards with icon + label) | yes | Exactly one of `CARS`, `MOTORCYCLES`, `HEAVY_EQUIPMENT` | `Tenant.primaryCategory` | Helper text under the group: *"Sets default identifiers and terminology (plate number vs. serial number). Additional categories can be requested later through platform support — this isn't final."* |
 
 ### Section 2 — Owner Details
@@ -93,9 +95,81 @@ All of the following happen inside a single database transaction — **either ev
 
 ---
 
+## PAGE: Workshops
+
+### Purpose
+The Platform Super Admin's default landing page. Every workshop on the platform, one row each — this is the page that has to stay usable whether the platform has 3 workshops or 30,000, and whether a given workshop has 1 branch or 200.
+
+### Access
+- Permission: `platform.workshop.view`.
+- Route: `/platform/workshops` (also the post-login landing page for `accountType = PLATFORM`).
+
+### Layout
+Full-width. Header bar: page title, search box, filter chips, **+ Add Workshop** button (top-right, links to Add Workshop Owner). Below that: the table. Below the table: pagination controls.
+
+### Loading & scale behavior
+- **Server-side pagination from day one** — this table is never fully loaded client-side. Default page size 25 (selectable: 25/50/100). Sorting and filtering are server-side query parameters, not client-side array operations, specifically because the platform is meant to run many workshops worldwide, not a handful.
+- Each row's Branch Count / User Count / Active Work Orders Count are pre-aggregated counts (single indexed query per column, not N+1 per row) — a workshop with 200 branches shows `200`, exactly like one with 1 shows `1`; the row itself never grows or changes shape based on how large that workshop is. All large-vs-small handling happens in the **Details drawer**, not the row.
+
+### Table Columns
+
+| Column | Type | Source | Notes |
+|---|---|---|---|
+| Workshop Name | text, clickable | `Tenant.name` | Click opens the Details drawer, not a navigation to another page |
+| Owner | name + email, two lines | `StaffUser.fullName` / `Account.email` where `role = TENANT_OWNER` for that tenant | If the owner invite was never accepted (`Account.status = INVITED`), shows a small "Invite Pending" tag next to the name |
+| Status | color-coded badge | `Tenant.status` | 7 values per spec; Frozen/Suspended/Archived render in a warning/danger color family, Active/Trial in a positive one |
+| Plan | badge | `Plan.name` (via `Tenant.planId`) | |
+| Branches | number | `count(Branch where tenantId = this, isActive = true)` | |
+| Users | number | `count(StaffUser where tenantId = this, isActive = true)` | |
+| Active Work Orders | number | `count(WorkOrder where tenantId = this, status not in (CLOSED, CANCELLED))` | This column did not exist in the platform's own earlier reports — it's here explicitly because "how busy is this workshop right now" is one of the first things Super Admin needs per row |
+| Last Activity | relative time (e.g. "2h ago") | `max(latest StaffUser session activity, latest AuditLog.createdAt for this tenant)` | Hover shows the absolute timestamp in **that workshop's own timezone** (`Tenant.timezone`), not the Super Admin's browser timezone — small detail, but every timestamp shown about a specific workshop should read the way that workshop's own staff would read it |
+| Subscription | badge | commercial snapshot (plan price × billing interval vs. last recorded payment) | Placeholder-quality until a real billing integration exists — labeled honestly, not left implying more precision than the data supports |
+| Builder Status | badge (`Not Customized` / `Customized` / `Draft Pending`) | `TenantConfiguration.publishedVersion` vs. starter template baseline; `draftVersion != publishedVersion` → `Draft Pending` | |
+| Health | badge (`Healthy` / `At Risk` / `Critical`) | composite: owner hasn't logged in > N days, failed-login spike, zero staff activity in M days, any Frozen/Suspended history in last 90 days | Badge alone on the row; the *specific* reasons are in the Details drawer, never inferred from the badge color alone |
+
+### Row Actions (icon buttons, right-aligned)
+- **Open Details** → opens the drawer described below
+- **Open Reports** → navigates to Platform Reports pre-filtered to this workshop
+- **Open Live View** → navigates to Workshop Live View pre-selected to this workshop
+- **Open Control Center** → navigates to Super Admin Control Center with this workshop pre-selected as Target
+- **Freeze Workshop** (shown only if `status` is not already `FROZEN`/`ARCHIVED`) / **Reactivate Workshop** (shown only if it is) — see below
+
+### Freeze / Reactivate flow
+1. Click opens a confirmation dialog, not an immediate action.
+2. Dialog shows a live-computed Impact Preview: *"This will immediately sign out **{N} staff** and **{M} customers**, and block new logins until reactivated."* (counts computed from that tenant's active sessions right at dialog-open time, not cached)
+3. **Reason** field: required textarea, 10–500 chars, no submit without it.
+4. Confirm button stays disabled until the reason is filled in.
+5. On confirm: `Tenant.status` updates, all active `Session` rows for that tenant are revoked, a `ControlSetting`/`AuditLog` row is written (`riskLevel = HIGH`), the dialog closes, and the row updates in place (no full page reload) with a toast: *"{Workshop Name} frozen."*
+6. Reactivate follows the identical pattern (reason required, same audit rigor) — reactivating is not treated as "less risky" just because it restores access rather than blocking it; unexpectedly restoring access to a tenant that was frozen for a real reason (e.g. non-payment, abuse) is exactly the kind of action that also deserves a deliberate reason and an audit trail.
+
+### Workshop Details drawer (slides in from the right, page stays visible/dimmed behind it)
+
+Sectioned, scrollable independently of the page behind it:
+
+- **Basic info**: name, slug, country, city, business type, category, currency, timezone, created date
+- **Owner info**: name, email, phone, account status, last login (in the workshop's own timezone)
+- **Plan info**: plan name, price, billing interval, `Allowed Branches/Users/Warehouses` limits with **current usage shown against each** (e.g. `Branches: 12 / 20`) so Super Admin immediately sees how close a large workshop is to its plan ceiling — small workshops just show a low number against a high ceiling, same component either way
+- **Branches**: a scrollable sub-list (name, city, active/inactive) — for a workshop with many branches this sub-list paginates internally (20 at a time) rather than the drawer ballooning in height; a workshop with 1 branch just shows 1 row, no empty extra chrome
+- **Warehouses**: same pattern as Branches — a workshop can have zero (if it doesn't track formal inventory), one, or many; the drawer must not assume any fixed count
+- **Users summary**: count by role (small horizontal bar or chip row — e.g. `1 Owner · 2 Branch Managers · 8 Technicians · 1 Inventory Manager`)
+- **Enabled modules**: chip list from `TenantConfiguration.enabledModules`
+- **Recent activity**: last 10 `AuditLog` rows for this tenant, newest first, actor + action + relative time
+- **Recent platform controls**: last 10 `ControlSetting` changes scoped to this tenant, same shape
+- **Subscription snapshot**: plan, price, renewal date placeholder, paid/unpaid placeholder — same honesty-about-placeholder-data note as the table column
+- **Health warnings**: the *itemized* list behind the Health badge (e.g. *"Owner has not logged in for 14 days," "3 failed login attempts in the last 24 hours"*) — never just the badge with no explanation
+
+### Search & Filters
+- Search box: matches workshop name or owner email, server-side, debounced 400ms.
+- Filter chips: Status (multi-select), Plan (multi-select), Health (multi-select). Filters combine with AND; each active filter shows as a removable chip under the search box.
+- Sort: Last Activity (default, descending), Name (A–Z), Branch Count, User Count, Created Date.
+
+### Empty state
+Zero workshops on the whole platform (genuinely first use): search/filter bar and table are hidden, replaced with a centered message — *"No workshops yet."* — and a prominent **+ Add Your First Workshop** button. Zero *matching* a filter/search (workshops do exist, none match): table area shows *"No workshops match these filters"* with a **Clear filters** link — a materially different state from true emptiness, so Super Admin never confuses "no data" with "no results."
+
+---
+
 ## Remaining pages in this role (pending — same depth)
 
-- Workshops
 - Super Admin Control Center — Tenant Status, Modules, Features, Limits & Entitlements, Access & Accounts, Emergency
 - Super Admin Control Center — Builder Control: Theme/Identity
 - Super Admin Control Center — Builder Control: Page Layout
