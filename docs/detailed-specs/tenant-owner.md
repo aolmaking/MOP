@@ -208,6 +208,32 @@ Filterable table: Actor (with a chip distinguishing **Platform** vs **This Works
 
 ---
 
+## PAGE: Workflow Health / Operations Integrity
+
+### Purpose
+Diagnose operational inconsistencies before they cause a real problem — the system checking its own consistency, not a human noticing something's off by accident. Added after a review pass against an older draft document that had this idea in more depth than our original spec did; it's a genuinely valuable addition, not a restatement of "workflow health alerts" on Owner Home (that card now links here for the real detail).
+
+### Access
+Permission: `organization.workflow_health.view`.
+
+### Detected issue types
+Each a real, computed check against the actual schema — not illustrative examples:
+
+| Issue | Detection |
+|---|---|
+| Part issued but technician never confirmed arrival | `IssuedItem.issuedAt` set, `arrivedAt` still null, beyond a configurable time threshold |
+| Customer responded but the Work Order still shows waiting-on-customer | Every `CustomerDecisionItem` on a request has `decision != PENDING`, but the Work Order's status hasn't advanced past `AWAITING_CUSTOMER_APPROVAL` |
+| Return requested but no inventory review | `PartReturnRequest` open beyond a configurable threshold with no Inventory Manager action |
+| Customer Portal enabled in this workshop's Workflow Policy while the Customer Portal module itself is disabled at the platform level | A genuine contradiction between two different config layers (Super Admin's Module Control vs. Super Admin's own Builder Control Workflow Policy for the same workshop) — surfaced here because Owner is the one who'll notice the portal "isn't working," even though the actual fix is Super Admin's to make |
+| A Team Leader has managed technicians but lacks report-view permission | Would otherwise silently show them an empty Technician Performance Reports page with no explanation |
+| Work Order status conflicts with its own Task statuses | e.g. Work Order shows `IN_PROGRESS` while every `Task` under it is `DONE` — should have advanced and didn't |
+| An active workflow change with no matching audit/operation event | The same `ACTIVE_WORKFLOW_MISSING_OPERATION_AUDIT`-style check already proven useful in an earlier version of this codebase (per the gap analysis) — kept here deliberately as a real, intentional check this time rather than something to rediscover by accident later |
+
+### Row content
+Description, affected entity (Work Order / request / assignment, linked), severity, suggested fix in plain language with a direct link into wherever the fix actually happens, and whether it's Owner-fixable or requires Super Admin (config contradictions spanning both layers are flagged as needing Super Admin, with a note explaining why Owner can't resolve it alone).
+
+---
+
 ## PAGE: Owner Home
 
 ### Purpose

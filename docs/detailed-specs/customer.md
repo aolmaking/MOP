@@ -62,6 +62,11 @@ Where a customer actually approves or rejects recommended work — the receiving
 ### Access
 Two entry paths: (1) logged into the portal, viewing any of their own pending/past decisions; (2) the public secure-link path (`secureToken`), which does **not** require a portal login — this is deliberate, since the WhatsApp link is meant to be openable directly, and requiring login-first would break the flow the whole feature exists for. The public path resolves `secureToken → CustomerDecisionRequest`, scoped to exactly that one request, and grants no broader portal access.
 
+### Link states (public path)
+- **Expired** — `CustomerDecisionRequest.expiresAt` has passed: a plain page, no items shown, explaining the link expired and to contact the branch for a new one — never a confusing empty decision list.
+- **Already responded** — every item already has a non-`PENDING` decision: shows the same content as normal but read-only (no Approve/Reject controls), with a clear "You already responded to this on {date}" banner, so re-opening an old WhatsApp link is informative, not broken.
+- **Valid and open** — the normal interactive state described below.
+
 ### Content, per item on the request
 Service/part/labor name, customer-facing explanation (from the technician's Ask Customer input, itself sourced from the workshop's Messages & Templates where applicable), importance (Low/Medium/High/Critical, shown as a plain badge, not the internal severity terminology), price, labor, total (subject to `customerInvoiceVisible`; if a workshop has that off, the item still shows with pricing withheld and a note that pricing will be confirmed on the invoice — a rare configuration, but the page must not break if it's set), **Approve** / **Reject** buttons per item.
 

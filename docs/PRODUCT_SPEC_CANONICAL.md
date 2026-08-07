@@ -726,6 +726,7 @@ Owner pages:
 5. Pricing & Financial Configuration
 6. Reports & Analytics
 7. Audit & Change History
+8. Workflow Health / Operations Integrity — added after review against an earlier draft spec: detects operational inconsistencies (e.g. a part issued but never confirmed arrived, a Work Order status that conflicts with its own Task statuses, an active workflow change with no matching audit event) with severity and a suggested fix; see `docs/detailed-specs/tenant-owner.md` for the full check list
 
 Moved to Super Admin Control Center → Builder Control (no longer Owner pages): Configuration & Permissions, Workshop Builder, Page Builder, Role Experience Studio, Workflow & Feature Studio, Publish Center / Impact Preview.
 
@@ -1853,6 +1854,7 @@ Examples:
 - blocker.reported
 - task.finish_attempted
 - task.finish_blocked
+- task.sent_to_review
 - invoice.issued
 - payment.recorded
 - builder.published
