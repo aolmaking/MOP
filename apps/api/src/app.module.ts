@@ -4,6 +4,7 @@ import { ConfigModule } from "@nestjs/config";
 import { DatabaseModule } from "./database/database.module";
 import { AuditModule } from "./audit/audit.module";
 import { OperationEventsModule } from "./operations/operation-events.module";
+import { AuthModule } from "./auth/auth.module";
 import { HealthController } from "./health/health.controller";
 
 @Module({
@@ -15,6 +16,7 @@ import { HealthController } from "./health/health.controller";
     DatabaseModule,
     AuditModule,
     OperationEventsModule,
+    AuthModule,
   ],
   controllers: [HealthController],
 })

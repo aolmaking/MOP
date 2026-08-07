@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { ValidationPipe } from "@nestjs/common";
+import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 import { ApiExceptionFilter } from "./common/filters/api-exception.filter";
 import { validationExceptionFactory } from "./common/validation/validation-exception-factory";
@@ -12,6 +13,7 @@ async function bootstrap() {
     origin: process.env.CORS_ORIGIN ?? "http://localhost:4200",
     credentials: true,
   });
+  app.use(cookieParser());
 
   app.useGlobalFilters(new ApiExceptionFilter());
   app.useGlobalPipes(
