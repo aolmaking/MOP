@@ -3,6 +3,7 @@
 > **Source:** Pasted verbatim by the product owner via chat on 2026-08-07.
 > **Status:** ⚠️ TRUNCATED — the source message hit a 50,000-character limit and cuts off mid-sentence inside "ACCEPTANCE TEST — FULL BUSINESS FLOW", at step 18 ("Technician marks used."). Everything after that point (remaining acceptance-test steps, and any sections that may have followed) was never received. **This document should be extended once the rest of the spec is provided** — do not treat the Acceptance Test section as complete.
 > **Purpose:** This is the authoritative business/product specification for MOP, distinct from the various `v*-*.md` build-log docs and `*_REPORT.md` self-audit docs elsewhere in this folder, which describe what was built/checked at a point in time. Where those docs conflict with this one, this spec is the source of truth for *intent*; the other docs describe *current implementation state* (see `GAP_ANALYSIS_CANONICAL_SPEC.md` once produced for the diff between the two).
+> **Amendment (2026-08-07):** the product owner changed a core architectural decision after the original spec below was written. In the original text, the Owner has a self-service Builder suite (Workshop Builder, Page Builder, Role Experience Studio, Workflow & Feature Studio, Configuration & Permissions, Publish Center) for their own single workshop, and Platform Super Admin only sits above that as an override/emergency layer. **That has been superseded.** Design, page layout, role experience, workflow/feature policy, and the permission matrix are now controlled exclusively by Platform Super Admin, per-workshop, from the Super Admin Control Center — never self-service by the Owner. A workshop can still end up looking/behaving differently from another workshop, but only Super Admin can make it so. New-workshop creation stays deliberately simple: it is seeded from a platform-controlled baseline structure, not built from scratch by anyone. The sections below have been edited in place to reflect this; where a page moved, a note marks where it went and why. See `docs/detailed-specs/` for full field-level detail as each page is worked out.
 
 ---
 
@@ -179,9 +180,9 @@ Permission order:
 3. Tenant Status
 4. Module Enabled
 5. Feature Enabled
-6. Owner Configuration
+6. Workshop Configuration (set by Super Admin per workshop via Builder Control — role templates, workflow policy; see Amendment note at the top of this document — this layer is no longer Owner-editable)
 7. Role Permission Template
-8. User Override
+8. User Override (Organization & Access — Owner activating/deactivating a specific staff member, still Owner-controlled)
 9. User Scope
 10. Workflow Status
 11. Record-Level Rule
@@ -593,13 +594,56 @@ Role states:
 - Login Locked
 - Actions Limited
 
-Builder Control:
+Disabling a role for a workshop ("vanishing" a character) is not just a flag flip. Before it is allowed to apply, Impact Preview must compute and show:
+- how many current staff hold that role at this workshop, and what happens to each of them (they are not deleted or silently logged out mid-task; disabling is blocked until each is either reassigned to another role or explicitly deactivated by the admin as part of the same action)
+- which workflow policies at this workshop depend on that role existing (e.g. "Team Leader review required" cannot stay on if Team Leader is being disabled — the control surfaces this as a required companion change, not a silent break)
+- any in-flight record currently routed to that role (an open blocker addressed to it, a pending team-review item, a customer decision requiring its approval) — each must have a resolution path (reassign to another role, or the disable is blocked until resolved)
+A role can never end up disabled while something in the workshop still points to it with no valid actor.
+
+### Builder Control (theme, layout, role experience, workflow policy, permission matrix)
+
+Moved here from what the original spec called the Owner's own Workshop Builder / Page Builder / Role Experience Studio / Workflow & Feature Studio / Configuration & Permissions / Publish Center — Owner no longer has any of these pages. All of it is now one per-workshop capability inside Super Admin Control Center, reached by selecting a target workshop and choosing "Builder" from the left nav.
+
+Builder Control states (apply per workshop):
 - Fully Enabled
 - View Only
 - Draft Only
 - Brand Only
 - Publishing Locked
 - Fully Locked
+
+**Theme / Identity** (per workshop):
+- logo, brand colors, primary accent, card style, border radius, font style, density, status colors, customer portal theme, staff theme
+- design tokens: `tenant.theme.primaryColor`, `tenant.theme.radius`, `tenant.theme.density`, `tenant.theme.statusColors`, `tenant.theme.logo`
+- changes apply to every role's pages at that workshop (Technician, Branch Manager, Inventory, Team Leader, Customer Portal, Reports) plus the Owner's own remaining pages
+
+**Page Layout** (per workshop, safe sections/blocks only):
+- reorder sections, hide/restore optional sections, rename section titles, compact/expanded layout, add allowed blocks, reset page, preview as role
+- customizable pages: Technician Home, Technician Work Card, Branch Manager Home, Work Order Workspace, Inventory Home, Team Leader Home, Customer Portal Home, Owner Dashboard, Reports pages
+- cannot: delete safety-critical sections, remove Finish Gate, remove Critical Warning Acknowledgement, remove Payment Gate, bypass permissions, show internal blocks to customer, inject raw HTML/JS/CSS
+- safe block registry fields: `allowedPages`, `allowedRoles`, `requiredPermissions`, `requiredFeatures`, `customerSafe`, `internalOnly`, `safetyCritical`, `removable`, `reorderable`
+
+**Role Experience** (per workshop, per role):
+- default landing page, simple/advanced mode, visible shortcuts, navigation density, card style, optional widgets, role labels
+- example: Technician Simple Mode = Home / My Work / Work Card only; Customer Minimal Mode = My Service / Decisions / Invoice / History
+- role experience cannot override permissions — it only changes what's visible/emphasized within what permissions already allow
+
+**Workflow & Feature Policy** (per workshop):
+- Quick Inspection enabled/disabled, Quick Service enabled/disabled, customer approval required rules, critical rejection warning required, Team Leader review required, QC required, time tracking optional/required/off, return-unused-required-before-finish, delivery-blocked-until-payment, technician-can-send-customer-request-directly-or-needs-review, discount approval thresholds
+- effects apply to Technician Work Card, Branch Manager Attention Center, Team Leader views, Customer Portal, Reports, Finish Gate, Delivery Gate
+- example: enabling Team Leader Review means Technician Finish sends the task to Ready for Team Review, Team Leader sees a review queue, Branch Manager sees the status, reports track review time — and (per the Role Control rule above) this cannot be turned on for a workshop where Team Leader is disabled
+
+**Permission Matrix** (per workshop, per role):
+- tabs: Role Templates, User Permissions, Permission Matrix, Scope Rules, Locked by Platform, Change History
+- permission groups: Authentication & Access, Customers, Assets, Work Orders, Technician Tasks, Inspection, Customer Decisions, Inventory, Parts Lifecycle, Branch Management, Team Leader Supervision, Reports, Builder, Configuration, Finance, Payments, Audit
+- cell states: Allowed, Denied, Inherited, Locked by Platform, Locked by Plan, Not Available
+- every permission change must affect navigation, routes, buttons, action guards, data returned, reports, exports, audit — not just hide a button
+- example: disabling `customer_decision.send` for Technician at a workshop removes the Send button from the Technician Work Card *and* blocks the action server-side *and* can require Branch Manager review instead *and* creates an audit event
+- example: hiding prices from Technicians at a workshop makes the Technician Work Order POS show "Price hidden by workshop settings" while the Customer can still see approved selling prices if enabled, and internal cost never appears regardless
+
+**Forms customization, Message templates, and Pricing stay with the Owner** — see the Tenant Owner section below. Those are the workshop's own day-to-day business content, not "design/structure," and the Owner keeps them.
+
+**Publish pipeline** (applies to every Builder Control change above, at the workshop selected): Draft → Validate → Preview → Impact Preview → Publish → Apply Effective Config → Audit → Rollback if needed. This is the same Select Target → Choose Control → Impact Preview → Confirm with Reason → Apply → Audit → Rollback flow already defined for the rest of Control Center — Builder Control is not a separate pipeline, it's this one, applied to design/structure/permission targets specifically. A change is not complete unless it actually changes the affected workshop's pages/actions/data, not just its own config.
 
 Access & Accounts:
 - Lock Owner Account
@@ -671,23 +715,19 @@ Super Admin cannot silently:
 ## TENANT OWNER / TENANT ADMIN ROLE
 
 The Owner owns one workshop tenant inside MOP.
-Owner can fully control their workshop within platform limits.
+Owner runs their workshop's people, prices, forms, and messages within the structure Super Admin has set up for them — Owner does not control design, layout, role experience, workflow policy, or the permission matrix (see "Amendment" at the top of this doc and Super Admin Control Center → Builder Control, above).
 
 Owner pages:
 
 1. Owner Home
 2. Organization & Access
-3. Configuration & Permissions
-4. Workshop Builder
-5. Page Builder
-6. Role Experience Studio
-7. Workflow & Feature Studio
-8. Forms & Fields
-9. Messages & Templates
-10. Pricing & Financial Configuration
-11. Reports & Analytics
-12. Audit & Change History
-13. Publish Center / Impact Preview
+3. Forms & Fields
+4. Messages & Templates
+5. Pricing & Financial Configuration
+6. Reports & Analytics
+7. Audit & Change History
+
+Moved to Super Admin Control Center → Builder Control (no longer Owner pages): Configuration & Permissions, Workshop Builder, Page Builder, Role Experience Studio, Workflow & Feature Studio, Publish Center / Impact Preview.
 
 ### PAGE: Owner Home
 
@@ -744,218 +784,7 @@ Validation:
 - Team Leader must have managed team/technicians
 - Technician must have branch/category scope if required
 
-### PAGE: Configuration & Permissions
-
-Purpose:
-Control who can see/do what.
-
-Tabs:
-- Role Templates
-- User Permissions
-- Permission Matrix
-- Scope Rules
-- Locked by Platform
-- Change History
-
-Permission groups:
-- Authentication & Access
-- Customers
-- Assets
-- Work Orders
-- Technician Tasks
-- Inspection
-- Customer Decisions
-- Inventory
-- Parts Lifecycle
-- Branch Management
-- Team Leader Supervision
-- Reports
-- Builder
-- Configuration
-- Finance
-- Payments
-- Audit
-
-Cell states:
-- Allowed
-- Denied
-- Inherited
-- Locked by Platform
-- Locked by Plan
-- Not Available
-
-Every permission change must affect:
-- navigation
-- routes
-- buttons
-- action guards
-- data returned
-- reports
-- exports
-- audit
-
-Example:
-If Owner disables customer_decision.send for Technician:
-- Send button disappears/disabled in Technician Work Card
-- action guard blocks direct send
-- request can require Branch Manager review
-- audit event created
-
-Example:
-If Owner allows Branch Manager to record payment:
-- Record Payment button appears
-- payment.record action guard allows it
-- Customer Portal payment status updates
-- Owner finance reports update
-
-Example:
-If Owner hides prices from Technicians:
-- Technician Work Order POS shows "Price hidden by workshop settings"
-- Customer can still see approved selling prices if enabled
-- internal cost never appears
-
-### PAGE: Workshop Builder
-
-Purpose:
-Customize workshop identity and visual theme.
-
-Owner can customize:
-- logo
-- brand colors
-- primary accent
-- card style
-- border radius
-- font style
-- density
-- status colors
-- customer portal theme
-- staff theme
-
-Use design tokens:
-- tenant.theme.primaryColor
-- tenant.theme.radius
-- tenant.theme.density
-- tenant.theme.statusColors
-- tenant.theme.logo
-
-Theme changes must apply to:
-- Technician pages
-- Branch Manager pages
-- Inventory pages
-- Team Leader pages
-- Customer Portal
-- Owner pages
-- Reports
-
-### PAGE: Page Builder
-
-Purpose:
-Customize actual pages using safe sections/blocks.
-
-Owner can:
-- reorder sections
-- hide optional sections
-- restore hidden sections
-- rename section titles
-- choose compact/expanded layout
-- add allowed blocks
-- reset page
-- preview as role
-
-Customizable pages:
-- Technician Home
-- Technician Work Card
-- Branch Manager Home
-- Work Order Workspace
-- Inventory Home
-- Team Leader Home
-- Customer Portal Home
-- Owner Dashboard
-- Reports pages
-
-Owner cannot:
-- delete safety-critical sections
-- remove Finish Gate
-- remove Critical Warning Acknowledgement
-- remove Payment Gate
-- bypass permissions
-- show internal blocks to customer
-- inject raw HTML/JS/CSS
-- access platform-locked blocks
-
-Use a safe registry for blocks:
-- allowedPages
-- allowedRoles
-- requiredPermissions
-- requiredFeatures
-- customerSafe
-- internalOnly
-- safetyCritical
-- removable
-- reorderable
-
-### PAGE: Role Experience Studio
-
-Purpose:
-Customize each role's experience.
-
-Owner can set:
-- default landing page
-- simple/advanced mode
-- visible shortcuts
-- navigation density
-- card style
-- optional widgets
-- role labels
-
-Examples:
-
-Technician Simple Mode:
-- Home
-- My Work
-- Work Card
-
-Customer Minimal Mode:
-- My Service
-- Decisions
-- Invoice
-- History
-
-Role Experience cannot override permissions.
-
-### PAGE: Workflow & Feature Studio
-
-Purpose:
-Configure operational workflow policies.
-
-Owner can configure:
-- Quick Inspection enabled/disabled
-- Quick Service enabled/disabled
-- customer approval required rules
-- critical rejection warning required
-- Team Leader review required
-- QC required
-- time tracking optional/required/off
-- return unused required before finish
-- delivery blocked until payment
-- technician can send customer request directly or needs Branch Manager review
-- discount approval thresholds
-
-Effects must apply to:
-- Technician Work Card
-- Branch Manager Attention Center
-- Team Leader views
-- Customer Portal
-- Reports
-- Finish Gate
-- Delivery Gate
-
-Example:
-If Team Leader Review is enabled:
-- Technician Finish sends task to Ready for Team Review
-- Team Leader sees review queue
-- Branch Manager sees status
-- reports track review time
+> Configuration & Permissions, Workshop Builder, Page Builder, Role Experience Studio, and Workflow & Feature Studio moved to **Super Admin Control Center → Builder Control** (see the Platform Super Admin section above for full detail). Owner does not have these pages.
 
 ### PAGE: Forms & Fields
 
@@ -1124,31 +953,7 @@ Audit:
 - workflow policy change
 - report visibility change
 
-### PAGE: Publish Center / Impact Preview
-
-Any major Owner change must go through:
-
-1. Draft
-2. Validate
-3. Preview
-4. Impact Preview
-5. Publish
-6. Apply Effective Config
-7. Audit
-8. Rollback if needed
-
-Impact Preview shows:
-- affected pages
-- affected roles
-- affected users
-- affected workflows
-- affected reports
-- affected customer portal behavior
-- platform locks
-- risk level
-- rollback availability
-
-A setting is not complete unless it actually changes affected pages/actions/data.
+> Publish Center / Impact Preview moved to **Super Admin Control Center → Builder Control**'s publish pipeline (Draft → Validate → Preview → Impact Preview → Publish → Apply Effective Config → Audit → Rollback), applied per workshop — see the Platform Super Admin section above. The Owner's remaining pages (Organization & Access, Pricing & Financial Configuration, Forms & Fields, Messages & Templates) save directly since they're day-to-day business content, not structural changes needing impact-preview governance.
 
 ## BRANCH MANAGER ROLE
 
@@ -1933,9 +1738,9 @@ All system actions must have actorType = system.
 ## RELATIONSHIPS BETWEEN ROLES
 
 1. **Super Admin → Owner**
-Super Admin creates workshop and Owner.
-Super Admin controls platform-level modules/features/limits.
-Owner works inside those limits.
+Super Admin creates the workshop and its Owner, and controls that workshop's design, layout, role experience, workflow policy, and permission matrix from Control Center → Builder Control (see Amendment note at the top of this document).
+Super Admin also controls platform-level modules/features/limits.
+Owner works inside all of that, running their workshop's people (Organization & Access), prices, forms, and messages.
 
 2. **Owner → Staff**
 Owner creates Branch Managers, Technicians, Inventory Managers, Team Leaders, Data Analysts.
@@ -1971,8 +1776,8 @@ Owner sees tenant-wide reports and controls who else sees reports.
 9. **Super Admin → Live View**
 Super Admin can view tenant pages read-only using tenant's current configuration.
 
-10. **Owner Builder → All Role Pages**
-Owner theme/page/layout/workflow changes must affect real pages for staff and customers.
+10. **Super Admin Builder Control → All Role Pages**
+Super Admin's per-workshop theme/page/layout/role-experience/workflow-policy/permission changes must affect real pages for that workshop's staff and customers — not just the Control Center's own config screens.
 
 ## FINANCIAL SYSTEM
 
@@ -2134,9 +1939,9 @@ Report permissions:
 
 ## BUILDER AND TENANT CUSTOMIZATION
 
-Each workshop can have its own design and layout.
+Each workshop can have its own design and layout, but only Platform Super Admin sets it — see the Amendment note at the top of this document. Owner-controlled content is limited to what's listed under the Tenant Owner role (forms, messages, pricing) — not theme, layout, role experience, workflow policy, or permissions.
 
-Owner can customize:
+Super Admin can customize, per workshop:
 - theme
 - logo
 - colors
@@ -2144,11 +1949,13 @@ Owner can customize:
 - status colors
 - page sections
 - role experience
+- workflows
+- reports visibility
+
+Owner can still customize, for their own workshop:
 - forms
 - messages
-- workflows
 - pricing
-- reports visibility
 
 When any user logs in:
 The app must load:
@@ -2166,13 +1973,12 @@ Apex Motors Technician Home may have blue theme and simple cards.
 Delta Service Technician Home may have green theme and different optional sections.
 But both must still respect safety, permissions, lifecycle, and tenant isolation.
 
-Builder cannot:
+Builder Control cannot — even for Super Admin, since these are hard rules baked into the application itself, not configurable locks:
 - inject raw code
 - show internal data to customer
 - remove critical safety sections
 - remove Finish Gate
 - remove payment gate
-- override platform locks
 - bypass permissions
 
 ## AUDIT
@@ -2237,7 +2043,7 @@ The system passes only if this flow works:
 
 1. Platform Super Admin creates workshop owner.
 2. Owner logs in to their workshop only.
-3. Owner configures theme, pages, permissions, staff, pricing.
+3. Super Admin configures the workshop's theme, pages, role experience, workflow policy, and permissions from Control Center → Builder Control; Owner configures their own staff and pricing.
 4. Owner adds Branch Manager, Technician, Inventory Manager, Team Leader.
 5. Branch Manager creates customer and asset.
 6. Branch Manager creates Work Order and assigns Technician.
