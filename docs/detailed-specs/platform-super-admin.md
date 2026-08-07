@@ -286,9 +286,50 @@ The unified history for everything above, scoped to the selected target: every c
 
 ---
 
+## PAGE: Super Admin Control Center — Builder Control
+
+### Purpose
+The per-workshop design/structure/permission editor. Same Target selector as the rest of Control Center; choosing "Builder" in the left nav opens a dedicated sub-workspace (its own tabs, its own draft state) rather than a simple form, because unlike the governance controls above, changes here are typically made in a batch (several theme tweaks, a couple of layout changes) and reviewed together before publishing — matching the Draft → Validate → Preview → Impact Preview → Publish pipeline already defined.
+
+### Layout
+- **Sub-nav (tabs, not left-nav items)**: Theme, Layout, Role Experience, Workflow Policy, Permissions. Switching tabs does not lose unsaved changes in another tab — all five share one draft.
+- **Builder Control state banner** at the top of the sub-workspace, reflecting the current state for this workshop (Fully Enabled / View Only / Draft Only / Brand Only / Publishing Locked / Fully Locked) — set from the Governance Controls' Modules/Limits area, not from within Builder Control itself, and shown here as a constraint (e.g. under **Brand Only**, the Layout/Role Experience/Workflow Policy/Permissions tabs are visible but disabled with a tooltip explaining why).
+- **Draft / Published toggle** at the top-right of the sub-workspace: viewing Draft shows unpublished changes; viewing Published shows what's actually live for that workshop right now. Defaults to Draft if one exists, Published otherwise.
+- **Bottom action bar**, sticky: Discard Draft, Preview as Role (opens a read-only render of the selected workshop's pages under the current draft, for a chosen role — reuses the same rendering path Workshop Live View uses, so what Super Admin previews here is provably the same thing Live View and real users would see, not a separate mock), Save Draft, Publish.
+
+### Tab: Theme
+Fields: logo (upload, or URL), primary brand color, primary accent color, card style (select: Sharp / Rounded / Soft), border radius (slider, mapped to `tenant.theme.radius` token), font style (select from a fixed platform font list — not arbitrary font upload, to keep every workshop's typography within a maintained, licensed set), density (Compact / Comfortable / Spacious), status colors (5 color pickers: success, warning, danger, info, neutral — map to `tenant.theme.statusColors`), and separate toggles for whether staff pages and the customer portal inherit the same theme or diverge (customer portal theme can be set independently, since a workshop might want a more conservative public-facing look than its internal staff tools).
+Live preview pane alongside the form, rendering a representative staff page and the customer portal home with the in-progress values — updates on every field change, not just on save.
+
+### Tab: Layout
+Page picker (Technician Home, Technician Work Card, Branch Manager Home, Work Order Workspace, Inventory Home, Team Leader Home, Customer Portal Home, Owner Dashboard, Reports pages) → once a page is selected, a drag-reorderable list of that page's sections. Each section row shows: name, a lock icon if `safetyCritical` (with the reason on hover — "Finish Gate cannot be removed or reordered below required checks"), a visibility toggle (only for `removable: true` sections), a "Restore" link if previously hidden, and a rename field (for sections where the registry allows title customization). A "Reset this page" link at the bottom returns every section on that page to the starter template's arrangement — itself a draft change, not immediate, so it goes through the same Preview/Publish step as everything else.
+
+### Tab: Role Experience
+Role picker (the 8 roles) → per role: default landing page (dropdown of that role's allowed pages), mode (Simple / Advanced), visible shortcuts (checkboxes from that role's available shortcut set), navigation density, card style, optional widgets (checkboxes), role label (text override, e.g. renaming "Technician" to "Mechanic" for a workshop that prefers that term — cosmetic only, does not change permission keys or routes). A persistent note under the picker: *"These settings change what's emphasized, never what's allowed — permission changes are on the Permissions tab."*
+
+### Tab: Workflow Policy
+Grouped toggles/selects matching the canonical list (Quick Inspection on/off, Quick Service on/off, customer approval required rules, critical rejection warning required, Team Leader review required, QC required, time tracking optional/required/off, return-unused-required-before-finish, delivery-blocked-until-payment, technician-can-send-directly-or-needs-review, discount approval thresholds). Each control that has a role dependency (per the Roles section of Governance Controls) shows an inline warning chip if the relevant role is currently Disabled at this workshop — e.g. the "Team Leader review required" toggle shows *"Team Leader is disabled at this workshop — enabling this will be blocked at Publish"* rather than letting the admin toggle it on and discover the conflict only at publish time.
+
+### Tab: Permissions
+The Permission Matrix: rows = permission keys grouped by the canonical permission groups (Authentication & Access, Customers, Assets, Work Orders, …), columns = the 8 roles. Each cell click-cycles through Allowed / Denied / Inherited (cells locked by Platform-level plan/control settings render non-interactive with a lock icon and the specific reason on hover — "Locked by Plan: Starter plan does not include Advanced Finance"). A per-role "View as this role's nav" side panel shows, live, which nav items and buttons a given permission state would produce — the same worked-example pattern as the canonical spec (toggling `customer_decision.send` off for Technician visibly removes the Send button in the side panel immediately, before Publish).
+
+### Validation before Publish is allowed
+- Every Workflow Policy toggle with a role dependency is checked against current Role states — any conflict blocks Publish with a clear list of exactly which toggles conflict with which disabled role, not a generic error.
+- Message templates and Forms are Owner-owned and not part of this draft, but Publish still checks whether a Workflow Policy change here would orphan a required-variable reference in an Owner-authored template (e.g. a policy change that removes a decision step referenced by a message template's conditional text) — flagged as a warning, not a hard block, since the Owner may need to be the one to fix their own template.
+- Raw-code injection scan runs across every free-text field in the draft (labels, custom section titles, role labels) — same rule as the original spec's "Builder cannot inject raw code," enforced here specifically since this is the only place that rule can actually be violated.
+
+### Publish
+Runs the full pipeline: Validate (above) → Preview (the same Preview-as-Role view, now framed as a final check) → Impact Preview (affected pages/roles/users/workflows/reports/customer-portal-behavior, computed for this specific draft's diff against the currently-published version) → Confirm with Reason → Apply Effective Config (this is the moment `TenantConfiguration.draftVersion` becomes the new `publishedVersion`, and it's the single write that `EffectiveAccessResolver` and every page actually read from) → Audit → a new row in `TenantConfigurationVersion` for Rollback.
+
+### Rollback
+From Audit & Rollback (Governance Controls) or from a "Version History" link inside Builder Control itself: pick any prior published version for this workshop, see a diff summary against current, confirm, and it becomes the new published version (rollback is itself a publish, audited the same way — not a special-cased revert).
+
+---
+
 ## Remaining pages in this role (pending — same depth)
 
-- Super Admin Control Center → Builder Control (full page detail — the sections above already give the content, this remaining item is the dedicated page writeup with layout/interaction detail matching Workshops' depth)
+- Platform Reports
+- Workshop Live View
 - Super Admin Control Center — Builder Control: Theme/Identity
 - Super Admin Control Center — Builder Control: Page Layout
 - Super Admin Control Center — Builder Control: Role Experience
