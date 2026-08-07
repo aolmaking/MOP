@@ -1,0 +1,1393 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum AccountType {
+  PLATFORM
+  TENANT_STAFF
+  CUSTOMER
+  SYSTEM_AUTOMATION
+}
+
+enum AccountStatus {
+  INVITED
+  ACTIVE
+  LOCKED
+  SUSPENDED
+  INACTIVE
+}
+
+enum TenantStatus {
+  ACTIVE
+  TRIAL
+  PENDING_SETUP
+  FROZEN
+  SUSPENDED
+  READ_ONLY
+  ARCHIVED
+}
+
+enum StaffRole {
+  TENANT_OWNER
+  TENANT_ADMIN
+  BRANCH_MANAGER
+  TECHNICIAN
+  INVENTORY_MANAGER
+  TEAM_LEADER
+  DATA_ANALYST
+}
+
+enum CustomerPortalStatus {
+  NOT_INVITED
+  INVITED
+  ENABLED
+  DISABLED
+}
+
+enum CategoryCode {
+  CARS
+  MOTORCYCLES
+  HEAVY_EQUIPMENT
+}
+
+// 16 states, authored directly from docs/PRODUCT_SPEC_CANONICAL.md's
+// "CORE WORK ORDER LIFECYCLE" list. The old schema was missing 6 of these.
+enum WorkOrderStatus {
+  DRAFT
+  REGISTERED
+  UNDER_INSPECTION
+  AWAITING_CUSTOMER_APPROVAL
+  APPROVED_FOR_WORK
+  IN_PROGRESS
+  WAITING_PARTS
+  WAITING_CUSTOMER
+  BLOCKED
+  READY_FOR_TEAM_REVIEW
+  READY_FOR_QC
+  QC_FAILED
+  READY_FOR_DELIVERY
+  PAYMENT_PENDING
+  CLOSED
+  CANCELLED
+}
+
+enum TaskStatus {
+  ASSIGNED
+  IN_PROGRESS
+  BLOCKED
+  READY_FOR_REVIEW
+  RETURNED_FOR_REWORK
+  DONE
+  CANCELLED
+}
+
+enum BlockerReason {
+  WAITING_PART
+  WAITING_CUSTOMER
+  NEED_TEAM_LEADER
+  TOOL_MISSING
+  SAFETY_ISSUE
+  UNCLEAR_DIAGNOSIS
+  OTHER
+}
+
+enum BlockerStatus {
+  OPEN
+  ESCALATED
+  RESOLVED
+}
+
+enum InspectionType {
+  QUICK
+  FULL
+}
+
+// Shared 4-level scale used for both fault severity and customer decision
+// item importance -- the spec treats these as the same concept.
+enum SeverityLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// 19 states. Adds RETURN_CLARIFICATION_REQUESTED, which the gap analysis
+// found missing (spec's "Request Clarification" action on Returns/Movements
+// had no backing state in the old build).
+enum PartRequestStatus {
+  DRAFT
+  REQUESTED
+  WAREHOUSE_REVIEWING
+  APPROVED
+  ISSUED
+  IN_TRANSIT
+  ARRIVED
+  RECEIVED_BY_TECHNICIAN
+  USED
+  REJECTED
+  UNAVAILABLE
+  WAITING_TRANSFER
+  WAITING_SUPPLIER
+  RETURN_REQUESTED
+  RETURN_ACCEPTED
+  RETURNED_TO_STOCK
+  RETURN_REJECTED
+  RETURN_CLARIFICATION_REQUESTED
+  CANCELLED
+}
+
+enum StockMovementType {
+  ISSUE
+  RETURN_TO_STOCK
+  DAMAGED
+  TRANSFER_IN
+  TRANSFER_OUT
+  SUPPLIER_RECEIPT
+  ADJUSTMENT
+}
+
+enum TransferStatus {
+  REQUESTED
+  IN_TRANSIT
+  RECEIVED
+  CANCELLED
+}
+
+enum SupplierOrderStatus {
+  REQUESTED
+  ORDERED
+  RECEIVED
+  CANCELLED
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  APPROVED
+  EXPIRED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  WALLET
+  DEPOSIT
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  REFUNDED
+}
+
+enum DiscountRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RefundRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum CustomerDecisionStatus {
+  PENDING
+  SENT
+  VIEWED
+  PARTIALLY_RESPONDED
+  RESOLVED
+  EXPIRED
+}
+
+enum CustomerDecisionItemDecision {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PermissionSource {
+  ROLE_DEFAULT
+  OWNER_OVERRIDE
+}
+
+enum ControlSettingScope {
+  PLATFORM
+  TENANT
+}
+
+enum AuditActorType {
+  SYSTEM
+  PLATFORM
+  TENANT_STAFF
+  CUSTOMER
+}
+
+// Required on every AuditLog row -- the gap analysis found the old build
+// only populated risk level ad hoc, inside a JSON blob, for 2 of many
+// audited action types. Making it a required column forces every writer
+// to set it.
+enum AuditRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ============================================================================
+// IDENTITY & TENANCY
+// ============================================================================
+
+model Plan {
+  id                String         @id @default(cuid())
+  code              String         @unique
+  name              String
+  maxBranches       Int
+  maxUsers          Int
+  maxWarehouses     Int
+  allowedCategories CategoryCode[]
+  allowedModules    String[]
+  allowedFeatures   String[]
+  allowedReports    String[]
+  monthlyPrice      Decimal        @db.Decimal(12, 2)
+  createdAt         DateTime       @default(now())
+
+  tenants Tenant[]
+
+  @@map("plans")
+}
+
+model Tenant {
+  id                       String       @id @default(cuid())
+  name                     String
+  slug                     String       @unique
+  customerRegistrationCode String       @unique
+  status                   TenantStatus @default(PENDING_SETUP)
+  planId                   String
+  country                  String
+  city                     String
+  businessType             String
+  primaryCategory          CategoryCode
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  branches                Branch[]
+  warehouses              Warehouse[]
+  accounts                Account[]
+  staffUsers              StaffUser[]
+  teams                   Team[]
+  customers               Customer[]
+  assets                  Asset[]
+  workOrders              WorkOrder[]
+  inventoryItems          InventoryItem[]
+  partRequests            PartRequest[]
+  invoices                Invoice[]
+  payments                Payment[]
+  quotations              Quotation[]
+  runningInvoices         RunningInvoice[]
+  decisionRequests        CustomerDecisionRequest[]
+  financeConfiguration    FinanceConfiguration?
+  configuration           TenantConfiguration?
+  configurationVersions   TenantConfigurationVersion[]
+  controlSettings         ControlSetting[]
+  rolePermissions         RolePermission[]
+  userPermissionOverrides UserPermissionOverride[]
+  rolePages               RolePage[]
+  auditLogs               AuditLog[]
+  operationEvents         OperationEvent[]
+  liveViewSessions        PlatformLiveViewSession[]
+
+  @@index([status])
+  @@map("tenants")
+}
+
+// Platform + tenant-level overrides that sit above everything else in the
+// effective permission resolver. One row per (scope, tenantId?, key).
+model ControlSetting {
+  id        String              @id @default(cuid())
+  scope     ControlSettingScope
+  tenantId  String?
+  key       String
+  value     Json
+  type      String
+  active    Boolean             @default(true)
+  reason    String?
+  createdBy String
+  createdAt DateTime            @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, key])
+  @@index([scope, key])
+  @@map("control_settings")
+}
+
+model Branch {
+  id       String  @id @default(cuid())
+  tenantId String
+  name     String
+  code     String
+  address  String?
+  city     String?
+  isActive Boolean @default(true)
+
+  tenant          Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warehouseAccess BranchWarehouseAccess[]
+  workOrders      WorkOrder[]
+  teams           Team[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("branches")
+}
+
+model Warehouse {
+  id       String  @id @default(cuid())
+  tenantId String
+  name     String
+  code     String
+  isActive Boolean @default(true)
+
+  tenant         Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branchAccess   BranchWarehouseAccess[]
+  stockBalances  WarehouseStockBalance[]
+  issuedItems    IssuedItem[]
+  stockMovements StockMovement[]
+  transfersOut   InventoryTransfer[]     @relation("TransferSource")
+  transfersIn    InventoryTransfer[]     @relation("TransferDestination")
+  supplierOrders SupplierOrder[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("warehouses")
+}
+
+model BranchWarehouseAccess {
+  id          String @id @default(cuid())
+  tenantId    String
+  branchId    String
+  warehouseId String
+
+  branch    Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, warehouseId])
+  @@index([tenantId])
+  @@map("branch_warehouse_access")
+}
+
+// One row per login credential. accountType decides which profile table
+// (StaffUser / Customer) it is linked from. Platform and system-automation
+// accounts have no StaffUser/Customer profile at all.
+model Account {
+  id               String        @id @default(cuid())
+  accountType      AccountType
+  tenantId         String?
+  email            String?
+  phone            String?
+  passwordHash     String?
+  status           AccountStatus @default(ACTIVE)
+  failedLoginCount Int           @default(0)
+  lockedUntil      DateTime?
+  createdAt        DateTime      @default(now())
+
+  tenant   Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staff    StaffUser?
+  customer Customer?
+  sessions Session[]
+
+  @@unique([tenantId, email])
+  @@index([accountType, tenantId])
+  @@map("accounts")
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  accountId        String
+  tenantId         String?
+  accessSecretHash String
+  refreshTokenHash String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model StaffUser {
+  id             String         @id @default(cuid())
+  accountId      String         @unique
+  tenantId       String
+  fullName       String
+  role           StaffRole
+  branchScope    String[]
+  warehouseScope String[]
+  categoryScope  CategoryCode[]
+  isActive       Boolean        @default(true)
+  lockedAt       DateTime?
+  createdAt      DateTime       @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  ledTeams            Team[]                   @relation("TeamLeader")
+  teamMemberships     TeamMembership[]
+  assignedWorkOrders  WorkOrderAssignment[]
+  taskAssignments     TaskAssignment[]
+  permissionOverrides UserPermissionOverride[]
+
+  @@index([tenantId, role])
+  @@map("staff_users")
+}
+
+// New model -- the old build had no Team/TeamMembership table at all, so
+// "Team Setup" and Team Leader scoping had nothing real to attach to.
+model Team {
+  id           String   @id @default(cuid())
+  tenantId     String
+  branchId     String?
+  name         String
+  teamLeaderId String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch     Branch?          @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  teamLeader StaffUser        @relation("TeamLeader", fields: [teamLeaderId], references: [id], onDelete: Restrict)
+  members    TeamMembership[]
+
+  @@index([tenantId])
+  @@map("teams")
+}
+
+// Membership is time-ranged (endedAt null = currently active) so history
+// is preserved when a technician moves teams, per spec.
+model TeamMembership {
+  id           String    @id @default(cuid())
+  tenantId     String
+  teamId       String
+  technicianId String
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+
+  team       Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  technician StaffUser @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, endedAt])
+  @@index([technicianId, endedAt])
+  @@map("team_memberships")
+}
+
+model Customer {
+  id           String               @id @default(cuid())
+  tenantId     String
+  accountId    String?              @unique
+  fullName     String
+  phone        String
+  email        String?
+  portalStatus CustomerPortalStatus @default(NOT_INVITED)
+  createdAt    DateTime             @default(now())
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  ownedAssets      AssetOwnershipHistory[]
+  workOrders       WorkOrder[]
+  decisionRequests CustomerDecisionRequest[]
+  timelineEvents   CustomerTimelineEvent[]
+
+  @@index([tenantId, phone])
+  @@map("customers")
+}
+
+// ============================================================================
+// PERMISSIONS
+// ============================================================================
+
+// The tenant's own effective permission set per role, seeded from a static
+// default map at tenant creation and editable by the Owner. Whether a cell
+// is *locked* by platform or plan is computed at resolve time from
+// ControlSetting + Plan.allowedFeatures, not stored redundantly here.
+model RolePermission {
+  id            String           @id @default(cuid())
+  tenantId      String
+  role          StaffRole
+  permissionKey String
+  allowed       Boolean
+  source        PermissionSource @default(ROLE_DEFAULT)
+  updatedBy     String?
+  updatedAt     DateTime         @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, role, permissionKey])
+  @@index([tenantId, role])
+  @@map("role_permissions")
+}
+
+model UserPermissionOverride {
+  id            String   @id @default(cuid())
+  tenantId      String
+  staffUserId   String
+  permissionKey String
+  allowed       Boolean
+  reason        String?
+  createdBy     String
+  createdAt     DateTime @default(now())
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffUser StaffUser @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@unique([staffUserId, permissionKey])
+  @@index([tenantId])
+  @@map("user_permission_overrides")
+}
+
+model RolePage {
+  id       String    @id @default(cuid())
+  tenantId String
+  role     StaffRole
+  pageId   String
+  allowed  Boolean   @default(true)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, role, pageId])
+  @@map("role_pages")
+}
+
+// ============================================================================
+// OPERATIONS -- ASSETS, WORK ORDERS, TASKS, INSPECTIONS
+// ============================================================================
+
+model Asset {
+  id                     String       @id @default(cuid())
+  tenantId               String
+  category               CategoryCode
+  plateNumber            String?
+  vinOrChassisNumber     String?
+  engineNumber           String?
+  serialNumber           String?
+  hourMeter              Decimal?     @db.Decimal(12, 2)
+  site                   String?
+  fleet                  String?
+  operator               String?
+  currentOwnerCustomerId String?
+  createdAt              DateTime     @default(now())
+
+  tenant           Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownershipHistory AssetOwnershipHistory[]
+  workOrders       WorkOrder[]
+  safeHistory      SafeTechnicalHistory[]
+
+  @@index([tenantId, plateNumber])
+  @@index([tenantId, serialNumber])
+  @@map("assets")
+}
+
+// One open row (endedAt null) = current owner. Closed rows are how a new
+// owner's technical-history view excludes a previous owner's private data.
+model AssetOwnershipHistory {
+  id         String    @id @default(cuid())
+  tenantId   String
+  assetId    String
+  customerId String
+  startedAt  DateTime  @default(now())
+  endedAt    DateTime?
+
+  asset    Asset    @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([assetId, endedAt])
+  @@index([customerId])
+  @@map("asset_ownership_history")
+}
+
+model WorkOrder {
+  id                      String          @id @default(cuid())
+  tenantId                String
+  branchId                String
+  assetId                 String
+  customerId              String
+  status                  WorkOrderStatus @default(DRAFT)
+  priority                String          @default("normal")
+  relinkedFromWorkOrderId String?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  closedAt                DateTime?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch   Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  asset    Asset    @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  relinkedFrom WorkOrder?  @relation("WorkOrderRelink", fields: [relinkedFromWorkOrderId], references: [id], onDelete: SetNull)
+  relinkedTo   WorkOrder[] @relation("WorkOrderRelink")
+
+  assignments        WorkOrderAssignment[]
+  tasks              Task[]
+  inspections        Inspection[]
+  faults             Fault[]
+  partRequests       PartRequest[]
+  quotation          Quotation?
+  runningInvoice     RunningInvoice?
+  invoice            Invoice?
+  decisionRequests   CustomerDecisionRequest[]
+  timelineEvents     CustomerTimelineEvent[]
+  safeHistoryEntries SafeTechnicalHistory[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, branchId, status])
+  @@index([assetId])
+  @@map("work_orders")
+}
+
+model WorkOrderAssignment {
+  id           String    @id @default(cuid())
+  tenantId     String
+  workOrderId  String
+  staffUserId  String
+  assignedAt   DateTime  @default(now())
+  unassignedAt DateTime?
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  staffUser StaffUser @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId])
+  @@index([staffUserId, unassignedAt])
+  @@map("work_order_assignments")
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  tenantId    String
+  workOrderId String
+  title       String
+  status      TaskStatus @default(ASSIGNED)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  workOrder   WorkOrder        @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  subtasks    Subtask[]
+  assignments TaskAssignment[]
+  blockers    TaskBlocker[]
+
+  @@index([tenantId, status])
+  @@index([workOrderId])
+  @@map("tasks")
+}
+
+model Subtask {
+  id        String   @id @default(cuid())
+  tenantId  String
+  taskId    String
+  title     String
+  isDone    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("subtasks")
+}
+
+model TaskAssignment {
+  id           String    @id @default(cuid())
+  tenantId     String
+  taskId       String
+  staffUserId  String
+  assignedAt   DateTime  @default(now())
+  unassignedAt DateTime?
+
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  staffUser StaffUser @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([staffUserId, unassignedAt])
+  @@map("task_assignments")
+}
+
+model TaskBlocker {
+  id         String        @id @default(cuid())
+  tenantId   String
+  taskId     String
+  reason     BlockerReason
+  note       String?
+  status     BlockerStatus @default(OPEN)
+  reportedBy String
+  createdAt  DateTime      @default(now())
+  resolvedAt DateTime?
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, status])
+  @@map("task_blockers")
+}
+
+model Inspection {
+  id              String         @id @default(cuid())
+  tenantId        String
+  workOrderId     String
+  technicianId    String
+  type            InspectionType
+  odometerOrHours Decimal?       @db.Decimal(12, 2)
+  fields          Json
+  note            String?
+  createdAt       DateTime       @default(now())
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  faults    Fault[]
+
+  @@index([workOrderId])
+  @@map("inspections")
+}
+
+model Fault {
+  id                       String        @id @default(cuid())
+  tenantId                 String
+  workOrderId              String
+  inspectionId             String?
+  code                     String?
+  description              String
+  severity                 SeverityLevel
+  recommendedService       String?
+  customerApprovalRequired Boolean       @default(true)
+  createdAt                DateTime      @default(now())
+
+  workOrder  WorkOrder   @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  inspection Inspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+
+  @@index([workOrderId])
+  @@map("faults")
+}
+
+// ============================================================================
+// INVENTORY
+// ============================================================================
+
+model InventoryItem {
+  id                     String         @id @default(cuid())
+  tenantId               String
+  sku                    String
+  name                   String
+  itemType               String
+  category               String?
+  subcategory            String?
+  compatibleCategories   CategoryCode[]
+  lowStockThreshold      Int            @default(0)
+  criticalStockThreshold Int            @default(0)
+  sellingPrice           Decimal        @db.Decimal(12, 2)
+  cost                   Decimal?       @db.Decimal(12, 2)
+  workOrderUsable        Boolean        @default(true)
+  posVisible             Boolean        @default(true)
+  stockTracked           Boolean        @default(true)
+  barcode                String?
+  supplier               String?
+  notes                  String?
+  createdAt              DateTime       @default(now())
+
+  tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stockBalances WarehouseStockBalance[]
+  partRequests  PartRequest[]
+  movements     StockMovement[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId])
+  @@map("inventory_items")
+}
+
+// Quantity invariants (never-negative, reserved+issued <= available, etc.)
+// are enforced both here in service code AND via DB-level CHECK
+// constraints added in a follow-up migration -- see docs/DATA_DICTIONARY.md.
+model WarehouseStockBalance {
+  id               String @id @default(cuid())
+  tenantId         String
+  inventoryItemId  String
+  warehouseId      String
+  availableQty     Int    @default(0)
+  reservedQty      Int    @default(0)
+  issuedQty        Int    @default(0)
+  returnPendingQty Int    @default(0)
+  damagedQty       Int    @default(0)
+
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  warehouse     Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([inventoryItemId, warehouseId])
+  @@index([tenantId])
+  @@map("warehouse_stock_balances")
+}
+
+model PartRequest {
+  id              String            @id @default(cuid())
+  tenantId        String
+  workOrderId     String
+  taskId          String?
+  inventoryItemId String
+  requestedById   String
+  quantity        Int
+  urgency         String            @default("normal")
+  reason          String?
+  status          PartRequestStatus @default(DRAFT)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workOrder     WorkOrder          @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem      @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  issuedItem    IssuedItem?
+  returnRequest PartReturnRequest?
+
+  @@index([tenantId, status])
+  @@index([workOrderId])
+  @@map("part_requests")
+}
+
+model IssuedItem {
+  id            String    @id @default(cuid())
+  tenantId      String
+  partRequestId String    @unique
+  warehouseId   String
+  quantity      Int
+  issuedById    String
+  issuedAt      DateTime  @default(now())
+  arrivedAt     DateTime?
+  receivedAt    DateTime?
+  usedAt        DateTime?
+
+  partRequest PartRequest @relation(fields: [partRequestId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse   @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  @@index([warehouseId])
+  @@map("issued_items")
+}
+
+model PartReturnRequest {
+  id            String    @id @default(cuid())
+  tenantId      String
+  partRequestId String    @unique
+  quantity      Int
+  reason        String?
+  requestedById String
+  createdAt     DateTime  @default(now())
+  resolvedAt    DateTime?
+  resolvedById  String?
+
+  partRequest PartRequest @relation(fields: [partRequestId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("part_return_requests")
+}
+
+// Append-only ledger. before/after quantities captured on every row --
+// this was one of the few things the old build got right; keeping it.
+model StockMovement {
+  id              String            @id @default(cuid())
+  tenantId        String
+  inventoryItemId String
+  warehouseId     String
+  type            StockMovementType
+  quantity        Int
+  beforeQty       Int
+  afterQty        Int
+  referenceType   String?
+  referenceId     String?
+  actorId         String
+  createdAt       DateTime          @default(now())
+
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  warehouse     Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, inventoryItemId])
+  @@index([warehouseId])
+  @@map("stock_movements")
+}
+
+model InventoryTransfer {
+  id                String         @id @default(cuid())
+  tenantId          String
+  inventoryItemId   String
+  sourceWarehouseId String
+  destWarehouseId   String
+  quantity          Int
+  status            TransferStatus @default(REQUESTED)
+  requestedById     String
+  createdAt         DateTime       @default(now())
+  receivedAt        DateTime?
+
+  sourceWarehouse Warehouse @relation("TransferSource", fields: [sourceWarehouseId], references: [id], onDelete: Restrict)
+  destWarehouse   Warehouse @relation("TransferDestination", fields: [destWarehouseId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@map("inventory_transfers")
+}
+
+model SupplierOrder {
+  id              String              @id @default(cuid())
+  tenantId        String
+  inventoryItemId String
+  warehouseId     String
+  quantity        Int
+  supplier        String?
+  status          SupplierOrderStatus @default(REQUESTED)
+  requestedById   String
+  createdAt       DateTime            @default(now())
+  receivedAt      DateTime?
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@map("supplier_orders")
+}
+
+// ============================================================================
+// FINANCE
+// ============================================================================
+
+model PriceCatalogEntry {
+  id            String    @id @default(cuid())
+  tenantId      String
+  itemKey       String
+  itemType      String
+  unitPrice     Decimal   @db.Decimal(12, 2)
+  laborPrice    Decimal?  @db.Decimal(12, 2)
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+
+  @@index([tenantId, itemKey, effectiveFrom])
+  @@map("price_catalog_entries")
+}
+
+model Quotation {
+  id          String          @id @default(cuid())
+  tenantId    String
+  workOrderId String          @unique
+  status      QuotationStatus @default(DRAFT)
+  createdAt   DateTime        @default(now())
+
+  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workOrder WorkOrder       @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  items     QuotationItem[]
+
+  @@index([tenantId])
+  @@map("quotations")
+}
+
+model QuotationItem {
+  id            String   @id @default(cuid())
+  tenantId      String
+  quotationId   String
+  name          String
+  itemType      String
+  quantity      Int      @default(1)
+  unitPrice     Decimal  @db.Decimal(12, 2)
+  laborPrice    Decimal  @default(0) @db.Decimal(12, 2)
+  approvedPrice Decimal? @db.Decimal(12, 2)
+  priceLocked   Boolean  @default(false)
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@index([quotationId])
+  @@map("quotation_items")
+}
+
+// The live, editable running total for a Work Order in progress.
+model RunningInvoice {
+  id          String   @id @default(cuid())
+  tenantId    String
+  workOrderId String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant    Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workOrder WorkOrder            @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  lines     RunningInvoiceLine[]
+
+  @@map("running_invoices")
+}
+
+model RunningInvoiceLine {
+  id               String   @id @default(cuid())
+  tenantId         String
+  runningInvoiceId String
+  name             String
+  itemType         String
+  quantity         Int      @default(1)
+  unitPrice        Decimal  @db.Decimal(12, 2)
+  laborPrice       Decimal  @default(0) @db.Decimal(12, 2)
+  total            Decimal  @db.Decimal(12, 2)
+  isFinalized      Boolean  @default(false)
+  addedById        String
+  createdAt        DateTime @default(now())
+
+  runningInvoice RunningInvoice @relation(fields: [runningInvoiceId], references: [id], onDelete: Cascade)
+
+  @@index([runningInvoiceId])
+  @@map("running_invoice_lines")
+}
+
+// Immutable once issued. lockedUnitPrice/lockedLaborPrice on each line are
+// snapshotted at issue time -- see InvoiceLine below.
+model Invoice {
+  id               String        @id @default(cuid())
+  tenantId         String
+  workOrderId      String        @unique
+  invoiceNumber    String
+  status           InvoiceStatus @default(ISSUED)
+  subtotal         Decimal       @db.Decimal(12, 2)
+  discount         Decimal       @default(0) @db.Decimal(12, 2)
+  tax              Decimal       @default(0) @db.Decimal(12, 2)
+  total            Decimal       @db.Decimal(12, 2)
+  paid             Decimal       @default(0) @db.Decimal(12, 2)
+  balance          Decimal       @db.Decimal(12, 2)
+  locked           Boolean       @default(true)
+  immutableVersion Int           @default(1)
+  issuedById       String
+  issuedAt         DateTime      @default(now())
+
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  workOrder   WorkOrder       @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  lines       InvoiceLine[]
+  payments    Payment[]
+  refunds     RefundRequest[]
+  creditNotes CreditNote[]
+
+  @@unique([tenantId, invoiceNumber])
+  @@index([tenantId, status])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id               String  @id @default(cuid())
+  tenantId         String
+  invoiceId        String
+  name             String
+  itemType         String
+  quantity         Int     @default(1)
+  lockedUnitPrice  Decimal @db.Decimal(12, 2)
+  lockedLaborPrice Decimal @default(0) @db.Decimal(12, 2)
+  total            Decimal @db.Decimal(12, 2)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([invoiceId])
+  @@map("invoice_lines")
+}
+
+model InvoiceSequence {
+  tenantId   String @id
+  lastNumber Int    @default(0)
+
+  @@map("invoice_sequences")
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  tenantId              String
+  invoiceId             String
+  amount                Decimal       @db.Decimal(12, 2)
+  method                PaymentMethod
+  status                PaymentStatus @default(CONFIRMED)
+  idempotencyKey        String        @unique
+  providerTransactionId String?
+  recordedById          String
+  createdAt             DateTime      @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, invoiceId])
+  @@map("payments")
+}
+
+model DiscountRequest {
+  id            String                @id @default(cuid())
+  tenantId      String
+  workOrderId   String
+  amount        Decimal               @db.Decimal(12, 2)
+  reason        String
+  status        DiscountRequestStatus @default(PENDING)
+  requestedById String
+  decidedById   String?
+  createdAt     DateTime              @default(now())
+  decidedAt     DateTime?
+
+  @@index([tenantId, status])
+  @@map("discount_requests")
+}
+
+model RefundRequest {
+  id            String              @id @default(cuid())
+  tenantId      String
+  invoiceId     String
+  amount        Decimal             @db.Decimal(12, 2)
+  reason        String
+  status        RefundRequestStatus @default(PENDING)
+  requestedById String
+  decidedById   String?
+  createdAt     DateTime            @default(now())
+  decidedAt     DateTime?
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@map("refund_requests")
+}
+
+model CreditNote {
+  id         String   @id @default(cuid())
+  tenantId   String
+  invoiceId  String
+  amount     Decimal  @db.Decimal(12, 2)
+  reason     String
+  issuedById String
+  createdAt  DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, invoiceId])
+  @@map("credit_notes")
+}
+
+model FinanceConfiguration {
+  tenantId                  String          @id
+  technicianPriceVisible    Boolean         @default(false)
+  customerInvoiceVisible    Boolean         @default(true)
+  discountApprovalThreshold Decimal         @default(0) @db.Decimal(12, 2)
+  maxBranchDiscountPercent  Decimal         @default(0) @db.Decimal(5, 2)
+  allowUnpaidDelivery       Boolean         @default(false)
+  allowPartialPaidDelivery  Boolean         @default(false)
+  paymentMethods            PaymentMethod[]
+  invoiceTerms              String?
+  updatedAt                 DateTime        @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("finance_configuration")
+}
+
+// ============================================================================
+// CUSTOMER-FACING
+// ============================================================================
+
+model CustomerDecisionRequest {
+  id              String                 @id @default(cuid())
+  tenantId        String
+  workOrderId     String
+  customerId      String
+  status          CustomerDecisionStatus @default(PENDING)
+  secureToken     String                 @unique
+  whatsappMessage String?
+  sentAt          DateTime?
+  respondedAt     DateTime?
+  expiresAt       DateTime?
+  createdById     String
+  createdAt       DateTime               @default(now())
+
+  tenant    Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workOrder WorkOrder              @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  customer  Customer               @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items     CustomerDecisionItem[]
+
+  @@index([tenantId, status])
+  @@index([workOrderId])
+  @@map("customer_decision_requests")
+}
+
+model CustomerDecisionItem {
+  id                  String                       @id @default(cuid())
+  tenantId            String
+  decisionRequestId   String
+  name                String
+  explanation         String
+  importance          SeverityLevel
+  price               Decimal                      @db.Decimal(12, 2)
+  laborPrice          Decimal                      @default(0) @db.Decimal(12, 2)
+  total               Decimal                      @db.Decimal(12, 2)
+  decision            CustomerDecisionItemDecision @default(PENDING)
+  warningAcknowledged Boolean                      @default(false)
+  note                String?
+  decidedAt           DateTime?
+
+  decisionRequest CustomerDecisionRequest @relation(fields: [decisionRequestId], references: [id], onDelete: Cascade)
+
+  @@index([decisionRequestId])
+  @@map("customer_decision_items")
+}
+
+// Customer-visible activity feed, populated exclusively through the
+// CustomerSafeProjection service (see Phase 1) -- nothing writes here
+// directly with raw internal text.
+model CustomerTimelineEvent {
+  id          String   @id @default(cuid())
+  tenantId    String
+  workOrderId String?
+  customerId  String
+  message     String
+  eventKey    String
+  createdAt   DateTime @default(now())
+
+  workOrder WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  customer  Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, createdAt])
+  @@map("customer_timeline_events")
+}
+
+// Sanitized service-history snapshot, scoped per ownership period so a new
+// owner never sees a previous owner's entries. Built with a real read
+// path from day one this time (the old model was seeded but never queried).
+model SafeTechnicalHistory {
+  id              String   @id @default(cuid())
+  tenantId        String
+  assetId         String
+  workOrderId     String?
+  ownerCustomerId String
+  summary         String
+  serviceDate     DateTime
+  createdAt       DateTime @default(now())
+
+  asset     Asset      @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  workOrder WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+
+  @@index([assetId, ownerCustomerId])
+  @@map("safe_technical_history")
+}
+
+// ============================================================================
+// TENANT CONFIGURATION (BUILDER) -- single source of truth
+//
+// This replaces the old build's two disconnected tables (a Builder-editor
+// table and a separately-read runtime table). EffectiveAccessResolver and
+// the Owner-facing Builder UI both read and write this SAME row -- there
+// is no second copy anywhere.
+// ============================================================================
+
+model TenantConfiguration {
+  tenantId         String   @id
+  theme            Json
+  pageLayouts      Json
+  roleExperience   Json
+  workflowPolicy   Json
+  featureFlags     Json
+  enabledModules   String[]
+  enabledFeatures  String[]
+  forms            Json
+  messageTemplates Json
+  draftVersion     Int      @default(1)
+  publishedVersion Int      @default(1)
+  updatedAt        DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_configuration")
+}
+
+model TenantConfigurationVersion {
+  id            String         @id @default(cuid())
+  tenantId      String
+  version       Int
+  snapshot      Json
+  riskLevel     AuditRiskLevel
+  publishedById String
+  publishedAt   DateTime       @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, version])
+  @@map("tenant_configuration_versions")
+}
+
+// ============================================================================
+// AUDIT & OPERATIONS EVENTS
+// ============================================================================
+
+// The only table any audit write may target -- enforced by module
+// encapsulation in apps/api (Phase 1), not just convention.
+model AuditLog {
+  id         String         @id @default(cuid())
+  tenantId   String?
+  actorId    String
+  actorType  AuditActorType
+  actorName  String
+  targetType String
+  targetId   String
+  action     String
+  before     Json?
+  after      Json?
+  reason     String?
+  riskLevel  AuditRiskLevel
+  createdAt  DateTime       @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}
+
+// Replay/debug log for the centralized operation-event pipeline. Every
+// significant action emits one row here before fanning out to workflow
+// status, notifications, audit, and customer-safe projection.
+model OperationEvent {
+  id        String         @id @default(cuid())
+  tenantId  String
+  eventKey  String
+  payload   Json
+  actorId   String
+  actorType AuditActorType
+  createdAt DateTime       @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, eventKey])
+  @@map("operation_events")
+}
+
+// ============================================================================
+// PLATFORM
+// ============================================================================
+
+model PlatformLiveViewSession {
+  id                String    @id @default(cuid())
+  platformAccountId String
+  tenantId          String
+  roleViewed        StaffRole
+  personaViewed     String?
+  mode              String    @default("read_only")
+  startedAt         DateTime  @default(now())
+  endedAt           DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, startedAt])
+  @@map("platform_live_view_sessions")
+}
