@@ -168,9 +168,127 @@ Zero workshops on the whole platform (genuinely first use): search/filter bar an
 
 ---
 
+## PAGE: Super Admin Control Center — Governance Controls
+
+(Builder Control — theme, layout, role experience, workflow policy, permission matrix — is specified separately as its own page below, since it's large enough to need its own document. Everything else lives here.)
+
+### Purpose
+The single control plane for everything Super Admin can do to a specific workshop, and the few things that apply platform-wide (Emergency). Every control on this page follows the same governed flow — no exceptions, no shortcuts, because a control plane where some actions skip the safety pipeline is worse than not having one.
+
+### Access
+Permission: `platform.control_center.access`, plus a specific permission per control category below (so a future second platform role — e.g. read-only "Platform Support" — could see this page without being able to act on it).
+
+### The governed flow (applies to every control on this page)
+1. **Select Target** — a workshop (search-as-you-type, same data as the Workshops page). Nothing below is usable until a target is selected. Deep-linking here from Workshops or another page pre-fills the target.
+2. **Choose Control** — pick a left-nav category, then a specific control within it.
+3. **Impact Preview** — computed live, every time, never cached from a previous look at this control: affected users (exact count, not an estimate), affected roles, affected pages, affected modules, whether the tenant/Owner can override this once set, risk level (Low/Medium/High/Critical, computed from the control category + current tenant state, not manually chosen by the admin), rollback availability.
+4. **Confirm with Reason** — a reason field, required for every control on this page without exception (some earlier drafts of this spec implied only "high-risk" actions need a reason; here, all of them do, because "why was this changed" should never be a mystery for a production platform, and the marginal cost of always asking is low compared to the cost of an unexplained change six months later).
+5. **Apply** — the control activates. UI shows a brief "Applying…" state, then confirms.
+6. **Audit** — an `AuditLog` row is written before the response returns to the admin, not fire-and-forget after — if audit-writing fails, the control change itself must not silently succeed unaudited (same "state and audit can't diverge" rule as the rest of the platform).
+7. **Rollback if possible** — every control category states explicitly, in its own section below, whether it's rollback-eligible and what rollback actually restores.
+
+High-risk and Critical-risk actions add a **double confirmation**: after step 4's reason is entered, a second modal restates exactly what will happen in plain language (not just "Confirm?") and requires typing the workshop's name to proceed — deliberately friction-heavy, because these are the actions most likely to be clicked by habit otherwise.
+
+### Layout
+- **Top bar**: Target selector (workshop search), then once selected: workshop status badge, current plan, current risk level, "last control change: {action} by {admin} {relative time}".
+- **Left nav**: Overview, Tenant Status, Modules, Features, Roles, Builder, Access & Accounts, Limits & Entitlements, Reports, Finance, Emergency, Audit & Rollback.
+- **Center**: the selected category's specific controls (detailed per category below).
+- **Right panel**: Impact Preview, always visible once a control is selected, updates live as the admin changes options before confirming — never a preview of last time's action.
+
+### Overview (left-nav default when a target is first selected)
+A read-only summary before touching anything: current status, plan, risk, module/feature enablement summary (chip list), role states summary, last 5 control changes for this workshop (mini audit feed with a "View all" link to Audit & Rollback), and quick links into each other category. Exists so an admin opening Control Center for an unfamiliar workshop orients before acting, rather than the first thing they see being a form.
+
+### Tenant Status
+
+Single-select control: Active, Trial, Pending Setup, Frozen, Suspended, Read-only, Archived.
+
+- Changing *to* **Frozen** or **Suspended** triggers the full Freeze effect set (from the Workshops page spec: blocks owner/staff login, blocks customer portal, blocks decision links, revokes all active sessions, preserves all data, Platform Live View stays available read-only). Frozen and Suspended are functionally identical in what they block; they exist as separate states so Super Admin can record *why* (Frozen = platform-initiated, e.g. policy violation; Suspended = commercial, e.g. non-payment) without needing a free-text reason to convey that distinction at a glance elsewhere in the UI (the reason field still captures specifics either way).
+- Changing *to* **Read-only**: all write actions blocked platform-wide for every role at that workshop, but logins and viewing still work — distinct from Frozen, where login itself is blocked.
+- Changing *to* **Archived**: same effect as Frozen, plus the workshop drops out of default list views everywhere (Workshops, Platform Reports) unless an explicit "show archived" filter is applied. Archiving is rollback-eligible (returns to whatever status it had before) but is flagged Critical risk regardless of the tenant's current activity level, since it's the state furthest from "business as usual."
+- Changing *to* **Active** or **Trial**: reverses login blocks; sessions are not automatically restored (users log in fresh) — a deliberate choice, since silently re-establishing old sessions after a status change is exactly the kind of thing that should require a fresh login, not a resumed one.
+- Rollback: available for every transition, restores the immediately-prior status only (not an arbitrary earlier one — for that, use the Audit & Rollback history and select a specific past event).
+
+### Modules
+
+Per-workshop on/off list: Customer Portal, Technician Workspace, Inventory Management, Branch Management, Team Leader Module, Workshop Builder, Reports, Finance, Multi-Branch, Multi-Warehouse.
+
+- Each is a toggle plus a state badge showing where it sits in the permission hierarchy: `Enabled (Platform)` (default, tenant-editable — wait, no: modules are Super-Admin-only per the Amendment, so there is no tenant-editable case here anymore; the only states are `Enabled` and `Disabled`, both Super-Admin-set) — corrected: **Enabled** / **Disabled**, full stop, no tenant override tier, since Owner no longer has any module-toggling surface at all.
+- Disabling a module removes its pages from navigation for every role at that workshop and blocks its endpoints server-side (not just hides the nav item) — this is what the platform's Effective Permission Resolver's layer 4 ("Module Enabled") directly reads.
+- Disabling **Multi-Branch** or **Multi-Warehouse** on a workshop that currently has more than one branch/warehouse is blocked with an inline explanation, not allowed to silently orphan existing branches/warehouses — Impact Preview shows the exact count that would be affected and the control refuses to apply until the admin either keeps the module on or first reduces the workshop down to one branch/warehouse through Organization & Access.
+- Rollback: restores prior enabled/disabled state for that module only.
+
+### Features
+
+Per-workshop on/off list: Quick Inspection, Quick Service, Computer Codes, Customer Decision Requests, WhatsApp Decision Links, Critical Warning Acknowledgement, Part Request Lifecycle, Return Unused, Builder Publishing, Custom Fields, Message Templates, Report Export, Finance Payments, Refunds.
+
+- Same Enabled/Disabled model as Modules, one layer lower in the resolver (layer 5).
+- Some features have hard dependencies on others, checked before Impact Preview even renders an Apply button: **WhatsApp Decision Links** requires **Customer Decision Requests** to be on; disabling Customer Decision Requests while WhatsApp Decision Links is on auto-includes disabling both in the same Impact Preview, shown as a single combined change, not two separate ones the admin has to notice and do in the right order.
+- **Critical Warning Acknowledgement** cannot be disabled at all from this screen — it's greyed out with a tooltip: *"This is a safety-critical feature and cannot be turned off from any control surface."* (matches the Builder Control section's "hard rules baked into the application itself" note — this is enforced the same way, just surfaced here too so the admin doesn't have to already know that to understand why the toggle won't move).
+- Rollback: restores prior state for that feature only, re-applying any dependency it had auto-included at disable time.
+
+### Roles
+
+Per-workshop, per-role state: Enabled, Disabled, Read-only, Login Locked, Actions Limited — for Tenant Owner, Tenant Admin, Branch Manager, Technician, Inventory Manager, Team Leader, Customer, Data Analyst.
+
+- **Enabled**: normal.
+- **Disabled**: the full dependency-safety flow already specified in the canonical spec (current holders reassigned/deactivated, dependent workflow policies force-resolved, in-flight records re-routed or blocking the disable) — Impact Preview here *is* that dependency check, rendered as a checklist the admin must resolve item-by-item before the Apply button activates. If there is nothing to resolve (a role with zero current holders, e.g. a workshop that never used Data Analyst), the checklist is empty and Apply is immediately available.
+- **Read-only**: every write permission that role would otherwise have is suppressed at the resolver level for the duration; view permissions remain. Existing sessions for staff in that role are not revoked (unlike Login Locked below) — they simply lose write access on their next action, with a banner explaining why.
+- **Login Locked**: new logins for that role are blocked; existing sessions are revoked immediately (this is the one role-state that does force a logout).
+- **Actions Limited**: a specific, admin-chosen subset of that role's normal permissions is suppressed (opens a secondary picker listing that role's current permission keys with checkboxes) — the most granular of the five states, and the only one that needs its own sub-form rather than being a single toggle.
+- Rollback: restores the prior role state, including re-running the dependency checklist in reverse where relevant (e.g. re-enabling a role that has since had its holders reassigned elsewhere doesn't silently reassign them back — it just makes the role assignable again going forward).
+
+### Access & Accounts
+
+- **Lock Owner Account** / **Unlock Owner Account** — toggle pair, mutually exclusive availability (only one shown depending on current state). Locking blocks that one account's login without touching any other staff.
+- **Change Workshop Owner** — a distinct flow, not a toggle: search/select a different existing `StaffUser` at that tenant (must already exist — this does not create a new person), confirm, and the `TENANT_OWNER` role reassigns from the old holder (who reverts to `TENANT_ADMIN` by default, editable) to the new one. Requires the new owner to already have an active account — cannot be done as a one-step invite-and-promote.
+- **Revoke All Sessions** — immediate logout for every account at that tenant (staff and customers). Not destructive to data; purely a session action. No rollback (there's nothing to roll back — sessions are simply re-established on next login).
+- **Suspend All Staff** / **Restore Staff Access** — mutually exclusive pair, same shape as Lock/Unlock Owner but scoped to every non-owner staff account at once. Customer accounts are unaffected by this pair specifically (Disable Customer Portal Access, below, is the customer-scoped equivalent).
+- **Disable Customer Portal Access** — blocks customer login and public decision links for this tenant specifically (distinct from the platform-wide Emergency "Disable Decision Links," which affects every tenant at once).
+- **Reset Invite (placeholder)** — regenerates and re-sends the invite token for an account still in `INVITED` status; marked placeholder in the original spec pending the real invite-email delivery integration (see the gap analysis — this was one of the old build's unresolved items), so this control exists in the UI now but its "send" step is a stub until that integration lands.
+
+### Limits & Entitlements
+
+Numeric/list fields, editable independent of the workshop's assigned Plan (a manual override on top of the plan default, shown with a "differs from plan default" indicator when it does):
+
+| Field | Type | Notes |
+|---|---|---|
+| Max Branches | number | Cannot be set below the workshop's current active branch count — inline validation, not just a save-time error |
+| Max Users | number | Same floor rule, against current active `StaffUser` count |
+| Max Warehouses | number | Same floor rule |
+| Allowed Categories | multi-select (Cars/Motorcycles/Heavy Equipment) | Cannot remove a category that has existing `Asset` rows under it — same floor logic, applied to a set rather than a count |
+| Allowed Modules | reference view only here | Actual toggles live under Modules, above — this just shows the plan-level ceiling those toggles can't exceed |
+| Allowed Reports | multi-select from the report registry | |
+| Allowed Builder Features | multi-select | Which parts of Builder Control (Theme / Layout / Role Experience / Workflow Policy / Permission Matrix) this workshop's plan permits Super Admin to even offer — a plan ceiling, not a per-workshop preference |
+| Allowed Exports | multi-select | Which report categories can be exported to file for this workshop |
+| Allowed Finance Features | multi-select (Payments / Refunds / Advanced Pricing / etc.) | |
+
+Every field change here goes through the full governed flow individually — this is not a bulk-save form; each field is its own control with its own Impact Preview, so a change to Max Branches can't accidentally bundle in an unreviewed change to Allowed Exports.
+
+### Reports (Control)
+
+Per-workshop toggles: enable/disable reports overall, advanced reports, exports, financial reports, inventory value reports, user performance reports; plus **lock report permissions** (freezes the Owner's ability to change who on their team can see which report category, without disabling the reports themselves).
+
+### Finance (Control)
+
+Per-workshop toggles: enable/disable finance module overall, invoice generation, payment recording, refunds, financial reports, payment methods (multi-select from the platform's supported method list); plus **force finance read-only** (Owner/Branch Manager can view all finance data but no write action succeeds — invoices, payments, refunds all blocked — distinct from disabling finance outright, which also hides it from navigation).
+
+### Emergency
+
+Platform-wide-feeling but still per-workshop-scoped buttons, each a shortcut into an already-defined control above rather than a separate mechanism: Freeze Workshop Immediately, Force Logout All Users, Disable Customer Portal, Disable Decision Links, Lock Builder Publishing, Set Workshop Read-only, Suspend Staff, Lock Owner, Disable External Access.
+
+- Every Emergency button skips step 2 (Choose Control) by pre-selecting its target control, but **never** skips Impact Preview, Confirm with Reason, or Audit — "Emergency" describes how fast an admin can reach the action, not a bypass of the governed flow.
+- All Emergency actions are Critical risk by definition and require the double-confirmation (type the workshop name) regardless of the underlying control's own normal risk level.
+- **Disable Decision Links** here is platform-wide (every tenant), distinct from the tenant-scoped "Disable Customer Portal Access" under Access & Accounts — the Emergency version exists for a scenario like a platform-wide incident with the WhatsApp/decision-link delivery path itself, not one misbehaving workshop.
+
+### Audit & Rollback
+
+The unified history for everything above, scoped to the selected target: every control change, in order, each row showing actor, action, before/after, reason, timestamp (in Super Admin's own timezone, with a toggle to view in the workshop's timezone instead), risk level, and a **Rollback** button where eligible (per the rollback notes under each category above). Rolling back writes its own new audit row referencing the original — history is append-only; a rollback is a new event, not an edit or deletion of the old one.
+
+---
+
 ## Remaining pages in this role (pending — same depth)
 
-- Super Admin Control Center — Tenant Status, Modules, Features, Limits & Entitlements, Access & Accounts, Emergency
+- Super Admin Control Center → Builder Control (full page detail — the sections above already give the content, this remaining item is the dedicated page writeup with layout/interaction detail matching Workshops' depth)
 - Super Admin Control Center — Builder Control: Theme/Identity
 - Super Admin Control Center — Builder Control: Page Layout
 - Super Admin Control Center — Builder Control: Role Experience
