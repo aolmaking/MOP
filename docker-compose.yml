@@ -1,20 +1,22 @@
+name: mop-platform
+
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: mop
-      POSTGRES_PASSWORD: mop
-      POSTGRES_DB: mop_platform
+      POSTGRES_USER: mop_dev
+      POSTGRES_PASSWORD: mop_dev_secret
+      POSTGRES_DB: mop_platform_dev
     ports:
       - "5432:5432"
     volumes:
-      - mop_postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mop -d mop_platform"]
+      test: ["CMD-SHELL", "pg_isready -U mop_dev -d mop_platform_dev"]
       interval: 5s
       timeout: 5s
       retries: 10
 
 volumes:
-  mop_postgres_data:
+  postgres_data:
