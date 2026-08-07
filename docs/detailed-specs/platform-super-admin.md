@@ -1,6 +1,6 @@
 # Platform Super Admin — Detailed Page Specifications
 
-> Status: **CALIBRATION DRAFT, confirmed.** Only "Add Workshop Owner" is done to full depth so far. Everything below is derived fresh from `docs/PRODUCT_SPEC_CANONICAL.md`'s intent, cross-checked against the Phase 0 schema (`packages/database/prisma/schema.prisma`) for what's actually representable — not copied or adapted from the old implementation.
+> Status: **COMPLETE.** All 5 Platform Super Admin pages (Add Workshop Owner, Workshops, Super Admin Control Center — Governance Controls, Super Admin Control Center — Builder Control, Platform Reports, Workshop Live View — Control Center counted as its two sub-areas) are done to full depth. Everything below is derived fresh from `docs/PRODUCT_SPEC_CANONICAL.md`'s intent, cross-checked against the Phase 0 schema (`packages/database/prisma/schema.prisma`) for what's actually representable — not copied or adapted from the old implementation.
 >
 > **This role's scope grew (2026-08-07):** design, page layout, role experience, workflow policy, and the permission matrix — previously planned as Owner self-service pages — now live here, under Super Admin Control Center → Builder Control, per workshop. See the Amendment note at the top of `docs/PRODUCT_SPEC_CANONICAL.md` and that doc's expanded Control Center section for the full rationale. "Add Workshop Owner" below is unaffected by this change (its "Starter Builder Template" field already assumed a platform-controlled baseline). The remaining pages list below is updated to include Builder Control's absorbed content.
 
@@ -326,10 +326,78 @@ From Audit & Rollback (Governance Controls) or from a "Version History" link ins
 
 ---
 
-## Remaining pages in this role (pending — same depth)
+## PAGE: Platform Reports
 
-- Platform Reports
-- Workshop Live View
+### Purpose
+How the platform operator understands the business of running MOP itself — usage, adoption, commercial health, risk — across every workshop. Not a workshop's own operational reporting (that's the Owner/Branch Manager/etc.'s Reports & Analytics, entirely separate data and entirely separate page).
+
+### Access
+Permission: `platform.reports.view`.
+
+### Layout
+Two levels, like Workshops → Details drawer:
+
+**Level 1 — Aggregated platform view (default landing state):**
+A row of platform-wide summary tiles at the top (total workshops, active workshops, total staff users, total customers, aggregate MRR placeholder), then a grid of **workshop cards** (not a dense table like the Workshops page — these carry more visual weight since they're comparison-oriented): workshop name, usage score (0–100, composite), feature adoption (%), last activity, subscription status, health risk badge, builder adoption (%), active users. Same server-side pagination discipline as Workshops (many workshops worldwide, cards paginate, never all-load).
+
+**Level 2 — Per-workshop detail (click a card):**
+Opens the six report sections below for that one workshop, as tabs. Each tab is also reachable pre-filtered from a workshop's row on the Workshops page ("Open Reports" action).
+
+A toggle at the top of Level 2 — **"Compare against platform average"** — overlays a faint reference line/value on every chart/metric showing where this workshop sits relative to the median across all workshops on the same plan tier (not all workshops platform-wide, since comparing a Starter-plan single-branch shop against an Enterprise 50-branch chain would be meaningless).
+
+### A. Usage Overview
+- Active users (staff + customer, split), daily/weekly active users (line chart, 30/90-day toggle), owner last login (with a staleness warning past a configurable threshold), staff last activity (table: each staff member, role, last action, relative time), customer portal usage (sessions, distinct customers, decision-link open rate).
+
+### B. Feature Usage
+- One row per feature (Technician Work Card, Customer Decision Requests, Inventory Requests, Parts Used/Returned, Quick Inspection, Quick Service, Builder, Reports, Team Leader, Finance): usage count this period, trend arrow vs. prior period, and — critically — cross-referenced against that feature's current enablement state from Control Center, so a feature showing zero usage because it's *disabled* reads differently (greyed, labeled "Disabled") than one showing zero usage while *enabled* (a real adoption signal, highlighted).
+
+### C. Builder Adoption
+- Theme customized (yes/no + last-changed date), pages customized (count of pages with any non-default layout), forms customized, messages customized, last publish (timestamp + who), rollback count (lifetime), validation failures (count of blocked-publish attempts — a proxy for how much friction Super Admin is hitting configuring this workshop), high-risk changes (count, links into that workshop's Audit & Rollback filtered to risk ≥ High).
+
+### D. Operational Activity
+- Work orders created/completed (chart, with a completion-rate percentage), active tasks, waiting-customer count, waiting-parts count, blockers (current open count + resolved-this-period count), inventory movements (count by type), payments recorded (count + total amount **in that workshop's own currency**, never converted or summed across workshops with different currencies — a platform-wide total would be currency-mixing nonsense, so Level 1's aggregate tiles never sum money, only counts), invoices issued.
+
+### E. Commercial Snapshot
+- Plan, subscription status, paid/unpaid, renewal date, overdue amount (placeholder — labeled honestly as not yet backed by real billing, same as the Workshops page), MRR contribution placeholder. This section is the most explicitly "not real yet" of the six, and the UI says so plainly rather than implying precision the platform doesn't have.
+
+### F. Health & Risk
+- Owner inactivity (days since last login), low staff usage (staff with zero actions in period), failed logins (count, with a spike indicator), builder validation errors (same count as section C, surfaced here too since it's a risk signal not just an adoption one), payment risk (placeholder, ties to Commercial Snapshot), frozen/suspension history (count + dates, last 12 months), low feature adoption (features enabled but unused past a threshold — the inverse of section B's disabled-vs-unused distinction). This section is what actually computes the Health badge shown on Workshops and on the Level 1 cards here — not a separate hidden formula, the same one, so a Super Admin who drills into "why is this workshop At Risk" always finds the literal answer here.
+
+### Privacy discipline (applies to every section above)
+- Nothing here ever surfaces a specific customer's name, phone, asset, or financial detail — every number is a count, a rate, or an aggregate. If a metric would require showing customer-identifying data to be useful (e.g. "which customer had the most decision requests"), it is not included on this page at all — that kind of lookup belongs to the workshop's own Owner-facing reports, not the platform operator's.
+- Staff-level detail (e.g. "staff last activity" in section A) is fine — staff are the platform's own users in a meaningful sense, and workshop Owners already see this in their own reporting; it's not the customer-privacy line this rule is protecting.
+
+## PAGE: Workshop Live View
+
+### Purpose
+Let Super Admin see a specific workshop's actual pages, in that workshop's actual current configuration, for a specific role — without logging in as anyone and without being able to change anything. Exists so "what does this workshop's Technician actually see right now" is answerable by looking, not by inference from config screens.
+
+### Access
+Permission: `platform.live_view.access`. Reachable from a workshop's row (Workshops page) or from Control Center's top bar.
+
+### Entry flow
+1. Target workshop (pre-filled if entered via a workshop's row).
+2. Role selector: Owner / Tenant Admin, Branch Manager, Technician, Inventory Manager, Team Leader, Customer Portal, Data Analyst.
+3. Persona selector (optional): either "Generic {role}" (no specific person, uses the role's baseline scope with no branch/warehouse/team narrowing) or a specific existing staff member/customer at that workshop (uses their actual scope — e.g. viewing as a specific Branch Manager shows only their assigned branch's data, not every branch).
+4. Data mode: **Live data** (that workshop's real current records) or **Demo data** (if the workshop has demo data seeded — useful for a Pending Setup tenant with no real activity yet to look at).
+
+### Rendering — the important architectural commitment
+Live View does not render a separate "simulated" summary of what a page would look like. It renders **the exact same page components** every real user of that role sees, fed the selected workshop's real `TenantConfiguration` (theme, layout, role experience) and real (or demo) data through the same read APIs those pages normally call — just through a read-only session type that has view permissions only, structurally incapable of firing a mutation, rather than a UI-level "these buttons are disabled" trick. If Live View and a real logged-in user of that role would ever show different things for the same workshop/role/persona, that's treated as a bug in Live View, not an acceptable approximation.
+
+### Chrome
+- Persistent banner, always visible, cannot be dismissed: **"Platform Live View — Read-only"**.
+- Every action surface (buttons, form submits, links that would normally mutate) still renders normally (so the page looks and feels real) but intercepts the click: a small toast — **"This action is disabled in Platform Live View."** — instead of performing it. Navigation between pages within the same role/workshop/persona context still works normally (it's a read action).
+- A small floating control (bottom-right) to change Role/Persona/Data-mode without leaving Live View and re-entering from scratch.
+
+### Session logging
+Every Live View session writes a row at entry and updates it at exit: platform admin, workshop, role viewed, persona/user viewed, start time, end time, mode (`read_only`, currently the only mode — the field exists as an enum of one so a future mode never requires a schema change). The end time is set on explicit exit *and* on session timeout, so a session an admin simply closes the tab on doesn't stay "open" forever — a background sweep closes out (sets `endedAt`) any Live View session whose underlying auth session has itself expired.
+
+### What Live View deliberately cannot do
+No data mutation, ever, including administrative-feeling ones — Live View cannot freeze the workshop, cannot open Control Center from within itself (must exit first), cannot impersonate for the purpose of taking a real action "on behalf of" the workshop. If a Super Admin needs to actually act, that's Control Center, a separate, separately-audited surface — Live View exists purely to look.
+
+---
+
+## Platform Super Admin role: detailed specs complete.
 - Super Admin Control Center — Builder Control: Theme/Identity
 - Super Admin Control Center — Builder Control: Page Layout
 - Super Admin Control Center — Builder Control: Role Experience
