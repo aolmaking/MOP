@@ -1,6 +1,9 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
+import { ValidationPipe } from "@nestjs/common";
 import { AppModule } from "./app.module";
+import { ApiExceptionFilter } from "./common/filters/api-exception.filter";
+import { validationExceptionFactory } from "./common/validation/validation-exception-factory";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -9,6 +12,16 @@ async function bootstrap() {
     origin: process.env.CORS_ORIGIN ?? "http://localhost:4200",
     credentials: true,
   });
+
+  app.useGlobalFilters(new ApiExceptionFilter());
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      exceptionFactory: validationExceptionFactory,
+    }),
+  );
 
   const port = process.env.PORT ?? 4000;
   await app.listen(port);

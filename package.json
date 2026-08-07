@@ -9,6 +9,10 @@
   "scripts": {
     "db:generate": "pnpm --filter @mop/database run generate",
     "db:migrate": "pnpm --filter @mop/database run migrate:dev",
-    "db:studio": "pnpm --filter @mop/database run studio"
+    "db:studio": "pnpm --filter @mop/database run studio",
+    "build:shared": "pnpm --filter @mop/shared run build",
+    "build": "pnpm build:shared && pnpm --filter @mop/api run build && pnpm --filter @mop/web run build",
+    "test": "pnpm --filter @mop/api run test && pnpm --filter @mop/web run test",
+    "lint": "pnpm --filter @mop/api run lint"
   }
 }
