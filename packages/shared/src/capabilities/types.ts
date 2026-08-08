@@ -16,6 +16,8 @@
  * never be possible again once the lifecycle is entangled with five roles.
  */
 
+import type { GateKey } from "./gates";
+
 export const CAPABILITY_KEYS = [
   "MULTI_BRANCH",
   "MULTI_WAREHOUSE",
@@ -132,8 +134,8 @@ export interface RemovalPolicy {
   readonly statesToDisable: readonly string[];
   /** Replacement edges that keep the graph connected once this capability is gone. */
   readonly addTransitions?: readonly WorkflowTransition[];
-  readonly gatesToDrop: readonly string[];
-  readonly gatesToKeep: readonly string[];
+  readonly gatesToDrop: readonly GateKey[];
+  readonly gatesToKeep: readonly GateKey[];
   readonly existingRecordsPolicy: ExistingRecordsPolicy;
   readonly orphanedRolePolicy: OrphanedRolePolicy;
   /** Replacement customer-facing wording, where removal changes what the customer is told. */
@@ -147,7 +149,7 @@ export interface CapabilityDefinition {
   readonly dependencies: readonly CapabilityKey[];
   /** Cannot be active at the same time as this capability. */
   readonly conflicts: readonly CapabilityKey[];
-  readonly affectedGates: readonly string[];
+  readonly affectedGates: readonly GateKey[];
   readonly affectedRoles: readonly string[];
   readonly affectedReports: readonly string[];
   readonly historicalRecordPolicy: HistoricalRecordPolicy;

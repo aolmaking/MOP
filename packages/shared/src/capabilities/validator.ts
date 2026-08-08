@@ -1,5 +1,6 @@
 import { CAPABILITY_REGISTRY } from "./registry";
 import { ALL_GRAPHS } from "./workflow-graphs";
+import { coreGates, gatesOwnedBy } from "./gates";
 import {
   ACTIVE_STATUSES,
   type CapabilityDefinition,
@@ -97,27 +98,34 @@ export function validateCapabilityProfile(
     definition.affectedRoles.forEach((role) => orphanedRoles.add(role));
 
     // A gate belongs to the capability that PRODUCES the thing it checks,
-    // so it dies with that capability. Deriving this from `affectedGates`
-    // rather than unioning the policies' own drop/keep lists is what
-    // stops two policies disagreeing about a shared gate: when Inventory
-    // and Part Returns are both off, Part Returns' "keep parts-used" must
-    // not resurrect a check that Inventory alone can satisfy -- that would
-    // strand every job, which is exactly the bug this layer exists for.
-    definition.affectedGates.forEach((gate) => droppedGates.add(gate));
+    // so it dies with that capability -- and the owner is read from the
+    // gate registry, not from this capability's own list. That is what
+    // stops two policies disagreeing about a shared gate: with Inventory
+    // and Part Returns both off, Part Returns' "keep parts-used" must not
+    // resurrect a check that only Inventory could satisfy, which would
+    // strand every job.
+    gatesOwnedBy(key).forEach((gate) => droppedGates.add(gate));
     definition.removal.gatesToKeep.forEach((gate) => keptGates.add(gate));
 
-    const notOwned = definition.removal.gatesToDrop.filter((gate) => !definition.affectedGates.includes(gate));
+    // A capability may only claim to drop gates the registry says it owns.
+    // Catches a policy drifting away from the registry after an edit.
+    const owned = new Set<string>(gatesOwnedBy(key));
+    const notOwned = definition.removal.gatesToDrop.filter((gate) => !owned.has(gate));
     if (notOwned.length > 0) {
       issues.push({
         code: "GATE_NOT_OWNED",
         entity: "-",
         subject: key,
         message:
-          `${key}'s removal policy drops gate(s) ${notOwned.join(", ")} that it does not declare in ` +
-          `affectedGates. A capability may only drop gates it owns.`,
+          `${key}'s removal policy drops gate(s) ${notOwned.join(", ")} that the gate registry does not ` +
+          `assign to it. A capability may only drop gates it owns.`,
       });
     }
   }
+
+  // A core gate has no owner, so nothing above can have dropped it. Belt
+  // and braces: assert it explicitly rather than trusting the derivation.
+  for (const gate of coreGates()) droppedGates.delete(gate);
 
   // "Keep" only means "my own removal doesn't drop this" -- it can never
   // override an owner having gone away.

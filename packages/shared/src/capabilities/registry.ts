@@ -65,7 +65,7 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
     owningSystem: "INVENTORY",
     dependencies: [],
     conflicts: [],
-    affectedGates: ["parts.received_used_or_returned", "parts.no_pending_return"],
+    affectedGates: ["parts.received_used_or_returned"],
     affectedRoles: ["INVENTORY_MANAGER"],
     affectedReports: ["reports.inventory.stock_health", "reports.inventory.consumption"],
     historicalRecordPolicy: "PRESERVE_READ_ONLY",
@@ -79,7 +79,9 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
       // No replacement edge is needed: a workshop without stock records a
       // parts wait as a blocker (BlockerReason.WAITING_PART), and
       // IN_PROGRESS <-> BLOCKED already exists unguarded.
-      gatesToDrop: ["parts.received_used_or_returned", "parts.no_pending_return"],
+      // parts.no_pending_return belongs to PART_RETURNS, which depends on
+      // INVENTORY and therefore drops it itself when this goes.
+      gatesToDrop: ["parts.received_used_or_returned"],
       gatesToKeep: ["approved_work_completed", "no_open_blocker", "customer_decisions_resolved"],
       existingRecordsPolicy: "PRESERVE_READ_ONLY",
       orphanedRolePolicy: "REQUIRE_REASSIGNMENT",
