@@ -10,3 +10,5 @@ export * from "./capabilities/registry";
 export * from "./capabilities/workflow-graphs";
 export * from "./capabilities/validator";
 export * from "./capabilities/profiles";
+export * from "./contracts/events";
+export * from "./contracts/cross-system";
