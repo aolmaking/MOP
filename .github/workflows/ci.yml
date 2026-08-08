@@ -1,0 +1,74 @@
+name: CI
+
+# Runs on every push and PR so a broken build/test/lint never lands on main
+# unnoticed -- the old project had no CI at all.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    # A real Postgres instance, not a mock -- the integration tests
+    # (auth, operation events, access layers) run real Prisma queries
+    # against it, matching how they're run locally.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mop_dev
+          POSTGRES_PASSWORD: mop_dev_secret
+          POSTGRES_DB: mop_platform_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mop_dev"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Matches .env.test -- kept as an explicit job-level var rather than
+      # relying on Prisma's own .env discovery, since that discovery is
+      # relative to the schema file's location, not the repo root (this
+      # tripped up the very first local migration run too).
+      DATABASE_URL: postgresql://mop_dev:mop_dev_secret@localhost:5432/mop_platform_test?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Apply database migrations
+        run: pnpm --filter @mop/database exec prisma migrate deploy
+
+      # Includes tools/lint-audit-boundary.mjs -- fails the build if any
+      # AuditLog write happens outside apps/api/src/audit/**.
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Runs both apps/api's Jest suite (unit + real-DB integration tests)
+      # and apps/web's Vitest suite.
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build

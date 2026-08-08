@@ -4,6 +4,11 @@
 // History pages) is fine anywhere -- this only guards writes, since a
 // write that bypasses AuditService is a write the platform can't
 // guarantee is consistently shaped.
+//
+// *.spec.ts files are exempt: integration tests own a disposable test
+// database end-to-end and legitimately need direct Prisma access to seed
+// and tear down every table, AuditLog included -- that's test hygiene, not
+// a production write path the platform needs to guarantee the shape of.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
@@ -30,6 +35,7 @@ const violations = [];
 for (const file of walk(ROOT)) {
   const rel = relative(ROOT, file).split(sep).join("/");
   if (rel.startsWith("audit/")) continue;
+  if (rel.endsWith(".spec.ts")) continue;
 
   const content = readFileSync(file, "utf8");
   const lines = content.split(/\r?\n/);

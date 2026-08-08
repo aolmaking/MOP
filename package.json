@@ -13,6 +13,7 @@
     "build:shared": "pnpm --filter @mop/shared run build",
     "build": "pnpm build:shared && pnpm --filter @mop/api run build && pnpm --filter @mop/web run build",
     "test": "pnpm --filter @mop/api run test && pnpm --filter @mop/web run test",
-    "lint": "pnpm --filter @mop/api run lint && node tools/lint-audit-boundary.mjs"
+    "lint": "pnpm --filter @mop/api run lint && node tools/lint-audit-boundary.mjs",
+    "typecheck": "pnpm --filter @mop/shared exec tsc --noEmit -p tsconfig.json && pnpm --filter @mop/api exec tsc --noEmit -p tsconfig.json"
   }
 }
