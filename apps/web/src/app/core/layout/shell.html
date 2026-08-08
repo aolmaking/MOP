@@ -1,0 +1,12 @@
+<div class="shell">
+  <header class="shell-header">
+    <span class="shell-brand">MOP</span>
+    @if (session(); as s) {
+      <span class="shell-user">{{ s.role }}</span>
+      <button type="button" class="shell-logout" (click)="logout()">Log out</button>
+    }
+  </header>
+  <main class="shell-main">
+    <router-outlet />
+  </main>
+</div>

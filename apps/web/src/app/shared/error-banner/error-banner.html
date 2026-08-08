@@ -1,0 +1,6 @@
+@if (error(); as e) {
+  <div class="error-banner" role="alert">
+    <span>{{ e.message }}</span>
+    <button type="button" class="error-banner-dismiss" (click)="dismissed.emit()" aria-label="Dismiss">&times;</button>
+  </div>
+}

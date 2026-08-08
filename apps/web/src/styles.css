@@ -1,1 +1,481 @@
-/* You can add global styles to this file, and also import other style files */
+/*
+ * MOP design tokens -- the single source every page/component reads color,
+ * type, spacing, and radius from. Nothing below should be hand-picked
+ * again inside a component's own stylesheet; that's how a product ends up
+ * with a dozen near-identical greys.
+ *
+ * Direction: this is platform-operator control-tower software (freeze a
+ * workshop, disable a role, publish a config thousands of people see) --
+ * not a marketing site. Cool slate-navy neutrals read as "monitoring
+ * surface"; one precise signal-blue accent stays reserved for actions and
+ * links so it never gets confused with the semantic status colors, which
+ * carry real meaning (Healthy/At Risk/Critical) and must never double as
+ * decoration.
+ *
+ * Theming: dark is the default ground (this is worn for long sessions --
+ * see the "eye comfortable" requirement), overridden for light via
+ * prefers-color-scheme, and both are overridable again via a
+ * `data-theme="dark|light"` attribute on <html> for an explicit in-app
+ * toggle later. Components must only ever reference the custom
+ * properties below, never a color literal, so both themes stay correct
+ * automatically.
+ */
+
+:root {
+  /* --- color: dark (default ground) --- */
+  --bg: #0b1220;
+  --surface: #121b2e;
+  --surface-raised: #18233a; /* one step above --surface: drawer/modal/dropdown elevation */
+  --border: #26324a;
+  --border-strong: #374563;
+  --text: #e8ecf4;
+  --text-muted: #8b96ac;
+  --text-faint: #5a6684;
+
+  --accent: #2fa8e0;
+  --accent-hover: #55bcec;
+  --accent-muted: #17324a;
+  --on-accent: #06141f;
+
+  --success: #34d399;
+  --success-bg: #113328;
+  --warning: #f5a524;
+  --warning-bg: #3a2a10;
+  --danger: #f2506b;
+  --danger-bg: #3a1620;
+  --neutral-badge: #8b96ac;
+  --neutral-badge-bg: #1c2740;
+
+  --focus-ring: #55bcec;
+  --shadow-color: 220 60% 2%;
+
+  /* --- type --- */
+  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
+
+  --text-xs: 0.75rem;   /* 12px -- captions, uppercase labels */
+  --text-sm: 0.8125rem; /* 13px -- dense table cells */
+  --text-base: 0.875rem;/* 14px -- default UI text */
+  --text-md: 1rem;      /* 16px -- emphasized body, form labels */
+  --text-lg: 1.25rem;   /* 20px -- section headers */
+  --text-xl: 1.5rem;    /* 24px -- page titles */
+  --text-2xl: 2rem;     /* 32px -- empty-state headlines, rare */
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --tracking-label: 0.06em;
+
+  /* --- spacing (4px base unit) --- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 2.5rem;
+  --space-8: 3rem;
+
+  /* --- radius: modest and consistent, never decorative --- */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  /* --- motion: quick and quiet, this is operational software --- */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --easing: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Light theme -- not a naive invert. Same cool-slate bias, re-tuned for
+   contrast on a light ground, same accent/semantic hues held constant
+   where they still pass contrast, nudged darker where they don't. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f7f9fc;
+    --surface: #ffffff;
+    --surface-raised: #ffffff;
+    --border: #dce3ee;
+    --border-strong: #c3ccdd;
+    --text: #0f1729;
+    --text-muted: #5b6478;
+    --text-faint: #8791a4;
+
+    --accent: #1c7ed6;
+    --accent-hover: #1567b3;
+    --accent-muted: #e6f2fc;
+    --on-accent: #ffffff;
+
+    --success: #17925a;
+    --success-bg: #e5f7ef;
+    --warning: #b3720b;
+    --warning-bg: #fbf0dd;
+    --danger: #d23355;
+    --danger-bg: #fceaee;
+    --neutral-badge: #5b6478;
+    --neutral-badge-bg: #eef1f6;
+
+    --focus-ring: #1c7ed6;
+    --shadow-color: 220 30% 60%;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f7f9fc;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --border: #dce3ee;
+  --border-strong: #c3ccdd;
+  --text: #0f1729;
+  --text-muted: #5b6478;
+  --text-faint: #8791a4;
+  --accent: #1c7ed6;
+  --accent-hover: #1567b3;
+  --accent-muted: #e6f2fc;
+  --on-accent: #ffffff;
+  --success: #17925a;
+  --success-bg: #e5f7ef;
+  --warning: #b3720b;
+  --warning-bg: #fbf0dd;
+  --danger: #d23355;
+  --danger-bg: #fceaee;
+  --neutral-badge: #5b6478;
+  --neutral-badge-bg: #eef1f6;
+  --focus-ring: #1c7ed6;
+  --shadow-color: 220 30% 60%;
+}
+
+/* --- base / reset --- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+  text-wrap: balance;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* Visible keyboard focus everywhere, invisible for mouse/touch --
+   operational software is used by keyboard far more than a marketing
+   page ever is (fast target-switching in Control Center especially). */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* =====================================================================
+   Shared components -- global on purpose (directives style real native
+   elements, e.g. ButtonDirective on <button>, so component-scoped
+   styleUrls don't apply). Grows one labeled section per component;
+   split into separate files if this gets unwieldy.
+   ===================================================================== */
+
+/* --- Button (apps/web/src/app/shared/button) --- */
+
+.mop-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--easing), border-color var(--duration-fast) var(--easing);
+  white-space: nowrap;
+}
+
+.mop-button--default {
+  padding: var(--space-2) var(--space-4);
+}
+
+.mop-button--small {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.mop-button--primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.mop-button--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.mop-button--secondary {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.mop-button--secondary:hover:not(:disabled) {
+  background: var(--surface-raised);
+}
+
+.mop-button--danger {
+  background: var(--danger);
+  color: #fff;
+}
+.mop-button--danger:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.mop-button--ghost {
+  background: transparent;
+  color: var(--text-muted);
+}
+.mop-button--ghost:hover:not(:disabled) {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.mop-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.mop-spinner {
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: mop-spin 0.6s linear infinite;
+  opacity: 0.85;
+}
+
+@keyframes mop-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- Status Pill (apps/web/src/app/shared/status-pill) --- */
+
+.mop-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1875rem var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  line-height: 1.4;
+}
+
+.mop-pill--success {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.mop-pill--warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+.mop-pill--danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.mop-pill--neutral {
+  background: var(--neutral-badge-bg);
+  color: var(--neutral-badge);
+}
+
+/* --- Toast (apps/web/src/app/shared/toast) --- */
+
+.mop-toast-stack {
+  position: fixed;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 360px;
+}
+
+.mop-toast {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--neutral-badge);
+  color: var(--text);
+  font-size: var(--text-sm);
+  box-shadow: 0 8px 24px hsl(var(--shadow-color) / 0.35);
+}
+
+.mop-toast--success {
+  border-left-color: var(--success);
+}
+.mop-toast--danger {
+  border-left-color: var(--danger);
+}
+
+.mop-toast-dismiss {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: var(--text-md);
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* --- Form field (apps/web/src/app/shared/form-field) + base input styling --- */
+
+.mop-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.mop-field-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.mop-field-label-text {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mop-field-required {
+  color: var(--danger);
+}
+
+.mop-field-checking {
+  color: var(--text-faint);
+}
+
+.mop-field-error {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--danger);
+}
+
+.mop-field-hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+}
+
+.mop-field input,
+.mop-field select,
+.mop-field textarea {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: 400;
+}
+
+.mop-field input:focus-visible,
+.mop-field select:focus-visible,
+.mop-field textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+  border-color: var(--focus-ring);
+}
+
+.mop-field--invalid input,
+.mop-field--invalid select,
+.mop-field--invalid textarea {
+  border-color: var(--danger);
+}
+
+/* --- Page header pattern --- used directly in each page's own template
+   (composition varies too much page to page -- search/filter rows on
+   Workshops, nothing but a title on Add Workshop Owner -- to force
+   through one wrapping component's fixed API). */
+
+.mop-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.mop-page-header-title h1 {
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
+.mop-page-header-title p {
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.mop-page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}

@@ -1,0 +1,39 @@
+.shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid #e3e5e9;
+  background: #fff;
+}
+
+.shell-brand {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.shell-user {
+  margin-left: auto;
+  color: #555;
+  font-size: 0.85rem;
+}
+
+.shell-logout {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #d0d3d9;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.shell-main {
+  flex: 1;
+  padding: 2rem 1.25rem;
+}

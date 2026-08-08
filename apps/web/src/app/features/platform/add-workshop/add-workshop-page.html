@@ -1,0 +1,184 @@
+<div class="add-workshop">
+  <div class="mop-page-header">
+    <div class="mop-page-header-title">
+      <h1>Add Workshop</h1>
+      <p>Creates a new tenant and its first owner in one step. This is the only way a workshop gets created.</p>
+    </div>
+  </div>
+
+  <app-error-banner [error]="submitError()" (dismissed)="submitError.set(null)" />
+
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="add-workshop-form">
+    <fieldset class="add-workshop-section">
+      <legend>Workshop Details</legend>
+
+      <app-form-field
+        label="Workshop / Company Name"
+        [required]="true"
+        [checking]="form.controls.name.pending"
+        [error]="form.controls.name.touched && form.controls.name.hasError('required') ? 'Name is required.' : form.controls.name.touched && form.controls.name.hasError('taken') ? 'A workshop with this name already exists.' : null"
+      >
+        <input type="text" formControlName="name" autocomplete="off" />
+      </app-form-field>
+
+      <app-form-field
+        label="URL slug"
+        [required]="true"
+        [checking]="form.controls.slug.pending"
+        [hint]="'mop.app/w/' + (form.controls.slug.value || '...')"
+        [error]="form.controls.slug.touched && form.controls.slug.hasError('taken') ? 'This slug is already in use.' : form.controls.slug.touched && form.controls.slug.hasError('pattern') ? 'Lowercase letters, numbers, and hyphens only (3-50 characters).' : null"
+      >
+        <input type="text" formControlName="slug" (input)="editSlugManually()" autocomplete="off" />
+      </app-form-field>
+
+      <app-form-field label="Country" [required]="true">
+        <input type="text" formControlName="country" placeholder="e.g. EG" autocomplete="off" />
+      </app-form-field>
+
+      <app-form-field label="City" [required]="true">
+        <input type="text" formControlName="city" autocomplete="off" />
+      </app-form-field>
+
+      <app-form-field label="Business Type" [required]="true">
+        <select formControlName="businessType">
+          <option value="" disabled>Select a business type</option>
+          @for (type of businessTypes; track type) {
+            <option [value]="type">{{ type }}</option>
+          }
+        </select>
+      </app-form-field>
+
+      @if (form.controls.businessType.value === 'Other') {
+        <app-form-field label="Describe business type" [required]="true">
+          <input type="text" formControlName="businessTypeOther" autocomplete="off" />
+        </app-form-field>
+      }
+
+      <app-form-field label="Currency" [required]="true" hint="ISO 4217 code, e.g. EGP, USD, AED">
+        <input type="text" formControlName="currency" maxlength="3" autocomplete="off" style="text-transform: uppercase" />
+      </app-form-field>
+
+      <app-form-field label="Timezone" [required]="true">
+        <select formControlName="timezone">
+          <option value="" disabled>Select a timezone</option>
+          @for (tz of timezones; track tz) {
+            <option [value]="tz">{{ tz }}</option>
+          }
+        </select>
+      </app-form-field>
+
+      <app-form-field label="Initial Operating Category" [required]="true">
+        <div class="category-cards">
+          @for (category of categories; track category.value) {
+            <label class="category-card" [class.category-card--selected]="form.controls.primaryCategory.value === category.value">
+              <input type="radio" formControlName="primaryCategory" [value]="category.value" />
+              {{ category.label }}
+            </label>
+          }
+        </div>
+      </app-form-field>
+      <p class="add-workshop-note">
+        Sets default identifiers and terminology. Additional categories can be requested later through platform support.
+      </p>
+    </fieldset>
+
+    <fieldset class="add-workshop-section">
+      <legend>Owner Details</legend>
+
+      <app-form-field label="Owner Full Name" [required]="true">
+        <input type="text" formControlName="ownerFullName" autocomplete="off" />
+      </app-form-field>
+
+      <app-form-field
+        label="Owner Email"
+        [required]="true"
+        [checking]="form.controls.ownerEmail.pending"
+        [error]="form.controls.ownerEmail.touched && form.controls.ownerEmail.hasError('taken') ? 'This email is already associated with an account.' : form.controls.ownerEmail.touched && form.controls.ownerEmail.hasError('email') ? 'Enter a valid email address.' : null"
+      >
+        <input type="email" formControlName="ownerEmail" autocomplete="off" />
+      </app-form-field>
+
+      <app-form-field label="Owner Phone" [required]="true" hint="E.164 format, e.g. +201234567890">
+        <input type="tel" formControlName="ownerPhone" autocomplete="off" />
+      </app-form-field>
+    </fieldset>
+
+    <fieldset class="add-workshop-section">
+      <legend>Plan &amp; Limits</legend>
+
+      <app-form-field label="Initial Plan / Package" [required]="true">
+        <select formControlName="planId">
+          <option value="" disabled>Select a plan</option>
+          @for (plan of plans(); track plan.id) {
+            <option [value]="plan.id">{{ plan.name }}</option>
+          }
+        </select>
+      </app-form-field>
+
+      @if (selectedPlan(); as plan) {
+        <p class="add-workshop-note">
+          Up to {{ plan.maxBranches }} branch(es) &middot; {{ plan.maxUsers }} user(s) &middot; {{ plan.maxWarehouses }} warehouse(s)
+          &middot; {{ plan.monthlyPrice }}/mo
+        </p>
+      }
+
+      <app-form-field label="Allowed Branches (starting count)" [required]="true">
+        <input type="number" formControlName="allowedBranchesStart" min="1" [attr.max]="selectedPlan()?.maxBranches" />
+      </app-form-field>
+
+      <app-form-field label="Allowed Users (starting count)" [required]="true">
+        <input type="number" formControlName="allowedUsersStart" min="1" [attr.max]="selectedPlan()?.maxUsers" />
+      </app-form-field>
+
+      <app-form-field label="Allowed Warehouses (starting count)" [required]="true">
+        <input type="number" formControlName="allowedWarehousesStart" min="0" [attr.max]="selectedPlan()?.maxWarehouses" />
+      </app-form-field>
+    </fieldset>
+
+    <fieldset class="add-workshop-section">
+      <legend>Initial Setup</legend>
+
+      <app-form-field label="Starter Builder Template" [required]="true">
+        <select formControlName="starterBuilderTemplate">
+          <option value="" disabled>Select a template</option>
+          @for (template of starterTemplates; track template) {
+            <option [value]="template">{{ starterTemplateLabels[template] }}</option>
+          }
+        </select>
+      </app-form-field>
+
+      <app-form-field label="Enable Demo Data">
+        <label class="demo-toggle">
+          <input type="checkbox" formControlName="enableDemoData" />
+          Adds sample branches, staff, customers, and a few work orders so the Owner can explore before entering real data.
+        </label>
+      </app-form-field>
+
+      <app-form-field label="Initial Status" [required]="true">
+        <select formControlName="initialStatus">
+          @for (status of initialStatuses; track status) {
+            <option [value]="status">{{ status }}</option>
+          }
+        </select>
+      </app-form-field>
+      <p class="add-workshop-note">{{ initialStatusHelp[form.controls.initialStatus.value] }}</p>
+    </fieldset>
+
+    <div class="add-workshop-footer">
+      <button type="button" appButton variant="secondary" routerLink="/platform/workshops">Cancel</button>
+      <button
+        type="submit"
+        appButton
+        variant="primary"
+        [disabled]="form.invalid || form.pending || submitting()"
+      >
+        @if (submitting()) {
+          <span class="mop-spinner" aria-hidden="true"></span>
+          Creating workshop&hellip;
+        } @else {
+          Create Workshop
+        }
+      </button>
+    </div>
+  </form>
+</div>

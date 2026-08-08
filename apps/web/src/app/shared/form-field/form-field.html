@@ -1,0 +1,19 @@
+<div class="mop-field" [class.mop-field--invalid]="error()">
+  <label class="mop-field-label">
+    <span class="mop-field-label-text">
+      {{ label() }}
+      @if (required()) {
+        <span class="mop-field-required" aria-hidden="true">*</span>
+      }
+      @if (checking()) {
+        <span class="mop-spinner mop-field-checking" aria-label="Checking"></span>
+      }
+    </span>
+    <ng-content />
+  </label>
+  @if (error()) {
+    <p class="mop-field-error">{{ error() }}</p>
+  } @else if (hint()) {
+    <p class="mop-field-hint">{{ hint() }}</p>
+  }
+</div>

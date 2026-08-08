@@ -1,0 +1,55 @@
+<div class="rail-shell">
+  <nav class="rail" aria-label="Platform navigation">
+    <div class="rail-brand">MOP</div>
+
+    <a routerLink="/platform/workshops" routerLinkActive="rail-link--active" class="rail-link">
+      <svg class="rail-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <rect x="3" y="8" width="6" height="9" rx="0.5" />
+        <rect x="11" y="4" width="6" height="13" rx="0.5" />
+        <path d="M5.5 11h1M5.5 14h1M13.5 7h1M13.5 10h1M13.5 13h1" stroke-linecap="round" />
+      </svg>
+      Workshops
+    </a>
+
+    <a routerLink="/platform/control-center" routerLinkActive="rail-link--active" class="rail-link">
+      <svg class="rail-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <circle cx="10" cy="10" r="6.5" />
+        <circle cx="10" cy="10" r="1.6" fill="currentColor" stroke="none" />
+        <path d="M10 3.5v1.4M10 15.1v1.4M16.5 10h-1.4M4.9 10H3.5" stroke-linecap="round" />
+      </svg>
+      Control Center
+    </a>
+
+    <a routerLink="/platform/reports" routerLinkActive="rail-link--active" class="rail-link">
+      <svg class="rail-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <path d="M4 16V9M10 16V4M16 16v-6" stroke-linecap="round" />
+        <path d="M3 16h14" stroke-linecap="round" />
+      </svg>
+      Reports
+    </a>
+
+    <a routerLink="/platform/live-view" routerLinkActive="rail-link--active" class="rail-link">
+      <svg class="rail-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <path d="M2.5 10S5.5 4.5 10 4.5 17.5 10 17.5 10 14.5 15.5 10 15.5 2.5 10 2.5 10Z" />
+        <circle cx="10" cy="10" r="2.2" />
+      </svg>
+      Live View
+    </a>
+
+    <div class="rail-footer">
+      @if (session(); as s) {
+        <div class="rail-account">
+          <span class="rail-account-name">{{ s.displayName }}</span>
+          <span class="rail-account-role">Platform Super Admin</span>
+        </div>
+        <button type="button" appButton variant="ghost" size="small" (click)="logout()">Log out</button>
+      }
+    </div>
+  </nav>
+
+  <main class="rail-content">
+    <router-outlet />
+  </main>
+</div>
+
+<app-toast-container />
