@@ -1,17 +1,37 @@
 import { Body, ConflictException, Controller, ForbiddenException, Get, HttpCode, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 import type { SessionContext } from "@mop/shared";
+import { readThrottleSettings } from "../config/environment";
 import { AuthService, MultipleAccountsError, TenantUnavailableError } from "./auth.service";
 import { LoginDto } from "./dto";
 import { ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME, clearSessionCookies, setSessionCookies } from "./cookie.util";
 import { SessionGuard } from "./session.guard";
 import { CurrentSession } from "./current-session.decorator";
 
+/**
+ * Read once at class-definition time because @Throttle is a decorator and
+ * needs literal values. Limits come from the validated environment so
+ * production can be strict while the integration suite -- which
+ * legitimately logs in many times from one address -- can be relaxed.
+ */
+const throttle = readThrottleSettings();
+const AUTH_THROTTLE = { default: { limit: throttle.authLimit, ttl: throttle.authTtlMs } };
+
 @Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  /**
+   * Throttled hard. Password verification is scrypt at N=131072 -- around
+   * 128MB and real CPU per attempt -- so without a limit here, a few dozen
+   * concurrent requests exhaust the server. The per-account lockout in
+   * AuthService handles targeted guessing; this handles the resource
+   * exhaustion that lockout alone cannot, since an attacker can burn CPU
+   * with addresses that do not exist.
+   */
   @Post("login")
+  @Throttle(AUTH_THROTTLE)
   @HttpCode(200)
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response): Promise<SessionContext> {
     try {
@@ -42,6 +62,7 @@ export class AuthController {
   }
 
   @Post("refresh")
+  @Throttle(AUTH_THROTTLE)
   @HttpCode(200)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<SessionContext> {
     const refreshCookie = req.cookies?.[REFRESH_COOKIE_NAME] as string | undefined;
