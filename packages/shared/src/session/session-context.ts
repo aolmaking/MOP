@@ -12,15 +12,26 @@ export type StaffRole =
 export type EffectiveRole = StaffRole | "PLATFORM_SUPER_ADMIN" | "CUSTOMER";
 
 /**
- * Resolved once at login (and on every /auth/me call) by
- * AuthService.buildSessionContext. `permissions` is populated by
- * EffectiveAccessService (Phase 1 step 6) -- this shape exists before that
- * service does so every later step builds against a stable contract rather
- * than widening it piecemeal.
+ * Resolved fresh on every request by AuthService.resolveContextForAccount
+ * (SessionGuard calls it per-request; never trust a client-cached copy).
+ *
+ * `permissions` is deliberately left empty for now, not a TODO stub: this
+ * was originally planned as "every permission key this session has,"
+ * populated once EffectiveAccessService existed (Phase 1 step 6). Having
+ * now built that service, eagerly running every registered permission key
+ * through an up-to-8-query-each resolver on every session check would be
+ * real, wasteful, wrong-shaped work, not a shortcut -- fine-grained action
+ * permissions are checked on demand, server-side, via
+ * EffectiveAccessService.can() at the specific endpoint that needs the
+ * answer. The likely real use for this field is coarser: which page IDs
+ * this role can see at all (RolePage-driven), for nav-gating -- deferred
+ * until Phase 2+ defines a real page-ID taxonomy to populate it from.
  */
 export interface SessionContext {
   accountId: string;
   accountType: AccountType;
+  /** Human-readable "who is this" -- staff full name, customer full name, or the platform account's email. Used anywhere a person needs to be shown/recorded (audit actorName, UI headers), so it's resolved once here rather than re-queried per use site. */
+  displayName: string;
   tenantId: string | null;
   role: EffectiveRole;
   staffUserId?: string;
