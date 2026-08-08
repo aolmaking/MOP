@@ -17,6 +17,14 @@ MOP is the shared ledger of what happened. If the technician's screen says "part
 
 This is why the original brief insisted the system "must not be a set of disconnected pages." That is not a style preference. It is the entire engineering problem.
 
+## 1a. MOP is five systems on one spine
+
+MOP is not one application with many pages. It is **five full systems running simultaneously** — Operations, Inventory, Finance, People & Performance, and Governance & Control — each of which could plausibly be sold on its own, sharing one operational spine and one event bus.
+
+That is the source of most of the difficulty. A single part going into a single car is simultaneously an Operations state change, an Inventory movement, a Finance line, a People performance data point, and a Governance audit entry. Five systems must agree about one physical event, in one transaction, or the product lies.
+
+Boundaries, ownership, and the contracts between them are in [`SYSTEMS.md`](./SYSTEMS.md).
+
 ## 2. MOP is three products wearing one codebase
 
 It helps to see this explicitly, because each has a different customer, a different risk, and a different definition of quality.
@@ -29,7 +37,7 @@ It helps to see this explicitly, because each has a different customer, a differ
 
 These three pull in opposite directions. Platform wants control and auditability. Workshop wants speed. Customer wants simplicity and honesty. Most design arguments in this project are really one of these three pulling against another, and naming which one usually resolves it.
 
-## 3. The four ideas that define the architecture
+## 3. The five ideas that define the architecture
 
 ### 3.1 Isolation
 Many workshops, one codebase, zero leakage. A user in Workshop A must not be able to see, infer, or affect anything in Workshop B — not through a URL, not through a report aggregate, not through a search box, not through an error message, not through a realtime channel.
@@ -42,6 +50,16 @@ Two workshops run the same code and behave differently — different theme, diff
 The trap here is enormous and v11.9 fell into it: configurability quietly becomes a second, worse programming language, with no type system, no tests, and no way to reason about what a given tenant's configuration actually does. The discipline is that **configuration selects among behaviours the code already knows how to do**, and never describes new behaviour.
 
 Per the 2026-08-07 amendment, this configuration is controlled by Platform Super Admin per workshop, not self-service by the Owner.
+
+### 3.2a Capability shaping — one product, many shapes
+
+A one-man oil-change shop and a twelve-branch dealership network run the same code. The small shop has no inventory, no team leader, no second branch, and no QC step — and its work orders, finish gate, invoices and customer approvals must still work perfectly.
+
+So Platform Super Admin does not merely *hide* what a workshop doesn't need; it **removes it coherently**. Removing Team Review must reroute the finish transition. Removing Inventory must drop the "parts used or returned" gate check, or every job in that workshop strands forever at a Finish Gate waiting for a part lifecycle that can no longer complete.
+
+**Disabling a capability is not subtraction. It is rewiring.** The formal guarantee: after any capability change, every reachable non-terminal state must still have a path to a terminal state — checked at validate time, so a configuration that could strand a work order is rejected before it is applied rather than discovered in production.
+
+Full design in [`CAPABILITY_MODEL.md`](./CAPABILITY_MODEL.md).
 
 ### 3.3 Truth propagation
 One physical event produces one domain event, which produces many consistent projections.
@@ -70,6 +88,10 @@ These are the parts I expect to be difficult, and where I will spend disproporti
 **4. The customer boundary is the highest-consequence surface.** Everyone else is an employee, subject to policy and a contract. The customer is an outsider with a link. Public decision links, portal accounts, ownership transfers where a new owner must see technical history but never the previous owner's financials — every one of these is a place where a mistake is a real-world privacy incident, not a bug report.
 
 **5. Real-time is promised and does not exist.** The brief is explicit that progress appears "on a timeline that occurs and updates in real time on the technician, team leader and customer pages." There is currently **no realtime mechanism in the codebase at all** — no WebSocket, no SSE, no polling. This is a genuine architectural gap, not a missing widget, and it interacts with isolation (a realtime channel is one more thing that can leak across tenants). Addressed in `INFRASTRUCTURE.md` §7.
+
+**5a. Capability shaping is a correctness problem wearing a configuration costume.** It looks like settings. It is actually a proof obligation: no reachable configuration may strand a work order, orphan a user with no pages, or leave a gate that can never clear. And because the workflow-routing logic does not exist yet, this must be built into the lifecycle from its first line — retrofitting it after five roles depend on hardcoded transitions is the expensive version.
+
+**5b. It will travel.** Arabic and RTL from the first component, not a later pass. Tax as a pluggable policy rather than a field. And government e-invoicing mandates (Egypt's ETA, Saudi ZATCA) mean invoice generation must be a per-country adapter behind a stable interface — in those markets an invoice that has not been cleared by the state portal is not a valid invoice. That is a Finance architecture constraint, decided before Finance is built.
 
 **6. Scale is multi-dimensional.** Not just "more rows" — more tenants, more branches per tenant, more warehouses, more categories, more roles, more features toggled on and off. A design that assumes one branch, or assumes a page can load "all" of anything, breaks silently as a workshop grows. The rule: **a list must look identical whether it holds 1 row or 100,000** — scale shows up in pagination, never in layout.
 

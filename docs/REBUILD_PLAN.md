@@ -1,233 +1,143 @@
-# MOP Rebuild Plan — Phase 0
+# MOP Rebuild Plan — Phase 0 (v2)
 
-> **Status:** Phase 0 defined, not yet executed.
-> **Date:** 2026-08-08.
-> **Why this file exists:** the original rebuild plan lived at `C:\Users\Stanikzai\.claude\plans\glowing-drifting-dragon.md` — outside the repo, under a Windows account this project no longer runs under. It is gone. Every `docs/detailed-specs/*.md` file references "Phases 2–9" of a plan nothing in this repository defines. This file brings the plan **inside the repo**, where it is versioned and survives machine moves.
+> **Status:** Phase 0 re-planned 2026-08-08 after the product owner clarified two things that change its shape: **capability shaping / smart delete** under Super Admin control, and that MOP is **five systems running simultaneously**, not one application with many pages.
+> **Supersedes:** the first Phase 0 draft (same day). Items 0.1 and part of 0.2 are already done; the scenario work has grown from a catalogue into a matrix.
+> **Why this file exists:** the original rebuild plan lived at `C:\Users\Stanikzai\.claude\plans\glowing-drifting-dragon.md` — outside the repo, under a Windows account this project no longer runs under. It is gone. This file keeps the plan **inside the repo**, versioned, surviving machine moves.
 
 ---
 
-## 0. The correction that changes the shape of this work
+## 0. Where the project actually stands
 
-The instruction that produced this document was: *"the whole project need to been rebuild totally … then you can start setting the phase 0 of rebuilding plan."*
+The instruction that started this work was *"the whole project needs to be rebuilt totally."* That was correct about **v11.9** and is no longer correct about this repository: v11.9 was deleted at commit `b0a4e68`, and a disciplined rebuild is roughly two phases in. None of the files the gap analysis criticises still exist. Restarting now would delete working, tested, spec-derived code.
 
-That judgement was correct about **v11.9**. It is no longer correct about **this repository**, because the rebuild it asks for was already started and is roughly two phases in. Rebuilding "totally" from here would delete working, tested, spec-derived code and repeat months of work.
+**Verified by running it, not read off a status document:**
 
-The evidence is in the git history:
-
-| Commit | What happened |
+| | |
 |---|---|
-| `a38b9af` | Initial commit — the v11.9 build |
-| `b0a4e68` | **Remove v11.9 implementation to rebuild from canonical spec** — the disaster was deleted |
-| `6297054` | Canonical spec + gap analysis committed as rebuild source of truth |
-| `1c55066` | **Phase 0: draft data model for the full canonical spec** |
-| `0331351` → `51d4a70` | Phase 1 steps 1–5, interleaved with the 9 detailed role specs |
+| Typecheck | Clean across `@mop/shared` and `@mop/api` |
+| Tests | **161 passing** — 112 API unit (22 suites) + 49 web (16 suites) |
+| Not yet verified | DB-backed integration tests — Docker not running on this machine |
 
-None of the files the gap analysis criticises (`builder.service.ts`, `technician.service.ts`, `team-review.component.ts`, `branch-manager.service.ts`, `inventory.service.ts`) exist any more. They were removed at `b0a4e68`. What is in the tree now is the replacement, written against the canonical spec.
+**Solid foundations already in place:** a 1,409-line schema covering all 16 work-order statuses and 19 part-request states; an 8-layer permission resolver that is a real iterated array with deny-by-default and a `locked` short-circuit; a **lint-enforced** audit boundary (the build fails if anything writes `AuditLog` outside the audit module); the operations event engine with customer-safe projection; auth with four account types and DB-backed sessions; a real design-token system; ~1,600 lines of field-level role specs.
 
-**So "Phase 0" cannot mean "start over."** It means: *stabilise what exists, close the gaps that would otherwise be baked in, and make the next phases executable.* That is what this document defines.
+## 1. What the new information changes
 
-If a genuine from-scratch restart is still wanted after reading Section 1, that is a decision to take deliberately — not the default.
+### 1.1 Capability shaping is now a first-class architectural concern
 
----
+Super Admin must be able to remove what a workshop doesn't need — no team leader, no inventory, one branch, one warehouse, a narrow technical specialisation — **without creating logical errors.**
 
-## 1. Verified current state
+Today's model cannot do this. `TenantConfiguration.enabledModules` is a flat `String[]`, and `ModuleEnabledLayer` denies the permission with *"This module is not enabled for your workshop."* That is a feature flag: it hides a button. It does not know that removing Inventory would leave the Finish Gate's *"parts received must be used or returned"* check in place, stranding every work order in that workshop permanently.
 
-Everything below was verified by running it on 2026-08-08, not read off a status doc.
+The design is now written: [`CAPABILITY_MODEL.md`](./CAPABILITY_MODEL.md). Its central guarantee — **after any capability change, every reachable non-terminal state must still reach a terminal state**, checked at validate time — is what makes smart delete provable rather than hopeful.
 
-### Works
+**Critical timing.** The workflow-routing logic *does not exist yet*. The lifecycle is Phase 3+. Building it capability-aware from its first line is nearly free; retrofitting after five roles depend on hardcoded transitions is months. This is the single most time-sensitive decision in the project right now.
 
-| Area | State | Evidence |
-|---|---|---|
-| Data model | 1,409-line Prisma schema, 3 migrations, covers all 16 WO statuses, 19 part-request states, Team/TeamMembership, ownership history, audit `riskLevel` as a real column | `packages/database/prisma/schema.prisma` |
-| Permission resolver | 8 layers in a real, iterated, ordered array with deny-by-default and `locked` short-circuit | `apps/api/src/access/permission-resolver.service.ts` |
-| Audit | Module-encapsulated, **lint-enforced** — a build fails if any `AuditLog` write happens outside `apps/api/src/audit/**` | `tools/lint-audit-boundary.mjs` |
-| Operations engine | Central event service + customer-safe projection | `apps/api/src/operations/` |
-| Auth | 4 account types, httpOnly cookie sessions, refresh rotation, lockout | `apps/api/src/auth/` |
-| Scheduler | `@nestjs/schedule` wired, heartbeat exposed via `GET /health` | `apps/api/src/scheduler/` |
-| Platform pages | Add Workshop Owner (transactional), Workshops list/details/freeze/reactivate + health | `apps/api/src/platform/` |
-| Design tokens | Real token system, dark-default + light, no colour literals in components | `apps/web/src/styles.css` |
-| Detailed specs | ~1,600 lines, all 9 role groups, field-level | `docs/detailed-specs/` |
-| Tests | **161 passing** — 112 API unit (22 suites), 49 web (16 suites) | run today |
-| Typecheck | Clean across `@mop/shared` and `@mop/api` | run today |
+### 1.2 Five systems, not one application
 
-The quality bar in this code is high. It carries honest comments where something is a known gap rather than pretending completeness, and the specific failures the gap analysis identified in v11.9 have been designed out structurally (the decorative-unused-hierarchy problem, the dead centralised-audit-service problem, the missing-statuses problem).
+Operations, Inventory, Finance, People & Performance, Governance & Control — each a product in its own right, sharing one spine. See [`SYSTEMS.md`](./SYSTEMS.md).
 
-### Broken or missing
+This changes build order. The phases are grouped by **role**, but the systems are how the thing is actually built, and one scenario (a part is unavailable) crosses five systems at once. Building role-by-role without cross-system contracts defined first is precisely how the previous attempt produced pages that each worked alone and did not connect.
 
-| # | Problem | Severity |
-|---|---|---|
-| 1 | **~40 files of Phase 1 step 6 + Phase 2 work are uncommitted.** The entire `access/`, `platform/`, `scheduler/` API modules, the whole web app beyond a stub, the CI workflow, the seed, and a migration exist only in the working tree. | **Critical** |
-| 2 | **The environment was completely broken.** Every `node_modules` symlink pointed at `C:\Users\Stanikzai\...`. Nothing could build, typecheck, test, or run. *(Repaired today — see Section 2.)* | **Critical** |
-| 3 | **The rebuild plan was lost** with the old user account. Phases 2–11 are referenced by number everywhere and defined nowhere. | High |
-| 4 | **Scenario coverage is incomplete in exactly the way originally warned about.** See below. | High |
-| 5 | DB-backed integration tests unverified — Docker/Postgres not running on this machine. | Medium |
-| 6 | CI has never executed — no GitHub remote is configured. | Medium |
+⚠️ **One open question blocks a real decision:** is Billing/Invoices a separate system from Finance, or one system? It affects module boundaries and is made sharper by e-invoicing mandates (§1.3). Flagged in `SYSTEMS.md` §1.
 
-### Problem 4 in detail, because it is the one that was called out by name
+### 1.3 It will travel the world
 
-The original instruction was explicit:
+Arabic/RTL from the first component. Tax as a pluggable policy, snapshotted per invoice. And government e-invoicing (Egypt ETA, Saudi ZATCA) means **invoice document generation must be a per-country adapter behind a stable interface** — in those markets, an uncleared invoice is not a valid invoice. A Finance architecture constraint, decided before Finance is built.
 
-> *"a customer doesn't want inspection or even to buy a part, he has his own part and only wants the service to fit it. There are very long lists of examples on each page and each situation and you need to cover them all — from day one of designing."*
+## 2. Done since the first draft
 
-That scenario is **not covered anywhere** — not in `PRODUCT_SPEC_CANONICAL.md`, not in any `detailed-specs/*.md`, and not in the schema. Searching the whole `docs/` tree for "own part", "customer-supplied", "skip inspection", "no inspection" returns nothing.
-
-It is not merely undocumented — it is currently **unrepresentable in the data model**:
-
-```prisma
-model PartRequest {
-  inventoryItemId String                      // required
-  inventoryItem   InventoryItem @relation(...) // required FK
-}
-```
-
-Every part on a Work Order must be an inventory item the workshop owns. A customer-supplied part has no inventory row, no stock movement, no cost, and needs a labour-only price and a liability/warranty disclaimer. There is no flag, no nullable path, no alternative model. Adding this after the inventory and finance phases are built is a migration across `PartRequest`, `StockMovement`, `QuotationItem`, `RunningInvoiceLine`, `InvoiceLine`, and the Finish Gate.
-
-This is the concrete, expensive version of the original point: the *scenarios* have to exist before the pages do. The canonical spec has 20 named scenario families; the real number is larger, and the gap is systematic, not a single oversight.
-
----
-
-## 2. Already done today
-
-These were done during analysis because nothing else could be verified until they were:
-
-1. **Repaired the workspace install.** Ran `pnpm install` non-interactively (`CI=true`; the plain run hits a confirmation prompt and silently no-ops). All symlinks now resolve locally.
-2. **Regenerated the Prisma client** against the current schema.
-3. **Established a working toolchain path.** `pnpm` is not on `PATH` on this machine; `corepack pnpm` works (`C:\Program Files\nodejs\corepack.cmd`). Root scripts that shell out to a nested bare `pnpm` (`db:generate`, `build`, `test`, `lint`, `typecheck`) therefore fail. Workspace-filtered commands work:
-   ```
-   corepack pnpm --filter @mop/api exec jest
-   ```
-4. **Verified the tree is green** — typecheck clean, 161 tests passing.
-
-None of this is committed and none of it changes source files.
-
----
+- **0.1 — all outstanding work committed.** ~40 files (the whole `access/`, `platform/`, `scheduler/` API modules, the entire web app, CI, seed, a migration) existed only in the working tree. Now in 7 commits; tree clean.
+- **Environment repaired.** Every `node_modules` symlink pointed at `C:\Users\Stanikzai\...` — the folder had been copied between Windows accounts, so nothing could build. Reinstalled; Prisma client regenerated.
+- **Lockfile synced.** `@nestjs/schedule`, eslint 10, supertest and Angular CDK were in `package.json` but never in the lockfile. CI installs `--frozen-lockfile`, so the first CI run was a guaranteed failure.
+- **Engineering charters written:** [`VISION.md`](./VISION.md), [`DATABASE_STRATEGY.md`](./DATABASE_STRATEGY.md), [`INFRASTRUCTURE.md`](./INFRASTRUCTURE.md), [`UX_PRINCIPLES.md`](./UX_PRINCIPLES.md), [`SYSTEMS.md`](./SYSTEMS.md), [`CAPABILITY_MODEL.md`](./CAPABILITY_MODEL.md).
 
 ## 3. Phase 0 work items
 
-Ordered by risk. Items 1–2 should happen before any other work of any kind.
+Ordered by what blocks the most downstream work.
 
-### 0.1 — Commit the outstanding work *(blocking)*
+### 0.A — Capability registry and the reachability check *(new, highest value)*
 
-~40 files representing Phase 1 step 6 and most of Phase 2 exist only in the working tree, on a project folder that has already been copied between Windows accounts once. `.gitignore` is correct (`node_modules`, `dist`, `.angular`, `packages/database/generated` all excluded), so everything untracked is genuine source.
+Build the registry from `CAPABILITY_MODEL.md` §3–4 as typed code, with a complete `RemovalPolicy` for every non-CORE capability, plus the three validators (dependency, live-data precondition, reachability).
 
-Commit in coherent slices matching the existing message style, not one bulk commit:
-- Phase 1 step 6 — access module (resolver + 8 layers + scope resolver)
-- Phase 1 step 7 — scheduler + health
-- Phase 2 step 1 — web shell, design tokens, shared UI kit
-- Phase 2 step 2 — Add Workshop Owner (API + page)
-- Phase 2 step 3 — Workshops list/details/freeze/reactivate
-- CI workflow, seed, invite-token migration
+Build it **standalone and fully tested before any lifecycle code depends on it.** It is a pure function over a graph — cheap to test exhaustively, and it can be proven correct in isolation, which will never be true again once it is entangled with five roles.
 
-**Done when:** `git status` is clean and every commit builds.
+**Done when:** every shipped capability profile passes reachability in CI, and a deliberately-broken profile (Inventory off, parts gate left on) is *rejected by a test* rather than by a human noticing.
 
-### 0.2 — Make the environment reproducible *(blocking)*
+### 0.B — The scenario matrix *(grew from a catalogue)*
 
-The folder is literally named `..._Pnpm_Install_Root_Fix_...`, which says this has bitten before. It will bite again on the next machine move.
+`docs/SCENARIOS.md`. Not a flat list — a matrix of **scenario × capability profile**, because "customer approves a part" is a different flow in a workshop with inventory than in one without.
 
-- Add `docs/DEVELOPMENT.md`: prerequisites, `corepack enable`, the `CI=true pnpm install` note, `docker compose up -d`, migrate, seed, run.
-- Pin Node via `.nvmrc` matching `engines.node`.
-- Fix the root scripts so they work when `pnpm` is only reachable through corepack, or document `corepack pnpm` as the supported invocation.
-- Add `pnpm doctor` — checks Node version, that a symlink resolves, that Postgres answers, that the Prisma client matches the schema. Every failure mode found today, detected in one command.
+Each entry: trigger, actors, happy path, every branch, what each role sees at each step, which systems and records change, terminal states, and — new — **which capability profiles it applies to and how it degrades under each.**
 
-**Done when:** a clean clone reaches green tests by following `DEVELOPMENT.md` alone.
+The named gap that started this: *customer declines inspection, brings their own part, wants labour only.* It appears nowhere in the spec or the detailed specs, and it is **unrepresentable** — `PartRequest.inventoryItemId` is a required FK, so a customer-supplied part has no inventory row, no stock movement, no cost, and no way to be billed as labour-only.
 
-### 0.3 — Rebuild the phase map *(blocking for Phase 2+)*
+Starter families (the canonical spec's 20, plus these): intake and scope refusals · asset and ownership · parts (unavailable, damaged, wrong part used, partial fulfilment) · execution (second fault mid-job, shift change, cancellation after issue) · money (dispute, partial payment, refund after delivery, price-lock integrity) · platform (freeze mid-work-order, plan downgrade below usage) · **capability edge cases** (a workshop with no inventory bills a part; no team leader finishes a job; single-branch transfer request).
 
-Reconstruct Phases 2–11 in this file from what the specs and code already assume. Enough is recoverable: `docs/detailed-specs/README.md` maps roles to phases 2–9, and code comments name "Phase 10, System Automation" and "Phase 11 adds a CI check that every permission key has a real assertion site."
+**Done when:** every scenario has a schema verdict of *representable* or *needs change*, and every needed change is applied or scheduled with a named phase.
 
-Each phase needs: goal, exact page/endpoint list, dependencies, exit criteria.
+### 0.C — Cross-system contracts
+
+Define and type the events and query interfaces in `SYSTEMS.md` §3 before the roles that trigger them exist. Establish the rule in code: **a system never reads another system's tables directly.**
+
+**Done when:** the contracts are typed, and a cross-system read outside a published contract is caught by review or lint.
+
+### 0.D — Schema changes the above demand
+
+Consolidated into one migration set, applied before Phase 3:
+
+- `TenantCapability` — per (tenant, capability), **time-ranged**, because interpreting a two-year-old work order requires knowing which capabilities were active then. A flat array cannot answer that.
+- `CapabilityChangeRequest` — the draft/validate/preview/apply record with retained impact and migration counts.
+- Customer-supplied parts — whatever 0.B concludes.
+- Money-serialisation rule applied systematically (`DATABASE_STRATEGY.md` §2).
+
+### 0.E — Reproducible environment
+
+The folder is named `..._Pnpm_Install_Root_Fix_...`, which says this has bitten before, and it bit again. `docs/DEVELOPMENT.md` (prerequisites, `corepack enable`, the `CI=true pnpm install` note, docker/migrate/seed/run), `.nvmrc`, root scripts fixed to work under corepack, and a `pnpm doctor` that checks Node version, symlink resolution, Postgres reachability, and Prisma-client-vs-schema drift — every failure mode hit today, caught in one command.
+
+**Done when:** a clean clone reaches green tests from `DEVELOPMENT.md` alone.
+
+### 0.F — Verify the database path end-to-end
+
+Start Postgres, migrate a clean database, seed, run the integration tests — the only tests never executed here, covering auth, access layers, and operation events. The seed must produce **at least two tenants with different capability profiles**, because a single-tenant seed makes isolation bugs invisible and leaves configurability untested by construction.
+
+### 0.G — CI actually running
+
+`.github/workflows/ci.yml` is well-built and has never executed. Push, confirm green.
+
+### 0.H — Rebuild the phase map
+
+Reconstruct Phases 2–11 here. Enough is recoverable: `detailed-specs/README.md` maps roles to phases 2–9, and code comments name "Phase 10, System Automation" and "Phase 11 adds a CI check that every permission key has a real assertion site."
 
 **Done when:** every "Phase N" reference in the repo resolves to a definition here.
 
-### 0.4 — Write the Scenario Catalogue *(the item the original instruction was actually about)*
+## 4. Exit criteria
 
-New file `docs/SCENARIOS.md`. One entry per scenario: trigger, actors, happy path, every branch, what each role sees at each step, which pages/records/events change, and the terminal states.
+1. Capability registry + reachability check built, tested, and running in CI on every shipped profile.
+2. `SCENARIOS.md` complete, every scenario carrying a schema verdict and a capability-profile note.
+3. Cross-system contracts typed.
+4. Schema changes from 0.D migrated and reviewed against real data.
+5. A clean clone reaches green tests from `DEVELOPMENT.md` alone.
+6. `pnpm test` fully green, integration tests included, seeded with two differently-shaped tenants.
+7. CI green on a real push.
+8. Phases 2–11 defined here.
 
-The catalogue must be reconciled against the schema **before Phase 3 builds the work-order lifecycle**, and any scenario that cannot be represented becomes a schema change now, while it is still cheap.
-
-Starter set — the canonical spec's 20 families, plus at minimum these, which are currently missing:
-
-**Intake / scope refusals**
-- Customer declines inspection entirely; wants one named service only
-- Customer supplies their own part; workshop provides labour only *(schema change required)*
-- Customer approves some items, rejects others, defers the rest
-- Customer rejects a **critical** item and takes the vehicle — acknowledgement, liability record, safe-history entry
-- Walk-in with no appointment and no prior asset record
-- Customer wants a quote only, authorises no work, vehicle leaves
-
-**Asset / ownership**
-- Vehicle arrives under a different owner than the record — mid-Work-Order ownership transfer
-- One customer, many assets; one asset, many open issues
-- Asset outside the tenant's operating category
-
-**Parts**
-- Part unavailable → supplier order → customer waits, or substitutes, or cancels
-- Part arrives damaged
-- Wrong part issued and used before anyone notices
-- Partial fulfilment — 3 requested, 2 issued
-- Technician finishes with a received part neither used nor returned *(Finish Gate already covers this — confirm the catalogue matches)*
-
-**Execution**
-- Second, unrelated fault found mid-work → new approval cycle inside an approved job
-- Technician goes off shift mid-job; reassignment mid-execution
-- Work Order cancelled after parts issued but before work started
-- Vehicle undrivable; blocks a bay
-
-**Money**
-- Customer disputes the final invoice after work is complete
-- Partial payment, delivery under a policy that allows it
-- Refund after delivery
-- Approved price vs. changed catalogue price — the lock must hold
-
-**Platform**
-- Tenant frozen mid-Work-Order — what each role sees, what survives
-- Plan downgraded below current usage (more branches than the new limit allows)
-
-**Done when:** every entry has a schema verdict of *representable* or *needs change*, and every needed change is either applied or scheduled with a named phase.
-
-### 0.5 — Verify the database path end-to-end
-
-Start Postgres, apply migrations to a clean database, run the seed, run the integration tests. These are the only tests never executed on this machine, and they cover auth, access layers, and operation events — the load-bearing parts.
-
-**Done when:** `pnpm test` passes in full, integration tests included.
-
-### 0.6 — Get CI actually running
-
-`.github/workflows/ci.yml` is well-built (real Postgres service, migrate, lint, typecheck, test, build) and has never run — there is no remote. Create the remote, push, confirm green.
-
-**Done when:** a green CI badge exists on a real run.
-
----
-
-## 4. Phase 0 exit criteria
-
-1. `git status` clean; all work committed.
-2. A clean clone reaches green tests using only `docs/DEVELOPMENT.md`.
-3. `pnpm test` passes in full, including DB integration tests.
-4. CI is green on a real push.
-5. Phases 2–11 are defined in this file.
-6. `docs/SCENARIOS.md` exists, and every scenario has a schema verdict.
-7. Any schema change the catalogue demands is migrated, with the migration reviewed against existing data.
-
-Nothing in Phase 0 builds a new page. That is deliberate — every item removes a risk that would otherwise compound through every later phase.
-
----
+Nothing in Phase 0 builds a page. That is deliberate: every item removes a risk that would otherwise compound through every later phase, and two of them (0.A, 0.C) are only cheap *because* the lifecycle does not exist yet.
 
 ## 5. Roadmap after Phase 0
 
-To be expanded under item 0.3. Current best reconstruction:
+To be expanded under 0.H. Current best reconstruction:
 
 | Phase | Scope |
 |---|---|
-| 2 | Platform Super Admin — Workshops, Add Workshop Owner, Control Center, Platform Reports, Live View |
-| 3 | Tenant Owner — Organization & Access, Forms, Messages, Pricing, Reports, Audit, Workflow Health |
-| 4 | Branch Manager — intake, board, workspace, approvals, delivery/payments, team setup |
+| 2 | Platform Super Admin — Workshops, Add Workshop Owner, Control Center (incl. capability shaping UI), Platform Reports, Live View |
+| 3 | Operations spine — work order lifecycle, **capability-aware workflow router**, Finish Gate |
+| 4 | Branch Manager — intake, board, workspace, approvals, delivery/payments |
 | 5 | Technician — Home, My Work, Work Card (10 tools) |
 | 6 | Inventory Manager — 6 pages |
-| 7 | Team Leader — 4 pages |
-| 8 | Data Analyst — 7 pages |
-| 9 | Customer portal — 6 pages |
-| 10 | System Automation — real background jobs |
-| 11 | Hardening — permission-key assertion CI check, perf, denormalised summary tables |
+| 7 | Finance — pricing, invoicing, payments, per-country invoice adapters |
+| 8 | Team Leader + People & Performance |
+| 9 | Customer portal + Data Analyst |
+| 10 | System Automation — real background jobs on a separate worker |
+| 11 | Hardening — permission-key assertion check, perf, summary tables |
 
-**Ordering note:** phases 3–9 are grouped by role, but the scenarios in 0.4 cut *across* roles — one part-unavailable scenario touches Technician, Inventory, Branch Manager, Customer, and Finance. Building role-by-role is how the previous attempt produced pages that each worked alone and did not connect. Each phase should therefore close with a **cross-role scenario walkthrough** proving the scenarios that touch it work end-to-end, not just that its own pages render.
+**Two ordering notes.** The lifecycle (Phase 3) is pulled ahead of the role pages, because the capability-aware router must exist before any role depends on a transition. And every phase closes with a **cross-system scenario walkthrough**, not a page checklist — the specific discipline that would have caught v11.9's disconnected-pages failure.
