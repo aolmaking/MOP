@@ -146,6 +146,22 @@ enum PartRequestStatus {
   CANCELLED
 }
 
+// Where a part on a work order came from. The reason this exists:
+// a customer who brings their own part and pays only for fitting cannot be
+// modelled as an inventory item priced at zero. There is no stock movement,
+// no cost to the workshop, and -- decisively -- a different liability
+// position, because warranty disputes turn on who supplied the part.
+enum PartProvenance {
+  // Issued from the workshop's own stock. Has a PartRequest.
+  INVENTORY
+  // Bought in for this job specifically; the workshop owns it briefly and
+  // bills it on, but it never enters stock.
+  EXTERNAL_PURCHASE
+  // Supplied by the customer. Zero cost, labour billed separately, and the
+  // workshop does not warrant the part itself.
+  CUSTOMER_SUPPLIED
+}
+
 enum StockMovementType {
   ISSUE
   RETURN_TO_STOCK
@@ -673,6 +689,7 @@ model WorkOrder {
   inspections        Inspection[]
   faults             Fault[]
   partRequests       PartRequest[]
+  partLines          WorkOrderPartLine[]
   quotation          Quotation?
   runningInvoice     RunningInvoice?
   invoice            Invoice?
@@ -833,6 +850,7 @@ model InventoryItem {
   tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   stockBalances WarehouseStockBalance[]
   partRequests  PartRequest[]
+  partLines     WorkOrderPartLine[]
   movements     StockMovement[]
 
   @@unique([tenantId, sku])
@@ -881,10 +899,58 @@ model PartRequest {
   inventoryItem InventoryItem      @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
   issuedItem    IssuedItem?
   returnRequest PartReturnRequest?
+  partLine      WorkOrderPartLine?
 
   @@index([tenantId, status])
   @@index([workOrderId])
   @@map("part_requests")
+}
+
+// Every part that goes onto a work order, whatever its origin -- this is
+// the billing-facing record, distinct from PartRequest, which is the
+// inventory-facing one.
+//
+// The split matters because not every part has a PartRequest: a
+// customer-supplied part never touches the warehouse, so it has no
+// request, no issue, no stock movement and no cost. Forcing those through
+// PartRequest would mean either a nullable inventoryItemId on a table
+// whose whole purpose is to reference stock, or fake inventory rows for
+// parts the workshop never owned.
+model WorkOrderPartLine {
+  id          String         @id @default(cuid())
+  tenantId    String
+  workOrderId String
+  taskId      String?
+  provenance  PartProvenance
+  // Set only when provenance is INVENTORY. Null for anything the workshop
+  // did not supply from its own stock.
+  inventoryItemId String?
+  // Free text for non-inventory parts, where there is no catalogue row to
+  // name them.
+  name        String
+  quantity    Int            @default(1)
+  // What the customer is charged for the part itself. Zero for
+  // CUSTOMER_SUPPLIED -- the labour is charged separately, on its own line.
+  sellingPrice Decimal       @db.Decimal(12, 2) @default(0)
+  // Null unless the workshop actually paid for it. Never set for
+  // CUSTOMER_SUPPLIED, and never exposed to the customer.
+  cost        Decimal?       @db.Decimal(12, 2)
+  // Recorded explicitly rather than inferred from provenance, because it
+  // is the fact a warranty dispute turns on and must survive any later
+  // change to how provenance is interpreted.
+  workshopWarranted Boolean  @default(true)
+  // Links back to the inventory flow when there is one.
+  partRequestId String?      @unique
+  addedById   String
+  createdAt   DateTime       @default(now())
+
+  workOrder     WorkOrder      @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  partRequest   PartRequest?   @relation(fields: [partRequestId], references: [id], onDelete: SetNull)
+
+  @@index([workOrderId])
+  @@index([tenantId, provenance])
+  @@map("work_order_part_lines")
 }
 
 model IssuedItem {
@@ -892,6 +958,9 @@ model IssuedItem {
   tenantId      String
   partRequestId String    @unique
   warehouseId   String
+  // Requested quantity lives on PartRequest; this is what was actually
+  // issued, which can be less. A single field on PartRequest could not
+  // express "3 requested, 2 issued" without losing one of the two numbers.
   quantity      Int
   issuedById    String
   issuedAt      DateTime  @default(now())
@@ -1195,6 +1264,12 @@ model CreditNote {
 
 model FinanceConfiguration {
   tenantId                  String          @id
+  // External Billing Mode: MOP owns pricing, payments and balances while
+  // legal invoices are issued from separate accounting software. The
+  // reference is recorded so delivery can still be gated on an invoice
+  // existing, even though MOP did not produce it.
+  externalBillingEnabled    Boolean         @default(false)
+  externalInvoiceReference  String?
   technicianPriceVisible    Boolean         @default(false)
   customerInvoiceVisible    Boolean         @default(true)
   discountApprovalThreshold Decimal         @default(0) @db.Decimal(12, 2)

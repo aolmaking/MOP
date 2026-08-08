@@ -1,5 +1,18 @@
 # Phase 2 — Design Completeness
 
+> **Status (2026-08-08): COMPLETE.**
+>
+> | Task | State |
+> |---|---|
+> | 2.A Gate registry | ✅ typed, ownership-derived, 47 tests |
+> | 2.B Cross-system contracts | ✅ typed, closed event union, 55 tests |
+> | 2.C Scenario matrix | ✅ [`docs/SCENARIOS.md`](../SCENARIOS.md) — 25 scenarios, every one with a verdict |
+> | 2.D Schema changes | ✅ migration applied, purely additive (no DROP) |
+>
+> Verified: **272 tests** (55 shared + 159 API + 58 web), typecheck clean, both custom lint rules passing, full build green.
+>
+> Two items are deferred **with named phases** rather than left vague: multiple partial issues against one part request (Phase 7, where the inventory flow is built) and `TenantCapability` time-ranging (Phase 3, where its writers exist).
+
 > **Goal:** close every design question that would otherwise force a migration or a rewrite once Phase 3 and 4 depend on it.
 > **Why now:** Phase 3 stores capabilities and Phase 4 builds the lifecycle on top of them. Anything still undecided at that point gets decided by accident, in code, under time pressure.
 > **Shape:** mostly design and typed contracts, plus one schema change. Almost no runtime behaviour — this phase makes later phases a translation exercise rather than a design exercise.

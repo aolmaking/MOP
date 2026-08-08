@@ -18,6 +18,7 @@ Read in this order the first time through.
 | Document | What it is |
 |---|---|
 | [`PRODUCT_SPEC_CANONICAL.md`](./PRODUCT_SPEC_CANONICAL.md) | The authoritative business spec, pasted by the product owner. Source of truth for *intent*. Note the 2026-08-07 amendment at the top and the truncation warning |
+| [`SCENARIOS.md`](./SCENARIOS.md) | The scenario matrix — what must work, under which capability profiles, with a schema verdict each |
 | [`detailed-specs/`](./detailed-specs/README.md) | Field-level, interaction-level detail for every page, one file per role |
 | [`GAP_ANALYSIS_CANONICAL_SPEC.md`](./GAP_ANALYSIS_CANONICAL_SPEC.md) | Spec vs. the **v11.9** implementation. **Historical** — v11.9 was deleted at commit `b0a4e68`. Read it as the record of *why* the rebuild happened and which mistakes must not recur, not as a description of current code |
 

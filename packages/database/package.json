@@ -11,7 +11,9 @@
     "studio": "node ../../tools/with-env.mjs prisma studio",
     "seed": "node ../../tools/with-env.mjs tsx prisma/seed.ts",
     "reset": "node ../../tools/with-env.mjs prisma migrate reset --force",
-    "test:prepare": "node ../../tools/with-env.mjs --mop-env .env.test prisma migrate deploy"
+    "test:prepare": "node ../../tools/with-env.mjs --mop-env .env.test prisma migrate deploy",
+    "migrate:create": "node ../../tools/with-env.mjs prisma migrate dev --name",
+    "validate": "node ../../tools/with-env.mjs prisma validate"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0"
