@@ -15,7 +15,7 @@ The instruction that started this work was *"the whole project needs to be rebui
 | | |
 |---|---|
 | Typecheck | Clean across `@mop/shared` and `@mop/api` |
-| Tests | **161 passing** — 112 API unit (22 suites) + 49 web (16 suites) |
+| Tests | **192 passing** — 31 shared/capabilities + 112 API unit (22 suites) + 49 web (16 suites) |
 | Not yet verified | DB-backed integration tests — Docker not running on this machine |
 
 **Solid foundations already in place:** a 1,409-line schema covering all 16 work-order statuses and 19 part-request states; an 8-layer permission resolver that is a real iterated array with deny-by-default and a `locked` short-circuit; a **lint-enforced** audit boundary (the build fails if anything writes `AuditLog` outside the audit module); the operations event engine with customer-safe projection; auth with four account types and DB-backed sessions; a real design-token system; ~1,600 lines of field-level role specs.
@@ -38,7 +38,7 @@ Operations, Inventory, Finance, People & Performance, Governance & Control — e
 
 This changes build order. The phases are grouped by **role**, but the systems are how the thing is actually built, and one scenario (a part is unavailable) crosses five systems at once. Building role-by-role without cross-system contracts defined first is precisely how the previous attempt produced pages that each worked alone and did not connect.
 
-⚠️ **One open question blocks a real decision:** is Billing/Invoices a separate system from Finance, or one system? It affects module boundaries and is made sharper by e-invoicing mandates (§1.3). Flagged in `SYSTEMS.md` §1.
+**Resolved 2026-08-08 — Billing/Invoicing is a separate bounded system from Finance Core.** Six systems internally; commercially still presentable as five, with *Financial Suite = Finance Core + Billing*. Finance Core owns pricing, discounts, tax policy, payments, refunds and balances; Billing owns the legal invoice document, numbering, immutable snapshots, country adapters, e-invoicing clearance, and credit/debit notes. The split pays for itself immediately by making **External Billing Mode** expressible — MOP owns the money while invoices are issued from separate accounting software — which is now a passing test.
 
 ### 1.3 It will travel the world
 
@@ -55,13 +55,17 @@ Arabic/RTL from the first component. Tax as a pluggable policy, snapshotted per 
 
 Ordered by what blocks the most downstream work.
 
-### 0.A — Capability registry and the reachability check *(new, highest value)*
+### 0.A — Capability registry and the reachability check ✅ **DONE**
 
-Build the registry from `CAPABILITY_MODEL.md` §3–4 as typed code, with a complete `RemovalPolicy` for every non-CORE capability, plus the three validators (dependency, live-data precondition, reachability).
+`packages/shared/src/capabilities/` — registry with a complete `RemovalPolicy` per capability, capability-annotated workflow graphs for Work Order / Part Request / Customer Decision, the reachability validator, and seven shipped profiles. **31 tests, all passing, wired into `pnpm test` and CI.**
 
-Build it **standalone and fully tested before any lifecycle code depends on it.** It is a pure function over a graph — cheap to test exhaustively, and it can be proven correct in isolation, which will never be true again once it is entangled with five roles.
+Built standalone, before any lifecycle code depends on it: a pure function over a graph with no database, framework or clock, so it can be proven correct in isolation — which will never be true again once it is entangled with five roles.
 
-**Done when:** every shipped capability profile passes reachability in CI, and a deliberately-broken profile (Inventory off, parts gate left on) is *rejected by a test* rather than by a human noticing.
+All six required smart-delete cases are covered by tests: Inventory, Customer Portal, Team Review, Multi-Branch, Billing-off-with-Finance-on, and Finance externalised. The decisive test reconstructs the naive implementation (deny `inventory.*`, hide the pages, leave the transition *into* `WAITING_PARTS` ungated) and asserts the validator **rejects** it.
+
+**One design bug was caught by a failing test rather than by review:** two removal policies disagreed about a shared gate, and the original "keep wins" resolution resurrected a parts check nothing could satisfy — re-creating the exact stranding the layer exists to prevent. Fixed by making gate ownership explicit (`CAPABILITY_MODEL.md` Rule 2a). This is the layer paying for itself before it has a single caller.
+
+**Remaining in this item:** live-data preconditions (counting in-flight records a removal would strand) need the database, so they land with 0.D.
 
 ### 0.B — The scenario matrix *(grew from a catalogue)*
 

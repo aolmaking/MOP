@@ -22,19 +22,29 @@ A complete warehouse management system. Catalog, SKUs, multi-warehouse stock, th
 *Owns:* `InventoryItem`, `WarehouseStockBalance`, `PartRequest`, `IssuedItem`, `PartReturnRequest`, `StockMovement`, `InventoryTransfer`, `SupplierOrder`
 *Specialist user:* Inventory Manager
 
-### 3. Finance
-Pricing catalog, quotations, the live running invoice, final invoicing, payment ledger, discounts, refunds, credit notes, tax, and financial reporting.
+### 3. Finance Core
+Pricing catalog, discounts, tax **policy**, margins, deposits, the live running balance, payments, refunds, and financial reporting. Everything about *how much*.
 
-*Owns:* `PriceCatalogEntry`, `Quotation`, `RunningInvoice`, `Invoice`, `Payment`, `DiscountRequest`, `RefundRequest`, `CreditNote`, `FinanceConfiguration`, `InvoiceSequence`
+*Owns:* `PriceCatalogEntry`, `Quotation`, `RunningInvoice`, `Payment`, `DiscountRequest`, `RefundRequest`, `FinanceConfiguration`
 *Specialist user:* Owner · *Operator:* Branch Manager
 
-### 4. People & Performance
+### 4. Billing / Invoicing
+Final invoice document generation, invoice numbering, immutable snapshots, the legal invoice lifecycle, country-specific adapters, e-invoicing clearance, QR/signature/compliance output, credit and debit notes. Everything about *the legal document*.
+
+*Owns:* `Invoice`, `InvoiceLine`, `InvoiceSequence`, `CreditNote`
+*Specialist user:* Owner · *Operator:* Branch Manager
+
+**Why this is a separate system, not a Finance screen.** In several target markets an invoice is a compliance artifact, not a formatted total: Saudi ZATCA Phase 2 requires integration with the Fatoora platform in a prescribed format, and Egypt's ETA requires registration, integration, and electronic signing. In those jurisdictions **an invoice that has not been cleared is not a valid invoice.** That is a compliance boundary with its own lifecycle, its own failure modes (clearance rejected, portal unreachable) and its own audit obligations — none of which belong in pricing logic.
+
+The two are packaged commercially as one **Financial Suite**. Architecturally they stay separate, and the split earns its keep immediately: a workshop can run **External Billing Mode** — MOP owns pricing, payments and balances while legal invoices are issued from separate accounting software — which is impossible if the two are one module. This case is covered by a passing test (`validator.spec.ts`, "Billing disabled while Finance Core stays enabled").
+
+### 5. People & Performance
 Staff, roles, scoping (branch/warehouse/category/team), teams and membership history, supervision, and technician performance measurement.
 
 *Owns:* `StaffUser`, `Team`, `TeamMembership`, `WorkOrderAssignment`, `TaskAssignment`
 *Specialist users:* Team Leader, Owner
 
-### 5. Governance & Control
+### 6. Governance & Control
 The platform's control plane. Tenant lifecycle, capability shaping and smart delete, the permission matrix, configuration and publishing, entitlements and limits, and the audit trail.
 
 *Owns:* `Tenant`, `Plan`, `ControlSetting`, `TenantConfiguration`, `RolePermission`, `UserPermissionOverride`, `AuditLog`, `PlatformLiveViewSession`
@@ -48,20 +58,22 @@ The platform's control plane. Tenant lifecycle, capability shaping and smart del
 
 **History** — not a system and deliberately not a table. History is the audit trail plus the time-ranged records (`AssetOwnershipHistory`, `TeamMembership`, `PriceCatalogEntry`, and the forthcoming `TenantCapability`). A separate "history system" that duplicates state is how history and reality drift apart.
 
-### ⚠️ Open question for the product owner
+### Resolved: Billing is separate from Finance Core
 
-The brief says *"about 5 systems."* The five above are my reading, mapped to the original words:
+*(Decision taken 2026-08-08 — this section previously carried it as an open question.)*
+
+The brief said *"about 5 systems."* Six is the internal count, because Billing splits out. Mapped to the original words:
 
 | Original wording | Mapped to |
 |---|---|
 | "the inventory and inventory manager" | **Inventory** |
-| "the financial system … on the workshop owner page" | **Finance** |
-| "the bills system … very sensitive" | **Finance** (invoicing is inside it) |
+| "the financial system … on the workshop owner page" | **Finance Core** |
+| "the bills system … very sensitive" | **Billing / Invoicing** — its own bounded system |
 | "an employee performance reporting system" | **People & Performance** |
 | "the history page contains each detail of each detail" | **Cross-cutting — History** |
 | *(implied throughout)* | **Operations**, **Governance & Control** |
 
-**The one real fork: is Billing/Invoices a separate system from Financial, or one system?** Splitting them means invoicing owns document generation, numbering, legal compliance and e-invoicing, while Finance owns pricing, margin and reporting — a defensible split, especially given e-invoicing mandates (§4). Keeping them together is simpler. This affects module boundaries and team ownership, so it should be settled before Phase 3.
+Commercially it can still be presented as five, with **Financial Suite = Finance Core + Billing/Invoicing**. Internally they are separate boundaries with separate tables, contracts, and lifecycle ownership.
 
 ## 2. The rule that keeps them separate
 
@@ -79,15 +91,35 @@ The interactions that actually matter. Each is a place where two systems must ag
 
 | From → To | Event / contract | Why it is delicate |
 |---|---|---|
-| Operations → Finance | `customer_decision.responded` (approved items) | Approved prices **lock** here. Late or duplicated delivery means billing something the customer never agreed to |
+| Operations → Finance Core | **`ChargeableWorkItem`** | The only way a task/part/labour becomes money. Finance must never reach into `Task` to work out what to bill |
 | Operations → Inventory | `part.requested` | Carries work order, task, branch, category — Inventory needs the branch to pick a warehouse |
 | Inventory → Operations | `part.issued` / `arrived` / `unavailable` | Drives `WAITING_PARTS` and the Finish Gate. **The contract that breaks if Inventory is smart-deleted** — see `CAPABILITY_MODEL.md` §5 |
-| Inventory → Finance | `part.used` (selling price, quantity) | The only path from a physical part to a billable line. Price comes from the catalog **at approval time**, never re-read later |
-| Operations → People | `task.completed`, `blocker.reported` | Feeds performance metrics. Must carry duration and blocker attribution or the metric is unfair to the technician |
-| Finance → Operations | `invoice.issued`, `payment.recorded` | Releases the delivery gate |
+| Inventory → Finance Core | `part.used` (selling price, quantity) | The only path from a physical part to a billable line. Price comes from the catalog **at approval time**, never re-read later |
+| Operations → Finance Core | `customer_decision.responded` | Approved prices **lock** here. Late or duplicated delivery means billing something the customer never agreed to |
+| Finance Core → Billing | **`InvoiceCandidateCreated`** | Carries lines, tax breakdown, discounts, totals, currency, **country**, and the approved-price snapshot. Billing validates and converts it into a legal artifact — it must never read Operations tables to decide what to invoice |
+| Billing → Finance Core / Operations | `invoice.issued`, `invoice.cleared`, `invoice.rejected`, `invoice.cancelled`, `invoice.clearance_failed`, `credit_note.issued`, `debit_note.issued` | Finance updates financial state; Operations releases the delivery gate. **`clearance_failed` is the one most likely to be forgotten** — in a clearance jurisdiction it means delivery must *not* be released |
+| Operations → People | `task.completed`, `blocker.reported` | Feeds performance metrics. Must carry duration and blocker attribution, or the metric is unfair to the technician |
 | All → Governance | every audited action | Lint-enforced: only the audit module may write `AuditLog` |
 | Governance → All | capability change applied | Every system must reroute per its removal policy, in one transaction |
 | All → Customer Engagement | any customer-visible event | Passes through customer-safe projection. **Never** raw internal text |
+
+### The Billing country adapter
+
+Billing's whole reason to exist as a separate system is that the last step differs per jurisdiction. A stable interface, with a generic adapter first and country adapters added without touching Finance:
+
+```ts
+interface BillingCountryAdapter {
+  validateInvoice(candidate: InvoiceCandidate): BillingValidationResult;
+  generateDocument(invoice: InvoiceSnapshot): BillingDocument;
+  submitForClearance(invoice: InvoiceSnapshot): ClearanceSubmissionResult;
+  getClearanceStatus(invoiceId: string): ClearanceStatus;
+  generateQr(invoice: InvoiceSnapshot): QrPayload;
+  generateCreditNote(invoice: InvoiceSnapshot, reason: string): CreditNoteDocument;
+  generateDebitNote(invoice: InvoiceSnapshot, reason: string): DebitNoteDocument;
+}
+```
+
+`GenericBillingAdapter` ships first; `EgyptETAAdapter`, `SaudiZATCAAdapter` and others follow. **No country adapter needs to be built now** — but the seam must exist from day one, because retrofitting a clearance step into an invoicing flow that assumes issuing is instantaneous and always succeeds is a rewrite, not an addition.
 
 ## 4. Going global
 
