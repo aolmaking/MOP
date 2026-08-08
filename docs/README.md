@@ -9,7 +9,9 @@ Read in this order the first time through.
 | [`VISION.md`](./VISION.md) | What MOP actually is, the five architectural ideas, the hard problems, what "done" means, and the failure modes being guarded against |
 | [`SYSTEMS.md`](./SYSTEMS.md) | The five systems running simultaneously, their boundaries, and the contracts between them. Also the going-global constraints |
 | [`CAPABILITY_MODEL.md`](./CAPABILITY_MODEL.md) | How Super Admin shapes a workshop and removes what it doesn't need **without creating logical errors** — the smart-delete architecture |
-| [`REBUILD_PLAN.md`](./REBUILD_PLAN.md) | Current verified state of the repo, Phase 0 work items, and the roadmap for Phases 2–11 |
+| [`PHASE_MAP.md`](./PHASE_MAP.md) | **The plan.** All 14 phases, their main points, ordering rules and dependencies. Start here to know what happens next |
+| [`phases/PHASE_1.md`](./phases/PHASE_1.md) | Full working detail of the current phase |
+| [`REBUILD_PLAN.md`](./REBUILD_PLAN.md) | Decision record — how the rebuild started, what was found broken, and the architectural decisions with their reasoning. Not a task list |
 
 ## Product specification
 
