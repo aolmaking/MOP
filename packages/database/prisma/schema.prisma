@@ -280,8 +280,15 @@ model Plan {
 }
 
 model Tenant {
-  id                       String       @id @default(cuid())
-  name                     String
+  id   String @id @default(cuid())
+  name String
+  // Lowercased mirror of `name`, maintained by application code on write.
+  // Prisma's schema DSL has no expression/functional index (Postgres
+  // supports `UNIQUE (lower(name))` directly, but not through @@unique),
+  // so a real, unique shadow column is the portable way to enforce
+  // Add Workshop Owner's "unique across the platform, case-insensitive"
+  // rule without hand-writing provider-specific SQL into the migration.
+  nameNormalized           String       @unique
   slug                     String       @unique
   customerRegistrationCode String       @unique
   status                   TenantStatus @default(PENDING_SETUP)
@@ -416,6 +423,13 @@ model Account {
   failedLoginCount Int           @default(0)
   lockedUntil      DateTime?
   createdAt        DateTime      @default(now())
+
+  // Set when an account is created without a password (status = INVITED --
+  // e.g. a new workshop owner) and cleared the moment the invite is
+  // redeemed. The raw token is never stored, only this hash, matching the
+  // same pattern session secrets already use (see auth/token.util.ts).
+  inviteTokenHash      String?
+  inviteTokenExpiresAt DateTime?
 
   tenant   Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   staff    StaffUser?
