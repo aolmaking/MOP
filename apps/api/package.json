@@ -8,7 +8,9 @@
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main.js",
     "lint": "eslint \"src/**/*.ts\"",
-    "test": "jest"
+    "test": "jest",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:unit": "jest --testPathIgnorePatterns=\".*integration\\.spec\\.ts$\""
   },
   "dependencies": {
     "@mop/database": "workspace:*",

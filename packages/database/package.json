@@ -6,10 +6,12 @@
   "types": "./generated/client/index.d.ts",
   "scripts": {
     "generate": "prisma generate",
-    "migrate:dev": "prisma migrate dev",
-    "migrate:deploy": "prisma migrate deploy",
-    "studio": "prisma studio",
-    "seed": "tsx prisma/seed.ts"
+    "migrate:dev": "node ../../tools/with-env.mjs prisma migrate dev",
+    "migrate:deploy": "node ../../tools/with-env.mjs prisma migrate deploy",
+    "studio": "node ../../tools/with-env.mjs prisma studio",
+    "seed": "node ../../tools/with-env.mjs tsx prisma/seed.ts",
+    "reset": "node ../../tools/with-env.mjs prisma migrate reset --force",
+    "test:prepare": "node ../../tools/with-env.mjs --mop-env .env.test prisma migrate deploy"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0"

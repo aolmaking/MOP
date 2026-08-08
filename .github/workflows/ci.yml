@@ -54,8 +54,11 @@ jobs:
       - name: Generate Prisma client
         run: pnpm db:generate
 
+      # Uses the same script a developer runs locally, so the two paths
+      # cannot drift. tools/with-env.mjs never overrides an already-set
+      # variable, so the job-level DATABASE_URL above still wins.
       - name: Apply database migrations
-        run: pnpm --filter @mop/database exec prisma migrate deploy
+        run: pnpm db:deploy
 
       # Includes tools/lint-audit-boundary.mjs -- fails the build if any
       # AuditLog write happens outside apps/api/src/audit/**.

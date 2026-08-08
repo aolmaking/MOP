@@ -1,20 +1,32 @@
 /**
- * Minimal smoke-test seed: one plan, one platform admin, one tenant with
- * its first owner (plus one real RolePermission grant, so the owner has
- * at least one permission key that resolves ALLOW, not just DENY-by-
- * default). Enough to run the Phase 1 verification sequence end to end
- * against a real database -- not meant to represent realistic production
- * data, and not something later phases should build on top of.
+ * Development seed: one platform admin and **two tenants with deliberately
+ * different shapes**.
  *
- * Idempotent: safe to re-run against the same database. Looks up each
- * row by a fixed, well-known identifier before creating it, rather than
- * inserting duplicates every run.
+ * The two-tenant part is not decoration. A single-tenant database makes
+ * tenant-isolation bugs invisible -- there is no second tenant to leak
+ * from, so an unscoped query looks correct. It also leaves the product's
+ * central claim (one codebase, differently-shaped workshops) untested by
+ * construction.
+ *
+ * So the two tenants differ in every dimension that matters:
+ *
+ *   Apex Motors    multi-branch, full service, inventory + teams + QC,
+ *                  2 branches, 2 warehouses, EGP / Africa-Cairo
+ *   Delta Quick    single bay, no inventory, no teams, no QC,
+ *                  1 branch, 0 warehouses, AED / Asia-Dubai
+ *
+ * Delta is the shape that breaks naive code: no inventory means no part
+ * lifecycle, and a Finish Gate that still demands "parts used or returned"
+ * would strand every job (see docs/CAPABILITY_MODEL.md).
+ *
+ * Idempotent: safe to re-run. Every row is looked up by a fixed, well-known
+ * identifier before being created.
  */
 // Relative, not "@prisma/client" or "@mop/database": the schema generates
 // into a custom location (see prisma/schema.prisma's generator block), so
 // the plain package name resolves to an uninitialized stub, not this
 // project's real generated client.
-import { PrismaClient } from "../generated/client";
+import { PrismaClient, type CategoryCode, type Prisma } from "../generated/client";
 import { randomBytes, scryptSync } from "node:crypto";
 
 const prisma = new PrismaClient();
@@ -49,48 +61,123 @@ function hashPassword(password: string): string {
 // --- fixed, well-known seed identifiers --------------------------------
 const PLATFORM_ADMIN_EMAIL = "platform-admin@mop.local";
 const PLATFORM_ADMIN_PASSWORD = "ChangeMe-Platform-123";
-const PLAN_CODE = "SEED-STARTER";
-const TENANT_SLUG = "seed-workshop";
-const OWNER_EMAIL = "owner@seed-workshop.local";
 const OWNER_PASSWORD = "ChangeMe-Owner-123";
-// Granted directly below so the seeded owner has one real ALLOW path to
-// test against, alongside every other key correctly denying by default.
+
+/**
+ * Granted directly so each seeded owner has one real ALLOW path to test
+ * against, alongside every other key correctly denying by default.
+ */
 const OWNER_GRANTED_PERMISSION_KEY = "organization.access.manage";
 
-async function main() {
-  const plan = await findOrCreatePlan();
-  const platformAdmin = await findOrCreatePlatformAdmin();
-  const { tenant, owner } = await findOrCreateTenantWithOwner(plan.id);
-
-  console.log("Seed complete:");
-  console.log(`  Platform admin: ${PLATFORM_ADMIN_EMAIL} / ${PLATFORM_ADMIN_PASSWORD} (account ${platformAdmin.id})`);
-  console.log(`  Tenant:         ${tenant.name} (${tenant.id}, slug "${tenant.slug}")`);
-  console.log(`  Owner:          ${OWNER_EMAIL} / ${OWNER_PASSWORD} (account ${owner.id})`);
-  console.log(`  Owner is granted: ${OWNER_GRANTED_PERMISSION_KEY}`);
+interface TenantSpec {
+  name: string;
+  slug: string;
+  registrationCode: string;
+  planCode: string;
+  planName: string;
+  maxBranches: number;
+  maxUsers: number;
+  maxWarehouses: number;
+  country: string;
+  city: string;
+  businessType: string;
+  primaryCategory: CategoryCode;
+  currency: string;
+  timezone: string;
+  ownerEmail: string;
+  ownerName: string;
+  /** Mirrors a capability profile in @mop/shared until Phase 3 stores capabilities properly. */
+  enabledModules: string[];
+  branches: Array<{ name: string; code: string }>;
+  warehouses: Array<{ name: string; code: string }>;
 }
 
-async function findOrCreatePlan() {
-  const existing = await prisma.plan.findUnique({ where: { code: PLAN_CODE } });
-  if (existing) return existing;
+const TENANTS: readonly TenantSpec[] = [
+  {
+    name: "Apex Motors",
+    slug: "apex-motors",
+    registrationCode: "APEX-001",
+    planCode: "SEED-FULL-SERVICE",
+    planName: "Full Service",
+    maxBranches: 10,
+    maxUsers: 100,
+    maxWarehouses: 5,
+    country: "EG",
+    city: "Cairo",
+    businessType: "Multi-Branch Service Centre",
+    primaryCategory: "CARS",
+    currency: "EGP",
+    timezone: "Africa/Cairo",
+    ownerEmail: "owner@apex-motors.local",
+    ownerName: "Apex Owner",
+    enabledModules: [
+      "ORGANIZATION",
+      "OPERATIONS",
+      "INVENTORY",
+      "FINANCE",
+      "TEAM_MANAGEMENT",
+      "REPORTS",
+      "AUDIT",
+      "CUSTOMER_PORTAL",
+    ],
+    branches: [
+      { name: "Nasr City", code: "NC" },
+      { name: "Giza", code: "GZ" },
+    ],
+    warehouses: [
+      { name: "Central Warehouse", code: "CENTRAL" },
+      { name: "Giza Store", code: "GZ-STORE" },
+    ],
+  },
+  {
+    name: "Delta Quick Service",
+    slug: "delta-quick",
+    registrationCode: "DELTA-001",
+    planCode: "SEED-QUICK-SERVICE",
+    planName: "Quick Service",
+    maxBranches: 1,
+    maxUsers: 10,
+    maxWarehouses: 0,
+    country: "AE",
+    city: "Dubai",
+    businessType: "Single-Bay Quick Service",
+    primaryCategory: "MOTORCYCLES",
+    currency: "AED",
+    timezone: "Asia/Dubai",
+    ownerEmail: "owner@delta-quick.local",
+    ownerName: "Delta Owner",
+    // No INVENTORY, no TEAM_MANAGEMENT -- this is the shape that strands
+    // work orders if the Finish Gate is not capability-aware.
+    enabledModules: ["ORGANIZATION", "OPERATIONS", "FINANCE", "REPORTS", "AUDIT", "CUSTOMER_PORTAL"],
+    // Rule 1 of the capability model: a single-branch workshop still has
+    // exactly one Branch row. "No branches" is never modelled as null.
+    branches: [{ name: "Main Bay", code: "MAIN" }],
+    warehouses: [],
+  },
+];
 
-  return prisma.plan.create({
-    data: {
-      code: PLAN_CODE,
-      name: "Seed Starter Plan",
-      maxBranches: 3,
-      maxUsers: 15,
-      maxWarehouses: 3,
-      allowedCategories: ["CARS"],
-      allowedModules: [],
-      allowedFeatures: [],
-      allowedReports: [],
-      monthlyPrice: 0,
-    },
-  });
+async function main() {
+  const platformAdmin = await findOrCreatePlatformAdmin();
+  console.log("Seed complete:\n");
+  console.log(`  Platform admin  ${PLATFORM_ADMIN_EMAIL} / ${PLATFORM_ADMIN_PASSWORD}`);
+  console.log(`                  account ${platformAdmin.id}\n`);
+
+  for (const spec of TENANTS) {
+    const { tenant, ownerAccount } = await findOrCreateTenant(spec);
+    console.log(`  ${spec.name}`);
+    console.log(`                  tenant ${tenant.id} (slug "${tenant.slug}", ${tenant.currency}/${tenant.timezone})`);
+    console.log(`                  owner  ${spec.ownerEmail} / ${OWNER_PASSWORD} (account ${ownerAccount.id})`);
+    console.log(`                  modules ${spec.enabledModules.join(", ")}`);
+    console.log(`                  ${spec.branches.length} branch(es), ${spec.warehouses.length} warehouse(s)\n`);
+  }
+
+  console.log(`  Every owner is granted: ${OWNER_GRANTED_PERMISSION_KEY}`);
 }
 
 async function findOrCreatePlatformAdmin() {
-  const existing = await prisma.account.findFirst({ where: { accountType: "PLATFORM", email: PLATFORM_ADMIN_EMAIL } });
+  const existing = await prisma.account.findFirst({
+    where: { accountType: "PLATFORM", email: PLATFORM_ADMIN_EMAIL },
+  });
   if (existing) return existing;
 
   return prisma.account.create({
@@ -103,78 +190,135 @@ async function findOrCreatePlatformAdmin() {
   });
 }
 
-async function findOrCreateTenantWithOwner(planId: string) {
-  const existingTenant = await prisma.tenant.findUnique({ where: { slug: TENANT_SLUG } });
-  if (existingTenant) {
-    const existingOwnerAccount = await prisma.account.findFirst({
-      where: { tenantId: existingTenant.id, email: OWNER_EMAIL },
-    });
-    if (existingOwnerAccount) return { tenant: existingTenant, owner: existingOwnerAccount };
-  }
+async function findOrCreatePlan(spec: TenantSpec) {
+  const existing = await prisma.plan.findUnique({ where: { code: spec.planCode } });
+  if (existing) return existing;
+
+  return prisma.plan.create({
+    data: {
+      code: spec.planCode,
+      name: spec.planName,
+      maxBranches: spec.maxBranches,
+      maxUsers: spec.maxUsers,
+      maxWarehouses: spec.maxWarehouses,
+      allowedCategories: [spec.primaryCategory],
+      allowedModules: spec.enabledModules,
+      allowedFeatures: [],
+      allowedReports: [],
+      monthlyPrice: 0,
+    },
+  });
+}
+
+async function findOrCreateTenant(spec: TenantSpec) {
+  const plan = await findOrCreatePlan(spec);
 
   const tenant =
-    existingTenant ??
+    (await prisma.tenant.findUnique({ where: { slug: spec.slug } })) ??
     (await prisma.tenant.create({
       data: {
-        name: "Seed Workshop",
-        slug: TENANT_SLUG,
-        customerRegistrationCode: "SEED-001",
+        name: spec.name,
+        nameNormalized: spec.name.toLowerCase(),
+        slug: spec.slug,
+        customerRegistrationCode: spec.registrationCode,
         status: "ACTIVE",
-        planId,
-        country: "EG",
-        city: "Cairo",
-        businessType: "Independent Garage",
-        primaryCategory: "CARS",
-        currency: "EGP",
-        timezone: "Africa/Cairo",
+        planId: plan.id,
+        country: spec.country,
+        city: spec.city,
+        businessType: spec.businessType,
+        primaryCategory: spec.primaryCategory,
+        currency: spec.currency,
+        timezone: spec.timezone,
       },
     }));
 
-  const existingConfiguration = await prisma.tenantConfiguration.findUnique({ where: { tenantId: tenant.id } });
-  if (!existingConfiguration) {
-    await prisma.tenantConfiguration.create({
-      data: {
-        tenantId: tenant.id,
-        theme: {},
-        pageLayouts: {},
-        roleExperience: {},
-        workflowPolicy: {},
-        featureFlags: {},
-        // ORGANIZATION enabled so OWNER_GRANTED_PERMISSION_KEY resolves
-        // ALLOW rather than being blocked earlier by ModuleEnabledLayer.
-        enabledModules: ["ORGANIZATION"],
-        enabledFeatures: [],
-        forms: {},
-        messageTemplates: {},
-      },
+  await ensureConfiguration(tenant.id, spec);
+  await ensureBranchesAndWarehouses(tenant.id, spec);
+  const ownerAccount = await ensureOwner(tenant.id, spec);
+
+  return { tenant, ownerAccount };
+}
+
+async function ensureConfiguration(tenantId: string, spec: TenantSpec) {
+  const existing = await prisma.tenantConfiguration.findUnique({ where: { tenantId } });
+  if (existing) return existing;
+
+  const empty: Prisma.InputJsonValue = {};
+  return prisma.tenantConfiguration.create({
+    data: {
+      tenantId,
+      theme: empty,
+      pageLayouts: empty,
+      roleExperience: empty,
+      workflowPolicy: empty,
+      featureFlags: empty,
+      enabledModules: spec.enabledModules,
+      enabledFeatures: [],
+      forms: empty,
+      messageTemplates: empty,
+    },
+  });
+}
+
+async function ensureBranchesAndWarehouses(tenantId: string, spec: TenantSpec) {
+  for (const branch of spec.branches) {
+    const existing = await prisma.branch.findUnique({
+      where: { tenantId_code: { tenantId, code: branch.code } },
     });
+    if (!existing) {
+      await prisma.branch.create({ data: { tenantId, name: branch.name, code: branch.code, city: spec.city } });
+    }
   }
 
-  const owner = await prisma.account.create({
+  for (const warehouse of spec.warehouses) {
+    const existing = await prisma.warehouse.findUnique({
+      where: { tenantId_code: { tenantId, code: warehouse.code } },
+    });
+    if (!existing) {
+      await prisma.warehouse.create({ data: { tenantId, name: warehouse.name, code: warehouse.code } });
+    }
+  }
+}
+
+async function ensureOwner(tenantId: string, spec: TenantSpec) {
+  const existing = await prisma.account.findFirst({ where: { tenantId, email: spec.ownerEmail } });
+  if (existing) return existing;
+
+  const account = await prisma.account.create({
     data: {
       accountType: "TENANT_STAFF",
-      tenantId: tenant.id,
-      email: OWNER_EMAIL,
+      tenantId,
+      email: spec.ownerEmail,
       passwordHash: hashPassword(OWNER_PASSWORD),
       status: "ACTIVE",
     },
   });
+
   await prisma.staffUser.create({
     data: {
-      accountId: owner.id,
-      tenantId: tenant.id,
-      fullName: "Seed Owner",
+      accountId: account.id,
+      tenantId,
+      fullName: spec.ownerName,
       role: "TENANT_OWNER",
       branchScope: [],
       warehouseScope: [],
-      categoryScope: ["CARS"],
+      categoryScope: [spec.primaryCategory],
     },
   });
-  await prisma.rolePermission.create({
-    data: { tenantId: tenant.id, role: "TENANT_OWNER", permissionKey: OWNER_GRANTED_PERMISSION_KEY, allowed: true },
+
+  await prisma.rolePermission.upsert({
+    where: {
+      tenantId_role_permissionKey: {
+        tenantId,
+        role: "TENANT_OWNER",
+        permissionKey: OWNER_GRANTED_PERMISSION_KEY,
+      },
+    },
+    create: { tenantId, role: "TENANT_OWNER", permissionKey: OWNER_GRANTED_PERMISSION_KEY, allowed: true },
+    update: {},
   });
 
-  return { tenant, owner };
+  return account;
 }
 
 main()

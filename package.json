@@ -7,13 +7,20 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "db:generate": "pnpm --filter @mop/database run generate",
-    "db:migrate": "pnpm --filter @mop/database run migrate:dev",
-    "db:studio": "pnpm --filter @mop/database run studio",
-    "build:shared": "pnpm --filter @mop/shared run build",
-    "build": "pnpm build:shared && pnpm --filter @mop/api run build && pnpm --filter @mop/web run build",
-    "test": "pnpm --filter @mop/shared run test && pnpm --filter @mop/api run test && pnpm --filter @mop/web run test",
-    "lint": "pnpm --filter @mop/api run lint && node tools/lint-audit-boundary.mjs",
-    "typecheck": "pnpm --filter @mop/shared exec tsc --noEmit -p tsconfig.json && pnpm --filter @mop/api exec tsc --noEmit -p tsconfig.json"
+    "doctor": "node tools/doctor.mjs",
+    "dev": "node tools/pnpm.mjs --parallel --filter @mop/api --filter @mop/web run start:dev",
+    "db:generate": "node tools/pnpm.mjs --filter @mop/database run generate",
+    "db:migrate": "node tools/pnpm.mjs --filter @mop/database run migrate:dev",
+    "db:deploy": "node tools/pnpm.mjs --filter @mop/database run migrate:deploy",
+    "db:seed": "node tools/pnpm.mjs --filter @mop/database run seed",
+    "db:reset": "node tools/pnpm.mjs --filter @mop/database run reset",
+    "db:studio": "node tools/pnpm.mjs --filter @mop/database run studio",
+    "db:test:prepare": "node tools/pnpm.mjs --filter @mop/database run test:prepare",
+    "build:shared": "node tools/pnpm.mjs --filter @mop/shared run build",
+    "build": "node tools/pnpm.mjs run build:shared && node tools/pnpm.mjs --filter @mop/api run build && node tools/pnpm.mjs --filter @mop/web run build",
+    "test": "node tools/pnpm.mjs --filter @mop/shared run test && node tools/pnpm.mjs --filter @mop/api run test && node tools/pnpm.mjs --filter @mop/web run test",
+    "test:unit": "node tools/pnpm.mjs --filter @mop/shared run test && node tools/pnpm.mjs --filter @mop/api run test:unit && node tools/pnpm.mjs --filter @mop/web run test",
+    "lint": "node tools/pnpm.mjs --filter @mop/api run lint && node tools/lint-audit-boundary.mjs",
+    "typecheck": "node tools/pnpm.mjs --filter @mop/shared run typecheck && node tools/pnpm.mjs --filter @mop/api run typecheck"
   }
 }
