@@ -10,7 +10,7 @@
   gap: var(--space-1);
   padding: var(--space-4) var(--space-3);
   background: var(--surface);
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
 }
 
 .rail-brand {

@@ -291,7 +291,7 @@ a {
   width: 1em;
   height: 1em;
   border: 2px solid currentColor;
-  border-right-color: transparent;
+  border-inline-end-color: transparent;
   border-radius: 50%;
   animation: mop-spin 0.6s linear infinite;
   opacity: 0.85;
@@ -338,7 +338,7 @@ a {
 
 .mop-toast-stack {
   position: fixed;
-  right: var(--space-5);
+  inset-inline-end: var(--space-5);
   bottom: var(--space-5);
   z-index: 1000;
   display: flex;
@@ -356,17 +356,17 @@ a {
   border-radius: var(--radius-md);
   background: var(--surface-raised);
   border: 1px solid var(--border);
-  border-left: 3px solid var(--neutral-badge);
+  border-inline-start: 3px solid var(--neutral-badge);
   color: var(--text);
   font-size: var(--text-sm);
   box-shadow: 0 8px 24px hsl(var(--shadow-color) / 0.35);
 }
 
 .mop-toast--success {
-  border-left-color: var(--success);
+  border-inline-start-color: var(--success);
 }
 .mop-toast--danger {
-  border-left-color: var(--danger);
+  border-inline-start-color: var(--danger);
 }
 
 .mop-toast-dismiss {

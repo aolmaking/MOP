@@ -19,7 +19,7 @@
 }
 
 .shell-user {
-  margin-left: auto;
+  margin-inline-start: auto;
   color: #555;
   font-size: 0.85rem;
 }
