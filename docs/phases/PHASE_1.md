@@ -1,5 +1,19 @@
 # Phase 1 — Runnable and Provable
 
+> **Status (2026-08-08):** 5 of 7 tasks complete. Remaining: **1.3** (blocked — needs a `git push` from the repository owner) and **1.6** (resolver caching, deliberately deferred; see its section). One sub-item of 1.4, structured logging, is also outstanding.
+>
+> | Task | State |
+> |---|---|
+> | 1.1 Reproducible environment | ✅ done |
+> | 1.2 Database path verified | ✅ done — **139 API tests now run against real Postgres for the first time** |
+> | 1.3 CI green | ⛔ blocked on a push |
+> | 1.4 Security baseline | ✅ done except structured logging |
+> | 1.5 Money serialization | ✅ done |
+> | 1.6 Resolver caching | ⏸ deferred — needs a clean 12-file refactor; must land before Phase 4 |
+> | 1.7 i18n / RTL foundation | ✅ done |
+>
+> Verified at time of writing: **248 tests** (31 shared + 159 API + 58 web), typecheck clean, lint clean (including two custom rules), full build green, `pnpm run doctor` green.
+
 > **Goal:** anyone can clone this repository, run it, and trust the result — automatically, on every push.
 > **Why first:** the DB integration tests have never executed on this machine, CI has never run, and the environment has already broken once badly enough that nothing could build at all. Every later phase is verified by this machinery. If it is unreliable, so is everything built on it.
 > **Size:** small. Days, not weeks. None of it is speculative.
@@ -67,7 +81,7 @@
 4. **Body size limits** — Express defaults are generous; inspection payloads with photos need explicit, much smaller caps.
 5. **Request IDs** — without a correlation id, "it failed around 3pm" is unresolvable across replicas.
 6. **Graceful shutdown** — in-flight transactions must finish before a replica dies mid-deploy.
-7. **Structured JSON logging** with `requestId` / `tenantId` / `actorId`, and **never** customer names, phone numbers, plate numbers, or decision tokens.
+7. **Structured JSON logging** with `requestId` / `tenantId` / `actorId`, and **never** customer names, phone numbers, plate numbers, or decision tokens. ⏸ *Outstanding.* The correlation id is emitted on every request and response, so the hard part (having an id to log) is done; formatting the logs around it is ops polish and does not gate any later phase.
 
 **Also decide (not necessarily implement):** `sameSite: lax` requires web and API to be same-site in production. `app.mop.com` + `api.mop.com` under `mop.com` works; separate registrable domains do not. Settle it now rather than discover it through broken logins at launch.
 
@@ -95,9 +109,19 @@
 2. **Batch the page-load case** — ask once for many keys, receive a map.
 3. Optional short-TTL cache for slow-moving data, with one hard rule: **anything that revokes access bypasses the cache.** A tenant freeze or a removed permission takes effect immediately. Stale *denial* is acceptable; stale *permission* is a breach.
 
-**Constraint:** the resolver is currently correct. Optimising it must not become an opportunity to quietly simplify the layer model. The existing layer tests must pass unchanged.
+**Constraint:** the resolver is currently correct. Optimising it must not become an opportunity to quietly simplify the layer model.
 
 **Done when:** a request resolving N permissions issues a constant number of queries, proven by a test that counts them.
+
+### ⏸ Deferred — and why, precisely
+
+Doing this properly means changing `PermissionLayer.evaluate` to receive a pre-loaded snapshot, which touches 12 files: the 5 querying layers, their 5 specs, the resolver, and its facade. The layers then stop injecting `PrismaService` entirely and become pure functions — which is the *right* end state, and better than what exists now.
+
+The tempting shortcut is an optional `snapshot?` parameter with each layer falling back to its own query when it is absent. That was rejected: two code paths producing the same answer is exactly the kind of duplication that rots, and one of the two would inevitably stop being exercised.
+
+**This is not optional work and it is not "later".** It must land before **Phase 4**, because that is when `can()` call sites multiply across the lifecycle and every role page. Deferring it past that point makes the refactor progressively more expensive in exactly the way this plan exists to avoid.
+
+Nothing is blocked by it today: the resolver is correct, and correctness is what Phases 2 and 3 depend on.
 
 ---
 
