@@ -41,6 +41,7 @@ describe("AuthService (integration)", () => {
     const tenant = await prisma.tenant.create({
       data: {
         name: "Auth Integration Workshop",
+        nameNormalized: `auth integration workshop ${Date.now()}`,
         slug: `auth-integration-${Date.now()}`,
         customerRegistrationCode: `AIC-${Date.now()}`,
         status: "ACTIVE",
@@ -183,18 +184,25 @@ describe("AuthService (integration)", () => {
     await expect(service.getSessionContext(cookies.accessToken.value)).rejects.toThrow();
   });
 
-  it("locks the account after repeated failed attempts, and a correct password doesn't help while locked", async () => {
-    const email = `bm-${Date.now()}-6@example.com`;
-    await createStaffAccount(email, "correct-password-123");
+  it(
+    "locks the account after repeated failed attempts, and a correct password doesn't help while locked",
+    async () => {
+      const email = `bm-${Date.now()}-6@example.com`;
+      await createStaffAccount(email, "correct-password-123");
 
-    for (let i = 0; i < LOCKOUT_THRESHOLD; i++) {
-      await expect(service.login(email, "wrong")).rejects.toThrow();
-    }
+      for (let i = 0; i < LOCKOUT_THRESHOLD; i++) {
+        await expect(service.login(email, "wrong")).rejects.toThrow();
+      }
 
-    // Even the correct password is now rejected -- with a distinctly
-    // different message (locked, not "incorrect").
-    await expect(service.login(email, "correct-password-123")).rejects.toThrow(/temporarily locked/);
-  });
+      // Even the correct password is now rejected -- with a distinctly
+      // different message (locked, not "incorrect").
+      await expect(service.login(email, "correct-password-123")).rejects.toThrow(/temporarily locked/);
+    },
+    // LOCKOUT_THRESHOLD+1 real scrypt verifications in one test, deliberately
+    // expensive (N=131072 per password.util.ts) -- the default 5000ms budget
+    // is tuned for single-hash tests and this one genuinely needs more room.
+    20000,
+  );
 
   it("blocks login for a frozen tenant with a distinct error, after credentials already checked out", async () => {
     const email = `bm-${Date.now()}-7@example.com`;
@@ -245,6 +253,7 @@ describe("AuthService (integration)", () => {
     const otherTenant = await prisma.tenant.create({
       data: {
         name: "Second Workshop",
+        nameNormalized: `second workshop ${Date.now()}`,
         slug: `second-workshop-${Date.now()}`,
         customerRegistrationCode: `SW-${Date.now()}`,
         planId: otherPlan.id,

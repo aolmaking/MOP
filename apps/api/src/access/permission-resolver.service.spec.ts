@@ -1,0 +1,166 @@
+import { PermissionResolverService } from "./permission-resolver.service";
+import { PlatformControlLayer } from "./layers/platform-control.layer";
+import { PlanEntitlementLayer } from "./layers/plan-entitlement.layer";
+import { TenantStatusLayer } from "./layers/tenant-status.layer";
+import { ModuleEnabledLayer } from "./layers/module-enabled.layer";
+import { FeatureEnabledLayer } from "./layers/feature-enabled.layer";
+import { WorkshopConfigurationLayer } from "./layers/workshop-configuration.layer";
+import { RolePermissionTemplateLayer } from "./layers/role-permission-template.layer";
+import { UserOverrideLayer } from "./layers/user-override.layer";
+import { PrismaService } from "../database/prisma.service";
+import { createSession } from "./test-support/session-fixture";
+import { DEFAULT_DECISION, type LayerDecision, type PermissionLayer } from "./types";
+
+describe("PermissionResolverService", () => {
+  function build() {
+    const prisma = {} as PrismaService;
+
+    const platformControlInstance = new PlatformControlLayer(prisma);
+    const planEntitlementInstance = new PlanEntitlementLayer(prisma);
+    const tenantStatusInstance = new TenantStatusLayer();
+    const moduleEnabledInstance = new ModuleEnabledLayer();
+    const featureEnabledInstance = new FeatureEnabledLayer();
+    const workshopConfigurationInstance = new WorkshopConfigurationLayer(prisma);
+    const rolePermissionTemplateInstance = new RolePermissionTemplateLayer(prisma);
+    const userOverrideInstance = new UserOverrideLayer(prisma);
+
+    // Same objects, widened to the interface type so every layer can be
+    // stubbed uniformly below regardless of its own sync/async signature.
+    const layers: Record<
+      "platformControl" | "planEntitlement" | "tenantStatus" | "moduleEnabled" | "featureEnabled" | "workshopConfiguration" | "rolePermissionTemplate" | "userOverride",
+      PermissionLayer
+    > = {
+      platformControl: platformControlInstance,
+      planEntitlement: planEntitlementInstance,
+      tenantStatus: tenantStatusInstance,
+      moduleEnabled: moduleEnabledInstance,
+      featureEnabled: featureEnabledInstance,
+      workshopConfiguration: workshopConfigurationInstance,
+      rolePermissionTemplate: rolePermissionTemplateInstance,
+      userOverride: userOverrideInstance,
+    };
+
+    const service = new PermissionResolverService(
+      platformControlInstance,
+      planEntitlementInstance,
+      tenantStatusInstance,
+      moduleEnabledInstance,
+      featureEnabledInstance,
+      workshopConfigurationInstance,
+      rolePermissionTemplateInstance,
+      userOverrideInstance,
+    );
+
+    return { service, layers };
+  }
+
+  function stub(layer: PermissionLayer, decision: LayerDecision) {
+    return jest.spyOn(layer, "evaluate").mockImplementation(async () => decision);
+  }
+
+  function stubAllDefer(layers: Record<string, PermissionLayer>) {
+    Object.values(layers).forEach((layer) => stub(layer, null));
+  }
+
+  it("denies by default (DEFAULT_DECISION) when every layer defers", async () => {
+    const { service, layers } = build();
+    stubAllDefer(layers);
+
+    const result = await service.resolve(createSession(), "inventory.stock.adjust");
+
+    expect(result).toEqual(DEFAULT_DECISION);
+  });
+
+  it("stops at the first locked layer and never calls layers after it", async () => {
+    const { service, layers } = build();
+    stub(layers.platformControl, null);
+    stub(layers.planEntitlement, { allowed: false, locked: true, reason: "plan" });
+    const laterSpies = [
+      layers.tenantStatus,
+      layers.moduleEnabled,
+      layers.featureEnabled,
+      layers.workshopConfiguration,
+      layers.rolePermissionTemplate,
+      layers.userOverride,
+    ].map((layer) => jest.spyOn(layer, "evaluate"));
+
+    const result = await service.resolve(createSession(), "inventory.stock.adjust");
+
+    expect(result).toEqual({ allowed: false, locked: true, reason: "plan" });
+    laterSpies.forEach((spy) => expect(spy).not.toHaveBeenCalled());
+  });
+
+  it("a higher layer's lock overrides a lower layer's allow -- platform lock beats an allowing role template and user override", async () => {
+    const { service, layers } = build();
+    stub(layers.platformControl, { allowed: false, locked: true, reason: "platform lock" });
+    stub(layers.planEntitlement, null);
+    stub(layers.tenantStatus, null);
+    stub(layers.moduleEnabled, null);
+    stub(layers.featureEnabled, null);
+    stub(layers.workshopConfiguration, null);
+    const rolePermissionSpy = jest.spyOn(layers.rolePermissionTemplate, "evaluate");
+    const userOverrideSpy = jest.spyOn(layers.userOverride, "evaluate");
+
+    const result = await service.resolve(createSession(), "inventory.stock.adjust");
+
+    expect(result).toEqual({ allowed: false, locked: true, reason: "platform lock" });
+    expect(rolePermissionSpy).not.toHaveBeenCalled();
+    expect(userOverrideSpy).not.toHaveBeenCalled();
+  });
+
+  it("an unlocked deny from the role template can still be overridden by a user override that allows it", async () => {
+    const { service, layers } = build();
+    stub(layers.platformControl, null);
+    stub(layers.planEntitlement, null);
+    stub(layers.tenantStatus, null);
+    stub(layers.moduleEnabled, null);
+    stub(layers.featureEnabled, null);
+    stub(layers.workshopConfiguration, null);
+    stub(layers.rolePermissionTemplate, { allowed: false, locked: false, reason: "role denies" });
+    stub(layers.userOverride, { allowed: true, locked: true, reason: "personally granted" });
+
+    const result = await service.resolve(createSession(), "inventory.stock.adjust");
+
+    expect(result).toEqual({ allowed: true, locked: true, reason: "personally granted" });
+  });
+
+  it("a workshop-configuration denial (unlocked upstream) still wins over an allowing role template, since it locks on deny", async () => {
+    const { service, layers } = build();
+    stub(layers.platformControl, null);
+    stub(layers.planEntitlement, null);
+    stub(layers.tenantStatus, null);
+    stub(layers.moduleEnabled, null);
+    stub(layers.featureEnabled, null);
+    stub(layers.workshopConfiguration, { allowed: false, locked: true, reason: "disabled in this workshop" });
+    const rolePermissionSpy = jest.spyOn(layers.rolePermissionTemplate, "evaluate");
+
+    const result = await service.resolve(createSession(), "inventory.stock.adjust");
+
+    expect(result).toEqual({ allowed: false, locked: true, reason: "disabled in this workshop" });
+    expect(rolePermissionSpy).not.toHaveBeenCalled();
+  });
+
+  it("evaluates layers in the documented 1-8 order", async () => {
+    const { service, layers } = build();
+    const callOrder: string[] = [];
+    Object.entries(layers).forEach(([label, layer]) => {
+      jest.spyOn(layer, "evaluate").mockImplementation(async () => {
+        callOrder.push(label);
+        return null;
+      });
+    });
+
+    await service.resolve(createSession(), "inventory.stock.adjust");
+
+    expect(callOrder).toEqual([
+      "platformControl",
+      "planEntitlement",
+      "tenantStatus",
+      "moduleEnabled",
+      "featureEnabled",
+      "workshopConfiguration",
+      "rolePermissionTemplate",
+      "userOverride",
+    ]);
+  });
+});

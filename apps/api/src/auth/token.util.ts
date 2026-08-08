@@ -7,7 +7,15 @@ export interface IssuedToken {
   secretHash: string;
 }
 
-function sha256(value: string): string {
+/**
+ * Exported for reuse anywhere else that needs "hash a high-entropy random
+ * secret with a fast digest" -- e.g. invite tokens (see platform.service.ts).
+ * Not for passwords: those are low-entropy human-chosen secrets and need
+ * scrypt's deliberate slowness (see password.util.ts), which would be
+ * pointless CPU cost here since a 256-bit random token is already
+ * infeasible to brute-force regardless of hash speed.
+ */
+export function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 

@@ -235,6 +235,7 @@ export class AuthService {
       return {
         accountId: account.id,
         accountType: "PLATFORM",
+        displayName: account.email ?? "Platform Super Admin",
         tenantId: null,
         role: "PLATFORM_SUPER_ADMIN",
         branchScope: [],
@@ -263,6 +264,7 @@ export class AuthService {
       return {
         accountId: account.id,
         accountType: "TENANT_STAFF",
+        displayName: staff.fullName,
         tenantId: tenant.id,
         role: staff.role as EffectiveRole,
         staffUserId: staff.id,
@@ -289,6 +291,7 @@ export class AuthService {
       return {
         accountId: account.id,
         accountType: "CUSTOMER",
+        displayName: customer.fullName,
         tenantId: tenant.id,
         role: "CUSTOMER",
         customerId: customer.id,

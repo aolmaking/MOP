@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, ConflictException, Controller, ForbiddenException, Get, HttpCode, Post, Req, Res, UseGuards } from "@nestjs/common";
 import type { Request, Response } from "express";
 import type { SessionContext } from "@mop/shared";
 import { AuthService, MultipleAccountsError, TenantUnavailableError } from "./auth.service";
@@ -19,13 +19,23 @@ export class AuthController {
       setSessionCookies(res, cookies);
       return context;
     } catch (error) {
+      // TenantUnavailableError/MultipleAccountsError are plain domain
+      // errors, not HttpExceptions -- ApiExceptionFilter only special-cases
+      // HttpException, so they must be translated here or they fall into
+      // the filter's catch-all and come back as a generic 500. This is the
+      // only place that HTTP-status mapping belongs; the service stays
+      // transport-agnostic.
       if (error instanceof TenantUnavailableError) {
-        res.status(403);
-        throw error;
+        throw new ForbiddenException({
+          code: "tenant_unavailable",
+          message: "This workshop is currently unavailable. Contact your workshop owner or platform support.",
+        });
       }
       if (error instanceof MultipleAccountsError) {
-        res.status(409);
-        throw error;
+        throw new ConflictException({
+          code: "multiple_accounts_found",
+          message: "This email is used at more than one workshop. Contact support to sign in.",
+        });
       }
       throw error;
     }

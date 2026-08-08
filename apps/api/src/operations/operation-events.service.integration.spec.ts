@@ -48,6 +48,7 @@ describe("OperationEventsService (integration)", () => {
     const tenant = await prisma.tenant.create({
       data: {
         name: "Integration Test Workshop",
+        nameNormalized: `integration test workshop ${Date.now()}`,
         slug: `integration-test-${Date.now()}`,
         customerRegistrationCode: `ITC-${Date.now()}`,
         planId,

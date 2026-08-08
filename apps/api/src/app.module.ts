@@ -5,6 +5,9 @@ import { DatabaseModule } from "./database/database.module";
 import { AuditModule } from "./audit/audit.module";
 import { OperationEventsModule } from "./operations/operation-events.module";
 import { AuthModule } from "./auth/auth.module";
+import { AccessModule } from "./access/access.module";
+import { SchedulerModule } from "./scheduler/scheduler.module";
+import { PlatformModule } from "./platform/platform.module";
 import { HealthController } from "./health/health.controller";
 
 @Module({
@@ -17,6 +20,9 @@ import { HealthController } from "./health/health.controller";
     AuditModule,
     OperationEventsModule,
     AuthModule,
+    AccessModule,
+    SchedulerModule,
+    PlatformModule,
   ],
   controllers: [HealthController],
 })
