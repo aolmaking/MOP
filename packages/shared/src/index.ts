@@ -4,3 +4,8 @@ export * from "./permissions/permission-manifest";
 export * from "./permissions/default-role-permissions";
 export * from "./pages/page-registry";
 export * from "./platform/workshop-options";
+export * from "./capabilities/types";
+export * from "./capabilities/registry";
+export * from "./capabilities/workflow-graphs";
+export * from "./capabilities/validator";
+export * from "./capabilities/profiles";

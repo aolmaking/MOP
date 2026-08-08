@@ -11,5 +11,9 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  // Specs are run by ts-jest straight from src; keeping them out of the
+  // build means dist stays shippable and the published types don't drag
+  // in @types/jest.
+  "exclude": ["src/**/*.spec.ts"]
 }

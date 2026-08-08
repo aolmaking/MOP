@@ -65,8 +65,10 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      # Runs both apps/api's Jest suite (unit + real-DB integration tests)
-      # and apps/web's Vitest suite.
+      # Runs @mop/shared's Jest suite (the capability reachability
+      # validator -- every shipped workshop profile is proven unable to
+      # strand a work order), apps/api's Jest suite (unit + real-DB
+      # integration tests), and apps/web's Vitest suite.
       - name: Test
         run: pnpm test
 
