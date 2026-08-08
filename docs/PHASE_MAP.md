@@ -34,9 +34,20 @@
 
 ---
 
+## Progress
+
+| Phase | State |
+|---|---|
+| 1 — Runnable and Provable | 🟡 5 of 7 tasks done. 1.3 needs a CI run; 1.6 deferred, must land before Phase 4 |
+| 2 — Design Completeness | ✅ complete |
+| 3 — Governance Runtime | ⬜ next |
+| 4–14 | ⬜ not started |
+
+**272 tests** green (55 shared + 159 API + 58 web), typecheck clean, two custom lint rules passing, full build green.
+
 ## The phases
 
-### Phase 1 — Runnable and Provable
+### Phase 1 — Runnable and Provable 🟡
 Make the project verifiable by anyone, on any machine, automatically.
 - Reproducible environment: `DEVELOPMENT.md`, `.nvmrc`, fixed root scripts, `pnpm doctor`
 - Database path verified end-to-end: clean migrate → seed → integration tests pass
@@ -49,8 +60,8 @@ Make the project verifiable by anyone, on any machine, automatically.
 **Exit:** clean clone → green tests from `DEVELOPMENT.md` alone; `pnpm test` fully green including integration; CI green.
 **Detail:** [`phases/PHASE_1.md`](./phases/PHASE_1.md)
 
-### Phase 2 — Design Completeness
-Close every open design question that would otherwise force a migration later. Writing, not code.
+### Phase 2 — Design Completeness ✅
+Close every open design question that would otherwise force a migration later. Writing, plus typed contracts and one migration.
 - **Scenario × capability matrix** (`SCENARIOS.md`) — including the customer who declines inspection and brings their own part
 - Cross-system contracts typed: `ChargeableWorkItem`, `InvoiceCandidate`, part/decision/payment events
 - Gate registry — gate keys are currently free strings in the capability registry with no canonical list or owner
