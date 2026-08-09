@@ -1,0 +1,90 @@
+<section class="stock">
+  <header class="stock-head">
+    <h1 class="stock-title">Stock</h1>
+    @if (table(); as t) {
+      <p class="stock-count">{{ t.rows.length }} items</p>
+    }
+  </header>
+
+  <label class="search">
+    <span class="visually-hidden">Search by name, SKU or barcode</span>
+    <input
+      type="search"
+      class="search-input"
+      placeholder="Name, SKU, barcode"
+      autocomplete="off"
+      [value]="query()"
+      (input)="onQuery($any($event.target).value)"
+    />
+  </label>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to inventory</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="reload()">Try again</button>
+      </div>
+    }
+    @case ('empty') {
+      <div class="state">
+        <p class="state-title">No items yet</p>
+        <p class="state-body">The catalog is empty. Items appear here once they're added.</p>
+      </div>
+    }
+    @case ('no-results') {
+      <div class="state">
+        <p class="state-title">Nothing matches “{{ query() }}”</p>
+        <p class="state-body">Try a name, a SKU, or a barcode.</p>
+      </div>
+    }
+    @case ('ready') {
+      @if (table(); as t) {
+        <!-- Scrolls inside itself: a workshop with eight warehouses must
+             not make the whole page scroll sideways. -->
+        <div class="table-scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th scope="col" class="col-item">Item</th>
+                @for (warehouse of t.warehouses; track warehouse.id) {
+                  <th scope="col" class="col-num">{{ warehouse.code }}</th>
+                }
+                <th scope="col" class="col-num col-total">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of t.rows; track row.itemId) {
+                <tr class="row" [class]="'row--' + level(row)">
+                  <th scope="row" class="cell-item">
+                    <a [routerLink]="['/inventory/items', row.itemId]">{{ row.name }}</a>
+                    <span class="cell-sku">{{ row.sku }}</span>
+                  </th>
+                  @for (cell of row.byWarehouse; track cell.warehouseId) {
+                    <td class="col-num">
+                      {{ cell.available }}
+                      @if (cell.damaged > 0) {
+                        <!-- Damaged is shown separately and never added in.
+                             Flattening it into one figure would claim
+                             stock the workshop cannot sell. -->
+                        <span class="cell-damaged">+{{ cell.damaged }} dmg</span>
+                      }
+                    </td>
+                  }
+                  <td class="col-num col-total">{{ row.totalAvailable }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  }
+</section>

@@ -1,7 +1,11 @@
 import { Module } from "@nestjs/common";
 import { DatabaseModule } from "../database/database.module";
+import { AuthModule } from "../auth/auth.module";
+import { AccessModule } from "../access/access.module";
 import { CapabilitiesModule } from "../capabilities/capabilities.module";
 import { OperationEventsModule } from "../operations/operation-events.module";
+import { InventoryController } from "./inventory.controller";
+import { InventoryViewService } from "./inventory-view.service";
 import { StockService } from "./stock.service";
 import { PartRequestService } from "./part-request.service";
 
@@ -14,8 +18,9 @@ import { PartRequestService } from "./part-request.service";
  * the sole writer of work-order status.
  */
 @Module({
-  imports: [DatabaseModule, CapabilitiesModule, OperationEventsModule],
-  providers: [StockService, PartRequestService],
+  imports: [DatabaseModule, AuthModule, AccessModule, CapabilitiesModule, OperationEventsModule],
+  controllers: [InventoryController],
+  providers: [StockService, PartRequestService, InventoryViewService],
   exports: [StockService, PartRequestService],
 })
 export class InventoryModule {}

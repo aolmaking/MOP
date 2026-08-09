@@ -1,0 +1,187 @@
+/*
+ * Stock -- items down, warehouses across.
+ *
+ * The one page in MOP that uses a real table, because a table asserts its
+ * cells are comparable and here they genuinely are: down a column is "how
+ * much of everything is in this room", across a row is "where is this
+ * item". Both are questions the storekeeper actually asks. The Attention
+ * Center refuses a table for the opposite reason, and that is the same
+ * rule producing a different answer, not a contradiction.
+ */
+
+.stock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 84rem;
+}
+
+.stock-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--text);
+}
+
+.stock-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.stock-count {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.search-input {
+  inline-size: 100%;
+  max-inline-size: 26rem;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-base);
+}
+
+.search-input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+  border-color: var(--focus-ring);
+}
+
+/* Scrolls inside itself. A workshop with eight warehouses must never make
+   the whole page scroll sideways. */
+.table-scroll {
+  overflow-x: auto;
+}
+
+.table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  font-size: var(--text-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  border-bottom: 2px solid var(--text);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  white-space: nowrap;
+}
+
+/* Numbers right-aligned and mono, so a column of quantities reads down
+   rather than across. */
+.col-num {
+  text-align: end;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.col-total {
+  border-inline-start: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.cell-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  font-weight: 500;
+}
+
+.cell-item a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.cell-item a:hover {
+  color: var(--brand);
+  text-decoration: underline;
+}
+
+.cell-sku {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* Damaged is shown but never added in. Folding it into the available
+   figure would claim stock the workshop cannot sell. */
+.cell-damaged {
+  margin-inline-start: var(--space-2);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+/*
+ * The good state carries no colour, so the two short items are the only
+ * thing the eye lands on. Marked with an inset edge rather than a tinted
+ * row: tinting a table row drags every number in it along with the tint.
+ */
+.row--low th:first-child,
+.row--low td:first-child {
+  box-shadow: inset 3px 0 0 0 var(--warning);
+}
+
+.row--critical th:first-child,
+.row--critical td:first-child {
+  box-shadow: inset 3px 0 0 0 var(--danger);
+}
+
+.row--critical .col-total {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.state {
+  padding: var(--space-5) 0;
+  padding-inline-start: var(--space-4);
+  border-inline-start: 3px solid var(--border-strong);
+  max-inline-size: 42rem;
+}
+
+.state-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.state-body {
+  margin-block-start: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.state-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

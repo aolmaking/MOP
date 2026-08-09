@@ -1,0 +1,96 @@
+/*
+ * Same frame as the platform rail. A manager who is also shown the
+ * platform side should not have to relearn where things are, and the rail
+ * scales to Phase 5's six pages without the truncation a top bar hits once
+ * identity and logout are competing for the same row.
+ */
+
+.rail-shell {
+  display: grid;
+  grid-template-columns: 224px 1fr;
+  min-height: 100vh;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-3);
+  background: var(--surface);
+  border-inline-end: 1px solid var(--border);
+}
+
+/* The one place the wordmark appears, and the only decorative use of red
+   in the product -- it is the mark, not an accent applied to a surface. */
+.rail-brand {
+  padding: var(--space-2) var(--space-3) var(--space-6);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: var(--text-md);
+  letter-spacing: var(--tracking-label);
+  color: var(--brand);
+}
+
+.rail-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-decoration: none;
+  /* Reserved so the active edge does not shift the label. */
+  border-inline-start: 2px solid transparent;
+}
+
+.rail-link:hover {
+  color: var(--text);
+}
+
+/* Marked with an edge rather than a filled pill, for the same reason the
+   queue marks priority with an edge: it is the rack's own language, and a
+   filled block here would be the heaviest thing on screen while saying
+   only "you are here". */
+.rail-link--active {
+  border-inline-start-color: var(--brand);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.rail-footer {
+  margin-top: auto;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.rail-account {
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--space-3);
+  gap: 0.125rem;
+}
+
+.rail-account-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-account-role {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+.rail-content {
+  padding: var(--space-6) var(--space-7);
+  overflow-y: auto;
+}

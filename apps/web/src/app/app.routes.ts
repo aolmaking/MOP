@@ -71,6 +71,31 @@ export const routes: Routes = [
     ],
   },
   {
+    // The inventory manager sits at a desk and works long sessions, so
+    // this is a rail like the platform and branch sides -- the opposite
+    // requirement to the technician's, which is why they are separate
+    // shells. See docs/phases/PHASE_7.md.
+    path: 'inventory',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./core/layout/inventory-shell/inventory-shell').then((m) => m.InventoryShell),
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'requests' },
+      {
+        path: 'requests',
+        loadComponent: () => import('./features/inventory/inventory-requests').then((m) => m.InventoryRequests),
+      },
+      {
+        path: 'stock',
+        loadComponent: () => import('./features/inventory/inventory-stock').then((m) => m.InventoryStock),
+      },
+      {
+        path: 'items/:id',
+        loadComponent: () => import('./features/inventory/inventory-item').then((m) => m.InventoryItem),
+      },
+    ],
+  },
+  {
     // The technician's own shell: three pages, no admin sidebar, and a
     // density layer built for a gloved hand. See docs/phases/PHASE_6.md.
     path: 'tech',

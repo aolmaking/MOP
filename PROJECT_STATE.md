@@ -2,16 +2,18 @@
 
 > **Purpose:** everything needed to continue MOP in a fresh session without the previous conversation.
 > **Companion:** [`CLAUDE.md`](./CLAUDE.md) holds permanent knowledge (architecture, rules, toolchain). This holds *where we are*.
-> **Last updated:** 2026-08-09, after Phase 6 completed.
+> **Last updated:** 2026-08-09, after Phase 7 completed.
 > **Keep this current.** Update it at the end of any phase task, and before ending a long session.
 
 ---
 
 ## 1. Current objective
 
-Build **Phase 7 — Inventory**: catalog, multi-warehouse stock, the part request lifecycle (issue / arrival / use / return), movements ledger, transfers and supplier orders.
+Build **Phase 8 — Finance Core**: pricing catalog, discounts, tax policy, running balance, payments, refunds, deposits, financial reports.
 
-Two role interfaces are now complete and are the pattern to follow: derive the person first, decide the page structure from the job rather than from a template, and argue every decision in the phase document.
+Three role interfaces are now complete and are the pattern to follow: derive the person first, decide the page structure from the job rather than from a template, and argue every decision in the phase document.
+
+**Phase 8 carries the money rule harder than anything so far.** `Decimal` in the database, `string` across the API, never a JS number. `MoneySerializationInterceptor` already enforces the boundary; Phase 8 must not add a service that sums through `Number()` on the way there — a mistake already made once in 5.E and caught in review.
 
 ## 2. Where we are
 
@@ -23,10 +25,11 @@ Two role interfaces are now complete and are the pattern to follow: derive the p
 | 4 — Operations Spine | ✅ complete |
 | 5 — Branch Manager | ✅ complete — 5.0 + 5.A–5.G |
 | 6 — Technician | ✅ complete — 6.A–6.G |
-| **7 — Inventory** | **🔵 next** |
-| 8–14 | ⬜ not started |
+| 7 — Inventory | ✅ complete — 7.A–7.H |
+| **8 — Finance Core** | **🔵 next** |
+| 9–14 | ⬜ not started |
 
-**Verified at last commit:** 479 tests (98 shared + 244 API + 137 web), typecheck clean, all **three** custom lint rules passing, full build green. Pushed to `origin/main`.
+**Verified at last commit:** 513 tests (98 shared + 278 API + 137 web), typecheck clean, all **three** custom lint rules passing, full build green. Pushed to `origin/main`.
 
 ## 3. Completed work
 
@@ -40,19 +43,21 @@ Two role interfaces are now complete and are the pattern to follow: derive the p
 
 **Technician (Phase 6, complete).** Its own shell with a 56px density layer derived from what a gloved hand can hit, three pages (Now / My Work / Work Card), the Finish Gate shown as a checklist before the press, and `tools/lint-touch-targets.mjs` enforcing the target floor.
 
+**Inventory (Phase 7, complete).** `StockService` as the only writer of a stock balance, with the movement written in the same transaction and `beforeQty`/`afterQty` stored so the ledger can be replayed and compared. Never-negative enforced in the database as well as in service code. Part request lifecycle on `PART_REQUEST_GRAPH`, with issuing bound to the stock transaction. Partial fulfilment (SCENARIOS.md 3.5, open since Phase 2) settled: one request, many issues, fulfilment derived. Requests queue, Stock table, and the Item page whose ledger *is* the page.
+
 **Documentation.** Vision, systems, capability model, scenarios, three engineering charters, design language, phase map and per-phase docs. README + CONTRIBUTING as the repository front door.
 
 ## 4. Current task — what to do next
 
-**Write `docs/phases/PHASE_7.md` first, then build it.** The outline is in `PHASE_MAP.md`; the detail document is written before any code, the same way Phases 5 and 6 were.
+**Write `docs/phases/PHASE_8.md` first, then build it.** The outline is in `PHASE_MAP.md`; the detail document comes before any code, the same way Phases 5, 6 and 7 did.
 
-Before writing any of it, read `DESIGN_LANGUAGE.md` §0.5 (character), §1 (the red rule) and **§7.5 — structure is decided per page, researched against how that page type is solved outside MOP, and argued in the phase document.** Phases 5 and 6 are the reference for the *visual language*, not for layout.
+Before writing any of it, read `DESIGN_LANGUAGE.md` §0.5 (character), §1 (the red rule) and **§7.5 — structure is decided per page, researched against how that page type is solved outside MOP, and argued in the phase document.**
 
-Inventory's person works in long focused sessions processing many similar rows, so its density is closer to Phase 5's than Phase 6's — but that is a conclusion to re-derive, not to inherit.
+Two things already exist that Phase 8 must build on rather than around: the `FINANCE_CORE` capability with its removal policy (a workshop can run with no internal finance at all), and the cross-system contracts in `packages/shared/src/contracts/` — `ChargeableWorkItem`, `InvoiceCandidate`, `InvoiceIssued`. **Finance never reads Operations' tables directly.**
 
-Two things already exist that Phase 7 must build on rather than around: `PART_REQUEST_GRAPH` in `@mop/shared`, and the `INVENTORY` / `PART_RETURNS` / `EXTERNAL_PARTS` capabilities with their removal policies. A workshop with no inventory must still be able to finish a job.
+Billing is deliberately *not* this phase. It is a separate bounded system (Phase 9) because an invoice is a compliance artifact with its own lifecycle.
 
-*(Previously: Phase 6 — Technician, complete.)*
+*(Previously: Phase 7 — Inventory, complete.)*
 
 ## 5. Key technical decisions (do not re-litigate)
 

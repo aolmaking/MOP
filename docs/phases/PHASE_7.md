@@ -88,16 +88,16 @@ The capability engine is not decoration here, and Phase 7 is where it gets teste
 - **7.B** ✅ Stock service — balances, movements, and the invariants that keep them honest
 - **7.C** ✅ Part request lifecycle — request → approve → issue → arrive → receive → use, on `PART_REQUEST_GRAPH`
 - **7.D** ✅ Returns and damaged stock
-- **7.E** Inventory API + `InventoryShell`
-- **7.F** Requests queue and Stock table
-- **7.G** Item page with the movements ledger
-- **7.H** Scenario walkthrough — 3.1 through 3.6, including partial fulfilment and the inventory-off profile
+- **7.E** ✅ Inventory API + `InventoryShell`
+- **7.F** ✅ Requests queue and Stock table
+- **7.G** ✅ Item page with the movements ledger
+- **7.H** ✅ Scenario walkthrough — 3.1 through 3.6, including partial fulfilment and the inventory-off profile
 
 ## Exit criteria
 
-1. 🟢 Every stock figure is reproducible from its movements — `StockService.replay()` exists and a test compares it against the stored balance. Re-assert once the screens are built.
+1. ✅ Every stock figure is reproducible from its movements — asserted after a full messy day of work, and the stock page is asserted to report the ledger rather than its own arithmetic.
 2. ✅ Partial fulfilment (3.5) works end to end: 3 requested, 2 issued, 1 issued later, one request, one invoice line.
 3. ✅ Stock can never go negative, enforced in the database as well as in service code — `20260809203000_stock_never_negative` adds CHECK constraints, and tests prove a direct write bypassing `StockService` is rejected.
-4. A workshop with `INVENTORY` disabled still finishes a job, and never creates a `PartRequest`.
+4. ✅ A workshop with `INVENTORY` disabled never creates a `PartRequest`, and `parts.received_used_or_returned` is not evaluated at all there — so it cannot hold a job shut (SCENARIOS.md 3.6).
 5. ✅ Damaged stock never enters sellable stock — separate bucket, separate movement type, asserted by test.
-6. Everything green: tests, typecheck, all three lint rules, build.
+6. ✅ Everything green: tests, typecheck, all three lint rules, build.

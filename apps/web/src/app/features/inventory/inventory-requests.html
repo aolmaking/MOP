@@ -1,0 +1,114 @@
+<section class="requests">
+  <header class="requests-head">
+    <h1 class="requests-title">Requests</h1>
+    @if (state() === 'ready') {
+      <p class="requests-count">{{ requests().length }} waiting</p>
+    }
+  </header>
+
+  @if (actionError(); as message) {
+    <p class="action-error" role="alert">{{ message }}</p>
+  }
+
+  @switch (state()) {
+    @case ('loading') {
+      <ul class="rows" aria-busy="true" aria-label="Loading requests">
+        @for (row of [1, 2, 3]; track row) {
+          <li class="row row--skeleton"><span class="skeleton-bar"></span></li>
+        }
+      </ul>
+    }
+
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to inventory</p>
+        <p class="state-body">Ask your workshop owner for inventory access.</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('empty') {
+      <div class="state">
+        <p class="state-title">Nobody is waiting</p>
+        <p class="state-body">Requests from technicians appear here, oldest first.</p>
+      </div>
+    }
+
+    @case ('ready') {
+      <ul class="rows">
+        @for (row of requests(); track row.id) {
+          <li class="row" [class.row--short]="shortOfStock(row)">
+            <div class="row-main">
+              <span class="row-item">{{ row.itemName }}</span>
+              <span class="row-sku">{{ row.sku }}</span>
+              <a class="row-job" [routerLink]="['/branch/work-orders', row.workOrderId]">
+                <mop-identifier [value]="row.identifier ?? '—'" />
+              </a>
+            </div>
+
+            <div class="row-numbers">
+              <!--
+                Requested, issued and outstanding are shown separately
+                rather than as one figure. "2 of 3" is a different fact
+                from "1 left", and the storekeeper acts on the second.
+              -->
+              <span class="row-qty">
+                <span class="row-qty-value">{{ row.outstanding }}</span>
+                <span class="row-qty-label">to issue</span>
+              </span>
+              @if (row.issued > 0) {
+                <span class="row-partial">{{ row.issued }} of {{ row.requested }} already issued</span>
+              }
+              <span class="row-onhand" [class.row-onhand--short]="shortOfStock(row)">{{ row.onHand }} on hand</span>
+              <span class="row-status">{{ label(row.status) }}</span>
+              <span class="row-waited">{{ waited(row.waitingHours) }}</span>
+            </div>
+
+            <div class="row-actions">
+              @if (row.status === 'REQUESTED') {
+                <button appButton variant="primary" size="small" [disabled]="busy() !== null" (click)="approve(row)">
+                  {{ busy() === 'approve-' + row.id ? '…' : 'Approve' }}
+                </button>
+                <button appButton variant="ghost" size="small" [disabled]="busy() !== null" (click)="reject(row)">
+                  Reject
+                </button>
+              } @else if (row.status === 'APPROVED') {
+                @if (row.sources.length === 0) {
+                  <span class="row-none">None in stock</span>
+                } @else {
+                  <!--
+                    One button per shelf that actually has stock. Which
+                    room the part comes out of is a physical fact the
+                    storekeeper is standing in front of; picking it for
+                    them would produce paperwork saying it left a room
+                    nobody walked into.
+                  -->
+                  @for (source of row.sources; track source.warehouseId) {
+                    <button
+                      appButton
+                      variant="primary"
+                      size="small"
+                      [disabled]="busy() !== null"
+                      (click)="issue(row, source.warehouseId)"
+                    >
+                      {{ busy() === 'issue-' + row.id ? '…' : 'Issue' }}
+                      @if (row.sources.length > 1) {
+                        <span class="row-source">{{ source.code }}</span>
+                      }
+                    </button>
+                  }
+                }
+              }
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  }
+</section>

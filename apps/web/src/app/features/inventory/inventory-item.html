@@ -1,0 +1,126 @@
+@switch (state()) {
+  @case ('loading') {
+    <p class="state-body" aria-busy="true">Loading…</p>
+  }
+
+  @case ('not-found') {
+    <div class="state">
+      <p class="state-title">That item isn't in this workshop</p>
+      <a class="state-link" routerLink="/inventory/stock">Back to stock</a>
+    </div>
+  }
+
+  @case ('forbidden') {
+    <div class="state">
+      <p class="state-title">You don't have access to inventory</p>
+    </div>
+  }
+
+  @case ('error') {
+    <div class="state-error">
+      <app-error-banner [error]="error()" />
+      <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+    </div>
+  }
+
+  @case ('ready') {
+    @if (detail(); as d) {
+      <section class="item">
+        <header class="item-head">
+          <a class="item-back" routerLink="/inventory/stock">Stock</a>
+          <h1 class="item-name">{{ d.item.name }}</h1>
+          <p class="item-sku">{{ d.item.sku }} · {{ label(d.item.itemType) }}</p>
+        </header>
+
+        <!--
+          Three separate figures, never one. Available, reserved and
+          damaged are different claims about the world, and folding them
+          into a single number would claim stock the workshop cannot sell.
+        -->
+        <dl class="totals">
+          <div class="total">
+            <dt>Available</dt>
+            <dd class="total-value">{{ totals().available }}</dd>
+          </div>
+          <div class="total">
+            <dt>Reserved</dt>
+            <dd class="total-value">{{ totals().reserved }}</dd>
+          </div>
+          <div class="total">
+            <dt>Damaged</dt>
+            <dd class="total-value">{{ totals().damaged }}</dd>
+          </div>
+        </dl>
+
+        @if (d.item.stockBalances.length > 1) {
+          <section class="band">
+            <h2 class="band-title">By warehouse</h2>
+            <ul class="warehouses">
+              @for (balance of d.item.stockBalances; track balance.warehouseId) {
+                <li class="warehouse">
+                  <span class="warehouse-name">{{ balance.warehouse.name }}</span>
+                  <span class="warehouse-qty">{{ balance.availableQty }}</span>
+                  @if (balance.damagedQty > 0) {
+                    <span class="warehouse-damaged">{{ balance.damagedQty }} damaged</span>
+                  }
+                </li>
+              }
+            </ul>
+          </section>
+        }
+
+        <!-- ── the ledger: the page's whole reason to exist ─────────── -->
+
+        <section class="band">
+          <h2 class="band-title">Every movement</h2>
+
+          @if (d.movements.length === 0) {
+            <p class="band-empty">Nothing has moved yet.</p>
+          } @else {
+            <div class="table-scroll">
+              <table class="ledger">
+                <thead>
+                  <tr>
+                    <th scope="col">What</th>
+                    <th scope="col">Where</th>
+                    <th scope="col" class="col-num">Before</th>
+                    <th scope="col" class="col-num">Change</th>
+                    <th scope="col" class="col-num">After</th>
+                    <th scope="col">Why</th>
+                    <th scope="col">When</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (movement of d.movements; track movement.id) {
+                    <tr class="ledger-row">
+                      <td>{{ label(movement.type) }}</td>
+                      <td class="cell-where">{{ movement.warehouse.code }}</td>
+                      <!--
+                        before and after are stored, not derived. Showing
+                        both is what lets a storekeeper check our arithmetic
+                        instead of taking the balance on trust.
+                      -->
+                      <td class="col-num cell-muted">{{ movement.beforeQty }}</td>
+                      <td class="col-num" [class]="'cell-' + direction(movement)">
+                        {{ movement.quantity > 0 ? '+' : '' }}{{ movement.quantity }}
+                      </td>
+                      <td class="col-num cell-after">{{ movement.afterQty }}</td>
+                      <td class="cell-why">
+                        @if (movement.referenceType) {
+                          {{ label(movement.referenceType) }}
+                        } @else {
+                          —
+                        }
+                      </td>
+                      <td class="cell-when">{{ when(movement.createdAt) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+      </section>
+    }
+  }
+}

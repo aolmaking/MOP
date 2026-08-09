@@ -1,0 +1,202 @@
+/*
+ * The requests queue -- dense, oldest first, actions on the row.
+ *
+ * Denser than any Branch Manager page: this person works long sessions
+ * over many similar rows, and a screen showing twelve where it could show
+ * thirty makes their whole day longer.
+ */
+
+.requests {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 76rem;
+}
+
+.requests-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--text);
+}
+
+.requests-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.requests-count {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.action-error {
+  padding: var(--space-3) var(--space-4);
+  background: var(--danger-bg);
+  border-inline-start: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border-inline-start: 3px solid transparent;
+}
+
+/* Not enough on the shelf to finish this request. Amber, not red: it is a
+   supply problem, not a safety one. */
+.row--short {
+  border-inline-start-color: var(--warning);
+}
+
+.row-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex: 1 1 20rem;
+}
+
+.row-item {
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+
+.row-sku {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.row-job {
+  font-size: var(--text-sm);
+}
+
+.row-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-4);
+  font-size: var(--text-sm);
+}
+
+/*
+ * The outstanding count leads and is the largest number on the row,
+ * because it is the one the storekeeper acts on. "2 of 3 issued" is
+ * context; "1 to issue" is the instruction.
+ */
+.row-qty {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.row-qty-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.row-qty-label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+.row-partial,
+.row-status {
+  color: var(--text-muted);
+}
+
+.row-onhand {
+  font-family: var(--font-mono);
+}
+
+.row-onhand--short {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.row-waited {
+  min-inline-size: 4rem;
+  font-family: var(--font-mono);
+  text-align: end;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The warehouse code on the button, so a storekeeper with two rooms knows
+   which one they are committing to before pressing it. */
+.row-source {
+  margin-inline-start: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  opacity: 0.8;
+}
+
+.row-none {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.row--skeleton {
+  min-block-size: 3rem;
+}
+
+.skeleton-bar {
+  display: block;
+  inline-size: 40%;
+  block-size: var(--text-base);
+  background: var(--accent-muted);
+  border-radius: var(--radius-sm);
+}
+
+.state {
+  padding: var(--space-5) 0;
+  padding-inline-start: var(--space-4);
+  border-inline-start: 3px solid var(--border-strong);
+  max-inline-size: 42rem;
+}
+
+.state-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.state-body {
+  margin-block-start: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.state-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
