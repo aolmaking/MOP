@@ -4,6 +4,7 @@ import { CapabilitiesModule } from "../capabilities/capabilities.module";
 import { OperationEventsModule } from "./operation-events.module";
 import { GateEvaluatorService } from "./gate-evaluator.service";
 import { WorkOrderLifecycleService } from "./work-order-lifecycle.service";
+import { IntakeService } from "./intake.service";
 
 /**
  * The operations spine: the work-order lifecycle and the gates that guard
@@ -13,7 +14,7 @@ import { WorkOrderLifecycleService } from "./work-order-lifecycle.service";
  */
 @Module({
   imports: [DatabaseModule, CapabilitiesModule, OperationEventsModule],
-  providers: [GateEvaluatorService, WorkOrderLifecycleService],
-  exports: [WorkOrderLifecycleService, GateEvaluatorService],
+  providers: [GateEvaluatorService, WorkOrderLifecycleService, IntakeService],
+  exports: [WorkOrderLifecycleService, GateEvaluatorService, IntakeService],
 })
 export class OperationsModule {}

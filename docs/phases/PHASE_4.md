@@ -7,13 +7,13 @@
 > | 4.A Workflow router | ✅ intent-labelled edges, precedence by declaration order |
 > | 4.B Gate evaluation | ✅ registry-driven, capability-filtered, no hardcoded checks |
 > | 4.C Lifecycle service | ✅ the only writer of WorkOrder.status |
-> | 4.D Intake | ⬜ next |
-> | 4.E Tasks, inspections, faults, blockers | ⬜ |
+> | 4.D Intake | ✅ transactional, with ownership transfer and category refusal |
+> | 4.E Tasks, inspections, faults, blockers | ⬜ next |
 > | 4.F Scenario walkthrough | 🟡 the three-profile lifecycle test covers the core of it |
 >
 > **The exit criterion already passes:** one work order runs to CLOSED under three capability profiles — full service (review → QC → invoice), quick service (straight to invoice) and external finance (straight to delivery) — through the same code, with no transition hardcoded anywhere. A grep for hardcoded work-order statuses outside the lifecycle service returns nothing.
 >
-> Verified: **327 tests** (81 shared + 188 API + 58 web), typecheck clean, both lint rules, full build green.
+> Verified: **337 tests** (81 shared + 198 API + 58 web), typecheck clean, both lint rules, full build green.
 
 > **Goal:** the work-order lifecycle, capability-aware from its first line.
 > **Why this phase carries the most risk:** every role phase after it reads and writes work-order state. If a single transition is hardcoded in a service here, the capability engine becomes decoration and the cost of undoing it multiplies with each role built on top.
