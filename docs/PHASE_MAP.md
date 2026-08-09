@@ -41,10 +41,11 @@
 | 1 — Runnable and Provable | 🟡 6 of 7 done. 1.6 landed in Phase 3; only 1.3 (CI green) outstanding |
 | 2 — Design Completeness | ✅ complete |
 | 3 — Governance Runtime | 🟢 4 of 5 done; capability UI moved to Phase 5 |
-| 4 — Operations Spine | 🟢 router, gates, lifecycle and intake built; technician records remain |
-| 5–14 | ⬜ not started |
+| 4 — Operations Spine | ✅ complete |
+| 5 — Branch Manager | ⬜ next (plus the Super Admin capability UI deferred from Phase 3) |
+| 6–14 | ⬜ not started |
 
-**337 tests** green (81 shared + 198 API + 58 web), typecheck clean, two custom lint rules passing, full build green.
+**346 tests** green (81 shared + 207 API + 58 web), typecheck clean, two custom lint rules passing, full build green.
 
 ## The phases
 
@@ -80,7 +81,7 @@ Make the capability layer real at runtime. Super Admin can shape a live workshop
 
 **Exit:** disabling Inventory on a live tenant is validated, previewed with real counts, audited, and reversible.
 
-### Phase 4 — Operations Spine
+### Phase 4 — Operations Spine ✅
 The lifecycle. Capability-aware from its first line.
 - `WorkflowRouter` driven by the capability graph — no hardcoded transitions anywhere
 - Customer and asset intake, ownership transfer

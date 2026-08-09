@@ -14,3 +14,4 @@ export * from "./capabilities/validator";
 export * from "./capabilities/profiles";
 export * from "./contracts/events";
 export * from "./contracts/cross-system";
+export * from "./operations/blocker-routing";
