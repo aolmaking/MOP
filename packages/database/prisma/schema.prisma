@@ -909,7 +909,8 @@ model PartRequest {
   tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   workOrder     WorkOrder          @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
   inventoryItem InventoryItem      @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
-  issuedItem    IssuedItem?
+  // Many: one request can be filled in more than one hand-over.
+  issuedItems   IssuedItem[]
   returnRequest PartReturnRequest?
   partLine      WorkOrderPartLine?
 
@@ -966,13 +967,24 @@ model WorkOrderPartLine {
 }
 
 model IssuedItem {
-  id            String    @id @default(cuid())
-  tenantId      String
-  partRequestId String    @unique
+  id String @id @default(cuid())
+
+  tenantId String
+  // Deliberately NOT unique -- see docs/phases/PHASE_7.md section 2 and
+  // SCENARIOS.md 3.5. One request, many issues: "3 requested, 2 issued,
+  // 1 issued tomorrow" is one thing the technician asked for and two
+  // hand-overs that actually happened. Splitting it into two requests
+  // would invent a record they never created and would split the charge
+  // on the customer's invoice.
+  //
+  // Fulfilment is therefore DERIVED, never stored: requested lives on
+  // PartRequest, issued is SUM(quantity) here. Nothing may cache that
+  // sum in a column -- a cached total is a second source of truth, and
+  // the two will eventually disagree.
+  partRequestId String
   warehouseId   String
   // Requested quantity lives on PartRequest; this is what was actually
-  // issued, which can be less. A single field on PartRequest could not
-  // express "3 requested, 2 issued" without losing one of the two numbers.
+  // issued in THIS hand-over, which can be less than what was asked.
   quantity      Int
   issuedById    String
   issuedAt      DateTime  @default(now())
@@ -983,6 +995,10 @@ model IssuedItem {
   partRequest PartRequest @relation(fields: [partRequestId], references: [id], onDelete: Cascade)
   warehouse   Warehouse   @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
 
+  // Replaces the unique constraint. Summing issues for one request is now
+  // the hot path -- it is how fulfilment is computed -- so it needs an
+  // index of its own rather than inheriting one from uniqueness.
+  @@index([partRequestId])
   @@index([warehouseId])
   @@map("issued_items")
 }

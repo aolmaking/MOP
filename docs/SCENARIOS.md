@@ -104,7 +104,13 @@ The genuinely awkward one: stock and the invoice are both already wrong.
 *Verdict:* **OK** for stock. Invoice correction is **PHASE 9**.
 
 ### 3.5 Partial fulfilment — 3 requested, 2 issued
-*Verdict:* **PARTLY OK — correction.** This was first recorded as needing a schema change; it does not. `PartRequest.quantity` is what was requested and `IssuedItem.quantity` is what was actually issued, so a *single* short issue is already expressible. What is **not** expressible is issuing the remainder later, because `IssuedItem.partRequestId` is unique — one issue per request. Deferred to **PHASE 7**, where the inventory flow is built and the choice between multiple issue rows and a split request can be made against real code rather than guessed at now.
+*Verdict:* ✅ **OK — resolved in Phase 7.A.**
+
+A *single* short issue was always expressible (`PartRequest.quantity` is the ask, `IssuedItem.quantity` is the hand-over). Issuing the **remainder later** was not, because `IssuedItem.partRequestId` was unique.
+
+Settled by dropping that constraint: **one request, many issue rows.** The alternative — splitting the request in two — was rejected because it invents a record the technician never created, and splits one part into two lines on the customer's invoice.
+
+Fulfilment is now **derived**, never stored: `requested` on the request, `issued` as `SUM(IssuedItem.quantity)`. Caching that sum would create a second source of truth. Proven by `apps/api/src/inventory/partial-fulfilment.integration.spec.ts` — 3 requested, 2 issued, 1 issued later, one invoice line. Full reasoning in [`PHASE_7.md`](phases/PHASE_7.md) §2.
 
 ### 3.6 Technician finishes with a received part neither used nor returned
 *Path:* Finish Gate blocks on `parts.received_used_or_returned`.
@@ -199,7 +205,7 @@ Workshop has 5 branches; new plan allows 3.
 |---|---|---|---|
 | 1 | `WorkOrderPartLine` with `PartProvenance`, nullable `inventoryItemId`, zero cost, `workshopWarranted` | 1.3 | ✅ applied in 2.D |
 | 2 | External billing reference on `FinanceConfiguration` | 5.6 | ✅ applied in 2.D |
-| 3 | Multiple partial issues against one `PartRequest` | 3.5 | ⏸ Phase 7 — see the correction above |
+| 3 | Multiple partial issues against one `PartRequest` | 3.5 | ✅ **Done (Phase 7.A).** The unique constraint on `IssuedItem.partRequestId` was dropped: one request, many issues. Fulfilment is derived (`requested` vs `SUM(issued)`), never stored. Reasoning in PHASE_7.md §2 |
 | 4 | `TenantCapability`, time-ranged | Phase 3 capability history | ⏸ Phase 3, where its writers exist |
 
 The 2.D migration is **purely additive** — no `DROP` statements — so it applies to a populated database without data loss and can be rolled forward from rather than reversed.
