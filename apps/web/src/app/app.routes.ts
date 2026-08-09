@@ -19,28 +19,37 @@ export const routes: Routes = [
     ],
   },
   {
+    // The Branch Manager gets its own shell, like the platform side: one
+    // shell per role rather than one shell branching on role.
+    //
+    // Declared before the '' route on purpose: '' matches as a prefix, so
+    // leaving this last would make every /branch/* URL depend on Angular
+    // backtracking out of the fallback shell.
+    path: 'branch',
+    canActivate: [authGuard],
+    loadComponent: () => import('./core/layout/branch-shell/branch-shell').then((m) => m.BranchShell),
+    children: [
+      // The branch manager's landing page: "what needs me?" answered with
+      // no click, filter or memory of where they were. Everything else in
+      // the role is reached from here.
+      { path: '', pathMatch: 'full', redirectTo: 'attention' },
+      {
+        path: 'attention',
+        loadComponent: () =>
+          import('./features/branch-manager/attention-center/attention-center').then((m) => m.AttentionCenter),
+      },
+      // Work Order Workspace is 5.D. Queue rows already link here, so
+      // the route is declared but not yet built -- the same mid-phase
+      // pattern as the platform rail's Workshops link.
+    ],
+  },
+  {
+    // The fallback frame, for roles whose own shell is not built yet.
     path: '',
     canActivate: [authGuard],
     loadComponent: () => import('./core/layout/shell').then((m) => m.Shell),
     children: [
       { path: '', loadComponent: () => import('./features/home/placeholder-home').then((m) => m.PlaceholderHome) },
-      {
-        path: 'branch',
-        children: [
-          // The branch manager's landing page: "what needs me?" answered
-          // with no click, filter or memory of where they were. Everything
-          // else in the role is reached from here.
-          { path: '', pathMatch: 'full', redirectTo: 'attention' },
-          {
-            path: 'attention',
-            loadComponent: () =>
-              import('./features/branch-manager/attention-center/attention-center').then((m) => m.AttentionCenter),
-          },
-          // Work Order Workspace is 5.D. Queue rows already link here, so
-          // the route is declared but not yet built -- the same mid-phase
-          // pattern as the platform rail's Workshops link.
-        ],
-      },
     ],
   },
   { path: '**', redirectTo: '' },

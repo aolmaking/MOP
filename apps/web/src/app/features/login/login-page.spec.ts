@@ -28,7 +28,7 @@ describe('LoginPage', () => {
     expect(authStoreStub.login).not.toHaveBeenCalled();
   });
 
-  it('logs in with the entered credentials and navigates to / by default on success', async () => {
+  it('lands on the home the server picked for the role, not a generic page', async () => {
     const authStoreStub = configure();
     authStoreStub.login.mockResolvedValue({ landingPage: 'branch-home' } as SessionContext);
     const fixture = TestBed.createComponent(LoginPage);
@@ -39,6 +39,19 @@ describe('LoginPage', () => {
     await fixture.componentInstance.submit();
 
     expect(authStoreStub.login).toHaveBeenCalledWith('owner@example.com', 'secret123');
+    expect(navigateSpy).toHaveBeenCalledWith('/branch/attention');
+  });
+
+  it('falls back to the placeholder when that role has no page yet', async () => {
+    const authStoreStub = configure();
+    authStoreStub.login.mockResolvedValue({ landingPage: 'technician-home' } as SessionContext);
+    const fixture = TestBed.createComponent(LoginPage);
+    fixture.detectChanges();
+    const navigateSpy = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+
+    fixture.componentInstance['form'].setValue({ email: 'tech@example.com', password: 'secret123' });
+    await fixture.componentInstance.submit();
+
     expect(navigateSpy).toHaveBeenCalledWith('/');
   });
 

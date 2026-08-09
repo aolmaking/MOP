@@ -1,3 +1,15 @@
+/*
+ * The fallback frame for roles whose own shell is not built yet. It holds
+ * the placeholder home and nothing else, so it stays a bare header rather
+ * than growing a rail with no destinations in it.
+ *
+ * Every value is a token. It previously hardcoded #fff/#e3e5e9/#555,
+ * which put a white header on the dark app surface and left the brand
+ * inheriting light body text onto white -- effectively invisible. Nothing
+ * here may reintroduce a literal colour: the theme flips with
+ * prefers-color-scheme, and a hardcoded value cannot flip with it.
+ */
+
 .shell {
   min-height: 100vh;
   display: flex;
@@ -7,33 +19,41 @@
 .shell-header {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1.25rem;
-  border-bottom: 1px solid #e3e5e9;
-  background: #fff;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 
 .shell-brand {
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  color: var(--text);
 }
 
 .shell-user {
   margin-inline-start: auto;
-  color: #555;
-  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
 }
 
 .shell-logout {
-  padding: 0.4rem 0.75rem;
-  border: 1px solid #d0d3d9;
-  border-radius: 6px;
-  background: #fff;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: var(--text-sm);
   cursor: pointer;
-  font-size: 0.85rem;
+  transition: border-color var(--duration-fast) var(--easing);
+}
+
+.shell-logout:hover {
+  border-color: var(--border-strong);
 }
 
 .shell-main {
   flex: 1;
-  padding: 2rem 1.25rem;
+  padding: var(--space-6) var(--space-7);
 }

@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthStore } from '../../core/auth/auth.store';
+import { landingRouteFor } from '../../core/auth/landing';
 import { ErrorBanner } from '../../shared/error-banner/error-banner';
 import type { PresentedError } from '../../core/api/error.interceptor';
 
@@ -39,13 +40,13 @@ export class LoginPage {
     const { email, password } = this.form.getRawValue();
 
     try {
-      await this.authStore.login(email, password);
-      // No per-role pages exist yet (Phase 2+ registers real routes keyed
-      // by SessionContext.landingPage) -- send the user back to whatever
-      // guarded route they originally asked for, or the one placeholder
-      // home page otherwise.
+      const session = await this.authStore.login(email, password);
+      // Where they asked to go wins; otherwise the home the server picked
+      // for their role. Roles whose home is not built yet fall through to
+      // the placeholder, which names the phase that builds it.
       const redirectTo = this.route.snapshot.queryParamMap.get('redirectTo');
-      await this.router.navigateByUrl(redirectTo && redirectTo !== '/login' ? redirectTo : '/');
+      const target = redirectTo && redirectTo !== '/login' ? redirectTo : landingRouteFor(session);
+      await this.router.navigateByUrl(target);
     } catch (err) {
       this.error.set(err as PresentedError);
     } finally {

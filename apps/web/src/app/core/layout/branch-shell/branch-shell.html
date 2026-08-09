@@ -1,0 +1,25 @@
+<div class="rail-shell">
+  <nav class="rail" aria-label="Branch navigation">
+    <div class="rail-brand">MOP</div>
+
+    @for (item of navigation; track item.route) {
+      <a [routerLink]="item.route" routerLinkActive="rail-link--active" class="rail-link">{{ item.label }}</a>
+    }
+
+    <div class="rail-footer">
+      @if (session(); as s) {
+        <div class="rail-account">
+          <span class="rail-account-name">{{ s.displayName }}</span>
+          <span class="rail-account-role">Branch Manager</span>
+        </div>
+        <button type="button" appButton variant="ghost" size="small" (click)="logout()">Log out</button>
+      }
+    </div>
+  </nav>
+
+  <main class="rail-content">
+    <router-outlet />
+  </main>
+</div>
+
+<app-toast-container />
