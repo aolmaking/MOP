@@ -4,14 +4,16 @@ import { DEFAULT_DECISION, type LayerResult, type PermissionLayer } from "./type
 import { PlatformControlLayer } from "./layers/platform-control.layer";
 import { PlanEntitlementLayer } from "./layers/plan-entitlement.layer";
 import { TenantStatusLayer } from "./layers/tenant-status.layer";
+import { TenantCapabilityLayer } from "./layers/tenant-capability.layer";
 import { ModuleEnabledLayer } from "./layers/module-enabled.layer";
 import { FeatureEnabledLayer } from "./layers/feature-enabled.layer";
 import { WorkshopConfigurationLayer } from "./layers/workshop-configuration.layer";
 import { RolePermissionTemplateLayer } from "./layers/role-permission-template.layer";
 import { UserOverrideLayer } from "./layers/user-override.layer";
+import { PermissionContextService, type PermissionContext } from "./permission-context.service";
 
 /**
- * Layers 1-8 of the Effective Permission Resolver: "can this session ever
+ * Layers 1-9 of the Effective Permission Resolver: "can this session ever
  * do X". A literal ordered array that IS actually iterated -- the old
  * project's permission hierarchy was a decorative array nothing walked;
  * this is the fix for that specific failure.
@@ -28,23 +30,31 @@ export class PermissionResolverService {
   private readonly layers: PermissionLayer[];
 
   constructor(
+    private readonly contextService: PermissionContextService,
     platformControl: PlatformControlLayer,
     planEntitlement: PlanEntitlementLayer,
     tenantStatus: TenantStatusLayer,
+    tenantCapability: TenantCapabilityLayer,
     moduleEnabled: ModuleEnabledLayer,
     featureEnabled: FeatureEnabledLayer,
     workshopConfiguration: WorkshopConfigurationLayer,
     rolePermissionTemplate: RolePermissionTemplateLayer,
     userOverride: UserOverrideLayer,
   ) {
-    // Order is the contract: platform/plan/tenant-status/module/feature are
-    // true ceilings (1-5); workshop configuration only narrows (6); role
-    // template is the tenant default (7); user override is the final,
-    // most-specific word (8).
+    // Order is the contract. Platform, plan, tenant status, capability,
+    // module and feature are true ceilings (1-6); workshop configuration
+    // only narrows (7); role template is the tenant default (8); user
+    // override is the final, most-specific word (9).
+    //
+    // Capability sits above role and user deliberately: a permission must
+    // never be able to resurrect a function the workshop does not perform.
+    // Granting inventory.request.issue in a workshop with no inventory
+    // still denies.
     this.layers = [
       platformControl,
       planEntitlement,
       tenantStatus,
+      tenantCapability,
       moduleEnabled,
       featureEnabled,
       workshopConfiguration,
@@ -54,10 +64,26 @@ export class PermissionResolverService {
   }
 
   async resolve(session: SessionContext, permissionKey: string): Promise<LayerResult> {
+    const context = await this.contextService.load(session);
+    return this.resolveWith(context, session, permissionKey);
+  }
+
+  /**
+   * Resolves many keys against ONE snapshot. This is the shape a page load
+   * should use: asking for ten permissions costs the same queries as
+   * asking for one, because the layers are pure over the context.
+   */
+  async resolveMany(session: SessionContext, permissionKeys: readonly string[]): Promise<Map<string, LayerResult>> {
+    const context = await this.contextService.load(session);
+    return new Map(permissionKeys.map((key) => [key, this.resolveWith(context, session, key)]));
+  }
+
+  /** The chain itself: synchronous, because every layer is now pure. */
+  private resolveWith(context: PermissionContext, session: SessionContext, permissionKey: string): LayerResult {
     let current: LayerResult = DEFAULT_DECISION;
 
     for (const layer of this.layers) {
-      const decision = await layer.evaluate(session, permissionKey, current);
+      const decision = layer.evaluate(session, permissionKey, current, context);
       if (decision === null) continue;
 
       current = decision;

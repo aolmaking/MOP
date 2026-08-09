@@ -6,6 +6,7 @@ export * from "./pages/page-registry";
 export * from "./platform/workshop-options";
 export * from "./capabilities/types";
 export * from "./capabilities/gates";
+export * from "./capabilities/permission-capability-map";
 export * from "./capabilities/registry";
 export * from "./capabilities/workflow-graphs";
 export * from "./capabilities/validator";

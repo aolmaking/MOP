@@ -1,66 +1,45 @@
 import { UserOverrideLayer } from "./user-override.layer";
-import { PrismaService } from "../../database/prisma.service";
 import { createSession } from "../test-support/session-fixture";
+import { createContext } from "../test-support/permission-context-fixture";
+import { DEFAULT_DECISION } from "../types";
+
+const layer = new UserOverrideLayer();
+const KEY = "inventory.stock.adjust";
+
+const overrides = (entries: Record<string, { allowed: boolean; reason: string | null }>) =>
+  createContext({ userOverrides: new Map(Object.entries(entries)) });
 
 describe("UserOverrideLayer", () => {
-  function createPrismaMock(row: unknown) {
-    return {
-      userPermissionOverride: { findUnique: jest.fn().mockResolvedValue(row) },
-    } as unknown as PrismaService;
-  }
-
-  it("defers when the session has no staff user (platform/customer sessions)", async () => {
-    const prisma = createPrismaMock(null);
-    const layer = new UserOverrideLayer(prisma);
-
-    const decision = await layer.evaluate(createSession({ staffUserId: undefined }), "inventory.stock.adjust");
-
-    expect(decision).toBeNull();
-    expect(prisma.userPermissionOverride.findUnique).not.toHaveBeenCalled();
+  it("defers when the session has no staff user", () => {
+    const customer = createSession({ staffUserId: undefined });
+    expect(layer.evaluate(customer, KEY, DEFAULT_DECISION, overrides({}))).toBeNull();
   });
 
-  it("defers when no override has been set for this person", async () => {
-    const prisma = createPrismaMock(null);
-    const layer = new UserOverrideLayer(prisma);
-
-    const decision = await layer.evaluate(createSession(), "inventory.stock.adjust");
-
-    expect(decision).toBeNull();
+  it("defers when no override exists for the key", () => {
+    expect(layer.evaluate(createSession(), KEY, DEFAULT_DECISION, overrides({}))).toBeNull();
   });
 
-  it("independently denies and locks when this person has an individual revocation, using the given reason", async () => {
-    const prisma = createPrismaMock({ allowed: false, reason: "Under investigation for stock discrepancy" });
-    const layer = new UserOverrideLayer(prisma);
+  it("grants and locks, being the last layer with nothing left to defer to", () => {
+    const context = overrides({ [KEY]: { allowed: true, reason: null } });
+    const decision = layer.evaluate(createSession(), KEY, DEFAULT_DECISION, context);
 
-    const decision = await layer.evaluate(createSession(), "inventory.stock.adjust");
-
-    expect(decision).toEqual({
-      allowed: false,
-      locked: true,
-      reason: "Under investigation for stock discrepancy",
-    });
+    expect(decision).toMatchObject({ allowed: true, locked: true });
+    expect(decision?.reason).toContain("Individually granted");
   });
 
-  it("allows and locks when this person has an individual grant, even with no reason on record", async () => {
-    const prisma = createPrismaMock({ allowed: true, reason: null });
-    const layer = new UserOverrideLayer(prisma);
+  it("revokes and locks", () => {
+    const context = overrides({ [KEY]: { allowed: false, reason: null } });
+    const decision = layer.evaluate(createSession(), KEY, DEFAULT_DECISION, context);
 
-    const decision = await layer.evaluate(createSession(), "inventory.stock.adjust");
-
-    expect(decision).toEqual({
-      allowed: true,
-      locked: true,
-      reason: "Individually granted to you",
-    });
+    expect(decision).toMatchObject({ allowed: false, locked: true });
   });
 
-  it("is the final word: locks on a deny even though this is the last layer in the chain", async () => {
-    const prisma = createPrismaMock({ allowed: false, reason: null });
-    const layer = new UserOverrideLayer(prisma);
+  it("prefers the recorded reason over the generic wording", () => {
+    // Whoever made the exception explained why. That explanation is far
+    // more useful to the person who hits it than a generated sentence.
+    const context = overrides({ [KEY]: { allowed: false, reason: "Revoked pending retraining" } });
+    const decision = layer.evaluate(createSession(), KEY, DEFAULT_DECISION, context);
 
-    const decision = await layer.evaluate(createSession(), "inventory.stock.adjust");
-
-    expect(decision?.locked).toBe(true);
-    expect(decision?.reason).toBe("Individually revoked for you");
+    expect(decision?.reason).toBe("Revoked pending retraining");
   });
 });

@@ -2,37 +2,48 @@ import { PermissionResolverService } from "./permission-resolver.service";
 import { PlatformControlLayer } from "./layers/platform-control.layer";
 import { PlanEntitlementLayer } from "./layers/plan-entitlement.layer";
 import { TenantStatusLayer } from "./layers/tenant-status.layer";
+import { TenantCapabilityLayer } from "./layers/tenant-capability.layer";
 import { ModuleEnabledLayer } from "./layers/module-enabled.layer";
 import { FeatureEnabledLayer } from "./layers/feature-enabled.layer";
 import { WorkshopConfigurationLayer } from "./layers/workshop-configuration.layer";
 import { RolePermissionTemplateLayer } from "./layers/role-permission-template.layer";
 import { UserOverrideLayer } from "./layers/user-override.layer";
-import { PrismaService } from "../database/prisma.service";
 import { createSession } from "./test-support/session-fixture";
+import { PermissionContextService } from "./permission-context.service";
+import { createContext } from "./test-support/permission-context-fixture";
 import { DEFAULT_DECISION, type LayerDecision, type PermissionLayer } from "./types";
 
 describe("PermissionResolverService", () => {
   function build() {
-    const prisma = {} as PrismaService;
-
-    const platformControlInstance = new PlatformControlLayer(prisma);
-    const planEntitlementInstance = new PlanEntitlementLayer(prisma);
+    const platformControlInstance = new PlatformControlLayer();
+    const planEntitlementInstance = new PlanEntitlementLayer();
     const tenantStatusInstance = new TenantStatusLayer();
+    // Resolution is stubbed per-test below; the resolver only cares about ordering.
+    const tenantCapabilityInstance = new TenantCapabilityLayer();
     const moduleEnabledInstance = new ModuleEnabledLayer();
     const featureEnabledInstance = new FeatureEnabledLayer();
-    const workshopConfigurationInstance = new WorkshopConfigurationLayer(prisma);
-    const rolePermissionTemplateInstance = new RolePermissionTemplateLayer(prisma);
-    const userOverrideInstance = new UserOverrideLayer(prisma);
+    const workshopConfigurationInstance = new WorkshopConfigurationLayer();
+    const rolePermissionTemplateInstance = new RolePermissionTemplateLayer();
+    const userOverrideInstance = new UserOverrideLayer();
 
     // Same objects, widened to the interface type so every layer can be
     // stubbed uniformly below regardless of its own sync/async signature.
     const layers: Record<
-      "platformControl" | "planEntitlement" | "tenantStatus" | "moduleEnabled" | "featureEnabled" | "workshopConfiguration" | "rolePermissionTemplate" | "userOverride",
+      | "platformControl"
+      | "planEntitlement"
+      | "tenantStatus"
+      | "tenantCapability"
+      | "moduleEnabled"
+      | "featureEnabled"
+      | "workshopConfiguration"
+      | "rolePermissionTemplate"
+      | "userOverride",
       PermissionLayer
     > = {
       platformControl: platformControlInstance,
       planEntitlement: planEntitlementInstance,
       tenantStatus: tenantStatusInstance,
+      tenantCapability: tenantCapabilityInstance,
       moduleEnabled: moduleEnabledInstance,
       featureEnabled: featureEnabledInstance,
       workshopConfiguration: workshopConfigurationInstance,
@@ -40,10 +51,16 @@ describe("PermissionResolverService", () => {
       userOverride: userOverrideInstance,
     };
 
+    // Loaded once per resolve; the layers are stubbed per test, so the
+    // snapshot contents do not matter here -- only that one is provided.
+    const contextService = { load: jest.fn().mockResolvedValue(createContext()) } as unknown as PermissionContextService;
+
     const service = new PermissionResolverService(
+      contextService,
       platformControlInstance,
       planEntitlementInstance,
       tenantStatusInstance,
+      tenantCapabilityInstance,
       moduleEnabledInstance,
       featureEnabledInstance,
       workshopConfigurationInstance,
@@ -51,11 +68,11 @@ describe("PermissionResolverService", () => {
       userOverrideInstance,
     );
 
-    return { service, layers };
+    return { service, layers, contextService };
   }
 
   function stub(layer: PermissionLayer, decision: LayerDecision) {
-    return jest.spyOn(layer, "evaluate").mockImplementation(async () => decision);
+    return jest.spyOn(layer, "evaluate").mockImplementation(() => decision);
   }
 
   function stubAllDefer(layers: Record<string, PermissionLayer>) {
@@ -140,11 +157,11 @@ describe("PermissionResolverService", () => {
     expect(rolePermissionSpy).not.toHaveBeenCalled();
   });
 
-  it("evaluates layers in the documented 1-8 order", async () => {
+  it("evaluates layers in the documented 1-9 order", async () => {
     const { service, layers } = build();
     const callOrder: string[] = [];
     Object.entries(layers).forEach(([label, layer]) => {
-      jest.spyOn(layer, "evaluate").mockImplementation(async () => {
+      jest.spyOn(layer, "evaluate").mockImplementation(() => {
         callOrder.push(label);
         return null;
       });
@@ -156,6 +173,7 @@ describe("PermissionResolverService", () => {
       "platformControl",
       "planEntitlement",
       "tenantStatus",
+      "tenantCapability",
       "moduleEnabled",
       "featureEnabled",
       "workshopConfiguration",

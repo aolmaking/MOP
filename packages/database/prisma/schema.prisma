@@ -337,6 +337,7 @@ model Tenant {
   decisionRequests        CustomerDecisionRequest[]
   financeConfiguration    FinanceConfiguration?
   configuration           TenantConfiguration?
+  capabilities            TenantCapability[]
   configurationVersions   TenantConfigurationVersion[]
   controlSettings         ControlSetting[]
   rolePermissions         RolePermission[]
@@ -1400,6 +1401,68 @@ model TenantConfiguration {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("tenant_configuration")
+}
+
+// Mirrors CapabilityStatus in packages/shared/src/capabilities/types.ts.
+// EXTERNAL is the load-bearing one: a workshop that issues legal invoices
+// from separate accounting software is EXTERNAL for billing, not DISABLED
+// -- the business function still happens, MOP just does not perform it, so
+// an external reference must still be recorded and may still gate delivery.
+enum TenantCapabilityStatus {
+  ENABLED
+  DISABLED
+  READ_ONLY
+  EXTERNAL
+  LOCKED
+}
+
+// Where a capability's current state came from. Determines who may change
+// it: a platform-sourced lock is not the owner's to undo.
+enum CapabilitySource {
+  PLATFORM
+  PLAN
+  OWNER_CONFIGURATION
+  MIGRATION
+  SYSTEM
+}
+
+// A workshop's shape, over time.
+//
+// Time-ranged rather than a single current value, because history has to
+// be interpretable under the rules that were in force when it happened. A
+// work order created in 2026 while Inventory was disabled has no part
+// requests; read under 2027's capabilities it looks corrupt -- missing
+// stock movements, missing part lifecycle -- when in fact parts were
+// handled externally and the record is perfectly correct.
+//
+// `effectiveTo` null means "current". Exactly one open row per
+// (tenant, capability) is the invariant; superseding a capability closes
+// the old row and opens a new one in the same transaction, so the two are
+// never both open and never both closed.
+model TenantCapability {
+  id               String                 @id @default(cuid())
+  tenantId         String
+  capabilityKey    String
+  status           TenantCapabilityStatus
+  effectiveFrom    DateTime               @default(now())
+  effectiveTo      DateTime?
+  source           CapabilitySource
+  // Set by Platform Super Admin. The Owner cannot override it, matching
+  // the resolver's rule that lower layers never beat higher ones.
+  lockedByPlatform Boolean                @default(false)
+  configuredBy     String?
+  reason           String?
+  createdAt        DateTime               @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // The hot path: "this tenant's open rows". Partial-unique on the open
+  // row would be better still, but Prisma cannot express a filtered index,
+  // so the single-open-row invariant is enforced in the service layer and
+  // asserted by tests.
+  @@index([tenantId, effectiveTo])
+  @@index([tenantId, capabilityKey, effectiveFrom])
+  @@map("tenant_capabilities")
 }
 
 model TenantConfigurationVersion {

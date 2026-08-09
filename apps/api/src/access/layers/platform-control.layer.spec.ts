@@ -1,82 +1,49 @@
 import { PlatformControlLayer } from "./platform-control.layer";
-import { PrismaService } from "../../database/prisma.service";
 import { createSession } from "../test-support/session-fixture";
+import { createContext } from "../test-support/permission-context-fixture";
+import { DEFAULT_DECISION } from "../types";
+
+const layer = new PlatformControlLayer();
+const KEY = "inventory.stock.adjust";
+
+/** Locks are keyed `${role}:${permissionKey}`. */
+const locks = (entries: Record<string, boolean>) => createContext({ platformLocks: new Map(Object.entries(entries)) });
 
 describe("PlatformControlLayer", () => {
-  function createPrismaMock(setting: unknown) {
-    return {
-      controlSetting: { findFirst: jest.fn().mockResolvedValue(setting) },
-    } as unknown as PrismaService;
-  }
-
-  it("defers when the session has no tenant (platform session)", async () => {
-    const prisma = createPrismaMock(null);
-    const layer = new PlatformControlLayer(prisma);
-
-    const decision = await layer.evaluate(createSession({ tenantId: null }), "inventory.stock.adjust");
-
-    expect(decision).toBeNull();
-    expect(prisma.controlSetting.findFirst).not.toHaveBeenCalled();
+  it("defers when the session has no tenant (platform session)", () => {
+    expect(layer.evaluate(createSession({ tenantId: null }), KEY, DEFAULT_DECISION, createContext())).toBeNull();
   });
 
-  it("defers when no matching platform lock exists", async () => {
-    const prisma = createPrismaMock(null);
-    const layer = new PlatformControlLayer(prisma);
-
-    const decision = await layer.evaluate(createSession(), "inventory.stock.adjust");
-
-    expect(decision).toBeNull();
+  it("defers when no matching platform lock exists", () => {
+    expect(layer.evaluate(createSession(), KEY, DEFAULT_DECISION, createContext())).toBeNull();
   });
 
-  it("independently denies and locks when the platform has explicitly disabled this role+permission", async () => {
-    const prisma = createPrismaMock({ value: { allowed: false } });
-    const layer = new PlatformControlLayer(prisma);
+  it("denies and locks when the platform has explicitly disabled this role and permission", () => {
+    const session = createSession();
+    const decision = layer.evaluate(session, KEY, DEFAULT_DECISION, locks({ [`${session.role}:${KEY}`]: false }));
 
-    const decision = await layer.evaluate(createSession(), "inventory.stock.adjust");
-
-    expect(decision).toEqual({
-      allowed: false,
-      locked: true,
-      reason: expect.stringContaining("Locked"),
-    });
+    expect(decision).toMatchObject({ allowed: false, locked: true });
+    expect(decision?.reason).toContain("Platform Super Admin");
   });
 
-  it("allows and locks when the platform has explicitly enabled this role+permission", async () => {
-    const prisma = createPrismaMock({ value: { allowed: true } });
-    const layer = new PlatformControlLayer(prisma);
+  it("allows and locks when the platform has explicitly enabled it", () => {
+    const session = createSession();
+    const decision = layer.evaluate(session, KEY, DEFAULT_DECISION, locks({ [`${session.role}:${KEY}`]: true }));
 
-    const decision = await layer.evaluate(createSession(), "inventory.stock.adjust");
-
-    expect(decision).toEqual({
-      allowed: true,
-      locked: true,
-      reason: expect.stringContaining("Enabled"),
-    });
+    expect(decision).toMatchObject({ allowed: true, locked: true });
   });
 
-  it("defers when the stored setting value is malformed", async () => {
-    const prisma = createPrismaMock({ value: { somethingElse: true } });
-    const layer = new PlatformControlLayer(prisma);
-
-    const decision = await layer.evaluate(createSession(), "inventory.stock.adjust");
+  it("ignores a lock aimed at a different role", () => {
+    const session = createSession({ role: "TECHNICIAN" });
+    const decision = layer.evaluate(session, KEY, DEFAULT_DECISION, locks({ [`BRANCH_MANAGER:${KEY}`]: false }));
 
     expect(decision).toBeNull();
   });
 
-  it("looks up the lock keyed by role and permission key together", async () => {
-    const prisma = createPrismaMock(null);
-    const layer = new PlatformControlLayer(prisma);
+  it("ignores a lock aimed at a different permission", () => {
+    const session = createSession();
+    const other = { [`${session.role}:finance.invoice.issue`]: false };
 
-    await layer.evaluate(createSession({ tenantId: "tenant-9", role: "TECHNICIAN" }), "task.complete");
-
-    expect(prisma.controlSetting.findFirst).toHaveBeenCalledWith({
-      where: {
-        scope: "PLATFORM",
-        tenantId: "tenant-9",
-        type: "role_permission_lock",
-        key: "TECHNICIAN:task.complete",
-        active: true,
-      },
-    });
+    expect(layer.evaluate(session, KEY, DEFAULT_DECISION, locks(other))).toBeNull();
   });
 });
