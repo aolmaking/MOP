@@ -17,14 +17,14 @@ Phase 5 matters beyond itself: it sets the visual and structural precedent that 
 
 | Phase | State |
 |---|---|
-| 1 — Runnable and Provable | 🟡 6 of 7. Only **1.3 (CI green)** open — blocked, see §7 |
+| 1 — Runnable and Provable | 🟢 7 of 7. CI cause found and fixed; awaiting a green run to confirm |
 | 2 — Design Completeness | ✅ complete |
 | 3 — Governance Runtime | 🟢 4 of 5. Capability UI moved to Phase 5 (5.F) |
 | 4 — Operations Spine | ✅ complete |
-| **5 — Branch Manager** | **🔵 in progress — 5.A done, 5.B–5.G open** |
+| **5 — Branch Manager** | **🔵 in progress — 5.A + 5.B done, 5.C–5.G open** |
 | 6–14 | ⬜ not started |
 
-**Verified at last commit:** 368 tests (93 shared + 217 API + 58 web), typecheck clean, both custom lint rules passing, full build green. Working tree clean, pushed to `origin/main`.
+**Verified at last commit:** 379 tests (93 shared + 217 API + 69 web), run in CI ORDER from a wiped build state, typecheck clean, both custom lint rules passing, full build green. Working tree clean, pushed to `origin/main`.
 
 ## 3. Completed work
 
@@ -40,7 +40,11 @@ Phase 5 matters beyond itself: it sets the visual and structural precedent that 
 
 ## 4. Current task — what to do next
 
-**5.B — the Attention Center page.** The first screen built on the design language.
+**5.C — the Customer Intake wizard.** Must survive being left mid-way: the manager is interrupted constantly and long forms get abandoned.
+
+5.B is done and is the pattern the remaining pages copy — read `attention-center.ts/html/css` before writing another page.
+
+*(Previously: 5.B — the Attention Center page.)*
 
 Its structure is already decided in [`docs/phases/PHASE_5.md`](docs/phases/PHASE_5.md) §2, in this order:
 

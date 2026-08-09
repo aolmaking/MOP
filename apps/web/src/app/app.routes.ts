@@ -24,6 +24,23 @@ export const routes: Routes = [
     loadComponent: () => import('./core/layout/shell').then((m) => m.Shell),
     children: [
       { path: '', loadComponent: () => import('./features/home/placeholder-home').then((m) => m.PlaceholderHome) },
+      {
+        path: 'branch',
+        children: [
+          // The branch manager's landing page: "what needs me?" answered
+          // with no click, filter or memory of where they were. Everything
+          // else in the role is reached from here.
+          { path: '', pathMatch: 'full', redirectTo: 'attention' },
+          {
+            path: 'attention',
+            loadComponent: () =>
+              import('./features/branch-manager/attention-center/attention-center').then((m) => m.AttentionCenter),
+          },
+          // Work Order Workspace is 5.D. Queue rows already link here, so
+          // the route is declared but not yet built -- the same mid-phase
+          // pattern as the platform rail's Workshops link.
+        ],
+      },
     ],
   },
   { path: '**', redirectTo: '' },
