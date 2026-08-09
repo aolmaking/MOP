@@ -1,6 +1,8 @@
 import { Module } from "@nestjs/common";
 import { DatabaseModule } from "../database/database.module";
+import { AuditModule } from "../audit/audit.module";
 import { CapabilityResolutionService } from "./capability-resolution.service";
+import { CapabilityChangeService } from "./capability-change.service";
 
 /**
  * The runtime half of the capability engine. The pure half -- registry,
@@ -9,8 +11,8 @@ import { CapabilityResolutionService } from "./capability-resolution.service";
  * in isolation.
  */
 @Module({
-  imports: [DatabaseModule],
-  providers: [CapabilityResolutionService],
-  exports: [CapabilityResolutionService],
+  imports: [DatabaseModule, AuditModule],
+  providers: [CapabilityResolutionService, CapabilityChangeService],
+  exports: [CapabilityResolutionService, CapabilityChangeService],
 })
 export class CapabilitiesModule {}

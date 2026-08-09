@@ -1,5 +1,19 @@
 # Phase 3 — Governance Runtime
 
+> **Status (2026-08-09):** 4 of 5 tasks complete.
+>
+> | Task | State |
+> |---|---|
+> | 3.A TenantCapability, time-ranged | ✅ migration applied |
+> | 3.B Resolution and enforcement | ✅ capability denies above role and user override |
+> | 3.C Per-request resolver context (Phase 1.6) | ✅ 20 keys cost the same 6 queries as 1 |
+> | 3.D Change pipeline | ✅ live counts, atomic apply, HIGH-risk audit |
+> | 3.E Super Admin UI | ⬜ moved to Phase 5 — see below |
+>
+> Verified: **293 tests** (55 shared + 180 API + 58 web), typecheck clean, both lint rules, full build green.
+>
+> **3.E moves to Phase 5**, deliberately and as the phase document said it might. The API and its guarantees are what Phase 4 depends on; the screen is not. Building the Super Admin capability UI before the lifecycle exists would mean designing a screen around states no work order can yet reach.
+
 > **Goal:** make the capability engine real at runtime. Until now it is a proven pure function with no callers — it can tell you a configuration is safe, but nothing stores a workshop's capabilities or enforces them on a request.
 > **Why before Phase 4:** the lifecycle reads capabilities to decide transitions. If capabilities are not resolvable at runtime first, Phase 4 hardcodes them and the engine becomes decoration.
 

@@ -38,12 +38,13 @@
 
 | Phase | State |
 |---|---|
-| 1 — Runnable and Provable | 🟡 5 of 7 tasks done. 1.3 needs a CI run; 1.6 deferred, must land before Phase 4 |
+| 1 — Runnable and Provable | 🟡 6 of 7 done. 1.6 landed in Phase 3; only 1.3 (CI green) outstanding |
 | 2 — Design Completeness | ✅ complete |
-| 3 — Governance Runtime | ⬜ next |
-| 4–14 | ⬜ not started |
+| 3 — Governance Runtime | 🟢 4 of 5 done; capability UI moved to Phase 5 |
+| 4 — Operations Spine | ⬜ next |
+| 5–14 | ⬜ not started |
 
-**272 tests** green (55 shared + 159 API + 58 web), typecheck clean, two custom lint rules passing, full build green.
+**293 tests** green (55 shared + 180 API + 58 web), typecheck clean, two custom lint rules passing, full build green.
 
 ## The phases
 
