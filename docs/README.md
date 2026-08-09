@@ -30,6 +30,7 @@ The measures and precautions each layer must hold, with `DONE` / `PARTIAL` / `TO
 |---|---|
 | [`DATABASE_STRATEGY.md`](./DATABASE_STRATEGY.md) | Tenant isolation depth, money handling, immutability and lock moments, concurrency races, history and deletion, migrations, growth and indexes, permission-resolver query amplification |
 | [`INFRASTRUCTURE.md`](./INFRASTRUCTURE.md) | Environments, topology, secrets, security posture, sessions and revocation, file/photo handling, realtime, observability, backups and DR, the scaling path, workshop connectivity |
+| [`DESIGN_LANGUAGE.md`](./DESIGN_LANGUAGE.md) | Why every visual value is what it is — colour, elevation, radius, motion, spacing, type |
 | [`UX_PRINCIPLES.md`](./UX_PRINCIPLES.md) | Next-action primacy, role-shaped surfaces, priority ordering, the six states, never-leak-by-hiding, Arabic/RTL, the technician field tool, consistency, accessibility, governed actions |
 | [`DATA_DICTIONARY.md`](./DATA_DICTIONARY.md) | Model-by-model reference for the Prisma schema |
 
