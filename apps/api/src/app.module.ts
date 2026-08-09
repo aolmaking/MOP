@@ -12,6 +12,7 @@ import { AuthModule } from "./auth/auth.module";
 import { AccessModule } from "./access/access.module";
 import { SchedulerModule } from "./scheduler/scheduler.module";
 import { PlatformModule } from "./platform/platform.module";
+import { BranchManagerModule } from "./branch-manager/branch-manager.module";
 import { HealthController } from "./health/health.controller";
 
 @Module({
@@ -38,6 +39,7 @@ import { HealthController } from "./health/health.controller";
     AccessModule,
     SchedulerModule,
     PlatformModule,
+    BranchManagerModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

@@ -18,9 +18,9 @@
     "db:test:prepare": "node tools/pnpm.mjs --filter @mop/database run test:prepare",
     "build:shared": "node tools/pnpm.mjs --filter @mop/shared run build",
     "build": "node tools/pnpm.mjs run build:shared && node tools/pnpm.mjs --filter @mop/api run build && node tools/pnpm.mjs --filter @mop/web run build",
-    "test": "node tools/pnpm.mjs --filter @mop/shared run test && node tools/pnpm.mjs --filter @mop/api run test && node tools/pnpm.mjs --filter @mop/web run test",
-    "test:unit": "node tools/pnpm.mjs --filter @mop/shared run test && node tools/pnpm.mjs --filter @mop/api run test:unit && node tools/pnpm.mjs --filter @mop/web run test",
-    "lint": "node tools/pnpm.mjs --filter @mop/api run lint && node tools/lint-audit-boundary.mjs && node tools/lint-directional-css.mjs",
-    "typecheck": "node tools/pnpm.mjs --filter @mop/shared run typecheck && node tools/pnpm.mjs --filter @mop/api run typecheck"
+    "test": "node tools/pnpm.mjs run build:shared && node tools/pnpm.mjs --filter @mop/shared run test && node tools/pnpm.mjs --filter @mop/api run test && node tools/pnpm.mjs --filter @mop/web run test",
+    "test:unit": "node tools/pnpm.mjs run build:shared && node tools/pnpm.mjs --filter @mop/shared run test && node tools/pnpm.mjs --filter @mop/api run test:unit && node tools/pnpm.mjs --filter @mop/web run test",
+    "lint": "node tools/pnpm.mjs run build:shared && node tools/pnpm.mjs --filter @mop/api run lint && node tools/lint-audit-boundary.mjs && node tools/lint-directional-css.mjs",
+    "typecheck": "node tools/pnpm.mjs run build:shared && node tools/pnpm.mjs --filter @mop/shared run typecheck && node tools/pnpm.mjs --filter @mop/api run typecheck"
   }
 }

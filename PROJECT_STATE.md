@@ -79,7 +79,7 @@ Then 5.C intake wizard · 5.D board + workspace · 5.E approvals + delivery/paym
 
 ## 7. Known issues and open questions
 
-1. **CI has never been verified.** `.github/workflows/ci.yml` is well-built and has never been confirmed green. The repo is private, so the GitHub API returns 404 without credentials and Claude cannot read it. **Needs someone with repository access to check the Actions tab.** This is Phase 1's only open task.
+1. **CI was red on every commit until 2026-08-09, now fixed.** Cause: the pipeline ran lint/typecheck/test BEFORE build, but `@mop/shared` is consumed through its built `dist/` (see its package.json main/types), which does not exist in a fresh checkout. It passed locally only because dist had been built at some point. Fixed by making the ordering explicit in both the root scripts and the workflow. Reproduce any suspected CI failure locally with `rm -rf packages/shared/dist` first.
 2. **Two gates return `true` unconditionally** — `review.team_review_passed` and `qc.passed` in `gate-evaluator.service.ts`. The justification is that reaching a post-review state *is* the evidence, since the router will not route there otherwise. This is defensible but is still a hardcoded true, which the project elsewhere treats as a defect. **Revisit when Team Leader (Phase 10) and QC produce real records.**
 3. **`byStatus` uses `updatedAt`** as a proxy for "entered this state", because no `statusChangedAt` column exists. Honest but imprecise; a dedicated column would be exact.
 4. **Multiple partial issues against one part request** are not expressible (`IssuedItem.partRequestId` is unique). Deferred to Phase 7 with the reason recorded in `SCENARIOS.md` 3.5.

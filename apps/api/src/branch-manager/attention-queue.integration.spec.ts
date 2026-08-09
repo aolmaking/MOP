@@ -145,7 +145,7 @@ describe("what appears in the queue", () => {
   it("surfaces a work order waiting on parts, with the wait in words", async () => {
     await makeWorkOrder({ status: "WAITING_PARTS", updatedAt: hoursAgo(30) });
 
-    const queue = await service.build({ tenantId, branchIds: [] }, NOW);
+    const queue = await service.build({ tenantId, branchScope: [] }, NOW);
 
     expect(queue).toHaveLength(1);
     expect(queue[0]?.kind).toBe("WAITING_PARTS");
@@ -162,7 +162,7 @@ describe("what appears in the queue", () => {
       data: { tenantId, taskId: task.id, reason: "TOOL_MISSING", reportedBy: "tech-1", status: "OPEN" },
     });
 
-    const queue = await service.build({ tenantId, branchIds: [] }, NOW);
+    const queue = await service.build({ tenantId, branchScope: [] }, NOW);
 
     expect(queue[0]?.kind).toBe("TECHNICIAN_BLOCKED");
     expect(queue[0]?.primaryAction).toBe("RESOLVE_BLOCKER");
@@ -171,7 +171,7 @@ describe("what appears in the queue", () => {
   it("shows the identifier a human uses to find the car in the yard", async () => {
     await makeWorkOrder({ status: "WAITING_PARTS", plate: `FIND-${SUFFIX}` });
 
-    const queue = await service.build({ tenantId, branchIds: [] }, NOW);
+    const queue = await service.build({ tenantId, branchScope: [] }, NOW);
 
     expect(queue[0]?.identifier).toBe(`FIND-${SUFFIX}`);
     expect(queue[0]?.customerName).toBe("Ahmed Salah");
@@ -182,7 +182,7 @@ describe("what appears in the queue", () => {
     // they did not ask for.
     await makeWorkOrder({ status: "WAITING_PARTS" });
 
-    const [row] = await service.build({ tenantId, branchIds: [] }, NOW);
+    const [row] = await service.build({ tenantId, branchScope: [] }, NOW);
     const keys = Object.keys(row ?? {});
 
     expect(keys).not.toContain("cost");
@@ -194,7 +194,7 @@ describe("what appears in the queue", () => {
     await makeWorkOrder({ status: "IN_PROGRESS" });
 
     // "Nothing needs you" is a real and desirable state, not an error.
-    expect(await service.build({ tenantId, branchIds: [] }, NOW)).toEqual([]);
+    expect(await service.build({ tenantId, branchScope: [] }, NOW)).toEqual([]);
   }, 120_000);
 });
 
@@ -228,7 +228,7 @@ describe("order — the thing the manager actually trusts", () => {
       },
     });
 
-    const queue = await service.build({ tenantId, branchIds: [] }, NOW);
+    const queue = await service.build({ tenantId, branchScope: [] }, NOW);
 
     // Even against a 200-hour parts wait, safety comes first and does not
     // decay.
@@ -258,7 +258,7 @@ describe("order — the thing the manager actually trusts", () => {
       },
     });
 
-    const queue = await service.build({ tenantId, branchIds: [] }, NOW);
+    const queue = await service.build({ tenantId, branchScope: [] }, NOW);
 
     // At a day, the risk is losing the customer rather than losing an hour.
     expect(queue[0]?.kind).toBe("CUSTOMER_APPROVAL_WAITING");
@@ -283,7 +283,7 @@ describe("order — the thing the manager actually trusts", () => {
     });
     await prisma.$executeRaw`UPDATE customer_decision_requests SET "createdAt" = ${hoursAgo(100)} WHERE id = ${created.id}`;
 
-    const queue = await service.build({ tenantId, branchIds: [] }, NOW);
+    const queue = await service.build({ tenantId, branchScope: [] }, NOW);
 
     expect(queue[0]?.rank.waitingHours).toBeLessThan(3);
     expect(queue[0]?.rank.escalated).toBe(false);
@@ -297,15 +297,15 @@ describe("scope", () => {
     // The other tenant's work order was created against this tenant's
     // branch id, which is the worst case: a join that forgets tenantId
     // would return it.
-    expect(await service.build({ tenantId, branchIds: [] }, NOW)).toEqual([]);
+    expect(await service.build({ tenantId, branchScope: [] }, NOW)).toEqual([]);
   }, 120_000);
 
   it("respects a manager scoped to one branch", async () => {
     await makeWorkOrder({ branch: mainBranchId, status: "WAITING_PARTS" });
     await makeWorkOrder({ branch: secondBranchId, status: "WAITING_PARTS" });
 
-    const scoped = await service.build({ tenantId, branchIds: [mainBranchId] }, NOW);
-    const all = await service.build({ tenantId, branchIds: [] }, NOW);
+    const scoped = await service.build({ tenantId, branchScope: [mainBranchId] }, NOW);
+    const all = await service.build({ tenantId, branchScope: [] }, NOW);
 
     expect(scoped).toHaveLength(1);
     expect(scoped[0]?.branchId).toBe(mainBranchId);

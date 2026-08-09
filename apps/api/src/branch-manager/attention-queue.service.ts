@@ -42,8 +42,8 @@ export type PrimaryAction =
 
 export interface AttentionQueueScope {
   readonly tenantId: string;
-  /** Empty means tenant-wide -- an owner or a manager scoped to everything. */
-  readonly branchIds: readonly string[];
+  /** Empty means tenant-wide -- an owner, or a manager scoped to everything. */
+  readonly branchScope: readonly string[];
 }
 
 /**
@@ -63,7 +63,7 @@ export class AttentionQueueService {
   constructor(private readonly prisma: PrismaService) {}
 
   async build(scope: AttentionQueueScope, now: Date = new Date()): Promise<AttentionItem[]> {
-    const branchFilter = scope.branchIds.length > 0 ? { in: [...scope.branchIds] } : undefined;
+    const branchFilter = scope.branchScope.length > 0 ? { in: [...scope.branchScope] } : undefined;
     const workOrderWhere = { tenantId: scope.tenantId, ...(branchFilter ? { branchId: branchFilter } : {}) };
 
     const [criticalRejections, blockers, awaitingCustomer, readyUnpaid, waitingParts, rework] = await Promise.all([

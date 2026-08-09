@@ -1,0 +1,114 @@
+<!--
+  Band order is the page's whole argument: what needs you, then how today
+  is going, then everything else. See docs/phases/PHASE_5.md section 2.
+-->
+<section class="attention">
+  <header class="attention-head">
+    <h1 class="attention-title">Attention</h1>
+    @if (state() === 'ready') {
+      <p class="attention-sub">{{ subtitle() }}</p>
+    }
+  </header>
+
+  <!-- ── Band 1: needs you now ─────────────────────────────────────── -->
+
+  @switch (state()) {
+    @case ('loading') {
+      <!-- Skeletons match the real row height so nothing jumps on arrival. -->
+      <ul class="queue" aria-busy="true" aria-label="Loading items that need attention">
+        @for (row of [1, 2, 3]; track row) {
+          <li class="queue-row queue-row--skeleton"><span class="skeleton-bar"></span></li>
+        }
+      </ul>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="reload()">Try again</button>
+      </div>
+    }
+
+    @case ('forbidden') {
+      <!-- Distinct from empty and from error: nothing is broken and there is
+           nothing to retry, so it must not offer a retry button. -->
+      <div class="state state--quiet">
+        <p class="state-title">You don't have access to branch operations</p>
+        <p class="state-body">Ask your workshop owner to give you branch access.</p>
+      </div>
+    }
+
+    @case ('empty') {
+      <!-- "Nothing needs you" is a good outcome, so it is stated plainly
+           and without alarm. It is deliberately NOT an error state. -->
+      <div class="state state--calm">
+        <p class="state-title">Nothing needs you right now</p>
+        <p class="state-body">Jobs that get stuck will appear here, most urgent first.</p>
+      </div>
+    }
+
+    @case ('ready') {
+      <ul class="queue">
+        @for (item of items(); track item.id) {
+          <li class="queue-row" [class.queue-row--critical]="isCritical(item)">
+            <div class="queue-main">
+              <p class="queue-identity">
+                <mop-identifier [value]="item.identifier ?? '—'" />
+                <span class="queue-customer">{{ item.customerName }}</span>
+              </p>
+              <!-- A sentence, not a badge: a badge asks the reader to
+                   remember what it maps to. -->
+              <p class="queue-reason">{{ item.reason }}</p>
+            </div>
+
+            <div class="queue-actions">
+              <button appButton variant="secondary" size="small" (click)="act(item)">
+                {{ actionLabel(item) }}
+              </button>
+              <a class="queue-open" [routerLink]="['/branch/work-orders', item.workOrderId]">Open</a>
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  }
+
+  <!-- ── Band 2: today's flow ──────────────────────────────────────── -->
+  <!-- Orientation, not action. Tells the manager whether today is normal. -->
+
+  @if (state() === 'ready' || state() === 'empty') {
+    <section class="band">
+      <h2 class="band-title">Today</h2>
+      <dl class="flow">
+        @for (stat of todayFlow(); track stat.label) {
+          <div class="flow-stat">
+            <dt class="flow-label">{{ stat.label }}</dt>
+            <dd class="flow-value">{{ stat.value }}</dd>
+          </div>
+        }
+      </dl>
+    </section>
+
+    <!-- ── Band 3: watch list ──────────────────────────────────────── -->
+    <!-- Counts, kept because browsing is a real need -- just not the
+         first question. Every tile reaches the underlying items. -->
+
+    <section class="band">
+      <h2 class="band-title">Watch list</h2>
+      @if (watchList().length === 0) {
+        <p class="band-empty">Nothing on the watch list.</p>
+      } @else {
+        <ul class="watch">
+          @for (tile of watchList(); track tile.kind) {
+            <li>
+              <button class="watch-tile" type="button" (click)="filterBy(tile.kind)">
+                <span class="watch-count">{{ tile.count }}</span>
+                <span class="watch-label">{{ tile.label }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  }
+</section>

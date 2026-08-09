@@ -54,6 +54,14 @@ jobs:
       - name: Generate Prisma client
         run: pnpm db:generate
 
+      # @mop/shared is consumed through its built dist, so it must exist
+      # before anything typechecks, lints or tests against it. The root
+      # scripts also do this themselves; having it as its own step means a
+      # failure here reports as "shared did not build" rather than as a
+      # confusing wall of "Cannot find module @mop/shared".
+      - name: Build shared package
+        run: pnpm build:shared
+
       # Uses the same script a developer runs locally, so the two paths
       # cannot drift. tools/with-env.mjs never overrides an already-set
       # variable, so the job-level DATABASE_URL above still wins.
