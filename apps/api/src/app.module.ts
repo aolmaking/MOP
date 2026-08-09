@@ -14,6 +14,7 @@ import { SchedulerModule } from "./scheduler/scheduler.module";
 import { PlatformModule } from "./platform/platform.module";
 import { BranchManagerModule } from "./branch-manager/branch-manager.module";
 import { TechnicianModule } from "./technician/technician.module";
+import { InventoryModule } from "./inventory/inventory.module";
 import { HealthController } from "./health/health.controller";
 
 @Module({
@@ -42,6 +43,7 @@ import { HealthController } from "./health/health.controller";
     PlatformModule,
     BranchManagerModule,
     TechnicianModule,
+    InventoryModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

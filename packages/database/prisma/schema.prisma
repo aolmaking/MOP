@@ -870,9 +870,12 @@ model InventoryItem {
   @@map("inventory_items")
 }
 
-// Quantity invariants (never-negative, reserved+issued <= available, etc.)
-// are enforced both here in service code AND via DB-level CHECK
-// constraints added in a follow-up migration -- see docs/DATA_DICTIONARY.md.
+// Never-negative is enforced in BOTH places, and deliberately so:
+// StockService refuses the movement and produces the message a human can
+// act on, while DB-level CHECK constraints make it impossible for a seed
+// script, a data fix, or a future service to write a negative quantity of
+// a physical object. Service code is a promise; a constraint is a fact.
+// Added in 20260809203000_stock_never_negative.
 model WarehouseStockBalance {
   id               String @id @default(cuid())
   tenantId         String
