@@ -44,12 +44,14 @@ describe('LoginPage', () => {
 
   it('falls back to the placeholder when that role has no page yet', async () => {
     const authStoreStub = configure();
-    authStoreStub.login.mockResolvedValue({ landingPage: 'technician-home' } as SessionContext);
+    // Inventory is Phase 7. Technician used to be the example here and
+    // stopped being one the moment Phase 6 gave it a real home.
+    authStoreStub.login.mockResolvedValue({ landingPage: 'inventory-home' } as SessionContext);
     const fixture = TestBed.createComponent(LoginPage);
     fixture.detectChanges();
     const navigateSpy = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
 
-    fixture.componentInstance['form'].setValue({ email: 'tech@example.com', password: 'secret123' });
+    fixture.componentInstance['form'].setValue({ email: 'stores@example.com', password: 'secret123' });
     await fixture.componentInstance.submit();
 
     expect(navigateSpy).toHaveBeenCalledWith('/');

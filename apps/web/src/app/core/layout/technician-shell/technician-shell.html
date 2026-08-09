@@ -1,0 +1,30 @@
+<div class="tech">
+  <header class="tech-head">
+    <span class="tech-brand">MOP</span>
+    @if (session(); as s) {
+      <span class="tech-who">{{ s.displayName }}</span>
+    }
+  </header>
+
+  <main class="tech-content">
+    <router-outlet />
+  </main>
+
+  <!--
+    At the bottom, not in a rail: a tablet held one-handed puts the top
+    corners out of thumb reach, and a left rail sits under the palm.
+  -->
+  <nav class="tech-nav" aria-label="Technician navigation">
+    @for (item of navigation; track item.route) {
+      <a
+        class="tech-nav-link"
+        routerLinkActive="tech-nav-link--active"
+        [routerLinkActiveOptions]="{ exact: true }"
+        [routerLink]="item.route"
+        >{{ item.label }}</a
+      >
+    }
+  </nav>
+</div>
+
+<app-toast-container />

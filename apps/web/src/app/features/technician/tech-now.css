@@ -1,0 +1,165 @@
+/*
+ * "Now" -- the page a technician sees when they pick the tablet back up.
+ *
+ * Everything here is oversized on purpose. The technician is at arm's
+ * length from a dirty screen in bad light, and this page is read rather
+ * than operated: one glance has to answer "which car, how far in, is
+ * anything wrong".
+ */
+
+.now {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  inline-size: 100%;
+  padding: var(--space-5) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--brand);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-align: start;
+  cursor: pointer;
+}
+
+.now:active {
+  background: var(--accent-muted);
+}
+
+.now-label {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+/*
+ * The largest text in the entire product. It is what gets matched
+ * against the car standing in front of them, and getting it wrong sends
+ * a technician to the wrong vehicle -- an operational error, not a
+ * cosmetic one.
+ */
+.now-plate {
+  font-size: var(--tech-text-xl);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.now-customer {
+  font-size: var(--tech-text);
+  color: var(--text-muted);
+}
+
+.now-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.now-fact {
+  font-family: var(--font-mono);
+  font-size: var(--tech-text);
+  font-weight: 500;
+}
+
+/* The one red thing on this page, and only when it is true. */
+.now-blocked {
+  inline-size: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--danger-bg);
+  border-inline-start: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+}
+
+/*
+ * Not red. A refused inspection is an instruction, not an alarm -- and
+ * colouring it the same as a blocker would make both mean less.
+ */
+.now-note {
+  inline-size: 100%;
+  padding-inline-start: var(--space-3);
+  border-inline-start: 3px solid var(--border-strong);
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+  line-height: var(--leading-normal);
+}
+
+.now-go {
+  margin-block-start: var(--space-2);
+  color: var(--brand);
+  font-size: var(--tech-text);
+  font-weight: 700;
+}
+
+/* --- idle / error -------------------------------------------------- */
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding-block: var(--space-6);
+}
+
+.state-title {
+  font-size: var(--tech-text-lg);
+  font-weight: 700;
+}
+
+.state-body {
+  color: var(--text-muted);
+  font-size: var(--tech-text);
+  line-height: var(--leading-normal);
+}
+
+/*
+ * Every actionable control on a technician page is at least one tap
+ * target tall and wide enough to hit without looking. --tap is defined
+ * on .tech in the shell and is 56px.
+ */
+.big-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--tap);
+  min-inline-size: 12rem;
+  padding: 0 var(--space-5);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--on-accent);
+  font-size: var(--tech-text);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.big-button:active {
+  background: var(--accent-hover);
+}
+
+/* --- loading ------------------------------------------------------- */
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-block: var(--space-5);
+}
+
+.skeleton-bar {
+  display: block;
+  inline-size: 40%;
+  block-size: var(--tech-text-lg);
+  background: var(--accent-muted);
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-bar--wide {
+  inline-size: 70%;
+  block-size: var(--tech-text-xl);
+}

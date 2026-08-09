@@ -71,6 +71,58 @@ export class TechnicianWorkService {
    * Marking a task done does not finish the work order -- the Finish Gate
    * decides that, and only once every task is accounted for.
    */
+  /**
+   * A technician picks the task up.
+   *
+   * Task status only -- this deliberately does NOT move the work order.
+   * Whether starting a task also starts the JOB depends on where the job
+   * is and what the workshop's profile allows, and that decision belongs
+   * to the lifecycle service. Nothing here may shortcut it.
+   *
+   * Refuses while a blocker is open, for the same reason completing does:
+   * a task someone has declared un-workable must not silently become
+   * workable because a different button was pressed.
+   */
+  async startTask(taskId: string, actor: LifecycleActor) {
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: { id: true, tenantId: true, workOrderId: true, status: true },
+    });
+    if (!task) throw new NotFoundException({ code: "task_not_found", message: "Task not found." });
+
+    if (task.status === "DONE" || task.status === "CANCELLED") {
+      throw new BadRequestException({ code: "task_finished", message: "That task is already finished." });
+    }
+
+    const openBlockers = await this.prisma.taskBlocker.count({
+      where: { taskId, status: { in: ["OPEN", "ESCALATED"] } },
+    });
+    if (openBlockers > 0) {
+      throw new BadRequestException({
+        code: "task_blocked",
+        message: "Resolve the blocker on this task before starting it.",
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.task.update({ where: { id: taskId }, data: { status: "IN_PROGRESS" } });
+      await this.events.emit(
+        {
+          tenantId: task.tenantId,
+          eventKey: "task.started",
+          actorId: actor.accountId,
+          actorName: actor.displayName,
+          actorType: actor.actorType,
+          targetType: "Task",
+          targetId: taskId,
+          riskLevel: "LOW",
+          payload: { taskId, workOrderId: task.workOrderId },
+        },
+        tx,
+      );
+    });
+  }
+
   async completeTask(taskId: string, actor: LifecycleActor) {
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },

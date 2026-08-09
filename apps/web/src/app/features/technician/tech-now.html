@@ -1,0 +1,63 @@
+<!--
+  One glance, no tap. The plate is the largest thing on the screen
+  because it is what the technician matches against the car they are
+  standing next to. See docs/phases/PHASE_6.md §3.
+-->
+@switch (state()) {
+  @case ('loading') {
+    <div class="skeleton" aria-busy="true" aria-label="Loading">
+      <span class="skeleton-bar skeleton-bar--wide"></span>
+      <span class="skeleton-bar"></span>
+    </div>
+  }
+
+  @case ('forbidden') {
+    <div class="state">
+      <p class="state-title">You don't have technician access</p>
+      <p class="state-body">Ask your branch manager to assign you work.</p>
+    </div>
+  }
+
+  @case ('error') {
+    <div class="state">
+      <p class="state-title">Couldn't load your work</p>
+      <button class="big-button" type="button" (click)="load()">Try again</button>
+    </div>
+  }
+
+  @case ('idle') {
+    <!-- Not an error and not a failure: they simply have not started
+         anything. It points at the one place that can change that. -->
+    <div class="state">
+      <p class="state-title">Nothing started</p>
+      <p class="state-body">Pick a job to begin.</p>
+      <a class="big-button" routerLink="/tech/work">My work</a>
+    </div>
+  }
+
+  @case ('active') {
+    @if (job(); as j) {
+      <!-- The entire card is the tap target. Nothing to aim at. -->
+      <button class="now" type="button" (click)="openCard()">
+        <span class="now-label">On now</span>
+        <span class="now-plate"><mop-identifier [value]="j.identifier ?? '—'" /></span>
+        <span class="now-customer">{{ j.customerName }}</span>
+
+        <span class="now-facts">
+          <span class="now-fact">{{ j.myOpenTaskCount }} of {{ j.myTaskCount }} left</span>
+          <span class="now-fact">{{ since(j.sinceHours) }}</span>
+        </span>
+
+        @if (j.blocked) {
+          <span class="now-blocked">Blocked — you reported a problem on this job</span>
+        }
+
+        @if (j.inspectionDeclined) {
+          <span class="now-note">Customer refused inspection. Do only what was agreed.</span>
+        }
+
+        <span class="now-go">Open work card</span>
+      </button>
+    }
+  }
+}

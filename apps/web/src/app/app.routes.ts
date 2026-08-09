@@ -71,6 +71,22 @@ export const routes: Routes = [
     ],
   },
   {
+    // The technician's own shell: three pages, no admin sidebar, and a
+    // density layer built for a gloved hand. See docs/phases/PHASE_6.md.
+    path: 'tech',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./core/layout/technician-shell/technician-shell').then((m) => m.TechnicianShell),
+    children: [
+      { path: '', loadComponent: () => import('./features/technician/tech-now').then((m) => m.TechNow) },
+      { path: 'work', loadComponent: () => import('./features/technician/tech-my-work').then((m) => m.TechMyWork) },
+      {
+        path: 'card/:id',
+        loadComponent: () => import('./features/technician/tech-work-card').then((m) => m.TechWorkCard),
+      },
+    ],
+  },
+  {
     // The fallback frame, for roles whose own shell is not built yet.
     path: '',
     canActivate: [authGuard],

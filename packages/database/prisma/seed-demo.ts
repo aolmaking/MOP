@@ -61,14 +61,17 @@ async function main() {
   }
 
   const manager = await ensureManager(tenant.id);
+  const technician = await ensureTechnician(tenant.id);
   await clearDemoWork(tenant.id);
-  await createStuckJobs(tenant.id, branch.id);
+  await createStuckJobs(tenant.id, branch.id, technician.staffUserId);
 
   console.log("\nDemo data ready.\n");
   console.log(`  Sign in at http://localhost:4200/login`);
   console.log(`  Email     ${MANAGER_EMAIL}`);
   console.log(`  Password  ${MANAGER_PASSWORD}`);
   console.log(`  Then open http://localhost:4200/branch/attention\n`);
+  console.log(`  Technician  ${TECHNICIAN_EMAIL} / ${TECHNICIAN_PASSWORD}`);
+  console.log(`              lands on http://localhost:4200/tech\n`);
   console.log(`  Manager account ${manager.id}`);
 }
 
@@ -116,6 +119,58 @@ async function ensureManager(tenantId: string) {
   return account;
 }
 
+const TECHNICIAN_EMAIL = "tech@apex-motors.local";
+const TECHNICIAN_PASSWORD = "ChangeMe-Tech-123";
+
+/** Defaults already grant the rest; these are the ones the pages read. */
+const TECHNICIAN_PERMISSIONS = [
+  "task.view_assigned",
+  "task.complete",
+  "task.finish_attempt",
+  "blocker.report",
+  "inspection.full.create",
+];
+
+async function ensureTechnician(tenantId: string): Promise<{ staffUserId: string }> {
+  const existing = await prisma.account.findFirst({ where: { tenantId, email: TECHNICIAN_EMAIL } });
+
+  const account =
+    existing ??
+    (await prisma.account.create({
+      data: {
+        accountType: "TENANT_STAFF",
+        tenantId,
+        email: TECHNICIAN_EMAIL,
+        passwordHash: hashPassword(TECHNICIAN_PASSWORD),
+        status: "ACTIVE",
+      },
+    }));
+
+  const staff =
+    (await prisma.staffUser.findUnique({ where: { accountId: account.id } })) ??
+    (await prisma.staffUser.create({
+      data: {
+        accountId: account.id,
+        tenantId,
+        fullName: "Hassan Fathy",
+        role: "TECHNICIAN",
+        branchScope: [],
+        warehouseScope: [],
+        categoryScope: ["CARS"],
+      },
+    }));
+
+  for (const permissionKey of TECHNICIAN_PERMISSIONS) {
+    await prisma.rolePermission.upsert({
+      where: { tenantId_role_permissionKey: { tenantId, role: "TECHNICIAN", permissionKey } },
+      create: { tenantId, role: "TECHNICIAN", permissionKey, allowed: true },
+      update: { allowed: true },
+    });
+  }
+
+  return { staffUserId: staff.id };
+}
+
 /** Demo assets carry a DEMO- plate so a re-run replaces exactly its own work. */
 async function clearDemoWork(tenantId: string) {
   const assets = await prisma.asset.findMany({
@@ -153,7 +208,7 @@ async function clearDemoWork(tenantId: string) {
   }
 }
 
-async function createStuckJobs(tenantId: string, branchId: string) {
+async function createStuckJobs(tenantId: string, branchId: string, technicianStaffUserId: string) {
   const jobs = [
     { plate: "DEMO-4471", customer: "Mona Adel", kind: "critical" as const },
     { plate: "DEMO-1188", customer: "Sara Nabil", kind: "customerLongWait" as const },
@@ -245,9 +300,37 @@ async function createStuckJobs(tenantId: string, branchId: string) {
       });
     }
 
+    // Every in-progress job carries work for the demo technician, so the
+    // Technician pages have something real to show. Assigned at both the
+    // job and task level, because the API treats either as "mine".
+    if (job.kind === "critical" || job.kind === "customerLongWait" || job.kind === "blocked") {
+      await prisma.workOrderAssignment.create({
+        data: { tenantId, workOrderId: workOrder.id, staffUserId: technicianStaffUserId },
+      });
+
+      if (job.kind !== "blocked") {
+        const task = await prisma.task.create({
+          data: {
+            tenantId,
+            workOrderId: workOrder.id,
+            title: job.kind === "critical" ? "Replace front brake pads" : "Diagnose gearbox noise",
+            // One started, one waiting: "Now" needs exactly one active
+            // job or it cannot demonstrate what it is for.
+            status: job.kind === "critical" ? "IN_PROGRESS" : "ASSIGNED",
+          },
+        });
+        await prisma.taskAssignment.create({
+          data: { tenantId, taskId: task.id, staffUserId: technicianStaffUserId },
+        });
+      }
+    }
+
     if (job.kind === "blocked") {
       const task = await prisma.task.create({
         data: { tenantId, workOrderId: workOrder.id, title: "Replace alternator", status: "BLOCKED" },
+      });
+      await prisma.taskAssignment.create({
+        data: { tenantId, taskId: task.id, staffUserId: technicianStaffUserId },
       });
       await prisma.taskBlocker.create({
         data: {

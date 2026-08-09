@@ -1,0 +1,351 @@
+/*
+ * The Work Card.
+ *
+ * Grouped by what each action costs someone ELSE, not by what it is:
+ * recording is one tap, telling someone something needs a reason, and
+ * finishing shows the gate before the press. See PHASE_6.md §4.
+ *
+ * Every control is at least --tap (56px). That is not a guideline here --
+ * a missed tap costs a put-down, pick-up cycle, so it is the floor.
+ */
+
+.card-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-block-end: var(--space-4);
+  border-block-end: 2px solid var(--text);
+}
+
+/* A full tap target, not a small text link. Going back one-handed with a
+   glove on is exactly as hard as any other tap on this page. */
+.card-back {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--tap);
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  text-decoration: none;
+}
+
+.card-plate {
+  font-size: var(--tech-text-xl);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.card-customer {
+  color: var(--text-muted);
+  font-size: var(--tech-text);
+}
+
+.card-note {
+  padding-inline-start: var(--space-3);
+  border-inline-start: 3px solid var(--border-strong);
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* Failures are stated on the page and stay there. */
+.action-error {
+  margin-block-start: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--danger-bg);
+  border-inline-start: 4px solid var(--danger);
+  border-radius: var(--radius-sm);
+  font-size: var(--tech-text);
+  font-weight: 500;
+}
+
+.blocked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-block-start: var(--space-4);
+  padding: var(--space-4);
+  background: var(--danger-bg);
+  border-inline-start: 4px solid var(--danger);
+  border-radius: var(--radius-sm);
+}
+
+.blocked-title {
+  font-size: var(--tech-text);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+.blocked-why {
+  font-size: var(--tech-text);
+}
+
+.blocked-note {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+}
+
+/* --- tool groups --------------------------------------------------- */
+
+.tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-block-start: var(--space-6);
+}
+
+.tools-title {
+  padding-block-end: var(--space-2);
+  border-block-end: 1px solid var(--border);
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+.tools-empty {
+  color: var(--text-faint);
+  font-size: var(--tech-text-sm);
+}
+
+.tool-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* --- tasks --------------------------------------------------------- */
+
+.tasks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-block-size: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* Done recedes rather than disappears -- a technician needs to see what
+   they already did without it competing with what is left. */
+.task--done {
+  opacity: 0.55;
+}
+
+.task-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1 1 12rem;
+}
+
+.task-title {
+  font-size: var(--tech-text);
+  font-weight: 500;
+}
+
+.task-status {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+}
+
+/* --- taps ---------------------------------------------------------- */
+
+.tap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--tap);
+  min-inline-size: 7rem;
+  padding: 0 var(--space-4);
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--tech-text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tap:active {
+  background: var(--accent-muted);
+}
+
+.tap:disabled {
+  opacity: 0.5;
+}
+
+.tap--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.tap--wide {
+  inline-size: 100%;
+}
+
+.tap--severity {
+  flex: 1 1 6rem;
+  min-inline-size: 0;
+}
+
+/* Selection is a filled state, not a thin outline -- an outline is
+   invisible on a dirty screen at arm's length. */
+.tap--selected {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+/* --- blocker reasons ----------------------------------------------- */
+
+.reasons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reasons .tap {
+  inline-size: 100%;
+  justify-content: flex-start;
+}
+
+/* --- fault --------------------------------------------------------- */
+
+.fault {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.fault-text {
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--tech-text);
+}
+
+.severity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* --- finish checklist ---------------------------------------------- */
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  font-size: var(--tech-text);
+  line-height: var(--leading-normal);
+}
+
+/*
+ * A tick and a cross as well as colour. Roughly one in twelve men has a
+ * colour-vision deficiency, which in a workshop is most of the staff --
+ * a green row and a red row that differ only in hue say nothing to them.
+ */
+.check-mark {
+  flex-shrink: 0;
+  inline-size: 1.5rem;
+  font-weight: 700;
+  color: var(--success);
+}
+
+.check--bad .check-mark {
+  color: var(--danger);
+}
+
+.check--bad .check-text {
+  font-weight: 700;
+}
+
+.checks-note {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* --- states -------------------------------------------------------- */
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding-block: var(--space-6);
+}
+
+.state-title {
+  font-size: var(--tech-text-lg);
+  font-weight: 700;
+}
+
+.big-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--tap);
+  min-inline-size: 12rem;
+  padding: 0 var(--space-5);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--on-accent);
+  font-size: var(--tech-text);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-block: var(--space-5);
+}
+
+.skeleton-bar {
+  display: block;
+  inline-size: 40%;
+  block-size: var(--tech-text-lg);
+  background: var(--accent-muted);
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-bar--wide {
+  inline-size: 70%;
+  block-size: var(--tech-text-xl);
+}

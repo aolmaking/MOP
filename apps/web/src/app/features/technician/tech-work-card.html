@@ -1,0 +1,181 @@
+@switch (state()) {
+  @case ('loading') {
+    <div class="skeleton" aria-busy="true" aria-label="Loading job">
+      <span class="skeleton-bar skeleton-bar--wide"></span>
+      <span class="skeleton-bar"></span>
+    </div>
+  }
+
+  @case ('not-mine') {
+    <!-- Same answer as not-found, so job ids cannot be probed. -->
+    <div class="state">
+      <p class="state-title">That job isn't yours</p>
+      <a class="big-button" routerLink="/tech/work">My work</a>
+    </div>
+  }
+
+  @case ('forbidden') {
+    <div class="state">
+      <p class="state-title">You don't have technician access</p>
+    </div>
+  }
+
+  @case ('error') {
+    <div class="state">
+      <p class="state-title">Couldn't load this job</p>
+      <button class="big-button" type="button" (click)="load()">Try again</button>
+    </div>
+  }
+
+  @case ('ready') {
+    @if (card(); as c) {
+      <header class="card-head">
+        <a class="card-back" routerLink="/tech/work">My work</a>
+        <h1 class="card-plate"><mop-identifier [value]="c.identifier ?? '—'" /></h1>
+        <p class="card-customer">{{ c.customerName }} · {{ label(c.status) }}</p>
+
+        @if (c.inspectionDeclined) {
+          <p class="card-note">Customer refused inspection. Do only what was agreed.</p>
+        }
+      </header>
+
+      @if (actionError(); as message) {
+        <!-- On the page, never a toast: a technician who put the tablet
+             down would miss a toast and believe the press had worked. -->
+        <p class="action-error" role="alert">{{ message }}</p>
+      }
+
+      @if (blockedTask(); as blocked) {
+        <section class="blocked">
+          <p class="blocked-title">Blocked</p>
+          <p class="blocked-why">{{ blocked.blockedReason }}</p>
+          <p class="blocked-note">Your branch manager can see this. They have to clear it.</p>
+        </section>
+      }
+
+      <!-- ── group 1: record what I did ─────────────────────────────── -->
+      <!-- Cheap, frequent, one tap. -->
+
+      <section class="tools">
+        <h2 class="tools-title">My tasks</h2>
+
+        @if (c.tasks.length === 0) {
+          <p class="tools-empty">Nothing assigned to you on this job yet.</p>
+        }
+
+        <ul class="tasks">
+          @for (task of c.tasks; track task.id) {
+            <li class="task" [class.task--done]="task.status === 'DONE'">
+              <span class="task-main">
+                <span class="task-title">{{ task.title }}</span>
+                <span class="task-status">{{ label(task.status) }}</span>
+              </span>
+
+              @if (task.status === 'ASSIGNED' || task.status === 'RETURNED_FOR_REWORK') {
+                <button
+                  class="tap tap--primary"
+                  type="button"
+                  [disabled]="busy() !== null"
+                  (click)="start(task)"
+                >
+                  {{ busy() === 'start-' + task.id ? '…' : 'Start' }}
+                </button>
+              } @else if (task.status === 'IN_PROGRESS') {
+                <button
+                  class="tap tap--primary"
+                  type="button"
+                  [disabled]="busy() !== null"
+                  (click)="complete(task)"
+                >
+                  {{ busy() === 'done-' + task.id ? '…' : 'Done' }}
+                </button>
+              }
+            </li>
+          }
+        </ul>
+      </section>
+
+      <!-- ── group 2: tell someone something ────────────────────────── -->
+      <!-- Costs someone else's time, so each needs a reason. -->
+
+      <section class="tools">
+        <h2 class="tools-title">Something's wrong</h2>
+
+        <div class="tool-row">
+          <button class="tap" type="button" (click)="panel.set(panel() === 'blocker' ? 'none' : 'blocker')">
+            I'm blocked
+          </button>
+          <button class="tap" type="button" (click)="panel.set(panel() === 'fault' ? 'none' : 'fault')">
+            Found a fault
+          </button>
+        </div>
+
+        @if (panel() === 'blocker') {
+          <!-- Reasons, not a text box. A technician with one free hand
+               will not type, and the reason enum is what routes this to
+               the right person. -->
+          <ul class="reasons">
+            @for (reason of reasons; track reason.key) {
+              <li>
+                <button class="tap tap--wide" type="button" (click)="reportBlocker(reason.key)">
+                  {{ reason.label }}
+                </button>
+              </li>
+            }
+          </ul>
+        }
+
+        @if (panel() === 'fault') {
+          <div class="fault">
+            <textarea
+              class="fault-text"
+              rows="3"
+              placeholder="What did you find?"
+              [value]="faultText()"
+              (input)="faultText.set($any($event.target).value)"
+            ></textarea>
+
+            <div class="severity">
+              @for (level of ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']; track level) {
+                <button
+                  class="tap tap--severity"
+                  type="button"
+                  [class.tap--selected]="faultSeverity() === level"
+                  (click)="faultSeverity.set(level)"
+                >
+                  {{ label(level) }}
+                </button>
+              }
+            </div>
+
+            <button class="tap tap--primary tap--wide" type="button" (click)="logFault()">Log it</button>
+          </div>
+        }
+      </section>
+
+      <!-- ── group 3: finish ────────────────────────────────────────── -->
+      <!-- The gate result BEFORE the press, never as a failure after it. -->
+
+      @if (c.finish.available) {
+        <section class="tools">
+          <h2 class="tools-title">Finish</h2>
+
+          <ul class="checks">
+            @for (condition of c.finish.conditions; track condition.text) {
+              <li class="check" [class.check--bad]="!condition.satisfied">
+                <span class="check-mark">{{ condition.satisfied ? '✓' : '✗' }}</span>
+                <span class="check-text">{{ condition.text }}</span>
+              </li>
+            }
+          </ul>
+
+          @if (c.finish.passed) {
+            <button class="tap tap--primary tap--wide" type="button">Ready to finish</button>
+          } @else {
+            <p class="checks-note">Clear the items above before this job can finish.</p>
+          }
+        </section>
+      }
+    }
+  }
+}

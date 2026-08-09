@@ -10,10 +10,14 @@ describe('landingRouteFor', () => {
     );
   });
 
+  it('sends a technician to their own shell', () => {
+    expect(landingRouteFor({ role: 'TECHNICIAN', landingPage: 'technician-home' } as SessionContext)).toBe('/tech');
+  });
+
   it('falls back to the placeholder for roles whose home is not built', () => {
     // Deliberately '/' and not a guess: the placeholder names the phase
     // that builds their home, which is more honest than a wrong page.
-    expect(landingRouteFor({ role: 'TECHNICIAN', landingPage: 'technician-home' } as SessionContext)).toBe('/');
+    expect(landingRouteFor({ role: 'INVENTORY_MANAGER', landingPage: 'inventory-home' } as SessionContext)).toBe('/');
     expect(
       landingRouteFor({ role: 'PLATFORM_SUPER_ADMIN', landingPage: 'platform-workshops' } as SessionContext),
     ).toBe('/');

@@ -1,0 +1,126 @@
+/*
+ * The Technician shell.
+ *
+ * Its own frame, following the rule PlatformShell set: one shell per
+ * role. The technician's spec is explicit that they get three pages and
+ * no admin sidebar, and this is the shell that honours it.
+ *
+ * ---------------------------------------------------------------------
+ * THE DENSITY LAYER
+ * ---------------------------------------------------------------------
+ *
+ * These overrides are scoped to .tech and nowhere else. They are not
+ * global token changes, because every one of them would waste half the
+ * branch manager's screen.
+ *
+ * The numbers are derived, not chosen (see docs/phases/PHASE_6.md §2):
+ * standard gloves cut effective touch precision to 20-25mm, 44px is the
+ * floor for gloved operation and 48-56px is where it becomes reliable.
+ * 56px is used because a missed tap here is not a re-tap -- it is a whole
+ * put-the-tablet-down, pick-a-tool-up cycle.
+ *
+ * Type rises with it. Thin or light type is explicitly wrong under glare,
+ * so the base goes to 16px and weights to 500/700: weight is what carries
+ * contrast when the screen is dirty and the light is behind you.
+ */
+
+.tech {
+  --tap: 3.5rem;        /* 56px -- the floor for anything touchable */
+  --tech-text: 1rem;    /* 16px base, up from the desk's 14px */
+  --tech-text-sm: 0.875rem; /* 14px floor, up from 12px */
+  --tech-text-lg: 1.375rem;
+  --tech-text-xl: 2rem;
+
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: var(--bg);
+  font-size: var(--tech-text);
+}
+
+.tech-content {
+  flex: 1;
+  padding: var(--space-4);
+  /* Clears the bottom bar plus the home indicator on a tablet. */
+  padding-block-end: calc(var(--tap) + var(--space-6));
+  overflow-y: auto;
+}
+
+/* --- bottom navigation -------------------------------------------- */
+
+/*
+ * At the bottom, not in a rail. A tablet held in one hand puts the top
+ * corners out of thumb reach entirely, and a left rail sits under the
+ * palm. Three targets, full width, evenly divided -- the whole bar is
+ * tappable, so there is no aiming.
+ */
+.tech-nav {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  display: grid;
+  /* Divides by however many tabs there are, so the bar stays fully
+     tappable if the count ever changes. */
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  background: var(--surface);
+  border-top: 1px solid var(--border-strong);
+  /* Respects the device's own safe area rather than assuming zero. */
+  padding-block-end: env(safe-area-inset-bottom, 0);
+}
+
+.tech-nav-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--tap);
+  padding: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+  font-weight: 500;
+  text-decoration: none;
+  text-align: center;
+}
+
+/*
+ * The active tab is marked with a top edge and ink, matching the rack's
+ * edge language used everywhere else in the product. Not a filled block:
+ * at this size a filled tab becomes the loudest thing on the screen while
+ * saying only "you are here".
+ */
+.tech-nav-link--active {
+  border-block-start: 3px solid var(--brand);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.tech-nav-link:active {
+  background: var(--accent-muted);
+}
+
+/* --- header -------------------------------------------------------- */
+
+.tech-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.tech-brand {
+  color: var(--brand);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+}
+
+.tech-who {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

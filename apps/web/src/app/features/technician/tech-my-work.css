@@ -1,0 +1,157 @@
+/*
+ * My work -- the day's jobs, chosen from.
+ *
+ * Every row is a full-width target well over the 56px floor, because the
+ * cost of a mis-tap here is opening the wrong car and having to back out
+ * with one hand.
+ */
+
+.page-title {
+  margin-block-end: var(--space-4);
+  font-size: var(--tech-text-lg);
+  font-weight: 700;
+}
+
+.jobs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.job {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* The car in their hands. Marked with the brand edge, matching "Now". */
+.job--active {
+  border-inline-start-color: var(--brand);
+}
+
+/* Blocked wins: it is the one state that needs someone else to act. */
+.job--blocked {
+  border-inline-start-color: var(--danger);
+}
+
+.job-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-block-size: var(--tap);
+  padding: var(--space-3) var(--space-4);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.job:active {
+  background: var(--accent-muted);
+}
+
+.job-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.job-plate {
+  font-size: var(--tech-text-lg);
+  font-weight: 700;
+}
+
+.job-tag {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+.job-tag--active {
+  background: var(--accent-muted);
+  color: var(--text);
+}
+
+.job-tag--blocked {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.job-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3) var(--space-4);
+  font-size: var(--tech-text-sm);
+}
+
+.job-customer,
+.job-status {
+  color: var(--text-muted);
+}
+
+.job-left,
+.job-since {
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+.job-since {
+  margin-inline-start: auto;
+}
+
+/* --- states -------------------------------------------------------- */
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding-block: var(--space-6);
+}
+
+.state-title {
+  font-size: var(--tech-text-lg);
+  font-weight: 700;
+}
+
+.state-body {
+  color: var(--text-muted);
+  font-size: var(--tech-text);
+  line-height: var(--leading-normal);
+}
+
+.big-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--tap);
+  min-inline-size: 12rem;
+  padding: 0 var(--space-5);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--on-accent);
+  font-size: var(--tech-text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.job--skeleton {
+  min-block-size: var(--tap);
+  padding: var(--space-4);
+}
+
+.skeleton-bar {
+  display: block;
+  inline-size: 45%;
+  block-size: var(--tech-text);
+  background: var(--accent-muted);
+  border-radius: var(--radius-sm);
+}

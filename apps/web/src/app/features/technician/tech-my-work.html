@@ -1,0 +1,60 @@
+<h1 class="page-title">My work</h1>
+
+@switch (state()) {
+  @case ('loading') {
+    <ul class="jobs" aria-busy="true" aria-label="Loading your work">
+      @for (row of [1, 2, 3]; track row) {
+        <li class="job job--skeleton"><span class="skeleton-bar"></span></li>
+      }
+    </ul>
+  }
+
+  @case ('forbidden') {
+    <div class="state">
+      <p class="state-title">You don't have technician access</p>
+      <p class="state-body">Ask your branch manager to assign you work.</p>
+    </div>
+  }
+
+  @case ('error') {
+    <div class="state">
+      <p class="state-title">Couldn't load your work</p>
+      <button class="big-button" type="button" (click)="load()">Try again</button>
+    </div>
+  }
+
+  @case ('empty') {
+    <div class="state">
+      <p class="state-title">Nothing assigned to you</p>
+      <p class="state-body">Your branch manager assigns jobs. They'll show up here.</p>
+    </div>
+  }
+
+  @case ('ready') {
+    <ul class="jobs">
+      @for (job of jobs(); track job.workOrderId) {
+        <li class="job" [class.job--active]="job.active" [class.job--blocked]="job.blocked">
+          <!-- The whole row is the target: 56px minimum, full width, no aiming. -->
+          <a class="job-link" [routerLink]="['/tech/card', job.workOrderId]">
+            <span class="job-top">
+              <span class="job-plate"><mop-identifier [value]="job.identifier ?? '—'" /></span>
+              @if (job.active) {
+                <span class="job-tag job-tag--active">On now</span>
+              }
+              @if (job.blocked) {
+                <span class="job-tag job-tag--blocked">Blocked</span>
+              }
+            </span>
+
+            <span class="job-bottom">
+              <span class="job-customer">{{ job.customerName }}</span>
+              <span class="job-status">{{ statusLabel(job.status) }}</span>
+              <span class="job-left">{{ job.myOpenTaskCount }} left</span>
+              <span class="job-since">{{ since(job.sinceHours) }}</span>
+            </span>
+          </a>
+        </li>
+      }
+    </ul>
+  }
+}

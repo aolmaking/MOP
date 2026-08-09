@@ -50,7 +50,9 @@ The canonical spec is explicit: the technician gets **exactly three pages and no
 | **My Work** | "What else is mine today?" | Choosing the next job. Used a handful of times a day, not continuously |
 | **Work Card** | "Everything about this one car, and the ten things I can do to it" | Where the shift is actually spent |
 
-Navigation between them is **three thumb-reachable targets at the bottom**, not a rail. A rail on a tablet held in one hand sits under the palm.
+Navigation is **thumb-reachable targets at the bottom**, not a rail. A rail on a tablet held in one hand sits under the palm.
+
+**Three pages, but two tabs.** The Work Card is always *a specific car*, so a tab pointing at it would either be a dead link or would silently guess which job the technician meant. It is reached by tapping the job on either of the other two, which is also how it is actually used.
 
 ### Home leads with the active job, not a list
 
@@ -88,17 +90,17 @@ The reason is honesty rather than laziness: offline means write-conflict resolut
 
 ## 6. Tasks
 
-- **6.A** Technician API — my work, active job, work card detail, built on `TechnicianWorkService`
-- **6.B** `TechnicianShell` — bottom navigation, technician-scoped density layer
-- **6.C** Home — the active job, one glance, no tap
-- **6.D** My Work — the day's jobs, chosen from
-- **6.E** Work Card — the ten tools, grouped by what they cost someone else
-- **6.F** Finish Gate preview — the checklist shown before the press
+- **6.A** ✅ Technician API — my work, active job, work card, finish check
+- **6.B** ✅ `TechnicianShell` — bottom navigation, technician density layer
+- **6.C** ✅ Home — the active job, one glance, no tap
+- **6.D** ✅ My Work — the day's jobs, chosen from
+- **6.E** ✅ Work Card — the tools, grouped by what they cost someone else
+- **6.F** ✅ Finish Gate preview — the checklist shown before the press
 - **6.G** Scenario walkthrough — a technician's shift, end to end, agreeing with the manager's surfaces
 
 ## Exit criteria
 
-1. Every interactive target on a technician page is **≥56px**, enforced by a test rather than by review.
+1. ✅ Every interactive target on a technician page is **≥56px**, enforced by `tools/lint-touch-targets.mjs` — the project's third custom linter, wired into `pnpm lint`. It caught two real defects in the first pass of this phase, including a 32px back link. The number is derived rather than preferred, and a control added later at 40px looks fine on a monitor and is unusable in a bay: nobody catches that by reading a diff.
 2. A technician can go from picking up the tablet to recording a completed task in **two taps**.
 3. The Finish Gate's unsatisfied conditions are visible **before** pressing finish, in sentences.
 4. A technician sees only their own work — scope enforced server-side, never filtered client-side.

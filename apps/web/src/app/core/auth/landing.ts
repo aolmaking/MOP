@@ -12,6 +12,7 @@ import type { EffectiveRole } from '@mop/shared';
  */
 const ROUTE_BY_LANDING_PAGE: Record<string, string> = {
   'branch-home': '/branch/attention',
+  'technician-home': '/tech',
 };
 
 export function landingRouteFor(session: { role: EffectiveRole; landingPage: string } | null): string {
