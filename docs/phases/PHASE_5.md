@@ -90,7 +90,7 @@ Ranking is a **score**, not a fixed list, because a fixed list gets one case wro
 
 ## 5. Tasks
 
-> **Status (2026-08-09):** everything except 5.G done.
+> **Status (2026-08-09):** ✅ **Phase 5 complete.** All exit criteria met except the CI note below.
 >
 > Note on CI (Phase 1.3): the repository is private, so the GitHub API returns 404 without credentials and I cannot read the workflow result. It stays open until someone with access reports it.
 
@@ -102,7 +102,7 @@ Ranking is a **score**, not a fixed list, because a fixed list gets one case wro
 - **5.D** ✅ Work Orders board and Work Order Workspace
 - **5.E** ✅ Approvals & Decisions, Delivery & Payments
 - **5.F** ✅ Super Admin capability UI *(deferred from Phase 3)*
-- **5.G** Cross-role scenario walkthrough
+- **5.G** ✅ Cross-role scenario walkthrough
 
 ### 5.0 — why a task was inserted after 5.B
 
@@ -242,6 +242,23 @@ Three endpoints rather than one, and `apply` re-validates from scratch instead o
 | Counts lead each affected-records row, in mono | They are the number being decided on, and they get compared against each other |
 
 **Verified against the running stack.** Removing `INVENTORY` from Apex Motors is refused with both real dependency violations (`MULTI_WAREHOUSE`, `PART_RETURNS`), while still reporting the one live `WAITING_PARTS` work order, the gate that would stop being checked, and the role left with nothing to do. Applying without a reason is a 400; applying a blocked change is a 409 carrying the reason; a valid change returns 201 and the shape actually moves.
+
+### 5.G — the walkthrough, and what it is actually for
+
+`apps/api/src/branch-manager/scenario-walkthrough.integration.spec.ts` — one car, from the counter to the keys, in fourteen steps against a real database.
+
+The unit tests already prove each page handles its own data. This proves something they structurally cannot: **that the five surfaces agree.** A board saying a car is with us, an attention queue ignoring it, and a delivery page saying it can leave are each individually "correct" and collectively a lie. That class of disagreement is what the previous implementation shipped, and no amount of per-page testing catches it.
+
+The scenario is the founding one — SCENARIOS.md 1.2, the customer who declines inspection and asks for one named service — because it is the case a naive Finish Gate blocks forever. **Step 12 asserts the gate does not demand the inspection the customer refused.**
+
+Other things it pins down that no unit test could:
+
+- A freshly booked car does **not** appear in the attention queue. If normal work showed up there the queue would stop meaning anything.
+- An **unsent** decision request is our delay and a **sent** one is the customer's, and the row moves between the two lists at exactly the moment `sentAt` is set.
+- Resolving a blocker **removes** it from the queue rather than leaving a ghost behind.
+- Delivery refuses to release a car with no invoice, and states why in a sentence rather than a gate key.
+
+---
 
 ## Exit criteria
 

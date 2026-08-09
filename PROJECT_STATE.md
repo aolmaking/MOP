@@ -21,8 +21,9 @@ Phase 5 matters beyond itself: it sets the visual and structural precedent that 
 | 2 — Design Completeness | ✅ complete |
 | 3 — Governance Runtime | 🟢 4 of 5. Capability UI moved to Phase 5 (5.F) |
 | 4 — Operations Spine | ✅ complete |
-| **5 — Branch Manager** | **🔵 in progress — 5.A, 5.B, 5.0 done; 5.C–5.G open** |
-| 6–14 | ⬜ not started |
+| 5 — Branch Manager | ✅ complete — 5.0 + 5.A–5.G |
+| **6 — Technician** | **🔵 next** |
+| 7–14 | ⬜ not started |
 
 **Verified at last commit:** 379 tests (93 shared + 217 API + 69 web), run in CI ORDER from a wiped build state, typecheck clean, both custom lint rules passing, full build green. Working tree clean, pushed to `origin/main`.
 
@@ -40,11 +41,13 @@ Phase 5 matters beyond itself: it sets the visual and structural precedent that 
 
 ## 4. Current task — what to do next
 
-**5.C — the Customer Intake wizard.** Must survive being left mid-way: the manager is interrupted constantly and long forms get abandoned.
+**Phase 6 — Technician.** The second role interface, and the first one built for someone who is *not* at a desk: gloved hands, a tablet, bad light, glare from an open shutter, used in short bursts between physical tasks.
 
-Before writing it: read `DESIGN_LANGUAGE.md` §0.5 (character), §1 (the red rule) and **§7.5 (structure is per page — research how that kind of page is solved outside MOP, then argue the choice in PHASE_5.md)**. `attention-center.css` is the reference for the visual language, **not** for layout — intake is a form, not a rack.
+Before writing any of it: read `DESIGN_LANGUAGE.md` §0.5 (character), §1 (the red rule) and **§7.5 — structure is decided per page, researched against how that page type is solved outside MOP, and argued in the phase document.** Phase 5's pages are the reference for the *visual language*, not for layout.
 
-*(Previously: 5.0 — the design language redo, inserted after the product owner rejected 5.B's visuals.)*
+The spec is explicit that the Technician gets **exactly three pages and no admin sidebar**, which is why `PlatformShell` and `BranchShell` exist separately — the technician gets its own shell too.
+
+*(Previously: Phase 5 — Branch Manager, complete.)*
 
 Its structure is already decided in [`docs/phases/PHASE_5.md`](docs/phases/PHASE_5.md) §2, in this order:
 
