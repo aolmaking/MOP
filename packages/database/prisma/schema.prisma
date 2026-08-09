@@ -236,6 +236,11 @@ enum CustomerDecisionStatus {
   PARTIALLY_RESPONDED
   RESOLVED
   EXPIRED
+  // A decision can be withdrawn -- most often because the work order it
+  // belongs to was cancelled while the customer had not yet answered.
+  // Without this the request would sit PENDING forever and hold the
+  // customer_decisions_resolved gate shut on a job nobody is doing.
+  CANCELLED
 }
 
 enum CustomerDecisionItemDecision {
@@ -672,6 +677,12 @@ model WorkOrder {
   customerId              String
   status                  WorkOrderStatus @default(DRAFT)
   priority                String          @default("normal")
+  // The customer declined inspection and asked for one named service
+  // (SCENARIOS.md 1.2). Recorded as a fact rather than inferred from the
+  // absence of an Inspection row, because "not inspected yet" and "will
+  // not be inspected" are different states -- and the Finish Gate must
+  // not block a job for a step the customer refused.
+  inspectionDeclined      Boolean         @default(false)
   relinkedFromWorkOrderId String?
   createdAt               DateTime        @default(now())
   updatedAt               DateTime        @updatedAt

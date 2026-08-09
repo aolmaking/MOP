@@ -41,10 +41,10 @@
 | 1 — Runnable and Provable | 🟡 6 of 7 done. 1.6 landed in Phase 3; only 1.3 (CI green) outstanding |
 | 2 — Design Completeness | ✅ complete |
 | 3 — Governance Runtime | 🟢 4 of 5 done; capability UI moved to Phase 5 |
-| 4 — Operations Spine | ⬜ next |
+| 4 — Operations Spine | 🟢 router, gates and lifecycle built; intake and technician records remain |
 | 5–14 | ⬜ not started |
 
-**293 tests** green (55 shared + 180 API + 58 web), typecheck clean, two custom lint rules passing, full build green.
+**327 tests** green (81 shared + 188 API + 58 web), typecheck clean, two custom lint rules passing, full build green.
 
 ## The phases
 

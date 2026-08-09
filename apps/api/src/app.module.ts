@@ -7,6 +7,7 @@ import { loadEnvironment } from "./config/environment";
 import { DatabaseModule } from "./database/database.module";
 import { AuditModule } from "./audit/audit.module";
 import { OperationEventsModule } from "./operations/operation-events.module";
+import { OperationsModule } from "./operations/operations.module";
 import { AuthModule } from "./auth/auth.module";
 import { AccessModule } from "./access/access.module";
 import { SchedulerModule } from "./scheduler/scheduler.module";
@@ -32,6 +33,7 @@ import { HealthController } from "./health/health.controller";
     DatabaseModule,
     AuditModule,
     OperationEventsModule,
+    OperationsModule,
     AuthModule,
     AccessModule,
     SchedulerModule,

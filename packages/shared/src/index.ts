@@ -9,6 +9,7 @@ export * from "./capabilities/gates";
 export * from "./capabilities/permission-capability-map";
 export * from "./capabilities/registry";
 export * from "./capabilities/workflow-graphs";
+export * from "./capabilities/workflow-router";
 export * from "./capabilities/validator";
 export * from "./capabilities/profiles";
 export * from "./contracts/events";

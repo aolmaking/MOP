@@ -74,9 +74,49 @@ export interface WorkflowTransition {
   readonly from: string;
   readonly to: string;
   readonly requires?: readonly CapabilityKey[];
+  /**
+   * The action a person takes, as opposed to the states it happens to
+   * connect. "Technician finishes" lands on Team Review, QC, invoicing or
+   * delivery readiness depending purely on which capabilities the
+   * workshop has -- so the branching belongs here, in the graph, not in
+   * an if-chain inside a service.
+   *
+   * Where several intent edges from one state are live at once, the FIRST
+   * declared wins. Declaration order is therefore precedence, and the
+   * graph must list them accordingly (review before QC before invoicing).
+   */
+  readonly intent?: WorkflowIntent;
+  /** Gates that must pass before this transition may be taken. */
+  readonly gates?: readonly GateKey[];
   /** Free-text, for validator output that a human has to act on. */
   readonly label?: string;
 }
+
+/** The named actions a person or the system can take on a record. */
+export const WORKFLOW_INTENTS = [
+  "REGISTER",
+  "START_INSPECTION",
+  "REQUEST_APPROVAL",
+  "APPROVE",
+  "START_WORK",
+  "REQUEST_PART",
+  "PART_RECEIVED",
+  "REPORT_BLOCKER",
+  "RESOLVE_BLOCKER",
+  "ASK_CUSTOMER",
+  "CUSTOMER_RESPONDED",
+  "FINISH",
+  "REVIEW_PASSED",
+  "REVIEW_REJECTED",
+  "QC_PASSED",
+  "QC_FAILED",
+  "ISSUE_INVOICE",
+  "SETTLE_PAYMENT",
+  "DELIVER",
+  "CANCEL",
+] as const;
+
+export type WorkflowIntent = (typeof WORKFLOW_INTENTS)[number];
 
 export interface WorkflowGraph {
   /** "WorkOrder", "Task", "PartRequest", ... -- reachability is checked per entity. */

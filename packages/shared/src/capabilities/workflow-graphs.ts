@@ -37,55 +37,63 @@ export const WORK_ORDER_GRAPH: WorkflowGraph = {
     "CANCELLED",
   ],
   transitions: [
-    { from: "DRAFT", to: "REGISTERED", label: "intake completed" },
-    { from: "REGISTERED", to: "UNDER_INSPECTION", label: "technician starts inspection" },
+    { from: "DRAFT", to: "REGISTERED", intent: "REGISTER", label: "intake completed" },
+    { from: "REGISTERED", to: "UNDER_INSPECTION", intent: "START_INSPECTION", label: "technician starts inspection" },
     // A customer who declines inspection and asks for one named service
     // goes straight to approval -- see SCENARIOS.md "intake refusals".
-    { from: "REGISTERED", to: "AWAITING_CUSTOMER_APPROVAL", label: "inspection declined, service requested" },
+    { from: "REGISTERED", to: "AWAITING_CUSTOMER_APPROVAL", intent: "REQUEST_APPROVAL", label: "inspection declined, service requested" },
 
-    { from: "UNDER_INSPECTION", to: "AWAITING_CUSTOMER_APPROVAL", label: "findings need approval" },
-    { from: "UNDER_INSPECTION", to: "APPROVED_FOR_WORK", label: "no approval required by policy" },
+    { from: "UNDER_INSPECTION", to: "AWAITING_CUSTOMER_APPROVAL", intent: "REQUEST_APPROVAL", label: "findings need approval" },
+    { from: "UNDER_INSPECTION", to: "APPROVED_FOR_WORK", intent: "APPROVE", label: "no approval required by policy" },
 
-    { from: "AWAITING_CUSTOMER_APPROVAL", to: "APPROVED_FOR_WORK", label: "customer approved" },
+    { from: "AWAITING_CUSTOMER_APPROVAL", to: "APPROVED_FOR_WORK", intent: "APPROVE", label: "customer approved" },
     { from: "AWAITING_CUSTOMER_APPROVAL", to: "CANCELLED", label: "customer rejected everything" },
 
-    { from: "APPROVED_FOR_WORK", to: "IN_PROGRESS", label: "work started" },
+    { from: "APPROVED_FOR_WORK", to: "IN_PROGRESS", intent: "START_WORK", label: "work started" },
 
     // Internal parts lifecycle -- only exists with an inventory.
-    { from: "IN_PROGRESS", to: "WAITING_PARTS", requires: ["INVENTORY"], label: "part requested from stock" },
-    { from: "WAITING_PARTS", to: "IN_PROGRESS", requires: ["INVENTORY"], label: "part received" },
+    { from: "IN_PROGRESS", to: "WAITING_PARTS", requires: ["INVENTORY"], intent: "REQUEST_PART", label: "part requested from stock" },
+    { from: "WAITING_PARTS", to: "IN_PROGRESS", requires: ["INVENTORY"], intent: "PART_RECEIVED", label: "part received" },
     { from: "WAITING_PARTS", to: "CANCELLED", requires: ["INVENTORY"], label: "job cancelled while waiting" },
 
-    { from: "IN_PROGRESS", to: "WAITING_CUSTOMER", label: "further approval needed mid-job" },
-    { from: "WAITING_CUSTOMER", to: "IN_PROGRESS", label: "customer responded" },
+    { from: "IN_PROGRESS", to: "WAITING_CUSTOMER", intent: "ASK_CUSTOMER", label: "further approval needed mid-job" },
+    { from: "WAITING_CUSTOMER", to: "IN_PROGRESS", intent: "CUSTOMER_RESPONDED", label: "customer responded" },
     { from: "WAITING_CUSTOMER", to: "CANCELLED", label: "customer withdrew" },
 
-    { from: "IN_PROGRESS", to: "BLOCKED", label: "blocker reported" },
-    { from: "BLOCKED", to: "IN_PROGRESS", label: "blocker resolved" },
+    { from: "IN_PROGRESS", to: "BLOCKED", intent: "REPORT_BLOCKER", label: "blocker reported" },
+    { from: "BLOCKED", to: "IN_PROGRESS", intent: "RESOLVE_BLOCKER", label: "blocker resolved" },
     { from: "BLOCKED", to: "CANCELLED", label: "blocker unresolvable" },
 
-    // Finish routing. Exactly one of these is live for a given tenant,
-    // decided by TEAM_REVIEW / QC / FINANCE_CORE.
-    { from: "IN_PROGRESS", to: "READY_FOR_TEAM_REVIEW", requires: ["TEAM_REVIEW"], label: "finish -> team review" },
-    { from: "READY_FOR_TEAM_REVIEW", to: "READY_FOR_QC", requires: ["TEAM_REVIEW", "QC"], label: "review passed -> QC" },
+    // Finish routing. SEVERAL of these can be live at once -- a workshop
+    // with team review, QC and finance has all three -- so declaration
+    // order is precedence: review, then QC, then invoicing. The router
+    // takes the first live match, which is why these three must stay in
+    // this order and why the choice is data rather than an if-chain.
+    //
+    // Every FINISH edge carries the full finish-gate set. Gates whose
+    // owning capability is inactive are dropped by the gate registry, so a
+    // workshop with no inventory is never asked about parts.
+    { from: "IN_PROGRESS", to: "READY_FOR_TEAM_REVIEW", requires: ["TEAM_REVIEW"], intent: "FINISH", gates: ["inspection_completed", "approved_work_completed", "customer_decisions_resolved", "critical_warning_acknowledged", "no_open_blocker", "parts.received_used_or_returned", "parts.no_pending_return", "parts.external_resolved"], label: "finish -> team review" },
+    { from: "READY_FOR_TEAM_REVIEW", to: "READY_FOR_QC", requires: ["TEAM_REVIEW", "QC"], intent: "REVIEW_PASSED", label: "review passed -> QC" },
     {
       from: "READY_FOR_TEAM_REVIEW",
       to: "PAYMENT_PENDING",
       requires: ["TEAM_REVIEW", "FINANCE_CORE"],
+      intent: "REVIEW_PASSED",
       label: "review passed -> invoice",
     },
-    { from: "READY_FOR_TEAM_REVIEW", to: "IN_PROGRESS", requires: ["TEAM_REVIEW"], label: "returned for rework" },
+    { from: "READY_FOR_TEAM_REVIEW", to: "IN_PROGRESS", requires: ["TEAM_REVIEW"], intent: "REVIEW_REJECTED", label: "returned for rework" },
 
-    { from: "IN_PROGRESS", to: "READY_FOR_QC", requires: ["QC"], label: "finish -> QC" },
-    { from: "READY_FOR_QC", to: "QC_FAILED", requires: ["QC"], label: "QC failed" },
-    { from: "QC_FAILED", to: "IN_PROGRESS", requires: ["QC"], label: "rework" },
-    { from: "READY_FOR_QC", to: "PAYMENT_PENDING", requires: ["QC", "FINANCE_CORE"], label: "QC passed -> invoice" },
-    { from: "READY_FOR_QC", to: "READY_FOR_DELIVERY", requires: ["QC"], label: "QC passed, no internal finance" },
+    { from: "IN_PROGRESS", to: "READY_FOR_QC", requires: ["QC"], intent: "FINISH", gates: ["inspection_completed", "approved_work_completed", "customer_decisions_resolved", "critical_warning_acknowledged", "no_open_blocker", "parts.received_used_or_returned", "parts.no_pending_return", "parts.external_resolved"], label: "finish -> QC" },
+    { from: "READY_FOR_QC", to: "QC_FAILED", requires: ["QC"], intent: "QC_FAILED", label: "QC failed" },
+    { from: "QC_FAILED", to: "IN_PROGRESS", requires: ["QC"], intent: "RESOLVE_BLOCKER", label: "rework" },
+    { from: "READY_FOR_QC", to: "PAYMENT_PENDING", requires: ["QC", "FINANCE_CORE"], intent: "QC_PASSED", label: "QC passed -> invoice" },
+    { from: "READY_FOR_QC", to: "READY_FOR_DELIVERY", requires: ["QC"], intent: "QC_PASSED", label: "QC passed, no internal finance" },
 
-    { from: "IN_PROGRESS", to: "PAYMENT_PENDING", requires: ["FINANCE_CORE"], label: "finish -> invoice" },
+    { from: "IN_PROGRESS", to: "PAYMENT_PENDING", requires: ["FINANCE_CORE"], intent: "FINISH", gates: ["inspection_completed", "approved_work_completed", "customer_decisions_resolved", "critical_warning_acknowledged", "no_open_blocker", "parts.received_used_or_returned", "parts.no_pending_return", "parts.external_resolved"], label: "finish -> invoice" },
 
-    { from: "PAYMENT_PENDING", to: "READY_FOR_DELIVERY", requires: ["FINANCE_CORE"], label: "payment settled" },
-    { from: "READY_FOR_DELIVERY", to: "CLOSED", label: "vehicle delivered" },
+    { from: "PAYMENT_PENDING", to: "READY_FOR_DELIVERY", requires: ["FINANCE_CORE"], intent: "SETTLE_PAYMENT", label: "payment settled" },
+    { from: "READY_FOR_DELIVERY", to: "CLOSED", intent: "DELIVER", gates: ["invoice.issued", "payment.settled_or_policy_allows"], label: "vehicle delivered" },
     { from: "READY_FOR_DELIVERY", to: "CANCELLED", label: "cancelled before handover" },
 
     { from: "DRAFT", to: "CANCELLED", label: "abandoned at intake" },

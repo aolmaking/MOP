@@ -243,11 +243,12 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
       behavior: "EXTERNALIZE",
       statesToDisable: ["PAYMENT_PENDING"],
       addTransitions: [
-        { from: "IN_PROGRESS", to: "READY_FOR_DELIVERY", label: "finish -> delivery (external finance)" },
+        { from: "IN_PROGRESS", to: "READY_FOR_DELIVERY", intent: "FINISH", label: "finish -> delivery (external finance)" },
         {
           from: "READY_FOR_TEAM_REVIEW",
           to: "READY_FOR_DELIVERY",
           requires: ["TEAM_REVIEW"],
+          intent: "REVIEW_PASSED",
           label: "review passed -> delivery (external finance)",
         },
       ],
