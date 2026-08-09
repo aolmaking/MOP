@@ -2,7 +2,7 @@ import { CAPABILITY_REGISTRY } from "./registry";
 import { ALL_GRAPHS } from "./workflow-graphs";
 import { coreGates, gatesOwnedBy } from "./gates";
 import {
-  ACTIVE_STATUSES,
+  isCapabilityActive,
   type CapabilityDefinition,
   type CapabilityKey,
   type CapabilityProfile,
@@ -35,12 +35,8 @@ export interface ValidateOptions {
   readonly registry?: ReadonlyMap<CapabilityKey, CapabilityDefinition>;
 }
 
-/** Capabilities absent from a profile are ENABLED -- a profile lists deviations from the full product. */
-function isActive(profile: CapabilityProfile, key: CapabilityKey): boolean {
-  const status = profile[key];
-  if (status === undefined) return true;
-  return ACTIVE_STATUSES.includes(status);
-}
+/** Capabilities absent from a profile are ENABLED -- see isCapabilityActive. */
+const isActive = isCapabilityActive;
 
 export function validateCapabilityProfile(
   profile: CapabilityProfile,

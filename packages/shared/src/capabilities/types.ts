@@ -65,6 +65,26 @@ export type CapabilityStatus = (typeof CAPABILITY_STATUSES)[number];
 /** Statuses under which the capability's own transitions and gates are live. */
 export const ACTIVE_STATUSES: readonly CapabilityStatus[] = ["ENABLED", "READ_ONLY", "LOCKED"];
 
+/**
+ * Is this capability live for this workshop?
+ *
+ * **An absent key means ENABLED.** A profile records deviations from the
+ * full product, so a freshly-provisioned workshop with no rows at all is
+ * a complete workshop. Reading absent as *disabled* is the dangerous
+ * inversion: it silently strips every capability from a tenant whose
+ * provisioning half-finished.
+ *
+ * Lives here because three separate places were deriving it -- the
+ * workflow router, the validator, and inventory -- and a service that
+ * gets it backwards tells a real workshop it has no inventory. One
+ * function, so they cannot drift.
+ */
+export function isCapabilityActive(profile: CapabilityProfile, key: string): boolean {
+  const status = profile[key as keyof CapabilityProfile];
+  if (status === undefined) return true;
+  return ACTIVE_STATUSES.includes(status);
+}
+
 export type CapabilityProfile = Readonly<Partial<Record<CapabilityKey, CapabilityStatus>>>;
 
 // ---------------------------------------------------------------------------

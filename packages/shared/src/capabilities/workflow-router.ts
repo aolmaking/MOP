@@ -1,4 +1,4 @@
-import { ACTIVE_STATUSES, type CapabilityProfile, type WorkflowGraph, type WorkflowIntent, type WorkflowTransition } from "./types";
+import { isCapabilityActive, type CapabilityProfile, type WorkflowGraph, type WorkflowIntent, type WorkflowTransition } from "./types";
 import { CAPABILITY_REGISTRY } from "./registry";
 import type { GateKey } from "./gates";
 
@@ -32,11 +32,8 @@ export type RoutingResult =
   | { readonly ok: true; readonly transition: WorkflowTransition }
   | { readonly ok: false; readonly failure: RoutingFailure };
 
-function isActive(profile: CapabilityProfile, key: string): boolean {
-  const status = profile[key as keyof CapabilityProfile];
-  if (status === undefined) return true; // absent means enabled
-  return ACTIVE_STATUSES.includes(status);
-}
+/** Shared with the validator and inventory -- see isCapabilityActive. */
+const isActive = isCapabilityActive;
 
 /**
  * The graph as this workshop actually experiences it: base edges whose

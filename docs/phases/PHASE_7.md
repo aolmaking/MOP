@@ -86,8 +86,8 @@ The capability engine is not decoration here, and Phase 7 is where it gets teste
 
 - **7.A** ✅ Schema: dropped the `IssuedItem.partRequestId` unique constraint; fulfilment derived
 - **7.B** ✅ Stock service — balances, movements, and the invariants that keep them honest
-- **7.C** Part request lifecycle service — request → approve → issue → arrive → receive → use, on `PART_REQUEST_GRAPH`
-- **7.D** Returns and damaged stock
+- **7.C** ✅ Part request lifecycle — request → approve → issue → arrive → receive → use, on `PART_REQUEST_GRAPH`
+- **7.D** ✅ Returns and damaged stock
 - **7.E** Inventory API + `InventoryShell`
 - **7.F** Requests queue and Stock table
 - **7.G** Item page with the movements ledger
@@ -99,5 +99,5 @@ The capability engine is not decoration here, and Phase 7 is where it gets teste
 2. ✅ Partial fulfilment (3.5) works end to end: 3 requested, 2 issued, 1 issued later, one request, one invoice line.
 3. ✅ Stock can never go negative, enforced in the database as well as in service code — `20260809203000_stock_never_negative` adds CHECK constraints, and tests prove a direct write bypassing `StockService` is rejected.
 4. A workshop with `INVENTORY` disabled still finishes a job, and never creates a `PartRequest`.
-5. Damaged stock never enters sellable stock.
+5. ✅ Damaged stock never enters sellable stock — separate bucket, separate movement type, asserted by test.
 6. Everything green: tests, typecheck, all three lint rules, build.
