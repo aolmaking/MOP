@@ -80,6 +80,7 @@ Then 5.C intake wizard · 5.D board + workspace · 5.E approvals + delivery/paym
 | Multi-heredoc bash command with an unmatched quote | Bash parses the whole command first, so **nothing ran** and five file writes silently did not happen | Use the Write tool for multi-file edits |
 | `pnpm doctor` | Silently runs pnpm's built-in and exits 0 | `pnpm run doctor` |
 | Letting integration specs rely on jest's default timeout | Auth spec does several ~1s scrypt hashes; failed as a timeout under parallel load and took the next test with it | `testTimeout: 120000` set in `apps/api` jest config |
+| `pnpm --parallel --filter A --filter B run <script>` where B lacks the script | pnpm **skips B silently and exits 0**. `pnpm dev` started only the API for weeks; port 4200 simply never opened | Every filtered package must define the script. If a `dev`/`test` script looks like it did nothing, check the script exists in *that* package |
 
 ## 7. Known issues and open questions
 
@@ -89,6 +90,18 @@ Then 5.C intake wizard · 5.D board + workspace · 5.E approvals + delivery/paym
 4. **Multiple partial issues against one part request** are not expressible (`IssuedItem.partRequestId` is unique). Deferred to Phase 7 with the reason recorded in `SCENARIOS.md` 3.5.
 5. **Structured logging** is still outstanding from Phase 1.4. The correlation id it needs is already emitted.
 6. **Billing vs Finance split** is decided but only Finance-side contracts exist; no billing adapter is built yet (Phase 9).
+
+## 7a. Looking at the app
+
+```bash
+docker compose up -d && corepack pnpm db:deploy && corepack pnpm db:seed && corepack pnpm db:seed:demo && corepack pnpm dev
+```
+
+Then `http://localhost:4200/branch/attention` → sign in `manager@apex-motors.local` / `ChangeMe-Manager-123`.
+
+The base seed creates **no work orders** by design, and no seeded account
+except this demo manager holds `workorders.branch.view` — without
+`db:seed:demo` the page correctly renders its no-access or empty state.
 
 ## 8. Environment requirements
 
