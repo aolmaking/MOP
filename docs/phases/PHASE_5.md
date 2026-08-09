@@ -90,7 +90,12 @@ Ranking is a **score**, not a fixed list, because a fixed list gets one case wro
 
 ## 5. Tasks
 
-- **5.A** Branch Manager API — attention queue with the ranking above, work order board, workspace read model
+> **Status (2026-08-09):** 5.A done. 5.B–5.G open.
+>
+> Note on CI (Phase 1.3): the repository is private, so the GitHub API returns 404 without credentials and I cannot read the workflow result. It stays open until someone with access reports it.
+
+
+- **5.A** ✅ Attention queue API — ranking applied to real data, tenant- and branch-scoped
 - **5.B** Attention Center page
 - **5.C** Customer Intake wizard (interruptible; survives being left mid-way)
 - **5.D** Work Orders board and Work Order Workspace
