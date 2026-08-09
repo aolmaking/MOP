@@ -33,7 +33,10 @@ export class BranchShell {
 
   protected readonly session = this.authStore.session;
 
-  protected readonly navigation: readonly BranchNavItem[] = [{ label: 'Attention', route: '/branch/attention' }];
+  protected readonly navigation: readonly BranchNavItem[] = [
+    { label: 'Attention', route: '/branch/attention' },
+    { label: 'Book in', route: '/branch/intake' },
+  ];
 
   /**
    * Read from the session rather than assumed from the route. Someone who

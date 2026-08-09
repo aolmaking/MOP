@@ -116,6 +116,46 @@ What changed: character derived from the workshop job card, red/black/white on 6
 
 **The constraint 5.C–5.G inherit:** each page's structure is researched against how that kind of page is solved outside MOP, and argued here. There is no house layout.
 
+---
+
+### 5.C — Customer Intake: why it is not a wizard
+
+**References consulted.** Multi-step form research, and service-drive workflow writing.
+
+The [multi-step form literature](https://www.numinam.com/en/blog/multi-step-vs-single-page-forms-which-really-generates-more-leads-complete-guide-2026) reports large gains for forms over ~7 fields, and intake is over 7 fields. **It is rejected anyway**, because that research measures *strangers converting on a marketing form* — people who abandon because a long form looks like work. Our user is a trained employee doing this twenty times a day with a customer standing in front of them. For a repeat expert, a wizard that hides fields behind steps is strictly slower: they already know every field, and each step boundary is a click that buys nothing.
+
+Two findings do transfer:
+
+- **Save on every transition, and never lose entered data.** Without it, abandonment between steps rises 18%. Applied here as draft persistence, not as step navigation.
+- **The counter fragments before the bays do** — advisors are [pulled from ringing phones to walk-ins by 10 a.m.](https://workflowotg.com/the-second-showroom-rethinking-workflow-in-the-service-drive/) This is the interruptibility requirement, confirmed from the domain rather than assumed.
+
+#### The structure, and what decides it
+
+**Intake is a conversation, not a form.** Information arrives in the order the customer says it, and a rigid wizard demanding customer details before vehicle details fights that. Worse, it optimises for the rare case: **most intakes are returning customers with a vehicle already on file.**
+
+So the page is one surface that starts as a single field and expands to exactly what is missing:
+
+| Band | Shows | Why |
+|---|---|---|
+| **1. Identify** | One search field — phone or plate | The fast path for the common case. A returning customer is three actions: search, pick, describe |
+| **2. Vehicle** | Their vehicles as choices, plus "another vehicle" | Appears only once a customer is known. A customer with one car should not be asked to fill in a vehicle form |
+| **3. What's wrong** | Complaint, and the **declines inspection** choice | `SCENARIOS.md` 1.2 — recorded at intake because the Finish Gate must not later block a job for a step the customer refused |
+| **4. Confirm** | Everything entered, and one primary action | The advisor reads it back to the customer. That is a real thing that happens at a counter |
+
+Progress is stated as **what is still missing**, never "step 2 of 4" — a step count measures the form's structure, and what the advisor needs to know is whether they can finish.
+
+New customer and new vehicle are the *expanded* state of bands 1 and 2, not separate screens. Nothing is ever hidden behind a step boundary.
+
+#### Interruptibility
+
+The draft is written on every change and restored on return, with an explicit discard. It is **device-local**, which is honest for an advisor returning to the same counter terminal and is a stated limitation, not an oversight: a draft that follows a person across devices needs server-side storage and is deferred until there is a reason to pay for it.
+
+A restored draft always announces itself. A stale draft that silently reappears and gets submitted against the wrong customer is worse than one that was lost.
+
+#### The refusal that must stay visible
+
+Intake refuses to move a vehicle between owners without explicit confirmation (`intake.service.ts` — quietly reassigning would hand one customer another's service history). The page surfaces that as a decision with both names shown, never as a generic error, because the advisor is the only person who can tell whether it is a genuine sale or a typo in the plate.
+
 ## Exit criteria
 
 1. The attention queue ranks by cost of delay, with age escalation, computed server-side — so two pages can never disagree about what is most urgent.

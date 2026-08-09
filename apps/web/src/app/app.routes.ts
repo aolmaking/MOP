@@ -38,6 +38,10 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/branch-manager/attention-center/attention-center').then((m) => m.AttentionCenter),
       },
+      {
+        path: 'intake',
+        loadComponent: () => import('./features/branch-manager/intake/intake-page').then((m) => m.IntakePage),
+      },
       // Work Order Workspace is 5.D. Queue rows already link here, so
       // the route is declared but not yet built -- the same mid-phase
       // pattern as the platform rail's Workshops link.

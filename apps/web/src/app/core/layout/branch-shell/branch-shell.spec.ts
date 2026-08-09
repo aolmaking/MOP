@@ -44,7 +44,7 @@ describe('BranchShell', () => {
     const { element } = render({ displayName: 'M', role: 'BRANCH_MANAGER' } as SessionContext);
 
     const routes = [...element.querySelectorAll('.rail-link')].map((a) => a.getAttribute('href'));
-    expect(routes).toEqual(['/branch/attention']);
+    expect(routes).toEqual(['/branch/attention', '/branch/intake']);
   });
 
   it('logging out clears the session and returns to /login', async () => {

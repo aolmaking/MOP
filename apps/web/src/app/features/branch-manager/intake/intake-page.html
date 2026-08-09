@@ -1,0 +1,304 @@
+<!--
+  Not a wizard. One surface that starts as a single search field and
+  expands to exactly what is missing. See docs/phases/PHASE_5.md (5.C).
+-->
+<section class="intake">
+  <header class="intake-head">
+    <h1 class="intake-title">Book a vehicle in</h1>
+  </header>
+
+  @if (forbidden()) {
+    <div class="state state--quiet">
+      <p class="state-title">You don't have access to book vehicles in</p>
+      <p class="state-body">Ask your workshop owner for intake access.</p>
+    </div>
+  } @else if (booked(); as done) {
+    <!--
+      Success stays on this page. The job number is the thing the advisor
+      reads back to the customer, so it is the largest text here, in mono
+      because it will be matched against a printed card later.
+    -->
+    <div class="booked">
+      <p class="booked-title">Booked in</p>
+      <p class="booked-id"><mop-identifier [value]="done.workOrderId" /></p>
+      @if (done.ownershipTransferred) {
+        <p class="booked-note">The vehicle was transferred to this customer.</p>
+      }
+      <button type="button" appButton variant="primary" (click)="bookAnother()">Book in another</button>
+    </div>
+  } @else {
+    @if (restored()) {
+      <!-- Never restored silently: a stale draft submitted against the
+           wrong customer is worse than one that was lost. -->
+      <div class="restored" role="status">
+        <p class="restored-text">Picked up where you left off.</p>
+        <div class="restored-actions">
+          <button type="button" appButton variant="ghost" size="small" (click)="discardDraft()">Start fresh</button>
+          <button type="button" appButton variant="secondary" size="small" (click)="dismissRestoredNotice()">
+            Keep it
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- ── 1. Who ─────────────────────────────────────────────────── -->
+
+    <section class="band">
+      <h2 class="band-title">Customer</h2>
+
+      @if (draft().customer || draft().newCustomer) {
+        <div class="chosen">
+          <div class="chosen-main">
+            <span class="chosen-name">{{ customerLabel() || 'New customer' }}</span>
+            @if (draft().customer?.phone) {
+              <span class="chosen-meta">{{ draft().customer?.phone }}</span>
+            }
+          </div>
+          <button type="button" class="chosen-change" (click)="clearCustomer()">Change</button>
+        </div>
+
+        @if (draft().newCustomer; as nc) {
+          <div class="fields">
+            <label class="field">
+              <span class="field-label">Full name</span>
+              <input
+                type="text"
+                [value]="nc.fullName"
+                (input)="patch({ newCustomer: { fullName: $any($event.target).value, phone: nc.phone, email: nc.email } })"
+              />
+            </label>
+            <label class="field">
+              <span class="field-label">Phone</span>
+              <input
+                type="tel"
+                inputmode="tel"
+                [value]="nc.phone"
+                (input)="patch({ newCustomer: { fullName: nc.fullName, phone: $any($event.target).value, email: nc.email } })"
+              />
+            </label>
+            <label class="field">
+              <span class="field-label">Email <span class="field-optional">optional</span></span>
+              <input
+                type="email"
+                [value]="nc.email"
+                (input)="patch({ newCustomer: { fullName: nc.fullName, phone: nc.phone, email: $any($event.target).value } })"
+              />
+            </label>
+          </div>
+        }
+      } @else {
+        <!-- One field for phone, name or plate. The advisor types what the
+             customer just said without first classifying it. -->
+        <label class="search">
+          <span class="visually-hidden">Search by phone, name or plate</span>
+          <input
+            type="search"
+            class="search-input"
+            placeholder="Phone, name, or plate"
+            autocomplete="off"
+            [value]="query()"
+            (input)="onQuery($any($event.target).value)"
+          />
+        </label>
+
+        @switch (searchState()) {
+          @case ('searching') {
+            <p class="search-note">Searching…</p>
+          }
+          @case ('error') {
+            <p class="search-note search-note--bad">Couldn't search just now. Type to try again.</p>
+          }
+          @case ('no-results') {
+            <div class="search-empty">
+              <p class="search-note">Nobody found for “{{ query() }}”.</p>
+              <button type="button" appButton variant="secondary" size="small" (click)="startNewCustomer()">
+                Add as a new customer
+              </button>
+            </div>
+          }
+          @case ('results') {
+            <ul class="matches">
+              @for (customer of results().customers; track customer.id) {
+                <li>
+                  <button type="button" class="match" (click)="chooseCustomer(customer)">
+                    <span class="match-name">{{ customer.fullName }}</span>
+                    <span class="match-meta">{{ customer.phone }}</span>
+                    @if (customer.vehicles.length) {
+                      <span class="match-vehicles">
+                        @for (vehicle of customer.vehicles; track vehicle.id) {
+                          <mop-identifier [value]="vehicle.identifier ?? '—'" />
+                        }
+                      </span>
+                    }
+                  </button>
+                </li>
+              }
+              @for (vehicle of results().vehicles; track vehicle.id) {
+                <li>
+                  <button type="button" class="match" (click)="chooseVehicleWithOwner(vehicle)">
+                    <mop-identifier [value]="vehicle.identifier ?? '—'" />
+                    <span class="match-meta">{{ vehicle.ownerName ?? 'No owner on file' }}</span>
+                  </button>
+                </li>
+              }
+              <li>
+                <button type="button" class="match match--new" (click)="startNewCustomer()">
+                  Not here — add a new customer
+                </button>
+              </li>
+            </ul>
+          }
+        }
+      }
+    </section>
+
+    <!-- ── 2. Which vehicle ───────────────────────────────────────── -->
+    <!-- Appears only once a customer is known. -->
+
+    @if (draft().customer || draft().newCustomer) {
+      <section class="band">
+        <h2 class="band-title">Vehicle</h2>
+
+        @if (draft().vehicle || draft().newVehicle) {
+          <div class="chosen">
+            <div class="chosen-main">
+              <mop-identifier [value]="vehicleLabel() || 'New vehicle'" />
+              @if (draft().vehicle?.ownerName) {
+                <span class="chosen-meta">{{ draft().vehicle?.ownerName }}</span>
+              }
+            </div>
+            <button type="button" class="chosen-change" (click)="clearVehicle()">Change</button>
+          </div>
+
+          @if (draft().newVehicle; as nv) {
+            <div class="fields">
+              <label class="field">
+                <span class="field-label">Plate or serial</span>
+                <input
+                  type="text"
+                  [value]="nv.plateNumber"
+                  (input)="patch({ newVehicle: { category: nv.category, plateNumber: $any($event.target).value, vinOrChassisNumber: nv.vinOrChassisNumber } })"
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Category</span>
+                <select
+                  [value]="nv.category"
+                  (change)="patch({ newVehicle: { category: $any($event.target).value, plateNumber: nv.plateNumber, vinOrChassisNumber: nv.vinOrChassisNumber } })"
+                >
+                  <option value="CARS">Cars</option>
+                  <option value="MOTORCYCLES">Motorcycles</option>
+                  <option value="HEAVY_EQUIPMENT">Heavy equipment</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field-label">VIN / chassis <span class="field-optional">optional</span></span>
+                <input
+                  type="text"
+                  [value]="nv.vinOrChassisNumber"
+                  (input)="patch({ newVehicle: { category: nv.category, plateNumber: nv.plateNumber, vinOrChassisNumber: $any($event.target).value } })"
+                />
+              </label>
+            </div>
+          }
+        } @else {
+          <ul class="matches">
+            @for (vehicle of draft().customer?.vehicles ?? []; track vehicle.id) {
+              <li>
+                <button type="button" class="match" (click)="chooseVehicle(vehicle)">
+                  <mop-identifier [value]="vehicle.identifier ?? '—'" />
+                  <span class="match-meta">{{ vehicle.category.toLowerCase() }}</span>
+                </button>
+              </li>
+            }
+            <li>
+              <button type="button" class="match match--new" (click)="startNewVehicle()">Another vehicle</button>
+            </li>
+          </ul>
+        }
+      </section>
+    }
+
+    <!-- ── 3. What's wrong ────────────────────────────────────────── -->
+
+    @if (draft().vehicle || draft().newVehicle) {
+      <section class="band">
+        <h2 class="band-title">What's wrong</h2>
+
+        <label class="field">
+          <span class="field-label">In the customer's own words <span class="field-optional">optional</span></span>
+          <textarea
+            rows="3"
+            [value]="draft().complaint"
+            (input)="patch({ complaint: $any($event.target).value })"
+          ></textarea>
+        </label>
+
+        <!--
+          SCENARIOS.md 1.2 -- the customer who refuses inspection and asks
+          for one named service. Recorded here because "not inspected yet"
+          and "will not be inspected" are different states, and only the
+          second may pass the Finish Gate without an inspection.
+        -->
+        <label class="choice">
+          <input
+            type="checkbox"
+            [checked]="draft().inspectionDeclined"
+            (change)="patch({ inspectionDeclined: $any($event.target).checked })"
+          />
+          <span class="choice-text">
+            <span class="choice-title">Customer declined inspection</span>
+            <span class="choice-note">They asked for a specific job only. Recorded so the job isn't held up later for an inspection they refused.</span>
+          </span>
+        </label>
+
+        @if (branches().length > 1) {
+          <label class="field field--narrow">
+            <span class="field-label">Branch</span>
+            <select [value]="draft().branchId" (change)="patch({ branchId: $any($event.target).value })">
+              @for (branch of branches(); track branch.id) {
+                <option [value]="branch.id">{{ branch.name }}</option>
+              }
+            </select>
+          </label>
+        }
+      </section>
+    }
+
+    <!-- ── 4. Confirm ─────────────────────────────────────────────── -->
+
+    <section class="confirm">
+      @if (error()) {
+        <app-error-banner [error]="error()" />
+      }
+
+      @if (ownershipConflict(); as conflict) {
+        <!-- A decision, not an error: only the advisor can tell a genuine
+             sale from a typo in the plate. Both names are shown. -->
+        <div class="conflict">
+          <p class="conflict-title">This vehicle is registered to {{ conflict.from }}</p>
+          <p class="conflict-body">
+            Booking it in for {{ conflict.to }} transfers it to them. They will see its service history from today
+            onward. {{ conflict.from }} keeps their own invoices.
+          </p>
+          <div class="conflict-actions">
+            <button type="button" appButton variant="secondary" size="small" (click)="cancelOwnershipTransfer()">
+              No — pick a different vehicle
+            </button>
+            <button type="button" appButton variant="danger" size="small" (click)="submit(true)">
+              Yes, it changed hands
+            </button>
+          </div>
+        </div>
+      }
+
+      @if (missing().length) {
+        <p class="missing">Still needs {{ missing().join(', ') }}.</p>
+      }
+
+      <button type="button" appButton variant="primary" [disabled]="!canSubmit()" (click)="submit()">
+        {{ submitting() ? 'Booking in…' : 'Book in' }}
+      </button>
+    </section>
+  }
+</section>

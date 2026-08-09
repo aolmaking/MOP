@@ -120,10 +120,15 @@ async function ensureManager(tenantId: string) {
 async function clearDemoWork(tenantId: string) {
   const assets = await prisma.asset.findMany({
     where: { tenantId, plateNumber: { startsWith: "DEMO-" } },
-    select: { id: true },
+    select: { id: true, currentOwnerCustomerId: true },
   });
   const assetIds = assets.map((asset) => asset.id);
   if (assetIds.length === 0) return;
+
+  // Their owners go too. Leaving them behind made every re-run add
+  // another "Mona Adel", and a search that returns the same person three
+  // times is worse than no demo data at all.
+  const customerIds = [...new Set(assets.map((asset) => asset.currentOwnerCustomerId).filter((id): id is string => !!id))];
 
   const workOrders = await prisma.workOrder.findMany({ where: { assetId: { in: assetIds } }, select: { id: true } });
   const workOrderIds = workOrders.map((workOrder) => workOrder.id);
@@ -135,6 +140,17 @@ async function clearDemoWork(tenantId: string) {
   await prisma.workOrder.deleteMany({ where: { id: { in: workOrderIds } } });
   await prisma.assetOwnershipHistory.deleteMany({ where: { assetId: { in: assetIds } } });
   await prisma.asset.deleteMany({ where: { id: { in: assetIds } } });
+
+  // Only customers left with nothing -- a demo customer who has since been
+  // used in a real intake keeps their other records and stays.
+  for (const customerId of customerIds) {
+    const stillReferenced = await prisma.workOrder.count({ where: { customerId } });
+    const stillOwns = await prisma.asset.count({ where: { currentOwnerCustomerId: customerId } });
+    if (stillReferenced === 0 && stillOwns === 0) {
+      await prisma.assetOwnershipHistory.deleteMany({ where: { customerId } });
+      await prisma.customer.deleteMany({ where: { id: customerId, tenantId } });
+    }
+  }
 }
 
 async function createStuckJobs(tenantId: string, branchId: string) {
@@ -152,6 +168,15 @@ async function createStuckJobs(tenantId: string, branchId: string) {
     });
     const asset = await prisma.asset.create({
       data: { tenantId, category: "CARS", plateNumber: job.plate, currentOwnerCustomerId: customer.id },
+    });
+
+    // Both halves, exactly as IntakeService writes them. currentOwnerCustomerId
+    // alone is an inconsistent state real code cannot produce: "who owns this
+    // now" is the column, but "which vehicles are this customer's" is read
+    // through the open history row, so a seed that skips it makes every
+    // returning customer look like they own nothing.
+    await prisma.assetOwnershipHistory.create({
+      data: { tenantId, assetId: asset.id, customerId: customer.id },
     });
 
     const status =

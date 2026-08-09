@@ -1,0 +1,422 @@
+/*
+ * Intake.
+ *
+ * Narrower than the Attention Center on purpose. The queue is scanned
+ * across; this is worked down, one decision at a time, and a long line
+ * length in a form makes the eye lose the label it is answering.
+ *
+ * Bands appear as they become relevant rather than being laid out in
+ * advance. An advisor should never look at a field they cannot yet
+ * answer -- that is the wizard's one good idea, kept without paying for
+ * step boundaries.
+ */
+
+.intake {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: 42rem;
+}
+
+.intake-head {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--text);
+}
+
+.intake-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+/* --- restored draft ------------------------------------------------ */
+
+/*
+ * Announced, never silent. Marked with the same edge the queue uses for
+ * something that needs a decision, because that is what this is.
+ */
+.restored {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--warning);
+  border-radius: var(--radius-sm);
+}
+
+.restored-text {
+  font-size: var(--text-sm);
+}
+
+.restored-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* --- bands --------------------------------------------------------- */
+
+.band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.band-title {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+/* --- search -------------------------------------------------------- */
+
+.search {
+  display: block;
+}
+
+/*
+ * The largest control on the page. It is the first thing touched in
+ * almost every intake, and a counter is not a place for precision aiming.
+ */
+.search-input {
+  inline-size: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-md);
+}
+
+.search-input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+  border-color: var(--focus-ring);
+}
+
+.search-note {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.search-note--bad {
+  color: var(--danger);
+}
+
+.search-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+/* --- match list ---------------------------------------------------- */
+
+.matches {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.match {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  inline-size: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-align: start;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--easing);
+}
+
+.match:hover {
+  border-color: var(--text);
+}
+
+.match--new {
+  background: transparent;
+  border-style: dashed;
+  color: var(--text-muted);
+}
+
+.match-name {
+  font-weight: 600;
+}
+
+.match-meta {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.match-vehicles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-inline-start: auto;
+}
+
+/* --- chosen summary ------------------------------------------------ */
+
+/*
+ * Once something is decided it collapses to one line. The page should get
+ * shorter as it gets more complete, not longer.
+ */
+.chosen {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--text);
+  border-radius: var(--radius-sm);
+}
+
+.chosen-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.chosen-name {
+  font-weight: 600;
+}
+
+.chosen-meta {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.chosen-change {
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--brand);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+/* --- fields -------------------------------------------------------- */
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field--narrow {
+  max-inline-size: 18rem;
+}
+
+.field-label {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.field-optional {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.field input,
+.field select,
+.field textarea {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-base);
+}
+
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+  border-color: var(--focus-ring);
+}
+
+/* --- the inspection-declined choice -------------------------------- */
+
+/*
+ * Given room rather than reduced to a checkbox label, because it changes
+ * what the Finish Gate will later accept. A consequence that large should
+ * not be a word next to a tick box.
+ */
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.choice input {
+  margin-block-start: 0.2rem;
+  flex-shrink: 0;
+}
+
+.choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.choice-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.choice-note {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+/* --- confirm ------------------------------------------------------- */
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.missing {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* --- ownership conflict -------------------------------------------- */
+
+/*
+ * Red, because this is the one place on the page where getting it wrong
+ * hands one customer another's service history.
+ */
+.conflict {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  inline-size: 100%;
+  padding: var(--space-4);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+}
+
+.conflict-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.conflict-body {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* --- booked -------------------------------------------------------- */
+
+/*
+ * The job number is the largest thing on this screen because it is the
+ * one piece of it that gets spoken out loud, and later matched against a
+ * printed card. Mono for the same reason plates are.
+ */
+.booked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5) 0;
+  padding-inline-start: var(--space-4);
+  border-inline-start: 3px solid var(--text);
+}
+
+.booked-title {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+.booked-id {
+  font-size: var(--text-xl);
+}
+
+.booked-note {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* --- states -------------------------------------------------------- */
+
+.state {
+  padding: var(--space-5) 0;
+  padding-inline-start: var(--space-4);
+  border-inline-start: 3px solid var(--border);
+  max-width: 42rem;
+}
+
+.state--quiet {
+  border-inline-start-color: var(--border);
+}
+
+.state-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.state-body {
+  margin-block-start: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
