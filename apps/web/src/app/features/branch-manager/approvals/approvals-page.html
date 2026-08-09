@@ -1,0 +1,103 @@
+<!--
+  Two lists, and the split is the argument: a sent request is the
+  customer's delay, an unsent one is ours. See PHASE_5.md (5.E).
+-->
+<section class="approvals">
+  <header class="approvals-head">
+    <h1 class="approvals-title">Approvals</h1>
+    @if (result(); as r) {
+      <p class="approvals-count">{{ r.waiting.length }} waiting on customers</p>
+    }
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <ul class="rows" aria-busy="true" aria-label="Loading approvals">
+        @for (row of [1, 2, 3]; track row) {
+          <li class="row row--skeleton"><span class="skeleton-bar"></span></li>
+        }
+      </ul>
+    }
+
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to branch operations</p>
+        <p class="state-body">Ask your workshop owner to give you branch access.</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('empty') {
+      <div class="state">
+        <p class="state-title">Nobody to chase</p>
+        <p class="state-body">Every customer has answered. New requests appear here once they're sent.</p>
+      </div>
+    }
+
+    @case ('ready') {
+      @if (result(); as r) {
+        <!-- Ours first. An unsent request is a delay we caused, and it is
+             cheaper to fix than any amount of chasing. -->
+        @if (r.unsent.length) {
+          <section class="band">
+            <h2 class="band-title">Not sent yet</h2>
+            <p class="band-note">These are waiting on us, not on the customer.</p>
+            <ul class="rows">
+              @for (row of r.unsent; track row.requestId) {
+                <li class="row row--ours">
+                  <a class="row-link" [routerLink]="['/branch/work-orders', row.workOrderId]">
+                    <span class="row-identity">
+                      <mop-identifier [value]="row.identifier ?? '—'" />
+                      <span class="row-customer">{{ row.customerName }}</span>
+                    </span>
+                    <span class="row-meta">
+                      <span class="row-progress">{{ progress(row) }}</span>
+                      <span class="row-total">{{ row.pendingTotal }}</span>
+                      <span class="row-waited">drafted {{ waited(row) }} ago</span>
+                    </span>
+                  </a>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+
+        @if (r.waiting.length) {
+          <section class="band">
+            <h2 class="band-title">Waiting on the customer</h2>
+            <ul class="rows">
+              @for (row of r.waiting; track row.requestId) {
+                <li class="row" [class.row--overdue]="overdue(row)" [class.row--critical]="row.hasCritical">
+                  <a class="row-link" [routerLink]="['/branch/work-orders', row.workOrderId]">
+                    <span class="row-identity">
+                      <mop-identifier [value]="row.identifier ?? '—'" />
+                      <span class="row-customer">{{ row.customerName }}</span>
+                      <!-- The number is the point of this page: the manager
+                           is about to dial it. Shown, never hidden behind
+                           opening the job. -->
+                      <span class="row-phone">{{ row.customerPhone }}</span>
+                    </span>
+                    <span class="row-meta">
+                      @if (row.hasCritical) {
+                        <span class="row-flag">safety-critical</span>
+                      }
+                      <span class="row-progress">{{ progress(row) }}</span>
+                      <span class="row-total">{{ row.pendingTotal }}</span>
+                      <span class="row-waited">{{ waited(row) }}</span>
+                    </span>
+                  </a>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+      }
+    }
+  }
+</section>

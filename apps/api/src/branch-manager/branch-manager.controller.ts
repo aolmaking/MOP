@@ -9,6 +9,8 @@ import { IntakeService, type IntakeResult } from "../operations/intake.service";
 import { IntakeDto } from "./intake.dto";
 import { PrismaService } from "../database/prisma.service";
 import { WorkOrderBoardService, type BoardResult } from "./work-order-board.service";
+import { ApprovalsService, type ApprovalsResult } from "./approvals.service";
+import { DeliveryService, type DeliveryBoard } from "./delivery.service";
 
 export interface AttentionCenterResponse {
   /** Ranked most urgent first. Empty is a valid and desirable state. */
@@ -28,6 +30,8 @@ export class BranchManagerController {
     private readonly intake: IntakeService,
     private readonly prisma: PrismaService,
     private readonly boardService: WorkOrderBoardService,
+    private readonly approvalsService: ApprovalsService,
+    private readonly deliveryService: DeliveryService,
   ) {}
 
   /**
@@ -161,6 +165,29 @@ export class BranchManagerController {
       { tenantId: session.tenantId as string, branchScope: session.branchScope },
       id,
     );
+  }
+
+  /** The chase list. Oldest first, because it is worked top to bottom. */
+  @Get("approvals")
+  async approvals(@CurrentSession() session: SessionContext): Promise<ApprovalsResult> {
+    await this.requireBranchView(session);
+    return this.approvalsService.list({
+      tenantId: session.tenantId as string,
+      branchScope: session.branchScope,
+    });
+  }
+
+  /**
+   * What is leaving today, and what is holding the rest. Gates are really
+   * run here -- see DeliveryService for why nothing may re-implement them.
+   */
+  @Get("delivery")
+  async delivery(@CurrentSession() session: SessionContext): Promise<DeliveryBoard> {
+    await this.requireBranchView(session);
+    return this.deliveryService.board({
+      tenantId: session.tenantId as string,
+      branchScope: session.branchScope,
+    });
   }
 
   private async requireBranchView(session: SessionContext): Promise<void> {

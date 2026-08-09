@@ -7,11 +7,13 @@ import { BranchManagerController } from "./branch-manager.controller";
 import { AttentionQueueService } from "./attention-queue.service";
 import { IntakeLookupService } from "./intake-lookup.service";
 import { WorkOrderBoardService } from "./work-order-board.service";
+import { ApprovalsService } from "./approvals.service";
+import { DeliveryService } from "./delivery.service";
 
 @Module({
   imports: [DatabaseModule, AuthModule, AccessModule, OperationsModule],
   controllers: [BranchManagerController],
-  providers: [AttentionQueueService, IntakeLookupService, WorkOrderBoardService],
+  providers: [AttentionQueueService, IntakeLookupService, WorkOrderBoardService, ApprovalsService, DeliveryService],
   exports: [AttentionQueueService],
 })
 export class BranchManagerModule {}

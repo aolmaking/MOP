@@ -1,0 +1,97 @@
+<!--
+  Held cars come FIRST. "Ready" needs no attention -- the manager already
+  knows those can go. The value of this page is the other list, and every
+  reason on it comes from the gate evaluator rather than from a status.
+-->
+<section class="delivery">
+  <header class="delivery-head">
+    <h1 class="delivery-title">Delivery &amp; payments</h1>
+    @if (board(); as b) {
+      <p class="delivery-count">{{ b.ready.length }} can leave · {{ b.held.length }} held</p>
+    }
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <ul class="rows" aria-busy="true" aria-label="Loading">
+        @for (row of [1, 2]; track row) {
+          <li class="row row--skeleton"><span class="skeleton-bar"></span></li>
+        }
+      </ul>
+    }
+
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to branch operations</p>
+        <p class="state-body">Ask your workshop owner to give you branch access.</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('empty') {
+      <div class="state">
+        <p class="state-title">Nothing waiting to leave</p>
+        <p class="state-body">Cars appear here once the work is finished.</p>
+      </div>
+    }
+
+    @case ('ready') {
+      @if (board(); as b) {
+        @if (b.held.length) {
+          <section class="band">
+            <h2 class="band-title">Held</h2>
+            <ul class="rows">
+              @for (row of b.held; track row.workOrderId) {
+                <li class="row row--held">
+                  <a class="row-link" [routerLink]="['/branch/work-orders', row.workOrderId]">
+                    <span class="row-identity">
+                      <mop-identifier [value]="row.identifier ?? '—'" />
+                      <span class="row-customer">{{ row.customerName }}</span>
+                    </span>
+                    <span class="row-waited">{{ waited(row) }}</span>
+                  </a>
+                  <!--
+                    Every reason, not just the first. A manager who clears
+                    one blocker and finds another waiting behind it stops
+                    trusting the page.
+                  -->
+                  <ul class="reasons">
+                    @for (reason of row.blockedBy; track reason) {
+                      <li class="reason">{{ reason }}</li>
+                    }
+                  </ul>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+
+        @if (b.ready.length) {
+          <section class="band">
+            <h2 class="band-title">Can leave</h2>
+            <ul class="rows">
+              @for (row of b.ready; track row.workOrderId) {
+                <li class="row row--ready">
+                  <a class="row-link" [routerLink]="['/branch/work-orders', row.workOrderId]">
+                    <span class="row-identity">
+                      <mop-identifier [value]="row.identifier ?? '—'" />
+                      <span class="row-customer">{{ row.customerName }}</span>
+                      <span class="row-phone">{{ row.customerPhone }}</span>
+                    </span>
+                    <span class="row-waited">{{ waited(row) }}</span>
+                  </a>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+      }
+    }
+  }
+</section>

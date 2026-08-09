@@ -160,6 +160,11 @@ async function createStuckJobs(tenantId: string, branchId: string) {
     { plate: "DEMO-9023", customer: "Omar Farid", kind: "blocked" as const },
     { plate: "DEMO-3356", customer: "Hala Kamal", kind: "waitingParts" as const },
     { plate: "DEMO-7742", customer: "Youssef Amin", kind: "rework" as const },
+    // Two at the handover end, so Delivery & Payments has something to
+    // evaluate. Neither has an invoice, so the delivery gates should hold
+    // both -- which is the behaviour worth being able to see.
+    { plate: "DEMO-5510", customer: "Nadia Roshdy", kind: "readyToLeave" as const },
+    { plate: "DEMO-6621", customer: "Tarek Selim", kind: "awaitingPayment" as const },
   ];
 
   for (const job of jobs) {
@@ -180,7 +185,15 @@ async function createStuckJobs(tenantId: string, branchId: string) {
     });
 
     const status =
-      job.kind === "waitingParts" ? "WAITING_PARTS" : job.kind === "rework" ? "QC_FAILED" : "IN_PROGRESS";
+      job.kind === "waitingParts"
+        ? "WAITING_PARTS"
+        : job.kind === "rework"
+          ? "QC_FAILED"
+          : job.kind === "readyToLeave"
+            ? "READY_FOR_DELIVERY"
+            : job.kind === "awaitingPayment"
+              ? "PAYMENT_PENDING"
+              : "IN_PROGRESS";
 
     const workOrder = await prisma.workOrder.create({
       data: { tenantId, branchId, assetId: asset.id, customerId: customer.id, status, inspectionDeclined: false },
@@ -248,8 +261,14 @@ async function createStuckJobs(tenantId: string, branchId: string) {
       });
     }
 
-    if (job.kind === "waitingParts" || job.kind === "rework") {
-      const age = job.kind === "waitingParts" ? hoursAgo(26) : hoursAgo(5);
+    const backdated: Partial<Record<typeof job.kind, Date>> = {
+      waitingParts: hoursAgo(26),
+      rework: hoursAgo(5),
+      readyToLeave: hoursAgo(9),
+      awaitingPayment: hoursAgo(31),
+    };
+    const age = backdated[job.kind];
+    if (age) {
       await prisma.$executeRaw`UPDATE work_orders SET "updatedAt" = ${age} WHERE id = ${workOrder.id}`;
     }
   }

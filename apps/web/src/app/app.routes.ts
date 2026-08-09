@@ -43,6 +43,15 @@ export const routes: Routes = [
         loadComponent: () => import('./features/branch-manager/intake/intake-page').then((m) => m.IntakePage),
       },
       {
+        path: 'approvals',
+        loadComponent: () =>
+          import('./features/branch-manager/approvals/approvals-page').then((m) => m.ApprovalsPage),
+      },
+      {
+        path: 'delivery',
+        loadComponent: () => import('./features/branch-manager/approvals/delivery-page').then((m) => m.DeliveryPage),
+      },
+      {
         path: 'work-orders',
         loadComponent: () =>
           import('./features/branch-manager/work-orders/work-orders-board').then((m) => m.WorkOrdersBoard),

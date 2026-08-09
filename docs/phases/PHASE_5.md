@@ -90,7 +90,7 @@ Ranking is a **score**, not a fixed list, because a fixed list gets one case wro
 
 ## 5. Tasks
 
-> **Status (2026-08-09):** 5.A, 5.B, 5.0, 5.C and 5.D done. 5.E–5.G open.
+> **Status (2026-08-09):** 5.A, 5.B, 5.0, 5.C, 5.D and 5.E done. 5.F–5.G open.
 >
 > Note on CI (Phase 1.3): the repository is private, so the GitHub API returns 404 without credentials and I cannot read the workflow result. It stays open until someone with access reports it.
 
@@ -100,7 +100,7 @@ Ranking is a **score**, not a fixed list, because a fixed list gets one case wro
 - **5.0** ✅ **Design language redo** *(inserted mid-phase — see below)*
 - **5.C** ✅ Customer Intake — search-first, interruptible
 - **5.D** ✅ Work Orders board and Work Order Workspace
-- **5.E** Approvals & Decisions, Delivery & Payments
+- **5.E** ✅ Approvals & Decisions, Delivery & Payments
 - **5.F** Super Admin capability UI *(deferred from Phase 3)*
 - **5.G** Cross-role scenario walkthrough
 
@@ -196,6 +196,32 @@ What is this → whose move is it → what is holding it up → what happened.
 The plate is the largest element on the screen. In the half-second after clicking, the manager's only question is whether they opened the car they meant to.
 
 Detail is assembled in one server call rather than six. The workspace is the destination of nearly every click, and six round trips is six chances to render half a car.
+
+---
+
+### 5.E — Approvals, and Delivery & Payments
+
+#### Approvals: the split is the design
+
+One list would be wrong. A decision request that was **sent** is the customer's delay; one that was **drafted and never sent** is ours. They are the same row in the database and they call for opposite actions — chase them, versus send it.
+
+Unsent is listed **first**, even though it is usually the shorter list, because our own delay is cheaper to fix than any amount of chasing.
+
+The customer's phone number is on the row. Dialling is the action this page exists for, and making the manager open a job to read a number turns a ten-second call into a minute.
+
+Ordering is oldest-first and never re-sorts, because the list is worked top to bottom in one sitting.
+
+Two edges compete on a row: **safety beats age.** A request containing a critical item is red regardless of how long it has waited; an ordinary one turns amber past 24 hours.
+
+#### Delivery: held first, and never re-derived
+
+Held is listed **before** ready, inverting the usual instinct. "Ready" needs no attention — the manager already knows those can go. The entire value of the page is the other list.
+
+**Nothing on this page decides for itself what "ready" means.** Readiness is obtained by actually running the delivery gates through `WorkOrderLifecycleService.previewGates` — the same code that will refuse the transition when someone presses the button. A page that re-implemented the check would eventually disagree with the engine, and the failure mode is telling a manager a car can leave when it cannot, with the customer already standing at the counter.
+
+**One bug found while building this, worth recording.** The first version asked the gate evaluator about every candidate. For a job in `PAYMENT_PENDING` there is no `DELIVER` edge at all, so the evaluator correctly returned *no gates* — which is indistinguishable from *nothing is blocking it*. The page would have cleared a car nobody had paid for. Reachability is now checked first: the question "is `DELIVER` even available from here?" is separate from "do its gates pass?", and conflating them is what made it wrong.
+
+Every reason is shown, not just the first. A manager who clears one blocker and finds another behind it stops trusting the page. Reasons come from the gate registry's own `blockedMessage`, so they read as sentences — `invoice.issued` tells a manager nothing they can act on.
 
 ## Exit criteria
 

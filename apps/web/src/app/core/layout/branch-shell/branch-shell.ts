@@ -36,6 +36,8 @@ export class BranchShell {
   protected readonly navigation: readonly BranchNavItem[] = [
     { label: 'Attention', route: '/branch/attention' },
     { label: 'Work orders', route: '/branch/work-orders' },
+    { label: 'Approvals', route: '/branch/approvals' },
+    { label: 'Delivery', route: '/branch/delivery' },
     { label: 'Book in', route: '/branch/intake' },
   ];
 
