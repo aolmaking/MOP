@@ -90,7 +90,7 @@ Ranking is a **score**, not a fixed list, because a fixed list gets one case wro
 
 ## 5. Tasks
 
-> **Status (2026-08-09):** 5.A, 5.B and 5.0 done. 5.C–5.G open.
+> **Status (2026-08-09):** 5.A, 5.B, 5.0, 5.C and 5.D done. 5.E–5.G open.
 >
 > Note on CI (Phase 1.3): the repository is private, so the GitHub API returns 404 without credentials and I cannot read the workflow result. It stays open until someone with access reports it.
 
@@ -98,8 +98,8 @@ Ranking is a **score**, not a fixed list, because a fixed list gets one case wro
 - **5.A** ✅ Attention queue API — ranking applied to real data, tenant- and branch-scoped
 - **5.B** ✅ Attention Center page — routed at /branch/attention, six states
 - **5.0** ✅ **Design language redo** *(inserted mid-phase — see below)*
-- **5.C** Customer Intake wizard (interruptible; survives being left mid-way)
-- **5.D** Work Orders board and Work Order Workspace
+- **5.C** ✅ Customer Intake — search-first, interruptible
+- **5.D** ✅ Work Orders board and Work Order Workspace
 - **5.E** Approvals & Decisions, Delivery & Payments
 - **5.F** Super Admin capability UI *(deferred from Phase 3)*
 - **5.G** Cross-role scenario walkthrough
@@ -152,9 +152,50 @@ The draft is written on every change and restored on return, with an explicit di
 
 A restored draft always announces itself. A stale draft that silently reappears and gets submitted against the wrong customer is worse than one that was lost.
 
-#### The refusal that must stay visible
+#### The refusal that must stay visible (5.C)
 
 Intake refuses to move a vehicle between owners without explicit confirmation (`intake.service.ts` — quietly reassigning would hand one customer another's service history). The page surfaces that as a decision with both names shown, never as a generic error, because the advisor is the only person who can tell whether it is a genuine sale or a typo in the plate.
+
+---
+
+### 5.D — Work Orders: why the board is a rack, not a kanban
+
+**Reference consulted.** Kanban board practice, which is clear that [columns must match the actual work process](https://kanbantool.com/support/kanban-board) and that states can be grouped rather than given one column each.
+
+#### Why not a kanban
+
+The obvious build is a drag-and-drop board. It is rejected for a reason specific to this product:
+
+> **`WorkOrderLifecycleService` is the only writer of `WorkOrder.status`, and every transition is gated.**
+
+A draggable card promises the manager they can move a job. Most of the time they cannot — the gate is unsatisfied, or the capability profile removed that edge entirely. An interface that offers a gesture the domain forbids teaches people the software is broken, and it would quietly make the capability engine look like decoration. The board therefore shows state and never pretends to set it.
+
+Two smaller reasons: sixteen columns is a spreadsheet turned sideways, and a card narrow enough to fit sixteen columns holds far less than a full-width row.
+
+#### Lanes are holders, not stages
+
+Grouping by status answers a question nobody asks. What a manager asks twenty times a day is **whose move is it?** — because a job costs something different depending on who is sitting on it. A car waiting on us is our failure; a car waiting on the customer is a phone call; a car waiting on a part is a supplier problem. Three different days.
+
+| Lane | Holder | States |
+|---|---|---|
+| Not started | Booked in, nobody has touched it | `DRAFT`, `REGISTERED` |
+| With us | Ours to move | inspection → in progress → review → QC |
+| Waiting on the customer | Needs a phone call | `AWAITING_CUSTOMER_APPROVAL`, `WAITING_CUSTOMER` |
+| Waiting on parts or a blocker | Somebody paid is idle | `WAITING_PARTS`, `BLOCKED` |
+| Ready to leave | Money, then the keys | `READY_FOR_DELIVERY`, `PAYMENT_PENDING` |
+| Finished | Nothing to do | terminal — excluded by default |
+
+This is the same idea the attention queue ranks by, so the two pages cannot disagree about what matters. The mapping lives in `@mop/shared` for that reason, and a test asserts **every graph state maps to exactly one lane** — a state with no lane would be a job that exists in the yard and appears on no screen, which is the exact failure this product exists to prevent. When it happens anyway, the board says so in red rather than dropping the row.
+
+#### The Workspace order
+
+What is this → whose move is it → what is holding it up → what happened.
+
+**Blockers sit above the task list** because a blocked job is usually why the page was opened. **An unacknowledged critical rejection sits above everything**, pulled out of the decision list entirely: it is a liability rather than a delay, and unlike every other row on the page it does not improve by waiting.
+
+The plate is the largest element on the screen. In the half-second after clicking, the manager's only question is whether they opened the car they meant to.
+
+Detail is assembled in one server call rather than six. The workspace is the destination of nearly every click, and six round trips is six chances to render half a car.
 
 ## Exit criteria
 

@@ -1,0 +1,190 @@
+<!--
+  Order is the argument: what is this, whose move is it, what is holding
+  it up, what happened. Blockers sit above tasks because a blocked job is
+  usually why this page was opened. See docs/phases/PHASE_5.md (5.D).
+-->
+<section class="job">
+  @switch (state()) {
+    @case ('loading') {
+      <div class="skeleton" aria-busy="true" aria-label="Loading job">
+        <span class="skeleton-bar skeleton-bar--wide"></span>
+        <span class="skeleton-bar"></span>
+      </div>
+    }
+
+    @case ('not-found') {
+      <!-- Out-of-scope and missing are deliberately the same answer: a
+           different one would confirm a job exists in a branch you cannot see. -->
+      <div class="state">
+        <p class="state-title">That job isn't in your branches</p>
+        <p class="state-body">It may have been moved, or it belongs to a branch you don't cover.</p>
+        <a class="state-link" routerLink="/branch/work-orders">Back to work orders</a>
+      </div>
+    }
+
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to branch operations</p>
+        <p class="state-body">Ask your workshop owner to give you branch access.</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('ready') {
+      @if (detail(); as job) {
+        <!-- ── identity ────────────────────────────────────────────── -->
+        <header class="job-head">
+          <a class="job-back" routerLink="/branch/work-orders">Work orders</a>
+
+          <h1 class="job-plate"><mop-identifier [value]="identifier()" /></h1>
+
+          <p class="job-who">
+            {{ job.customer.fullName }}
+            <span class="job-phone">{{ job.customer.phone }}</span>
+          </p>
+
+          <dl class="job-facts">
+            <div class="fact">
+              <dt>Status</dt>
+              <dd>{{ label(job.status) }}</dd>
+            </div>
+            @if (lane(); as l) {
+              <div class="fact">
+                <dt>Whose move</dt>
+                <dd>{{ l.holder }}</dd>
+              </div>
+            }
+            <div class="fact">
+              <dt>Booked in</dt>
+              <dd>{{ since(job.createdAt) }}</dd>
+            </div>
+            <div class="fact">
+              <dt>Last moved</dt>
+              <dd>{{ since(job.updatedAt) }}</dd>
+            </div>
+          </dl>
+
+          @if (job.inspectionDeclined) {
+            <p class="job-note">
+              The customer declined inspection and asked for a specific job only. This job will not be held up for a
+              missing inspection.
+            </p>
+          }
+        </header>
+
+        <!-- ── liability first ─────────────────────────────────────── -->
+        @if (unacknowledgedCritical().length) {
+          <section class="critical">
+            <h2 class="critical-title">Critical repair rejected, not acknowledged</h2>
+            <ul class="critical-list">
+              @for (item of unacknowledgedCritical(); track item.id) {
+                <li>{{ item.name }}</li>
+              }
+            </ul>
+            <p class="critical-body">
+              The customer refused a safety-critical repair and has not signed the warning. This does not improve by
+              waiting.
+            </p>
+          </section>
+        }
+
+        <!-- ── what is holding it up ───────────────────────────────── -->
+        @if (blockers().length) {
+          <section class="band">
+            <h2 class="band-title">Blocked</h2>
+            <ul class="blockers">
+              @for (blocker of blockers(); track blocker.id) {
+                <li class="blocker">
+                  <span class="blocker-reason">{{ label(blocker.reason) }}</span>
+                  <span class="blocker-task">{{ blocker.taskTitle }}</span>
+                  @if (blocker.note) {
+                    <span class="blocker-note">{{ blocker.note }}</span>
+                  }
+                  <span class="blocker-age">{{ since(blocker.createdAt) }}</span>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+
+        <!-- ── the work ────────────────────────────────────────────── -->
+        <section class="band">
+          <h2 class="band-title">Work</h2>
+          @if (job.tasks.length === 0) {
+            <p class="band-empty">No tasks yet. A technician adds these when work starts.</p>
+          } @else {
+            <ul class="tasks">
+              @for (task of job.tasks; track task.id) {
+                <li class="task" [class.task--blocked]="task.blockers.length > 0">
+                  <span class="task-title">{{ task.title }}</span>
+                  <span class="task-status">{{ label(task.status) }}</span>
+                  <span class="task-age">{{ since(task.updatedAt) }}</span>
+                </li>
+              }
+            </ul>
+          }
+        </section>
+
+        <!-- ── what the customer decided ───────────────────────────── -->
+        <section class="band">
+          <h2 class="band-title">Customer decisions</h2>
+          @if (job.decisionRequests.length === 0) {
+            <p class="band-empty">Nothing has been sent to the customer.</p>
+          } @else {
+            @for (request of job.decisionRequests; track request.id) {
+              <div class="decision">
+                <p class="decision-head">
+                  <span class="decision-status">{{ label(request.status) }}</span>
+                  <span class="decision-age">
+                    {{ request.sentAt ? 'sent ' + since(request.sentAt) : 'not sent yet' }}
+                  </span>
+                </p>
+                <ul class="decision-items">
+                  @for (item of request.items; track item.id) {
+                    <li class="decision-item" [class.decision-item--critical]="item.importance === 'CRITICAL'">
+                      <span class="decision-name">{{ item.name }}</span>
+                      <span class="decision-verdict">{{ label(item.decision) }}</span>
+                      <!-- Money arrives as a string and is printed as one.
+                           Formatting it as a number here would be the bug
+                           the API contract exists to prevent. -->
+                      <span class="decision-total">{{ item.total }}</span>
+                    </li>
+                  }
+                </ul>
+              </div>
+            }
+          }
+        </section>
+
+        <!-- ── the vehicle ─────────────────────────────────────────── -->
+        <section class="band">
+          <h2 class="band-title">Vehicle</h2>
+          <dl class="job-facts">
+            <div class="fact">
+              <dt>Category</dt>
+              <dd>{{ label(job.asset.category) }}</dd>
+            </div>
+            @if (job.asset.vinOrChassisNumber) {
+              <div class="fact">
+                <dt>VIN / chassis</dt>
+                <dd><mop-identifier [value]="job.asset.vinOrChassisNumber" /></dd>
+              </div>
+            }
+            @if (job.assignments.length) {
+              <div class="fact">
+                <dt>Assigned</dt>
+                <dd>{{ job.assignments[0].staffUser.fullName }}</dd>
+              </div>
+            }
+          </dl>
+        </section>
+      }
+    }
+  }
+</section>

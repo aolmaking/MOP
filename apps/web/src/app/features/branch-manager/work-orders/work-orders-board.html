@@ -1,0 +1,111 @@
+<!--
+  A rack, not a kanban. Lanes are holders ("whose move is it?"), not
+  stages, and nothing here is draggable because status is gated. See
+  docs/phases/PHASE_5.md (5.D).
+-->
+<section class="board">
+  <header class="board-head">
+    <h1 class="board-title">Work orders</h1>
+    @if (board(); as b) {
+      <p class="board-count">{{ b.total }} open</p>
+    }
+  </header>
+
+  <label class="search">
+    <span class="visually-hidden">Search by plate, customer or phone</span>
+    <input
+      type="search"
+      class="search-input"
+      placeholder="Plate, customer, phone"
+      autocomplete="off"
+      [value]="query()"
+      (input)="onQuery($any($event.target).value)"
+    />
+  </label>
+
+  @switch (state()) {
+    @case ('loading') {
+      <ul class="lane-rows" aria-busy="true" aria-label="Loading work orders">
+        @for (row of [1, 2, 3, 4]; track row) {
+          <li class="row row--skeleton"><span class="skeleton-bar"></span></li>
+        }
+      </ul>
+    }
+
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to branch operations</p>
+        <p class="state-body">Ask your workshop owner to give you branch access.</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="reload()">Try again</button>
+      </div>
+    }
+
+    @case ('empty') {
+      <div class="state">
+        <p class="state-title">Nothing open</p>
+        <p class="state-body">Every job is finished. New arrivals appear here once they're booked in.</p>
+      </div>
+    }
+
+    @case ('no-results') {
+      <!-- Distinct from empty: the yard is not clear, the search is narrow. -->
+      <div class="state">
+        <p class="state-title">No jobs match “{{ query() }}”</p>
+        <p class="state-body">Try a plate, a customer name, or a phone number.</p>
+      </div>
+    }
+
+    @case ('ready') {
+      @if (board()?.unlaned?.length) {
+        <!-- A status no lane claims. Surfaced loudly rather than dropped:
+             a job filed under no holder is invisible work. -->
+        <p class="unlaned">
+          {{ board()?.unlaned?.length }} status(es) have no lane and are not shown:
+          {{ board()?.unlaned?.join(', ') }}. This is a bug — tell someone.
+        </p>
+      }
+
+      @for (lane of lanes(); track lane.key) {
+        <section class="lane">
+          <header class="lane-head">
+            <h2 class="lane-title">{{ lane.label }}</h2>
+            <span class="lane-holder">{{ lane.holder }}</span>
+            <span class="lane-count">{{ lane.rows.length }}</span>
+          </header>
+
+          <ul class="lane-rows">
+            @for (row of lane.rows; track row.id) {
+              <li class="row">
+                <a class="row-link" [routerLink]="['/branch/work-orders', row.id]">
+                  <span class="row-identity">
+                    <mop-identifier [value]="row.identifier ?? '—'" />
+                    <span class="row-customer">{{ row.customerName }}</span>
+                  </span>
+
+                  <span class="row-meta">
+                    <span class="row-status">{{ statusLabel(row.status) }}</span>
+                    @if (row.inspectionDeclined) {
+                      <!-- Changes what the Finish Gate will accept, so it
+                           travels with the job rather than hiding inside it. -->
+                      <span class="row-flag">no inspection</span>
+                    }
+                    @if (row.assignedTo) {
+                      <span class="row-assignee">{{ row.assignedTo }}</span>
+                    }
+                    <span class="row-waited">{{ waited(row) }}</span>
+                  </span>
+                </a>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+    }
+  }
+</section>

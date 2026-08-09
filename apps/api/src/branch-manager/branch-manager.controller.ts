@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Post, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
 import { SessionGuard } from "../auth/session.guard";
 import { CurrentSession } from "../auth/current-session.decorator";
@@ -8,6 +8,7 @@ import { IntakeLookupService, type IntakeLookupResult } from "./intake-lookup.se
 import { IntakeService, type IntakeResult } from "../operations/intake.service";
 import { IntakeDto } from "./intake.dto";
 import { PrismaService } from "../database/prisma.service";
+import { WorkOrderBoardService, type BoardResult } from "./work-order-board.service";
 
 export interface AttentionCenterResponse {
   /** Ranked most urgent first. Empty is a valid and desirable state. */
@@ -26,6 +27,7 @@ export class BranchManagerController {
     private readonly intakeLookup: IntakeLookupService,
     private readonly intake: IntakeService,
     private readonly prisma: PrismaService,
+    private readonly boardService: WorkOrderBoardService,
   ) {}
 
   /**
@@ -131,6 +133,44 @@ export class BranchManagerController {
         actorType: "TENANT_STAFF",
       },
     );
+  }
+
+  /**
+   * The board. Grouped by who is holding each job rather than by status,
+   * because "whose move is it" is the question a manager actually asks --
+   * see WORK_ORDER_LANES for why.
+   */
+  @Get("work-orders")
+  async board(
+    @CurrentSession() session: SessionContext,
+    @Query("q") query?: string,
+    @Query("includeFinished") includeFinished?: string,
+  ): Promise<BoardResult> {
+    await this.requireBranchView(session);
+    return this.boardService.board(
+      { tenantId: session.tenantId as string, branchScope: session.branchScope },
+      { query, includeFinished: includeFinished === "true" },
+    );
+  }
+
+  /** Everything about one job, assembled server-side in one call. */
+  @Get("work-orders/:id")
+  async workOrder(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    await this.requireBranchView(session);
+    return this.boardService.detail(
+      { tenantId: session.tenantId as string, branchScope: session.branchScope },
+      id,
+    );
+  }
+
+  private async requireBranchView(session: SessionContext): Promise<void> {
+    const allowed = await this.access.can(session, "workorders.branch.view");
+    if (!allowed || !session.tenantId) {
+      throw new ForbiddenException({
+        code: "forbidden",
+        message: "You do not have access to branch operations.",
+      });
+    }
   }
 
   /** One place for the check, so every intake route agrees about it. */

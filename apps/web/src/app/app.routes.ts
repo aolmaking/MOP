@@ -42,9 +42,18 @@ export const routes: Routes = [
         path: 'intake',
         loadComponent: () => import('./features/branch-manager/intake/intake-page').then((m) => m.IntakePage),
       },
-      // Work Order Workspace is 5.D. Queue rows already link here, so
-      // the route is declared but not yet built -- the same mid-phase
-      // pattern as the platform rail's Workshops link.
+      {
+        path: 'work-orders',
+        loadComponent: () =>
+          import('./features/branch-manager/work-orders/work-orders-board').then((m) => m.WorkOrdersBoard),
+      },
+      {
+        // `id` binds to the component's input of the same name --
+        // withComponentInputBinding() is on in app.config.
+        path: 'work-orders/:id',
+        loadComponent: () =>
+          import('./features/branch-manager/work-orders/work-order-workspace').then((m) => m.WorkOrderWorkspace),
+      },
     ],
   },
   {

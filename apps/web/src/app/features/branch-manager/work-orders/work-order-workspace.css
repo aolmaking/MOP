@@ -1,0 +1,334 @@
+/*
+ * Work Order Workspace -- one car.
+ *
+ * The plate is the largest thing on the page. It is how the manager
+ * confirms, in the half second after clicking, that they opened the car
+ * they meant to. Everything else is subordinate to that check.
+ *
+ * Bands are separated by rules and space, never by nested cards. A page
+ * of boxes inside boxes reads as a settings screen; this is a document
+ * about one job.
+ */
+
+.job {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: 56rem;
+}
+
+/* --- identity ------------------------------------------------------ */
+
+.job-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--text);
+}
+
+.job-back {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  text-decoration: none;
+}
+
+.job-back:hover {
+  color: var(--brand);
+}
+
+.job-plate {
+  font-size: var(--text-2xl);
+  line-height: var(--leading-tight);
+}
+
+.job-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-size: var(--text-md);
+}
+
+.job-phone {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+/*
+ * Facts as a definition list, laid out in a row. A table would imply the
+ * values are comparable across rows; they are not, they are four
+ * different kinds of fact about one thing.
+ */
+.job-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+  margin: var(--space-2) 0 0;
+}
+
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.fact dt {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+.fact dd {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.job-note {
+  margin-block-start: var(--space-2);
+  padding-inline-start: var(--space-3);
+  border-inline-start: 2px solid var(--border-strong);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* --- liability ----------------------------------------------------- */
+
+/*
+ * The only red block on the page, and the only one above the work. A
+ * rejected critical repair is a liability rather than a delay: it does
+ * not improve by waiting, which is why it is not in the decision list
+ * with everything else.
+ */
+.critical {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+}
+
+.critical-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.critical-list {
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  font-size: var(--text-sm);
+}
+
+.critical-body {
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* --- bands --------------------------------------------------------- */
+
+.band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.band-title {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+.band-empty {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+/* --- blockers ------------------------------------------------------ */
+
+.blockers,
+.tasks,
+.decision-items {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.blocker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border-inline-start: 3px solid var(--danger);
+  font-size: var(--text-sm);
+}
+
+.blocker-reason {
+  font-weight: 600;
+}
+
+.blocker-task,
+.blocker-note {
+  color: var(--text-muted);
+}
+
+.blocker-age {
+  margin-inline-start: auto;
+  font-family: var(--font-mono);
+}
+
+/* --- tasks --------------------------------------------------------- */
+
+.task {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border-inline-start: 3px solid transparent;
+  font-size: var(--text-sm);
+}
+
+/* Marked here too, so a blocked task is findable in the work list and
+   not only in the block above it. */
+.task--blocked {
+  border-inline-start-color: var(--danger);
+}
+
+.task-title {
+  flex: 1 1 16rem;
+}
+
+.task-status {
+  color: var(--text-muted);
+}
+
+.task-age {
+  min-inline-size: 5rem;
+  font-family: var(--font-mono);
+  text-align: end;
+}
+
+/* --- decisions ----------------------------------------------------- */
+
+.decision {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-block-end: var(--space-3);
+}
+
+.decision-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+.decision-status {
+  font-weight: 600;
+}
+
+.decision-age {
+  color: var(--text-faint);
+}
+
+.decision-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface);
+  border-inline-start: 3px solid transparent;
+  font-size: var(--text-sm);
+}
+
+.decision-item--critical {
+  border-inline-start-color: var(--danger);
+}
+
+.decision-name {
+  flex: 1 1 14rem;
+}
+
+.decision-verdict {
+  color: var(--text-muted);
+}
+
+.decision-total {
+  min-inline-size: 6rem;
+  font-family: var(--font-mono);
+  text-align: end;
+}
+
+/* --- states -------------------------------------------------------- */
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-5) 0;
+  padding-inline-start: var(--space-4);
+  border-inline-start: 3px solid var(--border-strong);
+}
+
+.state-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.state-body {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.state-link {
+  font-size: var(--text-sm);
+}
+
+.state-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.skeleton-bar {
+  display: block;
+  inline-size: 30%;
+  block-size: var(--text-lg);
+  background: var(--accent-muted);
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-bar--wide {
+  inline-size: 55%;
+  block-size: var(--text-2xl);
+}
