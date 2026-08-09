@@ -1,0 +1,152 @@
+<!--
+  Removal is workflow rewiring, not feature hiding. Nothing here applies
+  on toggle: a change is staged, the server says what it would do, and
+  only then can it be committed. See docs/CAPABILITY_MODEL.md.
+-->
+<section class="caps">
+  <header class="caps-head">
+    <h1 class="caps-title">Workshop shape</h1>
+    <p class="caps-sub">Switching a capability off rewires the workflow. It does not hide a button.</p>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <ul class="rows" aria-busy="true" aria-label="Loading capabilities">
+        @for (row of [1, 2, 3, 4, 5]; track row) {
+          <li class="row row--skeleton"><span class="skeleton-bar"></span></li>
+        }
+      </ul>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('ready') {
+      @if (applied()) {
+        <p class="applied" role="status">Applied. The workshop's shape has changed.</p>
+      }
+
+      <ul class="rows">
+        @for (row of rows(); track row.key) {
+          <li class="row" [class.row--staged]="isStaged(row)">
+            <div class="row-main">
+              <span class="row-key">{{ label(row.key) }}</span>
+              <span class="row-system">{{ label(row.owningSystem) }}</span>
+              @if (row.dependencies.length) {
+                <span class="row-deps">needs {{ row.dependencies.join(', ') }}</span>
+              }
+              @if (!row.removable) {
+                <!-- Core. "Cannot be switched off" is a different claim
+                     from "would be disruptive", so it gets its own words
+                     and no control at all. -->
+                <span class="row-core">core — cannot be removed</span>
+              } @else if (!row.reversible) {
+                <span class="row-oneway">one-way — cannot be switched back on</span>
+              }
+            </div>
+
+            @if (row.removable) {
+              <select
+                class="row-status"
+                [value]="effectiveStatus(row)"
+                (change)="stage(row, $any($event.target).value)"
+              >
+                <option value="ENABLED">Enabled</option>
+                <option value="DISABLED">Disabled</option>
+                <option value="READ_ONLY">Read only</option>
+                <option value="EXTERNAL">External</option>
+              </select>
+            } @else {
+              <span class="row-fixed">{{ label(effectiveStatus(row)) }}</span>
+            }
+          </li>
+        }
+      </ul>
+
+      <!-- ── consequences ───────────────────────────────────────────── -->
+
+      @if (hasChanges()) {
+        <section class="impact" [class.impact--blocked]="blocked()">
+          <h2 class="impact-title">What this would do</h2>
+
+          @if (previewing()) {
+            <p class="impact-loading">Working it out…</p>
+          } @else if (preview(); as p) {
+            @if (p.blockers.length) {
+              <!-- The validator refused. Stated as the reason, not as a
+                   disabled button with no explanation. -->
+              <ul class="blockers">
+                @for (blocker of p.blockers; track blocker) {
+                  <li class="blocker">{{ blocker }}</li>
+                }
+              </ul>
+            }
+
+            @if (p.affectedRecords.length) {
+              <ul class="affected">
+                @for (record of p.affectedRecords; track record.entity + record.policy) {
+                  <li class="affected-row">
+                    <span class="affected-count">{{ record.count }}</span>
+                    <span class="affected-what">
+                      {{ record.entity }} in {{ record.states.join(', ') || 'affected states' }}
+                    </span>
+                    <span class="affected-policy">{{ label(record.policy) }}</span>
+                  </li>
+                }
+              </ul>
+            }
+
+            @if (p.orphanedRoles.length) {
+              <p class="impact-line">
+                {{ p.orphanedStaffCount }} staff in {{ p.orphanedRoles.join(', ') }} lose their reason to exist.
+              </p>
+            }
+
+            @if (p.droppedGates.length) {
+              <p class="impact-line">
+                {{ p.droppedGates.length }} gate(s) stop being checked: {{ p.droppedGates.join(', ') }}.
+              </p>
+            }
+
+            @if (!p.reversible) {
+              <p class="impact-line impact-line--warn">This cannot be undone.</p>
+            }
+
+            @if (
+              !p.blockers.length &&
+              !p.affectedRecords.length &&
+              !p.orphanedRoles.length &&
+              !p.droppedGates.length
+            ) {
+              <p class="impact-line">Nothing currently in progress is affected.</p>
+            }
+          }
+
+          <div class="commit">
+            <label class="reason">
+              <span class="reason-label">Why</span>
+              <input
+                type="text"
+                [value]="reason()"
+                [disabled]="blocked()"
+                placeholder="Recorded in the audit trail"
+                (input)="reason.set($any($event.target).value)"
+              />
+            </label>
+
+            <div class="commit-actions">
+              <button appButton variant="ghost" size="small" (click)="discard()">Discard</button>
+              <button appButton variant="danger" [disabled]="!canApply()" (click)="apply()">
+                {{ applying() ? 'Applying…' : 'Apply' }}
+              </button>
+            </div>
+          </div>
+        </section>
+      }
+    }
+  }
+</section>

@@ -53,7 +53,14 @@ export type OwningSystem = (typeof OWNING_SYSTEMS)[number];
  * is EXTERNAL for BILLING, not DISABLED) -- so MOP must still record a
  * reference and may still gate delivery on it.
  */
-export type CapabilityStatus = "ENABLED" | "DISABLED" | "READ_ONLY" | "EXTERNAL" | "LOCKED";
+/**
+ * A runtime list, with the type derived from it rather than declared
+ * beside it -- a request body has to be validated against real values,
+ * and two hand-maintained copies drift.
+ */
+export const CAPABILITY_STATUSES = ["ENABLED", "DISABLED", "READ_ONLY", "EXTERNAL", "LOCKED"] as const;
+
+export type CapabilityStatus = (typeof CAPABILITY_STATUSES)[number];
 
 /** Statuses under which the capability's own transitions and gates are live. */
 export const ACTIVE_STATUSES: readonly CapabilityStatus[] = ["ENABLED", "READ_ONLY", "LOCKED"];

@@ -90,7 +90,7 @@ Ranking is a **score**, not a fixed list, because a fixed list gets one case wro
 
 ## 5. Tasks
 
-> **Status (2026-08-09):** 5.A, 5.B, 5.0, 5.C, 5.D and 5.E done. 5.F–5.G open.
+> **Status (2026-08-09):** everything except 5.G done.
 >
 > Note on CI (Phase 1.3): the repository is private, so the GitHub API returns 404 without credentials and I cannot read the workflow result. It stays open until someone with access reports it.
 
@@ -101,7 +101,7 @@ Ranking is a **score**, not a fixed list, because a fixed list gets one case wro
 - **5.C** ✅ Customer Intake — search-first, interruptible
 - **5.D** ✅ Work Orders board and Work Order Workspace
 - **5.E** ✅ Approvals & Decisions, Delivery & Payments
-- **5.F** Super Admin capability UI *(deferred from Phase 3)*
+- **5.F** ✅ Super Admin capability UI *(deferred from Phase 3)*
 - **5.G** Cross-role scenario walkthrough
 
 ### 5.0 — why a task was inserted after 5.B
@@ -222,6 +222,26 @@ Held is listed **before** ready, inverting the usual instinct. "Ready" needs no 
 **One bug found while building this, worth recording.** The first version asked the gate evaluator about every candidate. For a job in `PAYMENT_PENDING` there is no `DELIVER` edge at all, so the evaluator correctly returned *no gates* — which is indistinguishable from *nothing is blocking it*. The page would have cleared a car nobody had paid for. Reachability is now checked first: the question "is `DELIVER` even available from here?" is separate from "do its gates pass?", and conflating them is what made it wrong.
 
 Every reason is shown, not just the first. A manager who clears one blocker and finds another behind it stops trusting the page. Reasons come from the gate registry's own `blockedMessage`, so they read as sentences — `invoice.issued` tells a manager nothing they can act on.
+
+---
+
+### 5.F — Workshop shape: the capability engine gets a face
+
+Deferred here from Phase 3 because it needed 5.0's visual language settled first.
+
+**A toggle never applies anything.** It stages a change; the server computes what that change would do to live records; the operator reads the consequences and only then commits. The preview is always server-computed — the reachability guarantee lives in the validator, and a client that predicted the outcome for itself would eventually predict it wrong, which is the one failure this model exists to prevent.
+
+Three endpoints rather than one, and `apply` re-validates from scratch instead of trusting a preview the caller is holding: they are separate requests and the workshop may have moved between them.
+
+| Decision | Reason |
+|---|---|
+| Core capabilities get **words, not a disabled toggle** | "Cannot be switched off" is a different claim from "would be disruptive". A greyed-out control invites *why can't I?*; a sentence answers it |
+| Staged rows are **amber, not red** | Nothing has happened yet. Red is reserved for a change the validator actually refused |
+| Setting a capability back to its original value **stops being a change** | Otherwise the operator is asked to justify a no-op and the audit trail records one |
+| A reason is **required, never defaulted** | Reshaping a workshop is the most consequential thing the platform can do to a tenant, and the audit entry is worthless without why |
+| Counts lead each affected-records row, in mono | They are the number being decided on, and they get compared against each other |
+
+**Verified against the running stack.** Removing `INVENTORY` from Apex Motors is refused with both real dependency violations (`MULTI_WAREHOUSE`, `PART_RETURNS`), while still reporting the one live `WAITING_PARTS` work order, the gate that would stop being checked, and the role left with nothing to do. Applying without a reason is a 400; applying a blocked change is a 409 carrying the reason; a valid change returns 201 and the shape actually moves.
 
 ## Exit criteria
 

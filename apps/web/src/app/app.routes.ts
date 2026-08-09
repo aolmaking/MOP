@@ -16,6 +16,11 @@ export const routes: Routes = [
         path: 'workshops/new',
         loadComponent: () => import('./features/platform/add-workshop/add-workshop-page').then((m) => m.AddWorkshopPage),
       },
+      {
+        path: 'workshops/:id/capabilities',
+        loadComponent: () =>
+          import('./features/platform/capabilities/capabilities-page').then((m) => m.CapabilitiesPage),
+      },
     ],
   },
   {
