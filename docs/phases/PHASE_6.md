@@ -96,13 +96,13 @@ The reason is honesty rather than laziness: offline means write-conflict resolut
 - **6.D** ✅ My Work — the day's jobs, chosen from
 - **6.E** ✅ Work Card — the tools, grouped by what they cost someone else
 - **6.F** ✅ Finish Gate preview — the checklist shown before the press
-- **6.G** Scenario walkthrough — a technician's shift, end to end, agreeing with the manager's surfaces
+- **6.G** ✅ Scenario walkthrough — a technician's shift, agreeing with the manager's surfaces
 
 ## Exit criteria
 
 1. ✅ Every interactive target on a technician page is **≥56px**, enforced by `tools/lint-touch-targets.mjs` — the project's third custom linter, wired into `pnpm lint`. It caught two real defects in the first pass of this phase, including a 32px back link. The number is derived rather than preferred, and a control added later at 40px looks fine on a monitor and is unusable in a bay: nobody catches that by reading a diff.
-2. A technician can go from picking up the tablet to recording a completed task in **two taps**.
-3. The Finish Gate's unsatisfied conditions are visible **before** pressing finish, in sentences.
-4. A technician sees only their own work — scope enforced server-side, never filtered client-side.
-5. Everything a technician records shows up correctly on the branch manager's surfaces (6.G).
-6. Everything green: tests, typecheck, both lint rules, build.
+2. ✅ A technician can go from picking up the tablet to recording a completed task in **two taps**.
+3. ✅ The Finish Gate's unsatisfied conditions are visible **before** pressing finish, in sentences.
+4. ✅ A technician sees only their own work — scope enforced server-side, never filtered client-side.
+5. ✅ Everything a technician records shows up correctly on the branch manager's surfaces (6.G).
+6. ✅ Everything green: tests, typecheck, both lint rules, build.

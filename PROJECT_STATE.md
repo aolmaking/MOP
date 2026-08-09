@@ -2,16 +2,16 @@
 
 > **Purpose:** everything needed to continue MOP in a fresh session without the previous conversation.
 > **Companion:** [`CLAUDE.md`](./CLAUDE.md) holds permanent knowledge (architecture, rules, toolchain). This holds *where we are*.
-> **Last updated:** 2026-08-09, after Phase 5 task 5.A.
+> **Last updated:** 2026-08-09, after Phase 6 completed.
 > **Keep this current.** Update it at the end of any phase task, and before ending a long session.
 
 ---
 
 ## 1. Current objective
 
-Build **Phase 5 — Branch Manager**: the first real role interface. Six pages, derived from the manager's actual day rather than from a feature list.
+Build **Phase 7 — Inventory**: catalog, multi-warehouse stock, the part request lifecycle (issue / arrival / use / return), movements ledger, transfers and supplier orders.
 
-Phase 5 matters beyond itself: it sets the visual and structural precedent that five more roles inherit. A layout decision made here without a reason gets copied five times.
+Two role interfaces are now complete and are the pattern to follow: derive the person first, decide the page structure from the job rather than from a template, and argue every decision in the phase document.
 
 ## 2. Where we are
 
@@ -22,10 +22,11 @@ Phase 5 matters beyond itself: it sets the visual and structural precedent that 
 | 3 — Governance Runtime | 🟢 4 of 5. Capability UI moved to Phase 5 (5.F) |
 | 4 — Operations Spine | ✅ complete |
 | 5 — Branch Manager | ✅ complete — 5.0 + 5.A–5.G |
-| **6 — Technician** | **🔵 next** |
-| 7–14 | ⬜ not started |
+| 6 — Technician | ✅ complete — 6.A–6.G |
+| **7 — Inventory** | **🔵 next** |
+| 8–14 | ⬜ not started |
 
-**Verified at last commit:** 379 tests (93 shared + 217 API + 69 web), run in CI ORDER from a wiped build state, typecheck clean, both custom lint rules passing, full build green. Working tree clean, pushed to `origin/main`.
+**Verified at last commit:** 479 tests (98 shared + 244 API + 137 web), typecheck clean, all **three** custom lint rules passing, full build green. Pushed to `origin/main`.
 
 ## 3. Completed work
 
@@ -35,29 +36,23 @@ Phase 5 matters beyond itself: it sets the visual and structural precedent that 
 
 **Operations spine.** Capability-aware workflow router with intent-labelled edges. Gate evaluator, registry-driven and capability-filtered. `WorkOrderLifecycleService` as the sole writer of work-order status. Transactional intake with ownership transfer. Technician records with blocker routing.
 
-**Branch Manager.** Attention queue API (5.A) — six sources, ranked by cost of delay with age escalation, tenant- and branch-scoped.
+**Branch Manager (Phase 5, complete).** Attention Center, Work Orders board and Workspace, Customer Intake, Approvals, Delivery & Payments, and the Super Admin capability UI. Plus 5.0, a mid-phase design-language redo after the product owner rejected the first visual language outright.
+
+**Technician (Phase 6, complete).** Its own shell with a 56px density layer derived from what a gloved hand can hit, three pages (Now / My Work / Work Card), the Finish Gate shown as a checklist before the press, and `tools/lint-touch-targets.mjs` enforcing the target floor.
 
 **Documentation.** Vision, systems, capability model, scenarios, three engineering charters, design language, phase map and per-phase docs. README + CONTRIBUTING as the repository front door.
 
 ## 4. Current task — what to do next
 
-**Phase 6 — Technician.** The second role interface, and the first one built for someone who is *not* at a desk: gloved hands, a tablet, bad light, glare from an open shutter, used in short bursts between physical tasks.
+**Write `docs/phases/PHASE_7.md` first, then build it.** The outline is in `PHASE_MAP.md`; the detail document is written before any code, the same way Phases 5 and 6 were.
 
-Before writing any of it: read `DESIGN_LANGUAGE.md` §0.5 (character), §1 (the red rule) and **§7.5 — structure is decided per page, researched against how that page type is solved outside MOP, and argued in the phase document.** Phase 5's pages are the reference for the *visual language*, not for layout.
+Before writing any of it, read `DESIGN_LANGUAGE.md` §0.5 (character), §1 (the red rule) and **§7.5 — structure is decided per page, researched against how that page type is solved outside MOP, and argued in the phase document.** Phases 5 and 6 are the reference for the *visual language*, not for layout.
 
-The spec is explicit that the Technician gets **exactly three pages and no admin sidebar**, which is why `PlatformShell` and `BranchShell` exist separately — the technician gets its own shell too.
+Inventory's person works in long focused sessions processing many similar rows, so its density is closer to Phase 5's than Phase 6's — but that is a conclusion to re-derive, not to inherit.
 
-*(Previously: Phase 5 — Branch Manager, complete.)*
+Two things already exist that Phase 7 must build on rather than around: `PART_REQUEST_GRAPH` in `@mop/shared`, and the `INVENTORY` / `PART_RETURNS` / `EXTERNAL_PARTS` capabilities with their removal policies. A workshop with no inventory must still be able to finish a job.
 
-Its structure is already decided in [`docs/phases/PHASE_5.md`](docs/phases/PHASE_5.md) §2, in this order:
-
-1. **Needs you now** — ranked items from `AttentionQueueService`, each with its reason sentence, wait time, and primary action *on the row*
-2. **Today's flow** — compact orientation strip
-3. **Watch list** — the spec's count tiles, as entry points into filtered lists
-
-Then 5.C intake wizard · 5.D board + workspace · 5.E approvals + delivery/payments · 5.F Super Admin capability UI · 5.G scenario walkthrough.
-
-**Before building the remaining five pages**, the product owner may want to review 5.B's layout — it is the pattern the others copy.
+*(Previously: Phase 6 — Technician, complete.)*
 
 ## 5. Key technical decisions (do not re-litigate)
 
