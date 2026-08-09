@@ -2,18 +2,16 @@
 
 > **Purpose:** everything needed to continue MOP in a fresh session without the previous conversation.
 > **Companion:** [`CLAUDE.md`](./CLAUDE.md) holds permanent knowledge (architecture, rules, toolchain). This holds *where we are*.
-> **Last updated:** 2026-08-09, after Phase 7 completed.
+> **Last updated:** 2026-08-09, after Phase 8 completed.
 > **Keep this current.** Update it at the end of any phase task, and before ending a long session.
 
 ---
 
 ## 1. Current objective
 
-Build **Phase 8 — Finance Core**: pricing catalog, discounts, tax policy, running balance, payments, refunds, deposits, financial reports.
+Build **Phase 9 — Billing / Invoicing**: the legal invoice document, numbering, immutable snapshots, credit notes, and `GenericBillingAdapter` behind the country-adapter seam.
 
-Three role interfaces are now complete and are the pattern to follow: derive the person first, decide the page structure from the job rather than from a template, and argue every decision in the phase document.
-
-**Phase 8 carries the money rule harder than anything so far.** `Decimal` in the database, `string` across the API, never a JS number. `MoneySerializationInterceptor` already enforces the boundary; Phase 8 must not add a service that sums through `Number()` on the way there — a mistake already made once in 5.E and caught in review.
+Three role interfaces are complete and are the pattern to follow: derive the person first, decide the page structure from the job rather than from a template, and argue every decision in the phase document.
 
 ## 2. Where we are
 
@@ -26,10 +24,11 @@ Three role interfaces are now complete and are the pattern to follow: derive the
 | 5 — Branch Manager | ✅ complete — 5.0 + 5.A–5.G |
 | 6 — Technician | ✅ complete — 6.A–6.G |
 | 7 — Inventory | ✅ complete — 7.A–7.H |
-| **8 — Finance Core** | **🔵 next** |
-| 9–14 | ⬜ not started |
+| 8 — Finance Core | ✅ complete — 8.A–8.G (refunds deferred to 9, recorded) |
+| **9 — Billing / Invoicing** | **🔵 next** |
+| 10–14 | ⬜ not started |
 
-**Verified at last commit:** 513 tests (98 shared + 278 API + 137 web), typecheck clean, all **three** custom lint rules passing, full build green. Pushed to `origin/main`.
+**Verified at last commit:** 560 tests (121 shared + 292 API + 147 web), typecheck clean, all **four** custom lint rules passing, full build green. Pushed to `origin/main`.
 
 ## 3. Completed work
 
@@ -45,19 +44,24 @@ Three role interfaces are now complete and are the pattern to follow: derive the
 
 **Inventory (Phase 7, complete).** `StockService` as the only writer of a stock balance, with the movement written in the same transaction and `beforeQty`/`afterQty` stored so the ledger can be replayed and compared. Never-negative enforced in the database as well as in service code. Part request lifecycle on `PART_REQUEST_GRAPH`, with issuing bound to the stock transaction. Partial fulfilment (SCENARIOS.md 3.5, open since Phase 2) settled: one request, many issues, fulfilment derived. Requests queue, Stock table, and the Item page whose ledger *is* the page.
 
+**Finance Core (Phase 8, complete).** Exact money arithmetic in `@mop/shared/money` — integer minor units, never a float, with rounding and the discount/tax order decided once. Running total, immutable issued invoices with snapshotted prices, and idempotent payments where the same key with a DIFFERENT amount is refused rather than replayed. `paid` is derived from payment rows and a test corrupts the cached column to prove it. `tools/lint-money.mjs` is the fourth linter.
+
 **Documentation.** Vision, systems, capability model, scenarios, three engineering charters, design language, phase map and per-phase docs. README + CONTRIBUTING as the repository front door.
 
 ## 4. Current task — what to do next
 
-**Write `docs/phases/PHASE_8.md` first, then build it.** The outline is in `PHASE_MAP.md`; the detail document comes before any code, the same way Phases 5, 6 and 7 did.
+**Write `docs/phases/PHASE_9.md` first, then build it.** The detail document comes before any code, as in Phases 5–8.
 
 Before writing any of it, read `DESIGN_LANGUAGE.md` §0.5 (character), §1 (the red rule) and **§7.5 — structure is decided per page, researched against how that page type is solved outside MOP, and argued in the phase document.**
 
-Two things already exist that Phase 8 must build on rather than around: the `FINANCE_CORE` capability with its removal policy (a workshop can run with no internal finance at all), and the cross-system contracts in `packages/shared/src/contracts/` — `ChargeableWorkItem`, `InvoiceCandidate`, `InvoiceIssued`. **Finance never reads Operations' tables directly.**
+Phase 9 inherits one deferred item and one seam:
 
-Billing is deliberately *not* this phase. It is a separate bounded system (Phase 9) because an invoice is a compliance artifact with its own lifecycle.
+- **Refunds and credit notes.** Phase 8 built payments but no refund flow, deliberately: a refund is only half the concern, and the other half is a credit note, which is a Billing artifact with its own numbering and immutability rules. `RefundRequest` and `CreditNote` exist in the schema and are untouched. Reasoning is in `PHASE_8.md` §6.
+- **The country-adapter seam.** Egypt ETA and Saudi ZATCA make an invoice a compliance artifact. `GenericBillingAdapter` is the default, and the seam must exist before a market forces it rather than after.
 
-*(Previously: Phase 7 — Inventory, complete.)*
+Note also that `BILLING` = `EXTERNAL` is a real capability state, not on/off: totals are still computed and shown, but the legal document is issued elsewhere and `FinanceConfiguration.externalInvoiceReference` records where.
+
+*(Previously: Phase 8 — Finance Core, complete.)*
 
 ## 5. Key technical decisions (do not re-litigate)
 

@@ -57,6 +57,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/branch-manager/approvals/delivery-page').then((m) => m.DeliveryPage),
       },
       {
+        // Reached from Delivery, where the balance is what holds a car.
+        path: 'payments/:id',
+        loadComponent: () => import('./features/finance/take-payment').then((m) => m.TakePayment),
+      },
+      {
         path: 'work-orders',
         loadComponent: () =>
           import('./features/branch-manager/work-orders/work-orders-board').then((m) => m.WorkOrdersBoard),

@@ -1,0 +1,220 @@
+/*
+ * Take payment.
+ *
+ * A focused task with the customer standing in front of the operator, so
+ * the page is narrow, single-column, and worked top to bottom: how much,
+ * then how, then confirm. Nothing else is on it.
+ */
+
+.pay {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 32rem;
+}
+
+.pay-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--text);
+}
+
+.pay-back {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  text-decoration: none;
+}
+
+.pay-back:hover {
+  color: var(--brand);
+}
+
+.pay-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+/* --- the balance --------------------------------------------------- */
+
+/*
+ * The largest text on the page, and the reason the page exists: it is the
+ * number the operator reads out loud and the customer hands over. Mono,
+ * because it is compared against what is in their hand.
+ */
+.balance {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--text);
+  border-radius: var(--radius-sm);
+}
+
+.balance-label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+.balance-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+}
+
+.balance-context {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+/* --- the conflict -------------------------------------------------- */
+
+/*
+ * Red, because the likely cause is that money was already taken. Phrased
+ * as something to check rather than something to retry -- "try again" is
+ * the worst possible advice here.
+ */
+.conflict {
+  padding: var(--space-3) var(--space-4);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* --- amount -------------------------------------------------------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.field-label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+/* Large and mono. It is read back against cash on a counter, and a
+   mistyped digit here is a real financial error. */
+.field-amount {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+}
+
+.field-amount:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+  border-color: var(--focus-ring);
+}
+
+.field-error {
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+/* --- method -------------------------------------------------------- */
+
+.methods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.method {
+  flex: 1 1 6rem;
+  min-block-size: 2.75rem;
+  padding: 0 var(--space-3);
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Filled, not outlined. Which method was chosen must survive a glance at
+   a busy counter, and a thin outline does not. */
+.method--chosen {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+/* --- settled ------------------------------------------------------- */
+
+.settled {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5) 0;
+  padding-inline-start: var(--space-4);
+  border-inline-start: 4px solid var(--success);
+}
+
+.settled-title {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+.settled-total {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+}
+
+.settled-over {
+  color: var(--danger);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+/* --- states -------------------------------------------------------- */
+
+.state {
+  padding: var(--space-5) 0;
+  padding-inline-start: var(--space-4);
+  border-inline-start: 3px solid var(--border-strong);
+}
+
+.state-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.state-body {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.state-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}

@@ -1,0 +1,101 @@
+<section class="pay">
+  <header class="pay-head">
+    <a class="pay-back" routerLink="/branch/delivery">Delivery</a>
+    <h1 class="pay-title">Take payment</h1>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to payments</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('settled') {
+      @if (settlement(); as s) {
+        <div class="settled">
+          <p class="settled-title">Paid in full</p>
+          <p class="settled-total">{{ s.paid }}</p>
+          @if (s.overpaid !== '0.00') {
+            <!-- Never shown as a negative balance. Money the workshop is
+                 holding that belongs to the customer is a refund, and a
+                 refund is its own record. -->
+            <p class="settled-over">{{ s.overpaid }} overpaid — this is owed back to the customer.</p>
+          }
+        </div>
+      }
+    }
+
+    @case ('ready') {
+      @if (settlement(); as s) {
+        <!--
+          The balance is the largest thing on the page. It is the number
+          the operator reads out loud and the customer hands over.
+        -->
+        <div class="balance">
+          <span class="balance-label">Outstanding</span>
+          <span class="balance-value">{{ s.outstanding }}</span>
+          @if (s.paid !== '0.00') {
+            <span class="balance-context">{{ s.paid }} of {{ s.total }} already paid</span>
+          }
+        </div>
+
+        @if (conflict(); as message) {
+          <!-- A question, not an error. The likely cause is that the money
+               was already taken, and "try again" would be the worst
+               possible advice. -->
+          <p class="conflict" role="alert">{{ message }}</p>
+        }
+
+        @if (error()) {
+          <app-error-banner [error]="error()" />
+        }
+
+        <label class="field">
+          <span class="field-label">Amount</span>
+          <input
+            class="field-amount"
+            type="text"
+            inputmode="decimal"
+            autocomplete="off"
+            [value]="amount()"
+            (input)="setAmount($any($event.target).value)"
+          />
+          @if (amount() !== '' && !amountValid()) {
+            <span class="field-error">Enter an amount like 150 or 150.50</span>
+          }
+        </label>
+
+        <!-- Four buttons, not a dropdown. A dropdown for four options is a
+             click that buys nothing. -->
+        <div class="methods">
+          @for (option of methods; track option.key) {
+            <button
+              type="button"
+              class="method"
+              [class.method--chosen]="method() === option.key"
+              (click)="setMethod(option.key)"
+            >
+              {{ option.label }}
+            </button>
+          }
+        </div>
+
+        <button appButton variant="primary" [disabled]="!canSubmit()" (click)="submit()">
+          {{ submitting() ? 'Recording…' : 'Record payment' }}
+        </button>
+      }
+    }
+  }
+</section>

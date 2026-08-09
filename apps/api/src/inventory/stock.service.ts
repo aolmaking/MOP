@@ -187,6 +187,9 @@ export class StockService {
 
     return movements.reduce((total, movement) => {
       const effect = EFFECTS[movement.type];
+      // money-lint-ok: a count of physical objects, not a currency amount.
+      // Integer arithmetic in JS is exact below 2^53, and no workshop has
+      // nine quadrillion brake pads.
       return effect.bucket === bucket ? total + movement.quantity * effect.direction : total;
     }, 0);
   }
