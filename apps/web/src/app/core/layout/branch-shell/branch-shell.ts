@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthStore } from '../../auth/auth.store';
 import { ToastContainer } from '../../../shared/toast/toast-container';
@@ -34,6 +34,17 @@ export class BranchShell {
   protected readonly session = this.authStore.session;
 
   protected readonly navigation: readonly BranchNavItem[] = [{ label: 'Attention', route: '/branch/attention' }];
+
+  /**
+   * Read from the session rather than assumed from the route. Someone who
+   * is not a branch manager can still reach this URL -- they get the
+   * page's no-access state -- and the rail must not tell them they are
+   * someone they are not.
+   */
+  protected readonly roleLabel = computed(() => {
+    const role = this.session()?.role;
+    return role ? role.toLowerCase().replace(/_/g, ' ') : '';
+  });
 
   async logout(): Promise<void> {
     await this.authStore.logout();

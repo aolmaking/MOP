@@ -1,38 +1,50 @@
 /*
- * Attention Center.
+ * Attention Center -- the rack.
  *
- * Every value below comes from a token in styles.css, and every layout
- * choice is argued in docs/DESIGN_LANGUAGE.md. Two rules do most of the
- * work here:
+ * Structure is taken from the thing this replaces: a rack of job cards.
+ * Each stuck job is a white card on the paper ground, and priority is a
+ * coloured edge on the card, exactly as it is in a physical rack. That is
+ * why the critical marker is an inline-start edge and not a badge, a pill
+ * or a tinted row -- workshops already read that edge.
  *
- *   Most rows are NEUTRAL. Only tier-1 (safety) carries red. If the whole
- *   queue were coloured, the ranking would be invisible -- and the ranking
- *   is the entire point of the page.
+ * Two rules do the rest:
  *
- *   Grouping is by SPACING before borders. A screen that needs a box round
- *   everything to be legible has a spacing problem, not a border problem.
+ *   Most rows carry NO colour. Red marks tier 1 only. If every row were
+ *   coloured the ordering would be invisible, and the ordering is the
+ *   entire point of the page.
+ *
+ *   Grouping is by SPACING and hairlines before boxes. A screen that
+ *   needs a border round everything to be legible has a spacing problem.
  */
 
 .attention {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
-  max-width: 60rem;
+  max-width: 68rem;
 }
 
 /* --- header ------------------------------------------------------- */
 
+/*
+ * Deliberately small. The manager knows which page they opened; a large
+ * title spends the most valuable strip of the screen restating it, and
+ * pushes the first real row below the fold on a tablet.
+ */
 .attention-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-2) var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--text);
 }
 
 .attention-title {
-  font-size: var(--text-xl);
+  font-size: var(--text-md);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
 }
 
 .attention-sub {
@@ -59,19 +71,22 @@
   gap: var(--space-3) var(--space-4);
   padding: var(--space-3) var(--space-4);
   background: var(--surface);
-  /* Border, not shadow: a row is part of the page, it does not float.
-     Shadow is reserved for things with a real z-axis relationship. */
+  /* A card sits on the desk, it does not float above it. Shadow is
+     reserved for things with a real z-axis relationship (modals). */
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
+  /* Reserved so a critical row does not shift its neighbours' text when
+     it gains its edge. */
+  border-inline-start: 3px solid var(--border);
 }
 
 /*
- * Tier 1 only -- an unacknowledged critical safety rejection. Marked with
- * an edge rather than a red background, because tinting the surface would
- * drag the text contrast with it and shout louder than the ranking below.
+ * Tier 1 only -- an unacknowledged critical safety rejection. The rack's
+ * coloured edge. Not a tinted background: tinting drags the text contrast
+ * with it and shouts louder than the ranking underneath.
  */
 .queue-row--critical {
-  border-inline-start: 3px solid var(--danger);
+  border-inline-start-color: var(--danger);
 }
 
 .queue-main {
@@ -79,14 +94,20 @@
   flex-direction: column;
   gap: var(--space-1);
   min-width: 14rem;
-  flex: 1 1 20rem;
+  flex: 1 1 22rem;
 }
 
 .queue-identity {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-2);
+  gap: var(--space-3);
+}
+
+/* The plate is the one thing a manager matches against a car in the yard,
+   so it is the heaviest text on the row. */
+.queue-row--critical .queue-identity {
+  color: var(--danger);
 }
 
 .queue-customer {
@@ -98,7 +119,7 @@
  * The reason carries the wait time inline ("Waiting for the customer to
  * approve — 3 days"). Time is text and never a tooltip: the manager is
  * accountable for delay, and a hover is invisible while scanning and
- * invisible on a tablet.
+ * absent entirely on a tablet.
  */
 .queue-reason {
   color: var(--text);
@@ -109,11 +130,11 @@
 .queue-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
 /*
- * "Open" is a link, not a second button. Two equally-weighted buttons
+ * "Open" is a link, not a second button. Two equally weighted buttons
  * would make the manager choose; the primary action is the one that
  * unsticks the job, and opening is the fallback.
  */
@@ -124,7 +145,7 @@
 }
 
 .queue-open:hover {
-  color: var(--accent);
+  color: var(--brand);
   text-decoration: underline;
 }
 
@@ -138,28 +159,33 @@
   display: block;
   width: 60%;
   height: var(--text-md);
-  background: var(--surface-raised);
+  background: var(--accent-muted);
   border-radius: var(--radius-sm);
 }
 
 /* --- non-ready states --------------------------------------------- */
 
+/*
+ * Left-aligned and unboxed. A centred panel with a dashed border is the
+ * house style of generated software; it also drags the eye to the middle
+ * of an empty screen, which is the least useful place to be looking when
+ * the next thing you do is read the rail or the watch list.
+ */
 .state {
-  padding: var(--space-6) var(--space-5);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  text-align: center;
+  padding: var(--space-5) 0;
+  max-width: 42rem;
 }
 
 /* An empty queue is a good day, so it reads calm rather than alarming. */
 .state--calm {
-  background: var(--surface);
+  border-inline-start: 3px solid var(--border-strong);
+  padding-inline-start: var(--space-4);
 }
 
 /* No access is not a failure of the system; it is quieter still. */
 .state--quiet {
-  background: transparent;
-  border-style: dashed;
+  border-inline-start: 3px solid var(--border);
+  padding-inline-start: var(--space-4);
 }
 
 .state-title {
@@ -182,6 +208,8 @@
 }
 
 .band-title {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
   color: var(--text-muted);
   font-size: var(--text-xs);
   font-weight: 600;
@@ -197,7 +225,7 @@
 .flow {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-6);
+  gap: var(--space-7);
   margin: 0;
 }
 
@@ -210,12 +238,17 @@
 .flow-label {
   color: var(--text-muted);
   font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
 }
 
+/* Mono and large: these are read as quantities, compared against each
+   other, and glanced at rather than read. */
 .flow-value {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
 }
 
 .watch {
@@ -239,14 +272,14 @@
   padding: var(--space-2) var(--space-3);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   color: var(--text);
   cursor: pointer;
   transition: border-color var(--duration-fast) var(--easing);
 }
 
 .watch-tile:hover {
-  border-color: var(--border-strong);
+  border-color: var(--text);
 }
 
 .watch-count {

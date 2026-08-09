@@ -20,12 +20,15 @@
   border-inline-end: 1px solid var(--border);
 }
 
+/* The one place the wordmark appears, and the only decorative use of red
+   in the product -- it is the mark, not an accent applied to a surface. */
 .rail-brand {
-  padding: var(--space-2) var(--space-3) var(--space-5);
+  padding: var(--space-2) var(--space-3) var(--space-6);
   font-family: var(--font-mono);
   font-weight: 600;
+  font-size: var(--text-md);
   letter-spacing: var(--tracking-label);
-  color: var(--text);
+  color: var(--brand);
 }
 
 .rail-link {
@@ -33,21 +36,26 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
   color: var(--text-muted);
   font-size: var(--text-sm);
   font-weight: 500;
   text-decoration: none;
+  /* Reserved so the active edge does not shift the label. */
+  border-inline-start: 2px solid transparent;
 }
 
 .rail-link:hover {
-  background: var(--surface-raised);
   color: var(--text);
 }
 
+/* Marked with an edge rather than a filled pill, for the same reason the
+   queue marks priority with an edge: it is the rack's own language, and a
+   filled block here would be the heaviest thing on screen while saying
+   only "you are here". */
 .rail-link--active {
-  background: var(--accent-muted);
-  color: var(--accent);
+  border-inline-start-color: var(--brand);
+  color: var(--text);
+  font-weight: 600;
 }
 
 .rail-footer {
@@ -78,6 +86,8 @@
 .rail-account-role {
   font-size: var(--text-xs);
   color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
 }
 
 .rail-content {

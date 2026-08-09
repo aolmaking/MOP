@@ -21,7 +21,7 @@ Phase 5 matters beyond itself: it sets the visual and structural precedent that 
 | 2 — Design Completeness | ✅ complete |
 | 3 — Governance Runtime | 🟢 4 of 5. Capability UI moved to Phase 5 (5.F) |
 | 4 — Operations Spine | ✅ complete |
-| **5 — Branch Manager** | **🔵 in progress — 5.A + 5.B done, 5.C–5.G open** |
+| **5 — Branch Manager** | **🔵 in progress — 5.A, 5.B, 5.0 done; 5.C–5.G open** |
 | 6–14 | ⬜ not started |
 
 **Verified at last commit:** 379 tests (93 shared + 217 API + 69 web), run in CI ORDER from a wiped build state, typecheck clean, both custom lint rules passing, full build green. Working tree clean, pushed to `origin/main`.
@@ -42,9 +42,9 @@ Phase 5 matters beyond itself: it sets the visual and structural precedent that 
 
 **5.C — the Customer Intake wizard.** Must survive being left mid-way: the manager is interrupted constantly and long forms get abandoned.
 
-5.B is done and is the pattern the remaining pages copy — read `attention-center.ts/html/css` before writing another page.
+Before writing it: read `DESIGN_LANGUAGE.md` §0.5 (character), §1 (the red rule) and **§7.5 (structure is per page — research how that kind of page is solved outside MOP, then argue the choice in PHASE_5.md)**. `attention-center.css` is the reference for the visual language, **not** for layout — intake is a form, not a rack.
 
-*(Previously: 5.B — the Attention Center page.)*
+*(Previously: 5.0 — the design language redo, inserted after the product owner rejected 5.B's visuals.)*
 
 Its structure is already decided in [`docs/phases/PHASE_5.md`](docs/phases/PHASE_5.md) §2, in this order:
 
@@ -69,6 +69,10 @@ Then 5.C intake wizard · 5.D board + workspace · 5.E approvals + delivery/paym
 | Attention ranking is a **score with age escalation**, not a fixed list | A customer ignored 24h outranks a freshly blocked technician |
 | The customer clock starts **when they were asked**, not when drafted | An unsent request is the branch's delay; charging it to the customer hides our own failure |
 | Attention Center leads with **items, not count tiles** | A departure from the canonical spec, stated openly in PHASE_5.md §2 |
+| Visual character is derived from the **workshop job card in the rack** | A design system with justified values but no decided character converges on the generated-UI default. Priority is a card edge because a rack already reads that way |
+| **Red `#d41717` is the only saturated colour**, and always means "attention here" | Keeps it at 10% without policing a percentage — there is nowhere else it is allowed. `--brand` and `--danger` are the same value on purpose |
+| **Light is the ground; dark is opt-in** and true black, never navy | Bright bays, tablet glare, and the artifact being replaced is paper. Default dark is the most-cited tell of AI-generated UI |
+| **No house page layout** — composition is decided per page | Product owner's rule. A single template shapes pages by the framework instead of by their job |
 
 ## 6. Things tried that failed — do not repeat
 

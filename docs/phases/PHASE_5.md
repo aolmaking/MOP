@@ -90,18 +90,31 @@ Ranking is a **score**, not a fixed list, because a fixed list gets one case wro
 
 ## 5. Tasks
 
-> **Status (2026-08-09):** 5.A and 5.B done. 5.C–5.G open.
+> **Status (2026-08-09):** 5.A, 5.B and 5.0 done. 5.C–5.G open.
 >
 > Note on CI (Phase 1.3): the repository is private, so the GitHub API returns 404 without credentials and I cannot read the workflow result. It stays open until someone with access reports it.
 
 
 - **5.A** ✅ Attention queue API — ranking applied to real data, tenant- and branch-scoped
-- **5.B** ✅ Attention Center page — routed at /branch/attention, six states, 11 tests
+- **5.B** ✅ Attention Center page — routed at /branch/attention, six states
+- **5.0** ✅ **Design language redo** *(inserted mid-phase — see below)*
 - **5.C** Customer Intake wizard (interruptible; survives being left mid-way)
 - **5.D** Work Orders board and Work Order Workspace
 - **5.E** Approvals & Decisions, Delivery & Payments
 - **5.F** Super Admin capability UI *(deferred from Phase 3)*
 - **5.G** Cross-role scenario walkthrough
+
+### 5.0 — why a task was inserted after 5.B
+
+The product owner reviewed 5.B and rejected the visual language outright: *"the typical basic AI design and colours… totally unacceptable UI."*
+
+They were right, and the cause was structural rather than cosmetic. `DESIGN_LANGUAGE.md` justified every value in isolation and never decided a **character**. Locally defensible choices with no governing character converge on the statistical default of generated UI — dark navy ground, blue accent, rounded cards, Inter — which is exactly what shipped. Worse, IBM Plex was declared in the font stack but never installed, so the app had been rendering in Segoe UI the whole time.
+
+**It was inserted before 5.C rather than scheduled after 5.G** because five more pages built on a rejected language means five more rewrites. This is the same waterfall argument the project is built on: the structure laid down now is inherited by everything after it.
+
+What changed: character derived from the workshop job card, red/black/white on 60-30-10 with one governing rule for the red, light as the ground with a true-black opt-in dark, IBM Plex self-hosted with tabular figures, radius cut to 2–4px, and per-page composition made explicit (`DESIGN_LANGUAGE.md` §0.5, §1, §3, §6, §7.5).
+
+**The constraint 5.C–5.G inherit:** each page's structure is researched against how that kind of page is solved outside MOP, and argued here. There is no house layout.
 
 ## Exit criteria
 

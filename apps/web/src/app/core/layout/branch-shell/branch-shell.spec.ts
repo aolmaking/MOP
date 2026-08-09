@@ -24,9 +24,18 @@ describe('BranchShell', () => {
   it('names the person, not just their role', () => {
     // The rail is also how a manager confirms which account they are in
     // after switching -- a role alone does not distinguish two managers.
-    const { element } = render({ displayName: 'Branch Manager', role: 'BRANCH_MANAGER' } as SessionContext);
+    const { element } = render({ displayName: 'Mona Adel', role: 'BRANCH_MANAGER' } as SessionContext);
 
-    expect(element.querySelector('.rail-account-name')?.textContent).toContain('Branch Manager');
+    expect(element.querySelector('.rail-account-name')?.textContent).toContain('Mona Adel');
+  });
+
+  it('shows the role from the session, never one hardcoded to the page', () => {
+    // Anyone can reach /branch/attention; they get the no-access state.
+    // The rail previously said "Branch Manager" to all of them, which is
+    // the interface stating something false.
+    const { element } = render({ displayName: 'Platform Admin', role: 'PLATFORM_SUPER_ADMIN' } as SessionContext);
+
+    expect(element.querySelector('.rail-account-role')?.textContent?.trim()).toBe('platform super admin');
   });
 
   it('links only to pages that exist', () => {

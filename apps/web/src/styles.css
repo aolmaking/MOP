@@ -1,56 +1,103 @@
 /*
+ * Self-hosted, not Google's CDN. MOP ships to markets where fonts.googleapis.com
+ * is blocked or slow, and a workshop tablet on bad signal must not wait on a
+ * third party to render a plate number.
+ */
+@import '@fontsource-variable/ibm-plex-sans/index.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/600.css';
+
+/*
  * MOP design tokens -- the single source every page/component reads color,
  * type, spacing, and radius from. Nothing below should be hand-picked
  * again inside a component's own stylesheet; that's how a product ends up
  * with a dozen near-identical greys.
  *
- * Direction: this is platform-operator control-tower software (freeze a
- * workshop, disable a role, publish a config thousands of people see) --
- * not a marketing site. Cool slate-navy neutrals read as "monitoring
- * surface"; one precise signal-blue accent stays reserved for actions and
- * links so it never gets confused with the semantic status colors, which
- * carry real meaning (Healthy/At Risk/Critical) and must never double as
- * decoration.
+ * ---------------------------------------------------------------------
+ * CHARACTER -- the decision the first version of this file never made,
+ * which is why it came out looking like every other generated interface.
+ * ---------------------------------------------------------------------
  *
- * Theming: dark is the default ground (this is worn for long sessions --
- * see the "eye comfortable" requirement), overridden for light via
- * prefers-color-scheme, and both are overridable again via a
- * `data-theme="dark|light"` attribute on <html> for an explicit in-app
- * toggle later. Components must only ever reference the custom
- * properties below, never a color literal, so both themes stay correct
- * automatically.
+ * MOP is derived from the artifact a workshop already trusts: the job
+ * card in the rack. Paper ground, black text, a rectangular card per job,
+ * and a coloured edge that means priority. Not a monitoring dashboard --
+ * workshops do not experience their work as telemetry, they experience it
+ * as a stack of cards someone has to clear.
+ *
+ * Palette is red / black / white on 60-30-10:
+ *   60%  paper ground and white cards
+ *   30%  near-black ink -- text, rules, structure, primary buttons
+ *   10%  #d41717 red
+ *
+ * ONE RULE GOVERNS THE RED: it is the only saturated colour in the
+ * system, and it always means "your attention goes here" -- a critical
+ * job, a destructive action, a link. Nothing decorative is ever red. That
+ * is what keeps it at 10% without policing percentages: there is simply
+ * nowhere else it is allowed.
+ *
+ * The good state therefore has NO colour. A job that is fine is black on
+ * white. Absence of red is the signal, which is why a screen full of
+ * work still reads calm and a single critical row is impossible to miss.
+ *
+ * Deliberately NOT done, because each is a known tell of generated UI
+ * (see docs/DESIGN_LANGUAGE.md for sources): permanent dark mode as the
+ * default, Inter, indigo/violet, gradients, and uniformly rounded cards.
+ * Radius here is 2-4px -- a job card is a rectangle.
+ *
+ * Theming: LIGHT is the ground, not a fallback. Workshop bays are bright,
+ * the device is often a tablet under glare, and the paper this replaces
+ * is white. Dark is opt-in via `data-theme="dark"` and is true black
+ * rather than navy. prefers-color-scheme deliberately does NOT flip the
+ * app on its own -- the ground is a product decision, not an OS setting.
  */
 
 :root {
-  /* --- color: dark (default ground) --- */
-  --bg: #0b1220;
-  --surface: #121b2e;
-  --surface-raised: #18233a; /* one step above --surface: drawer/modal/dropdown elevation */
-  --border: #26324a;
-  --border-strong: #374563;
-  --text: #e8ecf4;
-  --text-muted: #8b96ac;
-  --text-faint: #5a6684;
+  color-scheme: light;
 
-  --accent: #2fa8e0;
-  --accent-hover: #55bcec;
-  --accent-muted: #17324a;
-  --on-accent: #06141f;
+  /* --- 60%: paper --- */
+  --bg: #efedea;      /* the desk the cards sit on */
+  --surface: #ffffff; /* the job card itself */
+  --surface-raised: #ffffff; /* modals/dropdowns -- lifted by shadow, not tint */
 
-  --success: #34d399;
-  --success-bg: #113328;
-  --warning: #f5a524;
-  --warning-bg: #3a2a10;
-  --danger: #f2506b;
-  --danger-bg: #3a1620;
-  --neutral-badge: #8b96ac;
-  --neutral-badge-bg: #1c2740;
+  /* --- 30%: ink. Warm near-black, never #000: pure black on white
+         haloes at text sizes, and a warm ink sits with a warm red. --- */
+  --text: #1c1917;
+  --text-muted: #57534e;
+  --text-faint: #8b857e;
+  --border: #e0dcd7;
+  --border-strong: #c4beb7;
 
-  --focus-ring: #55bcec;
-  --shadow-color: 220 60% 2%;
+  /* --- interactive: ink, not colour. A primary button is the heaviest
+         thing on the page by weight, so it does not also need hue. --- */
+  --accent: #1c1917;
+  --accent-hover: #000000;
+  --accent-muted: #e8e4df;
+  --on-accent: #ffffff;
+
+  /* --- 10%: the red. --brand and --danger are the SAME value on
+         purpose. In this product "urgent" and "the thing to act on" are
+         one idea, and splitting them into two reds would only make both
+         weaker. Passes AA on white (5.3:1). --- */
+  --brand: #d41717;
+  --danger: #d41717;
+  --danger-strong: #a81212; /* pressed/hover -- heavier, never lighter */
+  --danger-bg: #fceceb;
+
+  /* Status colours are deliberately dark and desaturated so they read as
+     members of the ink family rather than as a second palette. Red is the
+     only colour permitted to be loud. */
+  --success: #2f6b4f;
+  --success-bg: #eaf2ee;
+  --warning: #8a6516;
+  --warning-bg: #f8f0e0;
+  --neutral-badge: #57534e;
+  --neutral-badge-bg: #eceae7;
+
+  --focus-ring: #d41717;
+  --shadow-color: 30 20% 40%;
 
   /* --- type --- */
-  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: 'IBM Plex Sans Variable', 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
 
   --text-xs: 0.75rem;   /* 12px -- captions, uppercase labels */
@@ -75,10 +122,12 @@
   --space-7: 2.5rem;
   --space-8: 3rem;
 
-  /* --- radius: modest and consistent, never decorative --- */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
+  /* --- radius: a job card is a rectangle. Softened just enough not to
+         look unfinished; uniformly rounded cards are a generated-UI
+         tell and read as decoration on operational software. --- */
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
 
   /* --- motion: quick and quiet, this is operational software --- */
   --duration-fast: 120ms;
@@ -86,67 +135,45 @@
   --easing: cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* Light theme -- not a naive invert. Same cool-slate bias, re-tuned for
-   contrast on a light ground, same accent/semantic hues held constant
-   where they still pass contrast, nudged darker where they don't. */
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f7f9fc;
-    --surface: #ffffff;
-    --surface-raised: #ffffff;
-    --border: #dce3ee;
-    --border-strong: #c3ccdd;
-    --text: #0f1729;
-    --text-muted: #5b6478;
-    --text-faint: #8791a4;
-
-    --accent: #1c7ed6;
-    --accent-hover: #1567b3;
-    --accent-muted: #e6f2fc;
-    --on-accent: #ffffff;
-
-    --success: #17925a;
-    --success-bg: #e5f7ef;
-    --warning: #b3720b;
-    --warning-bg: #fbf0dd;
-    --danger: #d23355;
-    --danger-bg: #fceaee;
-    --neutral-badge: #5b6478;
-    --neutral-badge-bg: #eef1f6;
-
-    --focus-ring: #1c7ed6;
-    --shadow-color: 220 30% 60%;
-  }
-}
-
+/*
+ * Dark -- opt-in only, via data-theme="dark". Not a naive invert and not
+ * navy: true near-black, so the red stays the brightest thing on screen
+ * exactly as it is on paper. The red lifts to #f2413a because #d41717 on
+ * black falls below AA (3.3:1); the ink-family status colours lift for
+ * the same reason. Ground and card swap roles -- the card is now lighter
+ * than the desk, because on a dark ground raised means lighter.
+ */
 :root[data-theme='dark'] {
   color-scheme: dark;
-}
 
-:root[data-theme='light'] {
-  color-scheme: light;
-  --bg: #f7f9fc;
-  --surface: #ffffff;
-  --surface-raised: #ffffff;
-  --border: #dce3ee;
-  --border-strong: #c3ccdd;
-  --text: #0f1729;
-  --text-muted: #5b6478;
-  --text-faint: #8791a4;
-  --accent: #1c7ed6;
-  --accent-hover: #1567b3;
-  --accent-muted: #e6f2fc;
-  --on-accent: #ffffff;
-  --success: #17925a;
-  --success-bg: #e5f7ef;
-  --warning: #b3720b;
-  --warning-bg: #fbf0dd;
-  --danger: #d23355;
-  --danger-bg: #fceaee;
-  --neutral-badge: #5b6478;
-  --neutral-badge-bg: #eef1f6;
-  --focus-ring: #1c7ed6;
-  --shadow-color: 220 30% 60%;
+  --bg: #0d0d0c;
+  --surface: #171716;
+  --surface-raised: #201f1e;
+  --border: #2e2d2b;
+  --border-strong: #454340;
+  --text: #f2f0ed;
+  --text-muted: #a8a29b;
+  --text-faint: #6f6a64;
+
+  --accent: #f2f0ed;
+  --accent-hover: #ffffff;
+  --accent-muted: #2a2927;
+  --on-accent: #0d0d0c;
+
+  --brand: #f2413a;
+  --danger: #f2413a;
+  --danger-strong: #ff5a52;
+  --danger-bg: #2c1512;
+
+  --success: #5fb98a;
+  --success-bg: #12251b;
+  --warning: #d3a04a;
+  --warning-bg: #2a2110;
+  --neutral-badge: #a8a29b;
+  --neutral-badge-bg: #26251f;
+
+  --focus-ring: #f2413a;
+  --shadow-color: 0 0% 0%;
 }
 
 /* --- base / reset --- */
@@ -170,6 +197,10 @@ body {
   font-size: var(--text-base);
   line-height: var(--leading-normal);
   -webkit-font-smoothing: antialiased;
+  /* Money, counts and wait times are read down a column, not across a
+     sentence. Proportional digits make 1 narrower than 8 and the column
+     stops lining up, which is how a misread quantity happens. */
+  font-variant-numeric: tabular-nums;
 }
 
 h1,
@@ -189,8 +220,11 @@ textarea {
   color: inherit;
 }
 
+/* A link is red because red means "your attention goes here", and that is
+   what a link is asking for. --accent is ink and belongs to buttons. */
 a {
-  color: var(--accent);
+  color: var(--brand);
+  text-underline-offset: 0.15em;
 }
 
 /* Visible keyboard focus everywhere, invisible for mouse/touch --
@@ -269,8 +303,10 @@ a {
   background: var(--danger);
   color: #fff;
 }
+/* Darkens rather than brightens on hover. A destructive control getting
+   lighter as you approach it reads as retreating; it should feel heavier. */
 .mop-button--danger:hover:not(:disabled) {
-  filter: brightness(1.08);
+  background: var(--danger-strong);
 }
 
 .mop-button--ghost {

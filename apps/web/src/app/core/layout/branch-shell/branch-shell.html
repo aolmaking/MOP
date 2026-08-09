@@ -10,7 +10,10 @@
       @if (session(); as s) {
         <div class="rail-account">
           <span class="rail-account-name">{{ s.displayName }}</span>
-          <span class="rail-account-role">Branch Manager</span>
+          <!-- The session's own role, never a label hardcoded to the page.
+               Hardcoding "Branch Manager" here made the rail state
+               something false for anyone else who opened this URL. -->
+          <span class="rail-account-role">{{ roleLabel() }}</span>
         </div>
         <button type="button" appButton variant="ghost" size="small" (click)="logout()">Log out</button>
       }
