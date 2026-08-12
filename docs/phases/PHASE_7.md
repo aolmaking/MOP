@@ -92,6 +92,18 @@ The capability engine is not decoration here, and Phase 7 is where it gets teste
 - **7.F** ✅ Requests queue and Stock table
 - **7.G** ✅ Item page with the movements ledger
 - **7.H** ✅ Scenario walkthrough — 3.1 through 3.6, including partial fulfilment and the inventory-off profile
+- **7.I** ⬜ Inventory Home — the spec's card home; `/inventory` currently jumps straight to Requests
+- **7.J** ⬜ Inventory POS / Catalog Control — item create/edit, pricing, POS visibility
+- **7.K** ⬜ Returns / Movements **actions** — accept, reject, request clarification. The ledger is readable; the decisions have no page
+- **7.L** ⬜ Reports & Stock Insights
+
+### Correction: this phase was marked complete when it was not
+
+It was declared complete having built **three of the six pages** `inventory-manager.md` specifies, and section 3 above lists five of them by name. Every task was ticked, the exit criteria were ticked, and the missing pages were never counted.
+
+The cause was that "complete" was measured against what had been built rather than against what the spec required, because no page inventory existed to check against. [`PAGE_INVENTORY.md`](../PAGE_INVENTORY.md) now exists for exactly that, and a phase may not be marked complete while any page it owns is unbuilt.
+
+The engine work in 7.A–7.H is real and its tests pass. The phase is not finished.
 
 ## Exit criteria
 

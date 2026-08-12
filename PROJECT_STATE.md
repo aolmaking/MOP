@@ -9,9 +9,17 @@
 
 ## 1. Current objective
 
-Build **Phase 9 — Billing / Invoicing**: the legal invoice document, numbering, immutable snapshots, credit notes, and `GenericBillingAdapter` behind the country-adapter seam.
+**Close the page gap before starting Phase 9.**
 
-Three role interfaces are complete and are the pattern to follow: derive the person first, decide the page structure from the job rather than from a template, and argue every decision in the phase document.
+An audit against `detailed-specs/` found the spec requires **53 pages** and **15 exist**. Phase 7 had been marked complete with three of its six pages built, because completion was measured against what had been made rather than against the spec. [`PAGE_INVENTORY.md`](docs/PAGE_INVENTORY.md) now tracks every page and is the definition of done.
+
+Three of the gaps are **finished systems with no door** — built, tested, and unreachable by any human:
+
+1. **Invite Accept.** Add Workshop writes `inviteTokenHash` and nothing redeems it, so every owner created through the product cannot log in.
+2. **Customer Decision Page.** `secureToken` appears nowhere in the API. The customer cannot approve anything.
+3. **Audit & Change History.** `AuditLog` is written on every risky action; `audit/` has no controller.
+
+Those come first. Then the pages owed by phases already run.
 
 ## 2. Where we are
 
@@ -21,10 +29,10 @@ Three role interfaces are complete and are the pattern to follow: derive the per
 | 2 — Design Completeness | ✅ complete |
 | 3 — Governance Runtime | 🟢 4 of 5. Capability UI moved to Phase 5 (5.F) |
 | 4 — Operations Spine | ✅ complete |
-| 5 — Branch Manager | ✅ complete — 5.0 + 5.A–5.G |
+| 5 — Branch Manager | 🟠 6 of 7 pages — Team Setup owed |
 | 6 — Technician | ✅ complete — 6.A–6.G |
-| 7 — Inventory | ✅ complete — 7.A–7.H |
-| 8 — Finance Core | ✅ complete — 8.A–8.G (refunds deferred to 9, recorded) |
+| 7 — Inventory | 🟠 **engine done, 3 of 6 pages built** — see PAGE_INVENTORY.md |
+| 8 — Finance Core | 🟠 engine done; Owner "Money" page owed (Phase 10) |
 | **9 — Billing / Invoicing** | **🔵 next** |
 | 10–14 | ⬜ not started |
 
@@ -38,13 +46,13 @@ Three role interfaces are complete and are the pattern to follow: derive the per
 
 **Operations spine.** Capability-aware workflow router with intent-labelled edges. Gate evaluator, registry-driven and capability-filtered. `WorkOrderLifecycleService` as the sole writer of work-order status. Transactional intake with ownership transfer. Technician records with blocker routing.
 
-**Branch Manager (Phase 5, complete).** Attention Center, Work Orders board and Workspace, Customer Intake, Approvals, Delivery & Payments, and the Super Admin capability UI. Plus 5.0, a mid-phase design-language redo after the product owner rejected the first visual language outright.
+**Branch Manager (Phase 5, 6 of 7 pages).** Attention Center, Work Orders board and Workspace, Customer Intake, Approvals, Delivery & Payments, and the Super Admin capability UI. Plus 5.0, a mid-phase design-language redo after the product owner rejected the first visual language outright.
 
-**Technician (Phase 6, complete).** Its own shell with a 56px density layer derived from what a gloved hand can hit, three pages (Now / My Work / Work Card), the Finish Gate shown as a checklist before the press, and `tools/lint-touch-targets.mjs` enforcing the target floor.
+**Technician (Phase 6, complete — 3 of 3 pages).** Its own shell with a 56px density layer derived from what a gloved hand can hit, three pages (Now / My Work / Work Card), the Finish Gate shown as a checklist before the press, and `tools/lint-touch-targets.mjs` enforcing the target floor.
 
-**Inventory (Phase 7, complete).** `StockService` as the only writer of a stock balance, with the movement written in the same transaction and `beforeQty`/`afterQty` stored so the ledger can be replayed and compared. Never-negative enforced in the database as well as in service code. Part request lifecycle on `PART_REQUEST_GRAPH`, with issuing bound to the stock transaction. Partial fulfilment (SCENARIOS.md 3.5, open since Phase 2) settled: one request, many issues, fulfilment derived. Requests queue, Stock table, and the Item page whose ledger *is* the page.
+**Inventory (Phase 7, engine complete, 3 of 6 pages).** `StockService` as the only writer of a stock balance, with the movement written in the same transaction and `beforeQty`/`afterQty` stored so the ledger can be replayed and compared. Never-negative enforced in the database as well as in service code. Part request lifecycle on `PART_REQUEST_GRAPH`, with issuing bound to the stock transaction. Partial fulfilment (SCENARIOS.md 3.5, open since Phase 2) settled: one request, many issues, fulfilment derived. Requests queue, Stock table, and the Item page whose ledger *is* the page.
 
-**Finance Core (Phase 8, complete).** Exact money arithmetic in `@mop/shared/money` — integer minor units, never a float, with rounding and the discount/tax order decided once. Running total, immutable issued invoices with snapshotted prices, and idempotent payments where the same key with a DIFFERENT amount is refused rather than replayed. `paid` is derived from payment rows and a test corrupts the cached column to prove it. `tools/lint-money.mjs` is the fourth linter.
+**Finance Core (Phase 8, engine complete).** Exact money arithmetic in `@mop/shared/money` — integer minor units, never a float, with rounding and the discount/tax order decided once. Running total, immutable issued invoices with snapshotted prices, and idempotent payments where the same key with a DIFFERENT amount is refused rather than replayed. `paid` is derived from payment rows and a test corrupts the cached column to prove it. `tools/lint-money.mjs` is the fourth linter.
 
 **Documentation.** Vision, systems, capability model, scenarios, three engineering charters, design language, phase map and per-phase docs. README + CONTRIBUTING as the repository front door.
 
