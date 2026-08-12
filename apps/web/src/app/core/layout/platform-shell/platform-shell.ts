@@ -32,12 +32,14 @@ export class PlatformShell {
 
   protected readonly session = this.authStore.session;
 
-  protected readonly navItems: PlatformNavItem[] = [
-    { label: 'Workshops', route: '/platform/workshops' },
-    { label: 'Control Center', route: '/platform/control-center' },
-    { label: 'Reports', route: '/platform/reports' },
-    { label: 'Live View', route: '/platform/live-view' },
-  ];
+  /**
+   * Only pages that exist, the same rule BranchShell states and keeps.
+   * This rail carried Control Center, Reports and Live View from Phase 2
+   * onward, all three 404ing -- the first dead link teaches a super
+   * admin that navigation is unreliable, and from then on they navigate
+   * by memorised URL. Each returns here as it lands.
+   */
+  protected readonly navItems: PlatformNavItem[] = [{ label: 'Workshops', route: '/platform/workshops' }];
 
   async logout(): Promise<void> {
     await this.authStore.logout();

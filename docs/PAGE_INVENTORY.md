@@ -15,19 +15,19 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| Built | **22** |
-| Remaining | **31** |
+| Built | **23** |
+| Remaining | **30** |
 
 Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built
 
 ---
 
-## Platform Super Admin — 2 / 6
+## Platform Super Admin — 3 / 6
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
 | Add Workshop Owner | ✅ | `/platform/workshops/new` | Phase 2 |
-| Workshops | ⬜ | — | The list. `app.routes.ts` has carried a comment admitting the rail link 404s since Phase 2 |
+| Workshops | ✅ | `/platform/workshops` | Server-side paged/sorted/filtered, details drawer, freeze/reactivate with impact preview. The API existed since Phase 2 with no UI |
 | Control Center — Governance Controls | ⬜ | — | Freeze/reactivate exist in the API; no page |
 | Control Center — Builder Control | 🟡 | `/platform/workshops/:id/capabilities` | Capability shaping is built (5.F). The spec's Builder Control is broader |
 | Platform Reports | ⬜ | — | |

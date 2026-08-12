@@ -1,0 +1,206 @@
+<div class="scrim" (click)="closed.emit()"></div>
+<aside class="drawer" role="dialog" aria-modal="true" [attr.aria-label]="details().basicInfo.name">
+  <header class="drawer-head">
+    <div>
+      <h2 class="drawer-title">{{ details().basicInfo.name }}</h2>
+      <p class="drawer-sub">{{ details().basicInfo.slug }}</p>
+    </div>
+    <button type="button" class="drawer-close" (click)="closed.emit()" aria-label="Close">×</button>
+  </header>
+
+  <div class="drawer-body">
+    @if (details().health.warnings.length > 0) {
+      <!-- The itemized reasons, never just the badge. A colour with
+           no explanation is something to guess at. -->
+      <section class="panel panel-warn">
+        <h3 class="panel-title">Health — {{ label(details().health.status) }}</h3>
+        <ul class="warnings">
+          @for (warning of details().health.warnings; track warning.code) {
+            <li class="warning">{{ warning.message }}</li>
+          }
+        </ul>
+      </section>
+    }
+
+    <section class="panel">
+      <h3 class="panel-title">Basic</h3>
+      <dl class="facts">
+        <dt>Status</dt>
+        <dd><span class="badge" [attr.data-status]="details().basicInfo.status">{{ label(details().basicInfo.status) }}</span></dd>
+        <dt>Country</dt>
+        <dd>{{ details().basicInfo.country }}</dd>
+        <dt>City</dt>
+        <dd>{{ details().basicInfo.city }}</dd>
+        <dt>Business</dt>
+        <dd>{{ details().basicInfo.businessType }}</dd>
+        <dt>Category</dt>
+        <dd>{{ label(details().basicInfo.primaryCategory) }}</dd>
+        <dt>Currency</dt>
+        <dd>{{ details().basicInfo.currency }}</dd>
+        <dt>Timezone</dt>
+        <dd>{{ details().basicInfo.timezone }}</dd>
+        <dt>Created</dt>
+        <dd>{{ absolute(details().basicInfo.createdAt, details().basicInfo.timezone) }}</dd>
+      </dl>
+    </section>
+
+    <section class="panel">
+      <h3 class="panel-title">Owner</h3>
+      @if (details().ownerInfo; as owner) {
+        <dl class="facts">
+          <dt>Name</dt>
+          <dd>{{ owner.fullName }}</dd>
+          <dt>Email</dt>
+          <dd>{{ owner.email ?? '—' }}</dd>
+          <dt>Phone</dt>
+          <dd>{{ owner.phone ?? '—' }}</dd>
+          <dt>Account</dt>
+          <dd>{{ label(owner.accountStatus) }}</dd>
+          <dt>Last seen</dt>
+          <dd [title]="absolute(owner.lastLoginAt, details().basicInfo.timezone)">{{ ago(owner.lastLoginAt) }}</dd>
+        </dl>
+      } @else {
+        <p class="panel-empty">This workshop has no owner on record.</p>
+      }
+    </section>
+
+    <section class="panel">
+      <h3 class="panel-title">Plan — {{ details().planInfo.name }}</h3>
+      <!-- Usage against the ceiling, so how close a workshop is to
+           outgrowing its plan is legible without arithmetic. -->
+      <ul class="limits">
+        <li class="limit">
+          <span class="limit-label">Branches</span>
+          <span class="limit-value">{{ details().planInfo.limits.branches.used }} / {{ details().planInfo.limits.branches.max }}</span>
+        </li>
+        <li class="limit">
+          <span class="limit-label">Users</span>
+          <span class="limit-value">{{ details().planInfo.limits.users.used }} / {{ details().planInfo.limits.users.max }}</span>
+        </li>
+        <li class="limit">
+          <span class="limit-label">Warehouses</span>
+          <span class="limit-value">
+            {{ details().planInfo.limits.warehouses.used }} / {{ details().planInfo.limits.warehouses.max }}
+          </span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h3 class="panel-title">Branches — {{ details().branches.total }}</h3>
+      @if (details().branches.items.length === 0) {
+        <p class="panel-empty">No branches yet.</p>
+      } @else {
+        <ul class="sub-list">
+          @for (branch of details().branches.items; track branch.id) {
+            <li class="sub-row">
+              <span>{{ branch.name }}</span>
+              <span class="cell-faint">{{ branch.city ?? '' }}</span>
+              @if (!branch.isActive) {
+                <span class="tag">inactive</span>
+              }
+            </li>
+          }
+        </ul>
+        @if (details().branches.total > details().branches.items.length) {
+          <p class="panel-note">Showing {{ details().branches.items.length }} of {{ details().branches.total }}.</p>
+        }
+      }
+    </section>
+
+    <section class="panel">
+      <h3 class="panel-title">Warehouses — {{ details().warehouses.total }}</h3>
+      @if (details().warehouses.items.length === 0) {
+        <!-- Zero is legitimate: a workshop that does not track
+             formal inventory has none. -->
+        <p class="panel-empty">This workshop does not keep warehouses.</p>
+      } @else {
+        <ul class="sub-list">
+          @for (warehouse of details().warehouses.items; track warehouse.id) {
+            <li class="sub-row">
+              <span>{{ warehouse.name }}</span>
+              <span class="cell-faint">{{ warehouse.code }}</span>
+            </li>
+          }
+        </ul>
+        @if (details().warehouses.total > details().warehouses.items.length) {
+          <p class="panel-note">Showing {{ details().warehouses.items.length }} of {{ details().warehouses.total }}.</p>
+        }
+      }
+    </section>
+
+    <section class="panel">
+      <h3 class="panel-title">People</h3>
+      <div class="chip-row">
+        @for (entry of details().usersByRole; track entry.role) {
+          <span class="count-chip">{{ entry.count }} {{ label(entry.role) }}</span>
+        }
+      </div>
+    </section>
+
+    @if (details().enabledModules.length > 0) {
+      <section class="panel">
+        <h3 class="panel-title">Modules</h3>
+        <div class="chip-row">
+          @for (module of details().enabledModules; track module) {
+            <span class="count-chip">{{ label(module) }}</span>
+          }
+        </div>
+      </section>
+    }
+
+    <section class="panel">
+      <h3 class="panel-title">Recent activity</h3>
+      @if (details().recentActivity.length === 0) {
+        <p class="panel-empty">Nothing recorded yet.</p>
+      } @else {
+        <ul class="events">
+          @for (event of details().recentActivity; track event.id) {
+            <li class="event">
+              <span class="event-actor">{{ event.actorName }}</span>
+              <span class="event-action">{{ event.action }}</span>
+              <span class="event-when" [title]="absolute(event.createdAt, details().basicInfo.timezone)">
+                {{ ago(event.createdAt) }}
+              </span>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <section class="panel">
+      <h3 class="panel-title">Platform controls</h3>
+      @if (details().recentPlatformControls.length === 0) {
+        <p class="panel-empty">The platform has not changed anything here.</p>
+      } @else {
+        <ul class="events">
+          @for (control of details().recentPlatformControls; track control.id) {
+            <li class="event">
+              <span class="event-actor">{{ control.type }}</span>
+              <span class="event-action">{{ control.key }}</span>
+              <span class="event-when" [title]="absolute(control.createdAt, details().basicInfo.timezone)">
+                {{ ago(control.createdAt) }}
+              </span>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <section class="panel">
+      <h3 class="panel-title">Subscription</h3>
+      <dl class="facts">
+        <dt>Plan</dt>
+        <dd>{{ details().subscription.planName }}</dd>
+        <dt>Monthly</dt>
+        <dd class="cell-mono">{{ details().subscription.monthlyPrice }} {{ details().subscription.currency }}</dd>
+      </dl>
+      <!-- Said plainly rather than shown as a blank field that looks
+           like missing data. There is no billing integration yet. -->
+      <p class="panel-note">
+        Renewal and payment status are not connected to billing yet — this is plan configuration, not a record of
+        what was paid.
+      </p>
+    </section>
+  </div>
+</aside>

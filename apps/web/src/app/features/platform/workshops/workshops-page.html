@@ -1,0 +1,276 @@
+<section class="workshops">
+  <header class="ws-head">
+    <h1 class="ws-title">Workshops</h1>
+    @if (result(); as r) {
+      <p class="ws-count">{{ r.total }} on the platform</p>
+    }
+    <button appButton variant="primary" size="small" class="ws-add" (click)="addWorkshop()">+ Add workshop</button>
+  </header>
+
+  @if (state() !== 'empty' && state() !== 'forbidden') {
+    <div class="controls">
+      <label class="control control-search">
+        <span class="visually-hidden">Search by workshop name or owner email</span>
+        <input
+          type="search"
+          class="control-input"
+          placeholder="Workshop name or owner email"
+          autocomplete="off"
+          [value]="search()"
+          (input)="onSearch($any($event.target).value)"
+        />
+      </label>
+
+      <label class="control">
+        <span class="control-label">Sort</span>
+        <select class="control-input" [value]="sort()" (change)="onSort($any($event.target).value)">
+          @for (option of sorts; track option.value) {
+            <option [value]="option.value">{{ option.label }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="control">
+        <span class="control-label">Per page</span>
+        <select class="control-input" [value]="pageSize()" (change)="onPageSize($any($event.target).value)">
+          @for (size of pageSizes; track size) {
+            <option [value]="size">{{ size }}</option>
+          }
+        </select>
+      </label>
+    </div>
+
+    <div class="chips">
+      <span class="chips-label">Status</span>
+      @for (value of statuses; track value) {
+        <button type="button" class="chip" [attr.aria-pressed]="status().includes(value)" (click)="toggleStatus(value)">
+          {{ label(value) }}
+        </button>
+      }
+    </div>
+
+    <div class="chips">
+      <span class="chips-label">Health</span>
+      @for (value of healths; track value) {
+        <button type="button" class="chip" [attr.aria-pressed]="health().includes(value)" (click)="toggleHealth(value)">
+          {{ label(value) }}
+        </button>
+      }
+    </div>
+
+    @if (plans().length > 0) {
+      <div class="chips">
+        <span class="chips-label">Plan</span>
+        @for (option of plans(); track option.id) {
+          <button
+            type="button"
+            class="chip"
+            [attr.aria-pressed]="plan().includes(option.name)"
+            (click)="togglePlan(option.name)"
+          >
+            {{ option.name }}
+          </button>
+        }
+      </div>
+    }
+
+    @if (hasFilters()) {
+      <button type="button" class="clear" (click)="clearFilters()">Clear filters</button>
+    }
+  }
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to the platform</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="reload()">Try again</button>
+      </div>
+    }
+    @case ('empty') {
+      <!-- Genuine first use. The search bar and table are gone, not
+           sitting empty above a message about nothing. -->
+      <div class="state state-first">
+        <p class="state-headline">No workshops yet.</p>
+        <button appButton variant="primary" (click)="addWorkshop()">+ Add your first workshop</button>
+      </div>
+    }
+    @case ('no-results') {
+      <!-- Materially different from the above: data exists, the filters
+           hide it, and the fix is a click away. -->
+      <div class="state">
+        <p class="state-title">No workshops match these filters</p>
+        <button type="button" class="clear" (click)="clearFilters()">Clear filters</button>
+      </div>
+    }
+    @case ('ready') {
+      @if (result(); as r) {
+        <div class="table-scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th scope="col">Workshop</th>
+                <th scope="col">Owner</th>
+                <th scope="col">Status</th>
+                <th scope="col">Plan</th>
+                <th scope="col" class="col-num">Branches</th>
+                <th scope="col" class="col-num">Users</th>
+                <th scope="col" class="col-num">Active jobs</th>
+                <th scope="col">Last activity</th>
+                <th scope="col">Builder</th>
+                <th scope="col">Health</th>
+                <th scope="col"><span class="visually-hidden">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of r.items; track row.id) {
+                <tr [attr.data-health]="row.health">
+                  <td>
+                    <button type="button" class="ws-name" (click)="openDetails(row)">{{ row.name }}</button>
+                    <span class="ws-slug">{{ row.slug }}</span>
+                  </td>
+                  <td>
+                    @if (row.owner) {
+                      <span class="owner-name">
+                        {{ row.owner.fullName }}
+                        @if (row.owner.invitePending) {
+                          <span class="tag">Invite pending</span>
+                        }
+                      </span>
+                      <span class="owner-email">{{ row.owner.email }}</span>
+                    } @else {
+                      <span class="cell-faint">No owner</span>
+                    }
+                  </td>
+                  <td><span class="badge" [attr.data-status]="row.status">{{ label(row.status) }}</span></td>
+                  <td>{{ row.plan.name }}</td>
+                  <!-- Pre-aggregated. A workshop with 200 branches shows
+                       200; the row never grows with the workshop. -->
+                  <td class="col-num cell-mono">{{ row.branchCount }}</td>
+                  <td class="col-num cell-mono">{{ row.userCount }}</td>
+                  <td class="col-num cell-mono">{{ row.activeWorkOrderCount }}</td>
+                  <td>
+                    <!-- Hover shows the absolute time in the workshop's
+                         own timezone, not the reader's. -->
+                    <span class="cell-mono" [title]="absolute(row.lastActivityAt, row.timezone)">
+                      {{ ago(row.lastActivityAt) }}
+                    </span>
+                  </td>
+                  <td><span class="badge" [attr.data-builder]="row.builderStatus">{{ label(row.builderStatus) }}</span></td>
+                  <td><span class="badge" [attr.data-health]="row.health">{{ label(row.health) }}</span></td>
+                  <td class="col-action">
+                    <div class="actions">
+                      <button type="button" class="action" (click)="openDetails(row)">Details</button>
+                      <button type="button" class="action" (click)="openControlCentre(row)">Control</button>
+                      @if (canFreeze(row)) {
+                        <button type="button" class="action action-danger" (click)="confirm(row)">Freeze</button>
+                      } @else if (canReactivate(row)) {
+                        <button type="button" class="action" (click)="confirm(row)">Reactivate</button>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <nav class="pager" aria-label="Workshop pages">
+          <button
+            appButton
+            variant="secondary"
+            size="small"
+            [disabled]="page() === 1"
+            (click)="goToPage(page() - 1)"
+          >
+            Previous
+          </button>
+          <span class="pager-position">Page {{ page() }} of {{ totalPages() }} · {{ r.total }} workshops</span>
+          <button
+            appButton
+            variant="secondary"
+            size="small"
+            [disabled]="page() === totalPages()"
+            (click)="goToPage(page() + 1)"
+          >
+            Next
+          </button>
+        </nav>
+      }
+    }
+  }
+
+  <!-- The drawer is its own component: it is where all the
+       large-versus-small handling lives, so it grows as the platform
+       does and the list page should not grow with it. -->
+  @if (details(); as d) {
+    <app-workshop-drawer [details]="d" (closed)="closeDetails()" />
+  }
+
+  <!-- ---------------------------------------------------------------
+       Freeze / reactivate. A dialog, never an immediate action.
+       --------------------------------------------------------------- -->
+  @if (confirming(); as row) {
+    <div class="scrim" (click)="cancelConfirm()"></div>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <h2 class="dialog-title" id="confirm-title">
+        {{ freezing() ? 'Freeze' : 'Reactivate' }} {{ row.name }}?
+      </h2>
+
+      @if (freezing()) {
+        @if (impact(); as i) {
+          <p class="dialog-impact">
+            This will immediately sign out
+            <strong>{{ i.staffSessionsToRevoke }} staff</strong>
+            and
+            <strong>{{ i.customerSessionsToRevoke }} customers</strong>, and block new logins until reactivated.
+          </p>
+        } @else {
+          <p class="dialog-impact" aria-busy="true">Counting who is signed in…</p>
+        }
+      } @else {
+        <!-- Reactivating is not treated as the lighter action. Restoring
+             access to a workshop frozen for non-payment or abuse
+             deserves the same deliberate reason. -->
+        <p class="dialog-impact">
+          This restores access for everyone in this workshop. It was frozen for a reason — say why it should end.
+        </p>
+      }
+
+      @if (confirmError(); as message) {
+        <p class="dialog-error" role="alert">{{ message }}</p>
+      }
+
+      <label class="dialog-field">
+        <span class="dialog-label">Reason <span class="dialog-required">required</span></span>
+        <textarea
+          rows="4"
+          class="dialog-textarea"
+          maxlength="500"
+          [value]="reason()"
+          (input)="reason.set($any($event.target).value)"
+        ></textarea>
+        <span class="dialog-hint">{{ reason().trim().length }} / 500 — at least 10 characters.</span>
+      </label>
+
+      <div class="dialog-actions">
+        <button appButton variant="secondary" (click)="cancelConfirm()">Cancel</button>
+        <button
+          appButton
+          [variant]="freezing() ? 'danger' : 'primary'"
+          [disabled]="!reasonValid() || submitting()"
+          (click)="submitConfirm()"
+        >
+          {{ submitting() ? 'Working…' : freezing() ? 'Freeze workshop' : 'Reactivate workshop' }}
+        </button>
+      </div>
+    </div>
+  }
+</section>

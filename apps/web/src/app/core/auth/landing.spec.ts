@@ -14,13 +14,17 @@ describe('landingRouteFor', () => {
     expect(landingRouteFor({ role: 'TECHNICIAN', landingPage: 'technician-home' } as SessionContext)).toBe('/tech');
   });
 
+  it('sends a super admin to the workshops list', () => {
+    expect(
+      landingRouteFor({ role: 'PLATFORM_SUPER_ADMIN', landingPage: 'platform-workshops' } as SessionContext),
+    ).toBe('/platform/workshops');
+  });
+
   it('falls back to the placeholder for roles whose home is not built', () => {
     // Deliberately '/' and not a guess: the placeholder names the phase
     // that builds their home, which is more honest than a wrong page.
     expect(landingRouteFor({ role: 'TEAM_LEADER', landingPage: 'team-leader-home' } as SessionContext)).toBe('/');
-    expect(
-      landingRouteFor({ role: 'PLATFORM_SUPER_ADMIN', landingPage: 'platform-workshops' } as SessionContext),
-    ).toBe('/');
+    expect(landingRouteFor({ role: 'DATA_ANALYST', landingPage: 'analytics-home' } as SessionContext)).toBe('/');
   });
 
   it('handles no session without throwing', () => {

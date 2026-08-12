@@ -11,6 +11,7 @@ import type { EffectiveRole } from '@mop/shared';
  * builds theirs instead of pretending to be it.
  */
 const ROUTE_BY_LANDING_PAGE: Record<string, string> = {
+  'platform-workshops': '/platform/workshops',
   'branch-home': '/branch/attention',
   'technician-home': '/tech',
   'inventory-home': '/inventory/home',
