@@ -11,6 +11,13 @@ export const routes: Routes = [
     loadComponent: () => import('./features/invite/invite-accept').then((m) => m.InviteAccept),
   },
   {
+    // The public decision link -- what a WhatsApp message points at. No
+    // guard, deliberately: requiring a login first would break the flow
+    // the whole feature exists for. The token scopes it to one request.
+    path: 'decide/:token',
+    loadComponent: () => import('./features/customer/decision-page').then((m) => m.DecisionPage),
+  },
+  {
     path: 'platform',
     canActivate: [authGuard],
     loadComponent: () => import('./core/layout/platform-shell/platform-shell').then((m) => m.PlatformShell),

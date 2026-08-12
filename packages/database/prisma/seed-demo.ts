@@ -287,7 +287,7 @@ async function createStuckJobs(tenantId: string, branchId: string, technicianSta
     if (job.kind === "customerLongWait") {
       // Waiting 3 days: escalates a tier and should outrank the blocked
       // technician below, which is the ranking rule made visible.
-      await prisma.customerDecisionRequest.create({
+      const request = await prisma.customerDecisionRequest.create({
         data: {
           tenantId,
           workOrderId: workOrder.id,
@@ -297,6 +297,35 @@ async function createStuckJobs(tenantId: string, branchId: string, technicianSta
           createdById: "demo",
           sentAt: hoursAgo(74),
         },
+      });
+
+      // Real items, one of them safety-critical. A request with nothing on
+      // it is not a thing a technician can create, and seeding one hid a
+      // bug: the public page reported it as already answered, because
+      // `[].every()` is vacuously true.
+      await prisma.customerDecisionItem.createMany({
+        data: [
+          {
+            tenantId,
+            decisionRequestId: request.id,
+            name: "Front brake discs",
+            explanation: "Scored past the wear limit. They will not pass an inspection and stopping distance is affected.",
+            importance: "CRITICAL",
+            price: 2400,
+            laborPrice: 400,
+            total: 2800,
+          },
+          {
+            tenantId,
+            decisionRequestId: request.id,
+            name: "Cabin air filter",
+            explanation: "Dirty. Worth doing while the dashboard is already apart, otherwise it is a separate job later.",
+            importance: "LOW",
+            price: 180,
+            laborPrice: 0,
+            total: 180,
+          },
+        ],
       });
     }
 

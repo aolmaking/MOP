@@ -15,8 +15,8 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| Built | **16** |
-| Remaining | **37** |
+| Built | **17** |
+| Remaining | **36** |
 
 Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built
 
@@ -98,7 +98,7 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Feature Adoption Analytics | ⬜ |
 | Saved Views / Exports | ⬜ |
 
-## Customer Portal — 0 / 6
+## Customer Portal — 1 / 6
 
 | Page | State | Notes |
 |---|:--:|---|
@@ -127,7 +127,7 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 Three of these are **not** "a later phase has not run yet" — they are things already built that no human can reach:
 
 1. ~~**Invite Accept.**~~ ✅ **Fixed.** Verified end to end against the running stack: a workshop created through the platform API had an owner who got a 401, and after redeeming the invite signs in as `TENANT_OWNER`. The token is consumed on use.
-2. **The customer Decision Page.** The whole approval flow — tokens, items, critical warnings, the safe projection — exists server-side. The customer has no way to answer.
+2. ~~**The customer Decision Page.**~~ ✅ **Fixed.** Walked end to end against the running stack: read with no auth, an unacknowledged safety rejection refused, a smuggled price field refused, then answered — and the job left the manager's Approvals queue.
 3. **Audit & Change History.** Every risky action writes an `AuditLog` row. Nothing reads them.
 
 These are the priority, ahead of any new role: they are finished systems with no door.
