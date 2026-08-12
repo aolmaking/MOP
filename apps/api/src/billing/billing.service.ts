@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, Optional } from "@nestjs/common";
 import { Prisma } from "@mop/database";
 import type {
   BillingCountryAdapter,
@@ -86,9 +86,16 @@ export class BillingService {
 
     const validation = this.adapter.validateInvoice(candidate);
     if (!validation.valid) {
-      throw new Error(
-        `Invoice failed billing validation: ${validation.errors.map((e) => `${e.field}: ${e.message}`).join("; ")}`,
-      );
+      // A real HTTP exception, not a bare Error -- this used to surface
+      // as an opaque 500 with no handler, and because it throws inside
+      // issueInvoice()'s own transaction (deliberately: an invoice must
+      // never exist without its billing document at least attempted),
+      // whoever is closing out the job needs an actual reason, not a
+      // stack trace.
+      throw new BadRequestException({
+        code: "billing_validation_failed",
+        message: `This invoice cannot be issued: ${validation.errors.map((e) => `${e.field} — ${e.message}`).join("; ")}`,
+      });
     }
 
     const artifact = this.adapter.generateDocument(snapshot);

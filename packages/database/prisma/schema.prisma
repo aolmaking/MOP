@@ -1021,6 +1021,14 @@ model PartReturnRequest {
   createdAt     DateTime  @default(now())
   resolvedAt    DateTime?
   resolvedById  String?
+  // The warehouse requestReturn() opened the RETURN_PENDING movement
+  // against. Read back by completeReturn()/rejectReturn() to reverse
+  // that SAME movement -- a caller-supplied warehouseId at accept time
+  // is a legitimate choice of where the part physically lands on the
+  // shelf, but it is never the right choice for which warehouse's
+  // returnPendingQty gets decremented; those are two different
+  // questions a single parameter cannot safely answer both of.
+  warehouseId   String
   // The inventory manager's open question, set by Request Clarification
   // and cleared the moment the technician replies or the request is
   // finally accepted/rejected -- null means there is nothing outstanding

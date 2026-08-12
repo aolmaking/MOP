@@ -445,6 +445,77 @@ describe("Returns/Movements: Reject Return", () => {
   });
 });
 
+/**
+ * Code-review regression: completeReturn() used to reverse RETURN_PENDING
+ * against whatever warehouseId the caller passed for "where the part
+ * lands on the shelf," which is a legitimate choice that can differ from
+ * where requestReturn() actually opened the pending balance. The two
+ * must never be conflated -- fixed by reading the warehouse back from
+ * PartReturnRequest instead of trusting the caller.
+ */
+describe("Returns/Movements: accepting into a different warehouse than it was issued from", () => {
+  beforeAll(async () => {
+    // Topped up separately from the shared fixture's original 20 units --
+    // this file's tests draw from the same balance throughout, and these
+    // two tests must not be starved by whatever earlier tests consumed.
+    await stock.record({
+      tenantId: full.tenantId,
+      inventoryItemId: full.itemId,
+      warehouseId: full.warehouseId,
+      type: "SUPPLIER_RECEIPT",
+      quantity: 10,
+      actorId: ACTOR.accountId,
+    });
+  });
+
+  it("reverses RETURN_PENDING against the ORIGINAL warehouse, not the one chosen at accept time", async () => {
+    const otherWarehouseId = (
+      await prisma.warehouse.create({ data: { tenantId: full.tenantId, name: "Annexe", code: `AX-${SUFFIX}` } })
+    ).id;
+
+    const request = await receivedRequest(full, 1);
+    await parts.requestReturn(request.id, 1, ACTOR); // opens RETURN_PENDING against full.warehouseId
+
+    const originalBefore = await stock.balanceOf(full.itemId, full.warehouseId);
+    const otherBefore = await stock.balanceOf(full.itemId, otherWarehouseId);
+    expect(originalBefore.returnPendingQty).toBeGreaterThan(0);
+    expect(otherBefore.returnPendingQty).toBe(0);
+
+    await parts.acceptReturn(request.id, ACTOR);
+    // The manager is physically standing at the annexe and accepts the
+    // part back there -- a legitimate, different warehouse.
+    await parts.completeReturn(request.id, otherWarehouseId, 1, ACTOR);
+
+    const originalAfter = await stock.balanceOf(full.itemId, full.warehouseId);
+    const otherAfter = await stock.balanceOf(full.itemId, otherWarehouseId);
+
+    // The pending balance clears on the warehouse it was actually opened
+    // against -- a delta, since other tests in this file share the same
+    // balance throughout and may have left their own pending quantity on
+    // the books. The annexe, brand new, must stay untouched at zero.
+    expect(originalAfter.returnPendingQty).toBe(originalBefore.returnPendingQty - 1);
+    expect(otherAfter.returnPendingQty).toBe(0);
+    // The part becomes sellable stock in the warehouse it was physically
+    // accepted into.
+    expect(otherAfter.availableQty).toBe(otherBefore.availableQty + 1);
+    expect(originalAfter.availableQty).toBe(originalBefore.availableQty);
+  });
+
+  it("resolving a rejected return also clears RETURN_PENDING on the original warehouse", async () => {
+    const request = await receivedRequest(full, 1);
+    await parts.requestReturn(request.id, 1, ACTOR);
+    await parts.rejectReturn(request.id, ACTOR, "Used, not defective");
+
+    const pending = await stock.balanceOf(full.itemId, full.warehouseId);
+    expect(pending.returnPendingQty).toBeGreaterThan(0);
+
+    await parts.resolveRejectedReturn(request.id, ACTOR);
+
+    const after = await stock.balanceOf(full.itemId, full.warehouseId);
+    expect(after.returnPendingQty).toBe(pending.returnPendingQty - 1);
+  });
+});
+
 describe("Returns/Movements: Accept Return to Stock reverses RETURN_PENDING", () => {
   it("the pending quantity returns to zero and availableQty gains it, in one transaction", async () => {
     const request = await receivedRequest(full, 1);

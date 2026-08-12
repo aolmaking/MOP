@@ -240,8 +240,13 @@ export class PartRequestService {
     await this.prisma.$transaction(async (tx) => {
       await tx.partReturnRequest.upsert({
         where: { partRequestId },
-        create: { tenantId: request.tenantId, partRequestId, quantity, reason, requestedById: actor.accountId },
-        update: { quantity, reason, resolvedAt: null, resolvedById: null, clarificationQuestion: null },
+        create: { tenantId: request.tenantId, partRequestId, quantity, reason, requestedById: actor.accountId, warehouseId },
+        // warehouseId is deliberately re-set here too: a second return
+        // request against the same part request (e.g. after a rejection
+        // was resolved and a new one raised) may have been issued from a
+        // different warehouse the second time, and the RETURN_PENDING
+        // reversal must always match whichever movement is actually open.
+        update: { quantity, reason, resolvedAt: null, resolvedById: null, clarificationQuestion: null, warehouseId },
       });
 
       await this.stock.record(
@@ -352,9 +357,50 @@ export class PartRequestService {
     return { id: partRequestId, status: "RETURN_REJECTED" as const };
   }
 
-  /** A rejected return is resolved by marking the part used after all. */
+  /**
+   * A rejected return is resolved by marking the part used after all.
+   *
+   * This is where the RETURN_PENDING balance `requestReturn` opened is
+   * finally reversed -- not at `rejectReturn` itself, because a rejected
+   * return is not yet closed (the technician still has to act on it),
+   * and reversing the pending quantity before that would let a second,
+   * unrelated return request momentarily read a balance that does not
+   * reflect the part still sitting in limbo. Reads the warehouse back
+   * from `PartReturnRequest` rather than trusting a caller-supplied one,
+   * for the same reason `completeReturn` now does.
+   */
   async resolveRejectedReturn(partRequestId: string, actor: LifecycleActor) {
-    return this.move(partRequestId, "USED", actor);
+    const request = await this.load(partRequestId);
+    await this.requireInventory(request.tenantId);
+
+    const returnRequest = await this.prisma.partReturnRequest.findUnique({ where: { partRequestId } });
+    if (!returnRequest) {
+      throw new ConflictException({
+        code: "no_return_on_record",
+        message: "There is no rejected return on this request to resolve.",
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.stock.record(
+        {
+          tenantId: request.tenantId,
+          inventoryItemId: request.inventoryItemId,
+          warehouseId: returnRequest.warehouseId,
+          type: "RETURN_PENDING",
+          quantity: -returnRequest.quantity,
+          actorId: actor.accountId,
+          referenceType: "PartRequest",
+          referenceId: partRequestId,
+        },
+        tx,
+      );
+
+      await this.transition(tx, request, "USED", actor);
+      await this.emit(tx, request.tenantId, "part_request.used", partRequestId, actor, {});
+    });
+
+    return { id: partRequestId, status: "USED" as const };
   }
 
   async acceptReturn(partRequestId: string, actor: LifecycleActor) {
@@ -374,6 +420,15 @@ export class PartRequestService {
    * opened by `requestReturn` is reversed in the same transaction as the
    * movement that replaces it, so the part is never counted twice and
    * never silently disappears from every bucket at once.
+   *
+   * `warehouseId` here is where the part physically lands on the shelf,
+   * chosen by whoever is standing in front of it -- a legitimate choice
+   * that can differ from where it was issued. The RETURN_PENDING reversal
+   * must NOT use that same value: it has to match whichever warehouse
+   * `requestReturn` actually opened the pending balance against, read
+   * back from `PartReturnRequest.warehouseId` rather than trusted from
+   * the caller, or a mismatched choice here corrupts a warehouse that
+   * has nothing to do with this return.
    */
   async completeReturn(
     partRequestId: string,
@@ -397,17 +452,26 @@ export class PartRequestService {
       });
     }
 
+    const returnRequest = await this.prisma.partReturnRequest.findUnique({ where: { partRequestId } });
+    if (!returnRequest) {
+      throw new ConflictException({
+        code: "no_return_on_record",
+        message: "There is no open return on this request to complete.",
+      });
+    }
+
     await this.prisma.$transaction(async (tx) => {
       // Reverses the RETURN_PENDING movement opened when the return was
       // first requested -- a negative RETURN_PENDING quantity is the one
       // place ADJUSTMENT-style signed movement isn't used, because this
       // is a real, typed event (the pending return being resolved), not
-      // a correction.
+      // a correction. Deliberately `returnRequest.warehouseId`, not the
+      // `warehouseId` parameter -- see the note above.
       await this.stock.record(
         {
           tenantId: request.tenantId,
           inventoryItemId: request.inventoryItemId,
-          warehouseId,
+          warehouseId: returnRequest.warehouseId,
           type: "RETURN_PENDING",
           quantity: -quantity,
           actorId: actor.accountId,
