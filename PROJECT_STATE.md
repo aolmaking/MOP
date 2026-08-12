@@ -87,7 +87,8 @@ Three doors closed earlier this arc, from the original audit:
 | 8 — Finance Core | 🟠 engine done; Owner "Money" page owed (Phase 10) |
 | **9 — Billing / Invoicing** | ✅ **complete** — refund workflow + compliantBlocked closed |
 | **10 — Team Leader & People/Performance** | ✅ **complete (narrowed)** — 4 Team Leader pages + Owner Home; Money page and staff exit-reason/rehire-eligibility re-planned out, see `docs/phases/PHASE_10.md` |
-| 11–14 | ⬜ not started |
+| **11 — Customer Portal** | ✅ **API complete** — 5 authenticated surfaces + pre-existing decision link; web pages owed, permission-engine gap documented, see `docs/phases/PHASE_11.md` |
+| 12–14 | ⬜ not started |
 | 15 — Specialization Discovery | ⬜ **drafted**, not started — `docs/phases/PHASE_15.md` |
 | 16 — Specialization Structure | ⬜ **drafted**, not started — `docs/phases/PHASE_16.md` |
 | 17 — Specialization at Creation | ⬜ **drafted**, not started — `docs/phases/PHASE_17.md` |

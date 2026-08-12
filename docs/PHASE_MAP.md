@@ -103,8 +103,8 @@ Separate bounded system. Legal invoice document, numbering, immutable snapshots,
 ### Phase 10 — Team Leader & People/Performance ✅ (narrowed — see `phases/PHASE_10.md`)
 Team Leader's four pages (Home, Technicians, Vehicles/Work Orders, Technician Performance Reports), all `managedTechnicianIds`-scoped, and Owner Home. **Re-planned at this phase boundary, recorded rather than silently dropped:** the Owner's Money page (folded into the remaining six Owner pages, its own future pass) and exit-reason/rehire-eligibility on staff deactivation (pushed to Phase 19, where the restricted-account-state vocabulary belongs) were both named in this entry originally but did not land this pass. **Detail:** [`phases/PHASE_10.md`](./phases/PHASE_10.md)
 
-### Phase 11 — Customer Portal
-Portal home, my assets, current service, decision page, invoice status, safe technical history, public decision links.
+### Phase 11 — Customer Portal ✅ (API surfaces; web pages owed) — see `phases/PHASE_11.md`
+Portal home, my assets, current service, invoice status, safe technical history (all new this phase); decision page and public decision links were already shipped in an earlier phase. Found and documented rather than silently patched: the ten-layer permission resolver has no real opinion about a `CUSTOMER` session, so portal access is checked directly on `session.accountType`/`enabledModules` instead, mirroring the existing public decision controller's own reasoning.
 
 ### Phase 12 — Reporting & Data Analyst
 Role-differentiated reports, drill-down, exports, saved views. **Depends on Phase 19.G** (point-in-time report snapshots) if this phase's reports are to support the retroactive-correction and tenant-relationship-change cases Workshops 5 and 6 found — build 12 after 19.G lands, or accept live-only reporting as this phase's explicit, named limitation.
