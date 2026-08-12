@@ -1,3 +1,16 @@
+/*
+ * The Platform Super Admin frame.
+ *
+ * The rail is where the palette's 30% red actually lives. It is a solid
+ * band of --brand-deep down the side of every screen, which is what makes
+ * the product read as red-and-black from across a room rather than as a
+ * black product with red bits.
+ *
+ * Everything inside the rail is therefore coloured for a RED ground, not
+ * a dark one: white and near-white, never --text, because --text is tuned
+ * for black and would sink into the red.
+ */
+
 .rail-shell {
   display: grid;
   grid-template-columns: 224px 1fr;
@@ -9,16 +22,19 @@
   flex-direction: column;
   gap: var(--space-1);
   padding: var(--space-4) var(--space-3);
-  background: var(--surface);
-  border-inline-end: 1px solid var(--border);
+  background: var(--brand-deep);
+  border-inline-end: 1px solid var(--brand);
 }
 
+/* White, not --brand: the mark sits ON the red, so the red cannot be its
+   colour. This is part of the palette's 10%. */
 .rail-brand {
-  padding: var(--space-2) var(--space-3) var(--space-5);
+  padding: var(--space-2) var(--space-3) var(--space-6);
   font-family: var(--font-mono);
-  font-weight: 600;
+  font-weight: 700;
+  font-size: var(--text-md);
   letter-spacing: var(--tracking-label);
-  color: var(--text);
+  color: var(--white);
 }
 
 .rail-link {
@@ -26,33 +42,36 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  color: var(--text-muted);
+  /* Legible but subordinate. Pure white is saved for the active item, so
+     "where am I" is answered by brightness rather than by a filled block. */
+  color: rgb(255 255 255 / 0.72);
   font-size: var(--text-sm);
   font-weight: 500;
   text-decoration: none;
+  border-inline-start: 2px solid transparent;
 }
 
 .rail-link:hover {
-  background: var(--surface-raised);
-  color: var(--text);
+  color: var(--white);
+  background: rgb(0 0 0 / 0.18);
 }
 
+/*
+ * Marked with an edge and full white rather than a filled pill. On a red
+ * rail a filled block would have to be white, and a white block is the
+ * loudest thing the palette can produce -- far too loud for "you are
+ * here".
+ */
 .rail-link--active {
-  background: var(--accent-muted);
-  color: var(--accent);
-}
-
-.rail-icon {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
+  border-inline-start-color: var(--white);
+  color: var(--white);
+  font-weight: 700;
 }
 
 .rail-footer {
   margin-top: auto;
   padding-top: var(--space-4);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid rgb(255 255 255 / 0.22);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -68,7 +87,7 @@
 .rail-account-name {
   font-size: var(--text-sm);
   font-weight: 600;
-  color: var(--text);
+  color: var(--white);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -76,10 +95,34 @@
 
 .rail-account-role {
   font-size: var(--text-xs);
-  color: var(--text-faint);
+  color: rgb(255 255 255 / 0.62);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+/*
+ * The rail's own logout button cannot use the shared ghost variant --
+ * that one is tuned for a dark surface and disappears on red.
+ */
+.rail-footer button {
+  background: transparent;
+  border: 1px solid rgb(255 255 255 / 0.42);
+  color: var(--white);
+}
+
+.rail-footer button:hover:not(:disabled) {
+  background: rgb(0 0 0 / 0.22);
+  border-color: var(--white);
+  color: var(--white);
 }
 
 .rail-content {
   padding: var(--space-6) var(--space-7);
   overflow-y: auto;
+}
+
+.rail-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }

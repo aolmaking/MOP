@@ -16,6 +16,9 @@
   padding: var(--space-6) var(--space-5);
   background: var(--surface);
   border: 1px solid var(--border);
+  /* Same red band as login: these two pages are the only ones outside a
+     shell, so each carries the mark itself. */
+  border-block-start: 4px solid var(--brand);
   border-radius: var(--radius-sm);
 }
 
@@ -26,6 +29,7 @@
 }
 
 .title {
+  color: var(--white);
   font-size: var(--text-lg);
   font-weight: 600;
   line-height: var(--leading-tight);

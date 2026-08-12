@@ -1,68 +1,106 @@
+/*
+ * Login.
+ *
+ * The first thing anyone sees, and until now the last place still
+ * hardcoding colours -- #f4f5f7, #1f4fd8 and friends survived every
+ * design pass because nothing linted it. It is the identity's front door,
+ * so it carries the palette hardest: a black field, a red mark, and white
+ * reserved for the two things that matter.
+ *
+ * Selectors follow the existing markup (element selectors inside the
+ * form, not classes) rather than renaming it -- the template is fine, it
+ * was only ever the colours that were wrong.
+ */
+
 .login-page {
-  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f4f5f7;
+  min-height: 100vh;
+  padding: var(--space-5);
+  background: var(--bg);
 }
 
 .login-card {
-  width: 100%;
-  max-width: 360px;
-  padding: 2rem;
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  inline-size: 100%;
+  max-inline-size: 24rem;
+  padding: var(--space-6) var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  /* The one piece of red on an otherwise black screen. A full band rather
+     than a hairline, so the identity is present before a word is read. */
+  border-block-start: 4px solid var(--brand);
+  border-radius: var(--radius-sm);
 }
 
+/* Pure white, and one of very few places in the product that earns it. */
 .login-card h1 {
-  margin: 0 0 0.25rem;
-  font-size: 1.4rem;
+  color: var(--white);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .login-subtitle {
-  margin: 0 0 1.25rem;
-  color: #666;
-  font-size: 0.9rem;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
 }
 
-form {
+.login-card form {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-2);
 }
 
-label {
-  font-size: 0.85rem;
+.login-card label {
+  margin-block-start: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
   font-weight: 600;
-  margin-top: 0.5rem;
 }
 
-input {
-  padding: 0.55rem 0.65rem;
-  border: 1px solid #d0d3d9;
-  border-radius: 6px;
-  font-size: 0.95rem;
+.login-card input {
+  padding: var(--space-2) var(--space-3);
+  /* Sunk into the ground rather than raised, so the field reads as a
+     hole in the card instead of another card on top of it. */
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-base);
+}
+
+.login-card input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+  border-color: var(--focus-ring);
 }
 
 .field-error {
-  margin: 0;
-  color: #b3261e;
-  font-size: 0.8rem;
+  color: var(--danger);
+  font-size: var(--text-sm);
 }
 
-button {
-  margin-top: 1.25rem;
-  padding: 0.6rem;
+.login-card button[type='submit'] {
+  margin-block-start: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--accent);
   border: none;
-  border-radius: 6px;
-  background: #1f4fd8;
-  color: #fff;
-  font-size: 0.95rem;
+  border-radius: var(--radius-sm);
+  color: var(--on-accent);
+  font-size: var(--text-base);
+  font-weight: 700;
   cursor: pointer;
 }
 
-button:disabled {
-  opacity: 0.6;
+.login-card button[type='submit']:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.login-card button[type='submit']:disabled {
+  opacity: 0.55;
   cursor: default;
 }

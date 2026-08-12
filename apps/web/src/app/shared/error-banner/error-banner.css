@@ -1,22 +1,44 @@
+/*
+ * Error banner.
+ *
+ * The last component still hardcoding colours (#d64545 / #fdecec /
+ * #7a1f1f), which meant it rendered a pale pink box on a black product.
+ *
+ * It uses --danger, the BRIGHT red, rather than --brand. That distinction
+ * is the whole reason the red family is split: --brand is structural and
+ * covers large areas, so an alarm painted in it would be the same colour
+ * as the furniture. --danger is higher-chroma and only ever appears on
+ * small surfaces, which is what keeps it audible.
+ */
+
 .error-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.6rem 0.9rem;
-  border: 1px solid #d64545;
-  background: #fdecec;
-  color: #7a1f1f;
-  border-radius: 6px;
-  font-size: 0.9rem;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  /* A heavier leading edge, matching how every list in the product marks
+     the row that needs attention. */
+  border-inline-start: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 .error-banner-dismiss {
+  flex-shrink: 0;
+  padding: 0 var(--space-1);
   border: none;
   background: transparent;
-  color: inherit;
-  font-size: 1.1rem;
+  color: var(--text-muted);
+  font-size: var(--text-md);
   line-height: 1;
   cursor: pointer;
-  padding: 0 0.25rem;
+}
+
+.error-banner-dismiss:hover {
+  color: var(--text);
 }

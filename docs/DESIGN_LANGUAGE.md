@@ -38,23 +38,23 @@ MOP is the digital form of that object, not a monitoring dashboard. Workshops do
 
 | From the object | In the interface |
 |---|---|
-| Cards are white paper on a desk | White surfaces on a paper-toned ground, not panels floating on navy |
+| Cards sit in a rack, and the rack is the furniture | Surfaces on a black ground; the **rail is the rack** and carries the red |
 | Cards are rectangles | Radius is 2–4px. A 10px card is a UI motif, not a job card |
 | Priority is a coloured edge | Critical state is `border-inline-start`, never a badge, pill or tinted row |
 | A rack is read top-down at a glance | Density and alignment beat decoration; tabular numerals throughout |
-| Most cards are ordinary | The ordinary state carries no colour at all |
+| Most cards are ordinary | The ordinary state carries no *alarm* colour. Red belongs to the frame, not to the row |
 
 ### The 60-30-10 split
 
-Set by the product owner and applied as the [standard rule](https://blog.logrocket.com/ux-design/60-30-10-rule/): a dominant neutral, a supporting neutral, one accent.
+Set by the product owner, and **corrected by them after the first implementation**:
 
 | Share | Role | Value |
 |---|---|---|
-| **60%** | Paper ground and card surfaces | `#efedea` desk, `#ffffff` card |
-| **30%** | Ink — text, rules, structure, primary buttons | `#1c1917` → `#8b857e` |
-| **10%** | Red | `#d41717` |
+| **60%** | **Black** — the ground and every surface | `#0d0c0c` ground, `#171414` card |
+| **30%** | **Red** — structure: rails, headers, rules, primary actions | `#8e1010` deep, `#d41717` mark |
+| **10%** | **White** — emphasis: titles, key numbers, text on red | `#ffffff` |
 
-The percentages are not measured or enforced. They hold automatically because of the rule below.
+The first build read this as white-60 / black-30 / red-10 — an assumption I stated openly and got wrong. Red is **not a rationed accent here**; it is a structural material, and the product should read as red-and-black from across a room. That is the identity, and the rails carry it: a solid band of `--brand-deep` down the side of every screen is where most of the 30% actually lives.
 
 ---
 
@@ -62,37 +62,49 @@ The percentages are not measured or enforced. They hold automatically because of
 
 ### The governing rule
 
-**Red is the only saturated colour in the system, and it always means "your attention goes here."**
+**The red family is split by weight, so one hue can carry two jobs without either going quiet.**
 
-A critical job. A destructive action. A link. Nothing decorative is ever red.
+At 30% coverage red can no longer mean "danger" by itself — an alarm the same colour as the furniture is not an alarm. So:
 
-This is what keeps red at roughly 10% without anyone policing a percentage — there is simply nowhere else it is permitted. And it is why `--brand` and `--danger` are deliberately **the same value**: in this product "urgent" and "the thing to act on" are one idea, and splitting them into two reds would make both weaker.
+| Token | Job | Where |
+|---|---|---|
+| `--brand-deep` `#8e1010` | Large calm structure | Rails, headers. Dark enough to sit *under* content |
+| `--brand` `#d41717` | The mark, primary action, active state | Buttons, the wordmark, the band on login |
+| `--danger` `#ff4b3e` | Alarm | **Small areas only**, so it pops against the structural red |
 
-### Why the good state has no colour
+The rule that keeps this honest: **`--danger` never covers a large surface, and `--brand` never signals an alarm.** Break either and the split collapses back into one indistinguishable red.
+
+This replaces the earlier rule that `--brand` and `--danger` were the same value. That worked when red was 10%; at 30% it would have made every alarm invisible.
+
+### White is now the scarce resource
 
 > **If everything is coloured, nothing is.**
 
-Most work orders are fine. A job that is fine is black on white — **the absence of red is the signal**. This is why a screen full of work still reads calm while a single critical row is impossible to miss, and it is the reason the Attention Center marks tier 1 only.
+The rule survives; what changed is which colour is rationed. On a black-and-red field it is **pure white** that is scarce, so `#ffffff` is reserved for what must be read first: a page title, a balance, a plate number, text sitting on red.
 
-If a screen ends up mostly red, the fault is the screen's, not the workshop's.
+Body copy is a warm off-white (`#f2eeec`), deliberately *not* pure, so that pure white still means something when it appears.
 
-### Why interactive elements are ink, not colour
+Content areas stay black. The red lives in the frame — rail, header, page rule — so a screen full of work still reads calm, and the one row that needs attention gets `--danger` on a small surface and is impossible to miss.
 
-A primary button is already the heaviest thing on the page by weight and contrast. It does not also need hue. Making it black leaves red free to mean only one thing.
+### Why interactive elements are red
 
-Links are the exception and are red, because a link is literally asking for attention — the same meaning, not a second one. `#d41717` on white is 5.3:1, which passes AA for body text.
+On a black ground the heaviest thing on the page should be the thing you press, and that is part of the 30%. Primary buttons are `--brand`; links are `--brand` too.
 
-### Why warm neutrals and not pure black
+This inverts the earlier system, where buttons were ink and red was reserved. With black as the ground, an ink button is invisible.
 
-- **Pure `#000` on white haloes** at text sizes and is harsher than anything printed. `#1c1917` is a warm near-black — it reads as ink on paper rather than as a screen.
-- **Warm greys read as "document", cool greys read as "instrument."** The earlier version chose cool deliberately, for a monitoring surface. The object MOP is derived from is a document, so the bias inverts with it.
+### Why the black is warm, and not pure
+
+- **Pure `#000` is not the ground.** `#0d0c0c` carries a trace of red in it, so the black and the red read as one system rather than two colours that happen to share a screen. A neutral or cool black next to `#8e1010` looks like a mistake.
+- **Pure white body text on pure black haloes** for astigmatic readers, which is roughly a third of adults. `#f2eeec` on `#0d0c0c` keeps the edges crisp — and reserving `#ffffff` for emphasis is the same decision paying twice.
 - The whole neutral range is one hue family, so layered surfaces never look like different materials.
 
-### Why light is the ground, and dark is opt-in
+### Why black is the ground, and light is the variant
 
-Light is not a fallback here. Workshop bays are bright, the device is often a tablet under glare from an open shutter, and the artifact being replaced is white paper.
+Black is 60% of the identity, so it is the default. Not navy, and not neutral grey — a *warm* near-black (`#0d0c0c`) so it sits with the red instead of looking like two unrelated systems.
 
-Dark exists, is properly designed rather than inverted — **true near-black `#0d0d0c`, never navy** — and is reached only via `data-theme="dark"`. `prefers-color-scheme` deliberately does **not** flip the app on its own: the ground is a product decision, not an OS setting. In dark, red lifts to `#f2413a` because `#d41717` on black falls below AA.
+A light variant is kept and properly tuned, reachable via `data-theme="light"`. The technician case that argued for it is real: a tablet held under an open shutter door in daylight is the one place a black screen genuinely loses. In light the roles swap — white becomes the 60% ground and black the 10% emphasis — while **red stays at 30% and stays structural**, so the identity survives the flip.
+
+`prefers-color-scheme` deliberately does not flip the app on its own. The ground is a product decision, not an OS setting.
 
 ### Why colour is never the only signal
 

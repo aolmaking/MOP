@@ -63,8 +63,8 @@
      tappable if the count ever changes. */
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
-  background: var(--surface);
-  border-top: 1px solid var(--border-strong);
+  background: var(--brand-deep);
+  border-top: 1px solid var(--brand);
   /* Respects the device's own safe area rather than assuming zero. */
   padding-block-end: env(safe-area-inset-bottom, 0);
 }
@@ -75,7 +75,7 @@
   justify-content: center;
   min-block-size: var(--tap);
   padding: var(--space-2);
-  color: var(--text-muted);
+  color: rgb(255 255 255 / 0.72);
   font-size: var(--tech-text-sm);
   font-weight: 500;
   text-decoration: none;
@@ -89,13 +89,13 @@
  * saying only "you are here".
  */
 .tech-nav-link--active {
-  border-block-start: 3px solid var(--brand);
-  color: var(--text);
+  border-block-start: 3px solid var(--white);
+  color: var(--white);
   font-weight: 700;
 }
 
 .tech-nav-link:active {
-  background: var(--accent-muted);
+  background: rgb(0 0 0 / 0.25);
 }
 
 /* --- header -------------------------------------------------------- */
@@ -106,19 +106,19 @@
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: var(--brand-deep);
+  border-bottom: 1px solid var(--brand);
 }
 
 .tech-brand {
-  color: var(--brand);
+  color: var(--white);
   font-family: var(--font-mono);
   font-weight: 700;
   letter-spacing: var(--tracking-label);
 }
 
 .tech-who {
-  color: var(--text-muted);
+  color: rgb(255 255 255 / 0.72);
   font-size: var(--tech-text-sm);
   overflow: hidden;
   text-overflow: ellipsis;
