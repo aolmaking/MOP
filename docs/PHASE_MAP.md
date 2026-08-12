@@ -1,28 +1,28 @@
 # MOP Phase Map
 
 > **What this is:** the single, linear plan for all remaining work. One numbering scheme, one order, one place.
-> **Replaces:** the previous numbering, which had accumulated into "Phase 0.A done" sitting alongside a half-built "Phase 1 step 5" and "Phase 2" — three overlapping schemes describing the same codebase. Everything below is renumbered from where the project actually is today.
-> **Date:** 2026-08-08.
+> **Companion:** [`docs/PAGE_INVENTORY.md`](./PAGE_INVENTORY.md) tracks the 53 spec'd pages against what's built — the definition of "done" for Phases 5–12. [`docs/scenarios/`](./scenarios/) and [`docs/scenarios2/`](./scenarios2/) are the two discovery passes that produced Phases 15–20.
+> **Date:** 2026-08-12, after the 40-scenario platform-layer discovery pass and its synthesis.
 
 ---
 
 ## Where the project stands
 
-**Built and verified** (192 tests passing, typecheck + lint clean):
+**Built and verified** (377 tests passing across shared/API/web, typecheck clean, all four custom lint rules passing, full build green):
 
 | Area | State |
 |---|---|
-| Data model | 1,409-line Prisma schema, 3 migrations, all 16 WO statuses, 19 part states |
-| Permission resolver | 8 layers, real iterated array, deny-by-default, `locked` short-circuit |
-| Audit | Module-encapsulated, **lint-enforced** — build fails on any write outside the audit module |
-| Operations engine | Central event service + customer-safe projection |
-| Auth | 4 account types, DB-backed sessions, refresh rotation, lockout |
-| Platform | Add Workshop Owner (transactional), Workshops list/details/freeze |
-| Web | Shell, design tokens, UI kit, login, Add Workshop page |
-| **Capability layer** | Registry, workflow graphs, reachability validator, 7 profiles, 31 tests |
-| Specs | Canonical spec + 9 role specs + 6 engineering charters |
+| Data model | Full Prisma schema, all work-order statuses, part states, capability/audit/control-setting tables |
+| Permission resolver | **10 layers** (platform → plan → tenant status → capability → module → feature → workshop config → **delegation** → role template → user override), real iterated array, deny-by-default, `locked` short-circuit, per-request context caching |
+| Audit | Module-encapsulated, lint-enforced — build fails on any `AuditLog` write outside `apps/api/src/audit/**` |
+| Capability layer | Registry, workflow graphs, reachability validator, 7 profiles |
+| Operations engine | `WorkOrderLifecycleService` sole writer of status, capability-aware from its first line |
+| Auth | 4 account types, DB-backed sessions, refresh rotation, lockout, rate limiting |
+| Money | `Decimal` in DB, `string` across API, dedicated `lint-money.mjs` guarding it |
+| Pages | **23 of 53 spec'd pages built** — see `PAGE_INVENTORY.md` for the full per-role breakdown |
+| Discovery | Two full scenario-discovery passes complete: 20 workshop-floor scenarios (`docs/scenarios/`), 40 platform-layer scenarios (`docs/scenarios2/`) |
 
-**Not yet true:** the DB integration tests have never run on this machine, CI has never executed, and no work order has ever moved through a lifecycle — because the lifecycle does not exist yet.
+**Not yet true:** Phases 9–14 (Billing, People, Customer Portal, Reporting, Automation, i18n release) have not started. Phases 18–20, named by this session's platform-layer discovery pass, did not exist before today.
 
 ## The rules that set the order
 
@@ -31,6 +31,8 @@
 3. **The capability-aware lifecycle comes before any role page**, because retrofitting capability-awareness into hardcoded transitions across five roles is the single most expensive mistake available.
 4. **Decisions that are cheap now and ruinous later happen at their cheapest moment** — i18n/RTL while there are 8 components, not 80.
 5. **Every role phase closes with a cross-system scenario walkthrough**, never a page checklist. This is the specific discipline that would have caught v11.9's disconnected-pages failure.
+6. **A phase may not be marked complete while any page or scenario finding it owns is unaddressed.** `PAGE_INVENTORY.md` and the two scenario syntheses are the definitions of done; measuring "complete" against what was built rather than what was required is the exact mistake Phase 7 was originally marked complete under.
+7. **A discovery pass earns a phase, not a patch.** When a scenario walkthrough finds a gap that is structural — missing vocabulary, missing platform-relationship model, missing resilience story — it gets its own phase with its own exit criteria, not a scattered set of tickets absorbed silently into whichever phase happens to be active.
 
 ---
 
@@ -38,108 +40,97 @@
 
 | Phase | State |
 |---|---|
-| 1 — Runnable and Provable | 🟡 6 of 7 done. 1.6 landed in Phase 3; only 1.3 (CI green) outstanding |
+| 1 — Runnable and Provable | ✅ complete |
 | 2 — Design Completeness | ✅ complete |
-| 3 — Governance Runtime | 🟢 4 of 5 done; capability UI moved to Phase 5 |
+| 3 — Governance Runtime | ✅ complete |
 | 4 — Operations Spine | ✅ complete |
-| 5 — Branch Manager | ⬜ next (plus the Super Admin capability UI deferred from Phase 3) |
-| 6–14 | ⬜ not started |
+| 5 — Branch Manager | ✅ complete — 7/7 pages |
+| 6 — Technician | ✅ complete — 3/3 pages |
+| 7 — Inventory | 🟢 5/6 pages — Returns/Movements actions owed |
+| 8 — Finance Core | 🟠 engine done; Owner Money page owed (Phase 10) |
+| 9 — Billing / Invoicing | 🔵 next in the original chain |
+| 10 — Team Leader & People/Performance | ⬜ not started |
+| 11 — Customer Portal | ⬜ not started |
+| 12 — Reporting & Data Analyst | ⬜ not started |
+| 13 — System Automation | ⬜ not started |
+| 14 — Internationalization & Release Readiness | ⬜ not started — 20.D narrows its original scope, see below |
+| 15 — Specialization Discovery | ⬜ not started |
+| 16 — Specialization Structure | ⬜ not started |
+| 17 — Specialization at Creation | ⬜ not started |
+| **18 — Tenant Relationships** | ⬜ **new** — not started |
+| **19 — Governance Depth** | ⬜ **new** — not started |
+| **20 — Operational Resilience at Scale** | ⬜ **new** — not started |
+| Platform Super Admin (cross-cutting) | 🟠 3/6 pages — Governance Controls, Reports, Live View owed |
 
-**346 tests** green (81 shared + 207 API + 58 web), typecheck clean, two custom lint rules passing, full build green.
+Total page inventory: **23 of 53** spec'd pages built. See `PAGE_INVENTORY.md` for the per-role table.
 
 ## The phases
 
-### Phase 1 — Runnable and Provable 🟡
-Make the project verifiable by anyone, on any machine, automatically.
-- Reproducible environment: `DEVELOPMENT.md`, `.nvmrc`, fixed root scripts, `pnpm doctor`
-- Database path verified end-to-end: clean migrate → seed → integration tests pass
-- CI green on a real push
-- API security baseline: **rate limiting** (urgent — scrypt at ~128MB/attempt is a DoS vector without it), helmet, body limits, request IDs, graceful shutdown, boot-time config validation
-- Money serialization made systematic rather than three ad-hoc call sites
-- Permission resolver per-request caching (today: 5 DB queries per `can()`)
-- **i18n/RTL foundation** — logical CSS properties, string extraction, `dir` handling, bidi isolation for plate numbers
-
-**Exit:** clean clone → green tests from `DEVELOPMENT.md` alone; `pnpm test` fully green including integration; CI green.
-**Detail:** [`phases/PHASE_1.md`](./phases/PHASE_1.md)
+### Phase 1 — Runnable and Provable ✅
+Reproducible environment, DB path verified end-to-end, CI green, rate limiting, boot-time config validation, systematic money serialization, per-request permission-context caching, i18n/RTL foundation (logical CSS, `dir` handling, bidi isolation).
 
 ### Phase 2 — Design Completeness ✅
-Close every open design question that would otherwise force a migration later. Writing, plus typed contracts and one migration.
-- **Scenario × capability matrix** (`SCENARIOS.md`) — including the customer who declines inspection and brings their own part
-- Cross-system contracts typed: `ChargeableWorkItem`, `InvoiceCandidate`, part/decision/payment events
-- Gate registry — gate keys are currently free strings in the capability registry with no canonical list or owner
-- Schema verdicts for every scenario: representable, or a named change
+Scenario × capability matrix, typed cross-system contracts, gate registry, schema verdict for every scenario.
 
-**Exit:** every scenario has a defined path, terminal state, and schema verdict; contracts compile; zero unresolved "needs schema change".
-
-### Phase 3 — Governance Runtime
-Make the capability layer real at runtime. Super Admin can shape a live workshop, safely.
-- `TenantCapability` time-ranged schema + migration
-- Capability resolution replaces flat `enabledModules`; capability enters the resolver at position 3
-- Change pipeline: draft → validate → **live-data preconditions** → impact preview → apply → audit → rollback
-- Super Admin capability shaping UI
-- Historical interpretation: a 2026 work order read under 2026's capabilities
-
-**Exit:** disabling Inventory on a live tenant is validated, previewed with real counts, audited, and reversible.
+### Phase 3 — Governance Runtime ✅
+`TenantCapability` time-ranged schema, capability resolution in the resolver, change pipeline (draft → validate → live-data preconditions → impact preview → apply → audit → rollback), Super Admin capability-shaping UI, historical interpretation.
 
 ### Phase 4 — Operations Spine ✅
-The lifecycle. Capability-aware from its first line.
-- `WorkflowRouter` driven by the capability graph — no hardcoded transitions anywhere
-- Customer and asset intake, ownership transfer
-- Work order and task lifecycle
-- Inspections, faults, blockers
-- Finish Gate, capability-aware, gates resolved from the registry
+`WorkflowRouter` driven by the capability graph, intake, ownership transfer, work order/task lifecycle, inspections/faults/blockers, capability-aware Finish Gate.
 
-**Exit:** a work order runs to `CLOSED` under at least three different capability profiles, with no transition hardcoded in a service.
+### Phase 5 — Branch Manager ✅
+Attention Center · Customer Intake · Work Orders board · Work Order Workspace · Approvals · Delivery & Payments · **Team Setup**, delegation-gated.
 
-### Phase 5 — Branch Manager
-First real role UI; proves the spine end-to-end.
-Attention Center · Customer Intake · Work Orders board · Work Order Workspace · Approvals · Delivery & Payments.
+### Phase 6 — Technician ✅
+Now · My Work · Work Card, 10 tools, mobile/tablet-first, no sidebar.
 
-### Phase 6 — Technician
-The operational heart. Mobile/tablet-first, three pages, no sidebar, scan-first.
-Home · My Work · Work Card (10 tools).
+### Phase 7 — Inventory 🟢
+Inventory Home · Technician Requests · Catalog Control · Quantity Control & Stock Status · Reports & Stock Insights. **Owed:** Returns/Movements' accept/reject/clarify actions — the ledger is built and readable; the actions have no page yet.
 
-### Phase 7 — Inventory
-Catalog, multi-warehouse stock, part request lifecycle, issue/arrival/use, returns, movements ledger, transfers, supplier orders.
+### Phase 8 — Finance Core 🟠
+Pricing catalog, discounts, tax policy, running balance, payments, deposits, financial reports engine — all built. **Owed:** the Owner's own Money page (Phase 10), and refunds/credit notes (explicitly deferred to Phase 9).
 
-### Phase 8 — Finance Core
-Pricing catalog, discounts, tax policy, running balance, payments, refunds, deposits, financial reports.
-
-### Phase 9 — Billing / Invoicing
-Separate bounded system. Legal invoice document, numbering, immutable snapshots, credit/debit notes, `GenericBillingAdapter` behind the country-adapter seam.
+### Phase 9 — Billing / Invoicing 🔵
+Separate bounded system. Legal invoice document, numbering, immutable snapshots, credit/debit notes, `GenericBillingAdapter` behind the country-adapter seam. **Sharpened by Workshop 2 (scenarios 6, 9, 10):** the country-adapter seam is not optional infrastructure for a hypothetical future market — it is the difference between a tenant being legally able to trade and not, the moment a second country's tenant exists. ZATCA (Saudi) and ETA (Egypt) are the two adapters named for this phase's first pass; a tenant onboarded into a country without a ready adapter must be flagged **compliant-blocked** (see Phase 20.D), never silently allowed to issue invoices the law doesn't recognize.
 
 ### Phase 10 — Team Leader & People/Performance
-Teams, membership history, supervision, technician performance — managed technicians only, no finance.
+Teams, membership history, supervision, technician performance, **the Owner's Money/Home page** (long overdue per this project's own repeated audits), **exit-reason and rehire-eligibility on staff deactivation** (found missing in Workshop 3, scenario 14, and recurring in Workshop 5's fraud-investigation account-state findings — build the vocabulary once here rather than patching it into Phase 19's restricted-account state later).
 
 ### Phase 11 — Customer Portal
 Portal home, my assets, current service, decision page, invoice status, safe technical history, public decision links.
 
 ### Phase 12 — Reporting & Data Analyst
-Role-differentiated reports (not one generic endpoint), drill-down, exports, saved views.
+Role-differentiated reports, drill-down, exports, saved views. **Depends on Phase 19.G** (point-in-time report snapshots) if this phase's reports are to support the retroactive-correction and tenant-relationship-change cases Workshops 5 and 6 found — build 12 after 19.G lands, or accept live-only reporting as this phase's explicit, named limitation.
 
 ### Phase 13 — System Automation
-Real background jobs on a **separate worker process** — the current in-process scheduler double-fires the moment there are two API replicas.
+Real background jobs on a separate worker process — the in-process scheduler double-fires the moment there are two API replicas.
 
 ### Phase 14 — Internationalization & Release Readiness
-Arabic translation pass on the Phase 1 foundation, country invoice adapters as needed, security review, performance, summary tables, permission-key assertion check.
+**Narrowed by Workshop 2's finding (scenario 9) that this phase originally bundled two separable problems.** Translation (dialect/register accuracy per market — Egyptian vs. Gulf Arabic) and legal country-adaptation (tax, invoicing, business-identity fields) are now two independently-paced tracks: the legal half is pulled forward into Phase 9/20.D because a tenant can need it years before it needs dialect-accurate UI. This phase's remaining scope: the translation pass proper, security review, performance, summary tables, permission-key assertion check.
 
 ### Phase 15 — Specialization Discovery
-Settle the schema for **specialization primitives** — service cards, measurement/diagnostic forms, position taxonomies, credentials, blocker reasons — the way Phase 2 settled scenario schema questions. Proves each primitive against a real case from `docs/scenarios/`. No authoring UI.
-
-**Exit:** every primitive has a written schema verdict; at least one service card, one measurement form and one credential work end-to-end against a seeded workshop.
+Settle the schema for specialization primitives — service cards, measurement/diagnostic forms, position taxonomies, credentials, blocker reasons. No authoring UI.
 **Detail:** [`phases/PHASE_15.md`](./phases/PHASE_15.md)
 
 ### Phase 16 — Specialization Structure
-Build the structural concepts specializations attach to, found independently across every scenario workshop: scheduling/promise time, resources (lifts, bays, crews), work-order linkage (comeback, follow-up, parent/child), payer attribution, SLA/expected-duration with alerting, a location/site entity, append-only addenda on closed work orders, a generic attachment capability, and a network-vs-branch specialization override (structurally close to the capability engine).
-
-**Exit:** scheduling, SLA and attachments ship; anything deferred is recorded here with the phase that carries it, never dropped silently.
+The structural concepts specializations attach to: scheduling/promise time, resources, work-order linkage, payer attribution, SLA/expected-duration, a location entity, append-only addenda, generic attachments, network-scoped specialization override.
 **Detail:** [`phases/PHASE_16.md`](./phases/PHASE_16.md)
 
 ### Phase 17 — Specialization at Creation
-Where the user's core idea lands: the super admin declares a workshop's specializations — service cards, resource types, branch structure, network-lock policy — **at `Add Workshop Owner`**, not as a settings page discovered later. Adds bulk staff provisioning, bulk customer/asset/catalog import, and a regional-manager role for multi-branch chains.
-
-**Exit:** a super admin can stand up each of the four scenario workshop shapes using only the product, with zero direct database access.
+The super admin declares a workshop's specializations at `Add Workshop Owner`, not as a settings page discovered later. **Sharpened by Workshop 1, scenario 1:** a fixed library of starter profiles will always under-cover reality — the very first specialized tenant tested against this phase's original draft (Apex Motorsport) fit none of the four profiles named. This phase must ship an explicit "start from nothing" authoring path as a first-class option alongside the profile library, not a fallback.
 **Detail:** [`phases/PHASE_17.md`](./phases/PHASE_17.md)
+
+### Phase 18 — Tenant Relationships 🆕
+External stakeholder access, multi-tenant identity, time-bounded access grants, the tenant archive/retention lifecycle, tenant groups for portfolio reporting, and a deliberate design decision on tenant merge/split. The single most-recurring finding across the 40-scenario platform pass: `Tenant.id` is treated everywhere as permanent and singular, and real businesses are sold, merged, split, invested in, and closed.
+**Detail:** [`phases/PHASE_18.md`](./phases/PHASE_18.md)
+
+### Phase 19 — Governance Depth 🆕
+Separation of duties, a dispute state distinct from work-order lifecycle status, a forensic-reason refund taxonomy, a restricted-pending-investigation account state, historical permission reconstruction, properly-bounded support impersonation, point-in-time reporting snapshots. Everything the permission and audit systems need once the platform stops assuming every actor is acting in good faith.
+**Detail:** [`phases/PHASE_19.md`](./phases/PHASE_19.md)
+
+### Phase 20 — Operational Resilience at Scale 🆕
+Multi-tenant load/concurrency testing, tenant-configuration-change atomicity, bulk provisioning and import with branch-scoped rollback, country as a real configuration axis (legal identity fields, tenant-configurable working week, compliant-blocked state), a deliberate offline-architecture decision, shared-device identity, and bandwidth-aware client design. The least visible, most likely to be deprioritized, and — per the scenarios that found it — most likely to actually break a real deployment first.
+**Detail:** [`phases/PHASE_20.md`](./phases/PHASE_20.md)
 
 ---
 
@@ -148,23 +139,53 @@ Where the user's core idea lands: the super admin declares a workshop's speciali
 ```
 Phase 1 ──┬──> Phase 3 ──> Phase 4 ──┬──> Phase 5 ──> Phase 6
           │                          ├──> Phase 7
-Phase 2 ──┘                          ├──> Phase 8 ──> Phase 9
-                                     ├──> Phase 10
-                                     ├──> Phase 11
-                                     └──> Phase 12 ──> Phase 13 ──> Phase 14
+Phase 2 ──┘                          ├──> Phase 8 ──> Phase 9 ──> Phase 10 ──> Phase 11 ──> Phase 12 ──> Phase 13 ──> Phase 14
+                                     └──> (10, 11, 12 also draw directly from Phase 4)
 
 Phase 15 ──> Phase 16 ──> Phase 17
+
+Phase 3 ──┬──> Phase 18 ──> Phase 19 ──> Phase 12 (point-in-time reports)
+          └──> Phase 20 (independent, but gates any real multi-country
+                          or 50-branch tenant going live before it lands)
 ```
 
-Phases 1 and 2 can run concurrently — one is code, the other is writing. Everything else is a hard dependency: Phase 3 needs Phase 2's schema verdicts, and Phase 4 needs Phase 3's capability runtime.
+Phases 1 and 2 can run concurrently. Everything in the original 3–14
+chain is a hard dependency in the order shown; 5–13 are drawn as
+parallel-eligible because they depend only on Phase 4, not because they
+should be built simultaneously — Branch Manager and Technician first,
+as before, since they exercise the spine hardest.
 
-Phases 5–12 are drawn as parallel because they *depend* only on Phase 4, not because they should be built simultaneously. Recommended order is as numbered: Branch Manager and Technician first, since they exercise the spine hardest and will expose its defects while it is still cheap to change.
+**Phases 15–17 remain their own chain**, gated behind Phase 4 only, not
+behind 5–14. 15 → 16 → 17 is a hard internal order: 15 settles what a
+specialization *is* before 16 builds what it attaches to, before 17
+builds the screen that declares one.
 
-**Phases 15–17 are a separate chain, numbered after 14 but not gated behind it.** They depend on Phase 4 (the spine) and touch Phase 7/8/9's finance and inventory models, but not on 10–14's specific content — a discovery spike could run earlier if a real pilot workshop needed it sooner. 15 → 16 → 17 is a hard internal order regardless of when the chain starts: 15 settles what a specialization *is* before 16 builds what it attaches to, before 17 builds the screen that declares one. See `phases/PHASE_17.md`'s closing note for why skipping this order repeats a mistake this project already made once, in Phase 7.
+**Phases 18–20 are a third, new chain**, gated behind Phase 3 (they need
+the capability runtime and audit discipline already in place) but
+otherwise independent of both the 5–14 chain and the 15–17 chain. They
+were not discoverable from inside any single workshop's story — every
+scenario in `docs/scenarios/` watched one tenant's whole life; only
+`docs/scenarios2/`'s platform-console vantage point surfaced them. Two
+explicit couplings exist and are called out inline above: Phase 9's
+country-adapter work should read Phase 20.D before finalizing scope, and
+Phase 12's reporting engine should sequence after Phase 19.G if it is to
+support retroactive correction and cross-tenant data movement — or
+explicitly name live-only reporting as a stated limitation if it ships
+first.
+
+Nothing in Phases 18–20 blocks the original 5–14 chain or the 15–17
+chain from proceeding in parallel. They compete for the same
+engineering time, not for the same schema surface, with two exceptions:
+Phase 18.A/18.B's stakeholder and multi-tenant-identity model should
+land before Phase 10's People/Performance work if that work wants to
+build tenure/rehire tracking against the same account-relationship
+model rather than a narrower one that needs revisiting later.
 
 ## What "done" means for any phase
 
 1. Its exit criteria are met and demonstrated, not asserted.
 2. Tests exist and run in CI.
 3. Nothing in it is a stub reporting success. A hardcoded `true` in a gate is a defect, not a placeholder.
-4. It closes with a **cross-system scenario walkthrough** from `SCENARIOS.md`, proving the scenarios it touches work end-to-end across every system involved — not that its own pages render.
+4. It closes with a **cross-system scenario walkthrough** — from `SCENARIOS.md` for Phases 1–14, from `docs/scenarios/` for Phases 15–17, from `docs/scenarios2/` for Phases 18–20 — proving the scenarios it touches work end-to-end across every system involved, not that its own pages render.
+5. Every page it owns, per `PAGE_INVENTORY.md`, is ✅, or the phase is not marked complete.
+6. Every finding a discovery pass attributed to it is either shipped or explicitly, reasonedly deferred in this document with the phase that now carries it — never silently dropped.

@@ -2,16 +2,19 @@
 
 > **Purpose:** everything needed to continue MOP in a fresh session without the previous conversation.
 > **Companion:** [`CLAUDE.md`](./CLAUDE.md) holds permanent knowledge (architecture, rules, toolchain). This holds *where we are*.
-> **Last updated:** 2026-08-12, after closing the Inventory/Branch Manager/Platform page gap and drafting Phases 15–17.
+> **Last updated:** 2026-08-12, after closing the Inventory/Branch Manager/Platform page gap, drafting Phases 15–17, and completing a second 40-scenario platform-layer discovery pass that drafted Phases 18–20.
 > **Keep this current.** Update it at the end of any phase task, and before ending a long session.
 
 ---
 
 ## 1. Current objective
 
-**Two tracks are open at once.** Continue closing the remaining page gap
-toward Phase 9, and carry forward the newly-drafted Phases 15–17
-(specialization) whose scenario research is now written.
+**Three tracks are now open at once.** Continue closing the remaining
+page gap toward Phase 9; carry forward the drafted Phases 15–17
+(specialization); carry forward the newly-drafted Phases 18–20 (tenant
+relationships, governance depth, operational resilience at scale). None
+of the three has started as code. All three are planning output — real,
+detailed, and waiting.
 
 The page-gap audit against `detailed-specs/` originally found the spec
 requires **53 pages** against **15 built**. [`PAGE_INVENTORY.md`](docs/PAGE_INVENTORY.md)
@@ -33,6 +36,36 @@ missing from the page count. [`FINDINGS_SYNTHESIS.md`](docs/scenarios/FINDINGS_S
 consolidates 78 findings into **three new phases, 15–17**, added to
 `PHASE_MAP.md` and detailed in `docs/phases/PHASE_15.md`–`PHASE_17.md`.
 They are drafted, not started — no code yet.
+
+**Newer:** [`docs/scenarios2/`](docs/scenarios2/) holds a second,
+harder 40-scenario pass — 8 workshops, 5 scenarios each — this time
+watched from the **super admin's console and the server's own machine
+room**, not the workshop floor. It asks whether a workshop can be stood
+up using only MOP (a hyper-specialized motorsport-prep shop that fits
+none of Phase 17's four starter profiles), how a second country breaks
+unstated assumptions (Saudi Arabia — VAT/ZATCA, a Friday–Saturday
+weekend, Gulf-dialect Arabic), what a 50-branch bulk migration weekend
+actually requires, what a fraud investigation demands of governance
+that assumed good faith everywhere, what happens when tenants merge,
+split, or are owned by a holding company, and what a low-connectivity
+workshop reveals about an architecture that has always assumed a live
+connection. [`docs/scenarios2/SYNTHESIS.md`](docs/scenarios2/SYNTHESIS.md)
+traces one dominant finding through five of the eight workshops —
+`Tenant.id` is treated everywhere as permanent and singular, and real
+businesses are sold, merged, split, invested in, and closed — plus a
+full cross-reference table of all 40 scenarios' findings. Consolidated
+into **three more new phases, 18–20**, added to `PHASE_MAP.md` and
+detailed in `docs/phases/PHASE_18.md`–`PHASE_20.md`. Also drafted, not
+started.
+
+`PHASE_MAP.md` was rebuilt in full this session to carry both discovery
+passes: updated progress table (23/53 pages, all four linters, 377+158
+tests), the specialization chain (15–17) as before, the new tenant/
+governance/resilience chain (18–20), and a rewritten dependency graph
+showing where 18–20 couple back into the original 9–14 chain (Phase 9's
+country-adapter scope should read Phase 20.D first; Phase 12's
+reporting engine should sequence after Phase 19.G or explicitly name
+live-only reporting as a stated limitation).
 
 Three doors closed earlier this arc, from the original audit:
 
@@ -57,6 +90,9 @@ Three doors closed earlier this arc, from the original audit:
 | 15 — Specialization Discovery | ⬜ **drafted**, not started — `docs/phases/PHASE_15.md` |
 | 16 — Specialization Structure | ⬜ **drafted**, not started — `docs/phases/PHASE_16.md` |
 | 17 — Specialization at Creation | ⬜ **drafted**, not started — `docs/phases/PHASE_17.md` |
+| 18 — Tenant Relationships | ⬜ **drafted**, not started — `docs/phases/PHASE_18.md` |
+| 19 — Governance Depth | ⬜ **drafted**, not started — `docs/phases/PHASE_19.md` |
+| 20 — Operational Resilience at Scale | ⬜ **drafted**, not started — `docs/phases/PHASE_20.md` |
 
 Platform Super Admin: 3 of 6 pages (Add Workshop Owner, Workshops,
 Builder Control partial). Governance Controls, Platform Reports and
@@ -86,13 +122,17 @@ Workshop Live View still owed.
 
 **Scenario research (this arc).** 20 scenarios across `docs/scenarios/`, four workshops chosen to be as structurally different as possible, each finding 3–4 core product mistakes by walking the software step by step. Synthesized into `FINDINGS_SYNTHESIS.md` and three new phases (15–17) added to `PHASE_MAP.md`, detailed in their own phase docs. No code from this track yet — it is planning output, matching this project's rule that re-planning at a phase boundary is expected, silent drift is not.
 
+**Second scenario pass (this arc).** 40 scenarios across `docs/scenarios2/`, eight tenant profiles chosen to stress the platform layer specifically — super admin control, workshop creation using only the product, and the server under genuine multi-tenant load — rather than any one workshop's daily operation. Synthesized into `SYNTHESIS.md` with a full cross-reference table, and three more new phases (18–20) added to `PHASE_MAP.md`, detailed in their own phase docs. Also no code yet.
+
 ## 4. Current task — what to do next
 
-**Two directions are both legitimate next steps; pick based on what's asked for.**
+**Three directions are now legitimate next steps; pick based on what's asked for.**
 
-**A — Continue the page-gap track toward Phase 9.** Remaining: Returns/Movements actions (accept/reject a return, request clarification — Inventory Manager's last owed page), Platform's Governance Controls / Platform Reports / Workshop Live View, then Phase 9 (Billing/Invoicing) as originally planned. See §1 above.
+**A — Continue the page-gap track toward Phase 9.** Remaining: Returns/Movements actions (accept/reject a return, request clarification — Inventory Manager's last owed page), Platform's Governance Controls / Platform Reports / Workshop Live View, then Phase 9 (Billing/Invoicing) as originally planned. Before finalizing Phase 9's scope, read `docs/phases/PHASE_20.md` §20.D — the country-adapter seam is sharper than originally scoped; a tenant onboarded into a country without a ready adapter needs an explicit **compliant-blocked** state, not silent non-compliance. See §1 above.
 
-**B — Start Phase 15.** The scenario research is done; Phase 15 is drafted and ready to build against. Its exit criteria and the primitives it owns (service card, measurement form, position taxonomy, credential, blocker reason) are in `docs/phases/PHASE_15.md`. Do not start Phase 17's creation-time UI before 15 and 16 exist — see that document's closing note, which names Phase 7's own history as the cautionary case.
+**B — Start Phase 15.** The scenario research is done; Phase 15 is drafted and ready to build against. Its exit criteria and the primitives it owns (service card, measurement form, position taxonomy, credential, blocker reason) are in `docs/phases/PHASE_15.md`. Do not start Phase 17's creation-time UI before 15 and 16 exist — see that document's closing note, which names Phase 7's own history as the cautionary case. Also note Phase 17's scope was sharpened this session: a fixed starter-profile library under-covers reality on day one (Workshop 1 of `docs/scenarios2/`), so Phase 17 must ship an explicit "start from nothing" authoring path as a first-class option, not a fallback.
+
+**C — Start Phase 18.** Independent of both other tracks, gated only behind Phase 3 (already complete). `docs/phases/PHASE_18.md` names six sub-items (18.A–18.F); 18.A (external stakeholder access) and 18.D (the tenant archive/retention lifecycle) are the two with the clearest, smallest schema surface and are the recommended starting point if this track is picked. 18.F (merge/split) is a design decision, not an implementation, and should be scoped last within this phase.
 
 **Write `docs/phases/PHASE_9.md` first, then build it.** The detail document comes before any code, as in Phases 5–8.
 
