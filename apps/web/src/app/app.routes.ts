@@ -4,6 +4,13 @@ import { authGuard } from './core/auth/auth.guard';
 export const routes: Routes = [
   { path: 'login', loadComponent: () => import('./features/login/login-page').then((m) => m.LoginPage) },
   {
+    // Public, and deliberately outside every shell: the person arriving
+    // here has no account yet, which is the whole point. The URL shape
+    // matches what PlatformService already puts in the invite link.
+    path: 'invite/accept',
+    loadComponent: () => import('./features/invite/invite-accept').then((m) => m.InviteAccept),
+  },
+  {
     path: 'platform',
     canActivate: [authGuard],
     loadComponent: () => import('./core/layout/platform-shell/platform-shell').then((m) => m.PlatformShell),

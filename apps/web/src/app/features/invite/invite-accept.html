@@ -1,0 +1,79 @@
+<section class="invite">
+  @switch (state()) {
+    @case ('checking') {
+      <p class="muted" aria-busy="true">Checking your invitation…</p>
+    }
+
+    @case ('invalid') {
+      <!--
+        One message for expired, already-used and never-existed. Telling
+        them apart would let somebody probe for live invite tokens.
+      -->
+      <h1 class="title">This invitation is no longer valid</h1>
+      <p class="body">
+        It may have already been used, or it may have expired. Invitations last fourteen days. Ask the platform
+        team to send a new one.
+      </p>
+      <a class="link" routerLink="/login">Go to sign in</a>
+    }
+
+    @case ('done') {
+      <h1 class="title">Your password is set</h1>
+      <p class="body">Sign in with your email and the password you just chose.</p>
+      <button class="primary" type="button" (click)="goToLogin()">Sign in</button>
+    }
+
+    @case ('ready') {
+      @if (invite(); as details) {
+        <header class="head">
+          <h1 class="title">Set your password</h1>
+          <p class="body">
+            @if (details.workshopName) {
+              You have been invited to run <strong>{{ details.workshopName }}</strong>.
+            } @else {
+              You have been invited to MOP.
+            }
+          </p>
+          @if (details.email) {
+            <!-- Shown so the recipient can confirm the invite reached the
+                 right person before committing a password to it. -->
+            <p class="who">{{ details.email }}</p>
+          }
+        </header>
+
+        @if (error(); as message) {
+          <p class="error" role="alert">{{ message }}</p>
+        }
+
+        <label class="field">
+          <span class="field-label">New password</span>
+          <input
+            type="password"
+            autocomplete="new-password"
+            [value]="password()"
+            (input)="password.set($any($event.target).value)"
+          />
+          <!-- Stated up front, not after a rejected submit. -->
+          <span class="hint" [class.hint--met]="longEnough()">At least 12 characters</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Confirm password</span>
+          <input
+            type="password"
+            autocomplete="new-password"
+            [value]="confirm()"
+            (input)="confirm.set($any($event.target).value)"
+          />
+          @if (confirm().length > 0 && !matches()) {
+            <span class="hint hint--bad">These do not match</span>
+          }
+        </label>
+
+        <button class="primary" type="button" [disabled]="!canSubmit()" (click)="submit()">
+          {{ submitting() ? 'Setting…' : 'Set password' }}
+        </button>
+      }
+    }
+  }
+</section>

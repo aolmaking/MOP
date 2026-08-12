@@ -15,8 +15,8 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| Built | **15** |
-| Remaining | **38** |
+| Built | **16** |
+| Remaining | **37** |
 
 Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built
 
@@ -109,13 +109,13 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Invoice & Payment Status | ⬜ | |
 | Safe Technical History | ⬜ | `SafeTechnicalHistory` + `CustomerSafeProjectionService` are built and unreachable |
 
-## Shared System Pages — 1 / 6
+## Shared System Pages — 2 / 6
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
 | Login / Identity Gateway | ✅ | `/login` | |
 | Register as Customer | ⬜ | — | `Tenant.customerRegistrationCode` exists for this |
-| Invite Accept / Set Password | ⬜ | — | **A workshop owner created by Add Workshop cannot sign in.** `inviteTokenHash` is written and never redeemed |
+| Invite Accept / Set Password | ✅ | `/invite/accept?token=` | Closed the four-phase hole: owners created by Add Workshop can now sign in. Verified end to end against the running stack |
 | Access Denied | ⬜ | — | Currently a per-page state rather than a page |
 | Tenant Frozen / Workspace Unavailable | ⬜ | — | Login already refuses frozen tenants; there is no page explaining it |
 | Password Reset | ⬜ | — | Spec marks it a placeholder |
@@ -126,7 +126,7 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 
 Three of these are **not** "a later phase has not run yet" — they are things already built that no human can reach:
 
-1. **Invite Accept.** Add Workshop creates an owner account with `status = INVITED` and no password. There is no page to redeem the invite, so **every workshop created through the product has an owner who cannot log in.**
+1. ~~**Invite Accept.**~~ ✅ **Fixed.** Verified end to end against the running stack: a workshop created through the platform API had an owner who got a 401, and after redeeming the invite signs in as `TENANT_OWNER`. The token is consumed on use.
 2. **The customer Decision Page.** The whole approval flow — tokens, items, critical warnings, the safe projection — exists server-side. The customer has no way to answer.
 3. **Audit & Change History.** Every risky action writes an `AuditLog` row. Nothing reads them.
 

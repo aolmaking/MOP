@@ -4,7 +4,8 @@ import type { Request, Response } from "express";
 import type { SessionContext } from "@mop/shared";
 import { readThrottleSettings } from "../config/environment";
 import { AuthService, MultipleAccountsError, TenantUnavailableError } from "./auth.service";
-import { LoginDto } from "./dto";
+import { AcceptInviteDto, InviteTokenDto, LoginDto } from "./dto";
+import { InviteService } from "./invite.service";
 import { ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME, clearSessionCookies, setSessionCookies } from "./cookie.util";
 import { SessionGuard } from "./session.guard";
 import { CurrentSession } from "./current-session.decorator";
@@ -20,7 +21,10 @@ const AUTH_THROTTLE = { default: { limit: throttle.authLimit, ttl: throttle.auth
 
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly inviteService: InviteService,
+  ) {}
 
   /**
    * Throttled hard. Password verification is scrypt at N=131072 -- around
@@ -84,5 +88,33 @@ export class AuthController {
   @UseGuards(SessionGuard)
   me(@CurrentSession() session: SessionContext): SessionContext {
     return session;
+  }
+
+  /**
+   * Who is this invitation for?
+   *
+   * Public by necessity -- the recipient has no account yet -- and
+   * throttled for the same reason login is: a token is a secret, and an
+   * unthrottled lookup is an offer to enumerate them.
+   */
+  @Post("invite/describe")
+  @Throttle(AUTH_THROTTLE)
+  @HttpCode(200)
+  describeInvite(@Body() dto: InviteTokenDto) {
+    return this.inviteService.describe(dto.token);
+  }
+
+  /**
+   * Redeem it: set a password and activate the account.
+   *
+   * Deliberately does not sign the person in. Redeeming and signing in
+   * are separate acts, and typing the new password once at the login
+   * screen is the moment it becomes memorable.
+   */
+  @Post("invite/accept")
+  @Throttle(AUTH_THROTTLE)
+  @HttpCode(200)
+  acceptInvite(@Body() dto: AcceptInviteDto) {
+    return this.inviteService.accept(dto.token, dto.password);
   }
 }

@@ -1,0 +1,127 @@
+/*
+ * Invite acceptance.
+ *
+ * Centred and narrow, like login, because it is the same kind of moment:
+ * a person arriving from outside with one thing to do and no navigation
+ * to offer them. Every other page in MOP is left-aligned inside a shell;
+ * these two have no shell at all.
+ */
+
+.invite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 26rem;
+  margin: var(--space-8) auto;
+  padding: var(--space-6) var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+}
+
+.body {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* The address the invite was issued to, so the recipient can confirm it
+   reached the right person before committing a password to it. */
+.who {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.error {
+  padding: var(--space-3);
+  background: var(--danger-bg);
+  border-inline-start: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field-label {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.field input {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-base);
+}
+
+.field input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+  border-color: var(--focus-ring);
+}
+
+/*
+ * The requirement is stated before it is tested, and turns from muted to
+ * solid when met. A rule that only appears after a rejected submit makes
+ * the person guess twice.
+ */
+.hint {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.hint--met {
+  color: var(--success);
+}
+
+.hint--bad {
+  color: var(--danger);
+}
+
+.primary {
+  padding: var(--space-3) var(--space-4);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--on-accent);
+  font-size: var(--text-base);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.link {
+  font-size: var(--text-sm);
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
