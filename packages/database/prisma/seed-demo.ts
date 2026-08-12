@@ -62,6 +62,7 @@ async function main() {
 
   const manager = await ensureManager(tenant.id);
   const technician = await ensureTechnician(tenant.id);
+  await ensureOwner(tenant.id);
   await clearDemoWork(tenant.id);
   await createStuckJobs(tenant.id, branch.id, technician.staffUserId);
 
@@ -70,6 +71,9 @@ async function main() {
   console.log(`  Email     ${MANAGER_EMAIL}`);
   console.log(`  Password  ${MANAGER_PASSWORD}`);
   console.log(`  Then open http://localhost:4200/branch/attention\n`);
+  console.log(`  Owner       ${OWNER_EMAIL} / ${OWNER_PASSWORD}`);
+  console.log(`              lands on http://localhost:4200/owner/audit
+`);
   console.log(`  Technician  ${TECHNICIAN_EMAIL} / ${TECHNICIAN_PASSWORD}`);
   console.log(`              lands on http://localhost:4200/tech\n`);
   console.log(`  Manager account ${manager.id}`);
@@ -117,6 +121,52 @@ async function ensureManager(tenantId: string) {
   }
 
   return account;
+}
+
+const OWNER_EMAIL = "owner-demo@apex-motors.local";
+const OWNER_PASSWORD = "ChangeMe-Owner-123";
+
+/**
+ * The seeded owner from the BASE seed has only organization.access.manage,
+ * so it cannot open History. This one carries the role's real defaults.
+ */
+async function ensureOwner(tenantId: string): Promise<void> {
+  const existing = await prisma.account.findFirst({ where: { tenantId, email: OWNER_EMAIL } });
+
+  const account =
+    existing ??
+    (await prisma.account.create({
+      data: {
+        accountType: "TENANT_STAFF",
+        tenantId,
+        email: OWNER_EMAIL,
+        passwordHash: hashPassword(OWNER_PASSWORD),
+        status: "ACTIVE",
+      },
+    }));
+
+  const staff = await prisma.staffUser.findUnique({ where: { accountId: account.id } });
+  if (!staff) {
+    await prisma.staffUser.create({
+      data: {
+        accountId: account.id,
+        tenantId,
+        fullName: "Amira Hassan",
+        role: "TENANT_OWNER",
+        branchScope: [],
+        warehouseScope: [],
+        categoryScope: ["CARS"],
+      },
+    });
+  }
+
+  for (const permissionKey of ["audit.own_tenant.view", "organization.access.manage"]) {
+    await prisma.rolePermission.upsert({
+      where: { tenantId_role_permissionKey: { tenantId, role: "TENANT_OWNER", permissionKey } },
+      create: { tenantId, role: "TENANT_OWNER", permissionKey, allowed: true },
+      update: { allowed: true },
+    });
+  }
 }
 
 const TECHNICIAN_EMAIL = "tech@apex-motors.local";

@@ -90,6 +90,21 @@ export const routes: Routes = [
     ],
   },
   {
+    // The Tenant Owner shell -- the first Owner surface. History is built
+    // first because AuditLog has been written since Phase 1 and read by
+    // nothing; the other seven Owner pages are Phase 10.
+    path: 'owner',
+    canActivate: [authGuard],
+    loadComponent: () => import('./core/layout/owner-shell/owner-shell').then((m) => m.OwnerShell),
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'audit' },
+      {
+        path: 'audit',
+        loadComponent: () => import('./features/owner/audit-page').then((m) => m.AuditPage),
+      },
+    ],
+  },
+  {
     // The inventory manager sits at a desk and works long sessions, so
     // this is a rail like the platform and branch sides -- the opposite
     // requirement to the technician's, which is why they are separate

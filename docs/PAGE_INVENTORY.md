@@ -15,8 +15,8 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| Built | **17** |
-| Remaining | **36** |
+| Built | **18** |
+| Remaining | **35** |
 
 Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built
 
@@ -64,17 +64,17 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Returns / Movements | 🟡 | `/inventory/items/:id` | The ledger is built and readable. The spec's *actions* — accept/reject a return, request clarification — have no page |
 | Reports & Stock Insights | ⬜ | — | |
 
-## Tenant Owner — 0 / 8
+## Tenant Owner — 1 / 8
 
 | Page | State | Notes |
 |---|:--:|---|
-| Owner Home | ⬜ | Phase 10 |
+| Owner Home | ⬜ | Phase 10. `OwnerShell` now exists, with History as its only rail item |
 | Organization & Access | ⬜ | Roles, permissions, staff. The permission engine is built; nothing drives it |
 | Forms & Fields | ⬜ | |
 | Messages & Templates | ⬜ | |
 | Pricing & Financial Configuration | ⬜ | `FinanceConfiguration` exists in the schema, unreachable |
 | Reports & Analytics | ⬜ | |
-| Audit & Change History | ⬜ | `AuditLog` is written on every risky action and has never been readable |
+| Audit & Change History | 🟡 | `/owner/audit` — filterable, with inline diffs. **Rollback not built**: it deep-links to Control Center and Owner pages that do not exist yet. Timestamps use the reader's locale, not the workshop's timezone (the session does not carry it) |
 | Workflow Health / Operations Integrity | ⬜ | |
 
 ## Team Leader — 0 / 4
@@ -124,10 +124,10 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 
 ## What this audit found that nothing else had
 
-Three of these are **not** "a later phase has not run yet" — they are things already built that no human can reach:
+**All three are now closed.** They were not "a later phase has not run yet" — they were finished, tested systems that no human could reach:
 
 1. ~~**Invite Accept.**~~ ✅ **Fixed.** Verified end to end against the running stack: a workshop created through the platform API had an owner who got a 401, and after redeeming the invite signs in as `TENANT_OWNER`. The token is consumed on use.
 2. ~~**The customer Decision Page.**~~ ✅ **Fixed.** Walked end to end against the running stack: read with no auth, an unacknowledged safety rejection refused, a smuggled price field refused, then answered — and the job left the manager's Approvals queue.
-3. **Audit & Change History.** Every risky action writes an `AuditLog` row. Nothing reads them.
+3. ~~**Audit & Change History.**~~ ✅ **Fixed.** Read live as a seeded owner: 8 real rows including this session's own capability changes and customer decisions, every filter working, a manager without the permission refused with 403, and tenant isolation asserted in the query.
 
 These are the priority, ahead of any new role: they are finished systems with no door.

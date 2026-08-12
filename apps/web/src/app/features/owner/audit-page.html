@@ -1,0 +1,144 @@
+<section class="audit">
+  <header class="audit-head">
+    <h1 class="audit-title">History</h1>
+    <p class="audit-sub">Everything that changed about this workshop, who changed it, and why.</p>
+  </header>
+
+  <!--
+    Filters are always visible rather than behind a toggle. This page is
+    opened to answer a specific question -- "what did the platform change
+    last Tuesday" -- and hiding the way to ask it costs a click every
+    single time.
+  -->
+  <div class="filters">
+    <label class="filter">
+      <span class="filter-label">Who</span>
+      <select [value]="actorType()" (change)="setFilter('actorType', $any($event.target).value)">
+        <option value="">Anyone</option>
+        @for (actor of actors; track actor.key) {
+          <option [value]="actor.key">{{ actor.label }}</option>
+        }
+      </select>
+    </label>
+
+    @if (categories().length > 1) {
+      <!-- Only offered when this workshop's history actually spans more
+           than one category. A filter whose options return nothing
+           teaches people the filter is broken. -->
+      <label class="filter">
+        <span class="filter-label">What</span>
+        <select [value]="category()" (change)="setFilter('category', $any($event.target).value)">
+          <option value="">Everything</option>
+          @for (option of categories(); track option) {
+            <option [value]="option">{{ option }}</option>
+          }
+        </select>
+      </label>
+    }
+
+    <label class="filter">
+      <span class="filter-label">Risk</span>
+      <select [value]="riskLevel()" (change)="setFilter('riskLevel', $any($event.target).value)">
+        <option value="">Any</option>
+        @for (risk of risks; track risk) {
+          <option [value]="risk">{{ label(risk) }}</option>
+        }
+      </select>
+    </label>
+  </div>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to this workshop's history</p>
+        <p class="state-body">Ask your workshop owner for audit access.</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('empty') {
+      <div class="state">
+        <p class="state-title">Nothing to show</p>
+        <p class="state-body">
+          Either nothing has changed yet, or nothing matches these filters. Changes appear here the moment they
+          happen.
+        </p>
+      </div>
+    }
+
+    @case ('ready') {
+      <ul class="entries">
+        @for (row of rows(); track row.id) {
+          <li class="entry" [class]="'entry--' + row.riskLevel.toLowerCase()">
+            <div class="entry-main">
+              <div class="entry-who">
+                <span class="actor">{{ row.actorName }}</span>
+                <!-- The chip the spec asks for. An owner needs to know at a
+                     glance whether this was them or the platform. -->
+                @if (row.actorIsPlatform) {
+                  <span class="chip chip--platform">Platform</span>
+                } @else {
+                  <span class="chip">This workshop</span>
+                }
+                <span class="entry-when">{{ when(row.createdAt) }}</span>
+              </div>
+
+              <p class="entry-action">
+                <span class="action">{{ label(row.action) }}</span>
+                <span class="target">{{ row.targetType }}</span>
+              </p>
+
+              <!-- Reason is a column, not a detail. "Why" is the question
+                   this page exists to answer. -->
+              @if (row.reason) {
+                <p class="entry-reason">{{ row.reason }}</p>
+              } @else {
+                <p class="entry-reason entry-reason--missing">No reason recorded</p>
+              }
+            </div>
+
+            <div class="entry-side">
+              <span class="risk">{{ label(row.riskLevel) }}</span>
+              @if (row.hasDiff) {
+                <button class="expand" type="button" (click)="toggle(row)">
+                  {{ isExpanded(row) ? 'Hide changes' : 'Show changes' }}
+                </button>
+              }
+            </div>
+
+            @if (isExpanded(row)) {
+              <!-- Inline, not a separate page. Comparing two states means
+                   seeing them beside the row they belong to. -->
+              <div class="diff">
+                <div class="diff-side">
+                  <p class="diff-label">Before</p>
+                  <pre class="diff-body">{{ format(row.before) }}</pre>
+                </div>
+                <div class="diff-side">
+                  <p class="diff-label diff-label--after">After</p>
+                  <pre class="diff-body">{{ format(row.after) }}</pre>
+                </div>
+              </div>
+            }
+          </li>
+        }
+      </ul>
+
+      @if (nextCursor()) {
+        <button appButton variant="secondary" [disabled]="loadingMore()" (click)="loadMore()">
+          {{ loadingMore() ? 'Loading…' : 'Show older' }}
+        </button>
+      }
+    }
+  }
+</section>

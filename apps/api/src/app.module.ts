@@ -17,6 +17,7 @@ import { TechnicianModule } from "./technician/technician.module";
 import { InventoryModule } from "./inventory/inventory.module";
 import { FinanceModule } from "./finance/finance.module";
 import { CustomerModule } from "./customer/customer.module";
+import { OwnerModule } from "./owner/owner.module";
 import { HealthController } from "./health/health.controller";
 
 @Module({
@@ -48,6 +49,7 @@ import { HealthController } from "./health/health.controller";
     InventoryModule,
     FinanceModule,
     CustomerModule,
+    OwnerModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
