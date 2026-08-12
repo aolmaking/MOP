@@ -30,6 +30,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "finance.invoice.view": true,
     "finance.invoice.issue": true,
     "finance.payment.record": true,
+    "finance.refund.request": true,
+    "finance.refund.decide": true,
     "reports.owner.view": true,
     "audit.own_tenant.view": true,
   },
@@ -54,6 +56,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     // see tenant-owner.md's Pricing page.
     "finance.invoice.issue": false,
     "finance.payment.record": false,
+    // A branch manager can ask for money back on a job -- they see the
+    // dispute -- but deciding it stays with the owner, the same
+    // separation as issuing an invoice in the first place.
+    "finance.refund.request": true,
+    "finance.refund.decide": false,
     // True in the template, and still denied until the owner delegates.
     // The template says "this role would do this if allowed to"; the
     // delegation layer says whether anyone but the owner may at all.

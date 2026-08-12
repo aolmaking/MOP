@@ -130,6 +130,7 @@ afterAll(async () => {
     const where = { tenantId: shop.tenantId };
     await prisma.payment.deleteMany({ where });
     await prisma.creditNote.deleteMany({ where });
+    await prisma.refundRequest.deleteMany({ where });
     await prisma.billingDocument.deleteMany({ where });
     await prisma.invoiceLine.deleteMany({ where });
     await prisma.invoice.deleteMany({ where });
@@ -411,4 +412,141 @@ describe("invoice numbering under real concurrency", () => {
 
     expect(new Set(numbers).size).toBe(10);
   });
+});
+
+async function invoicedJobWithPayment(total: string, paidAmount: string): Promise<string> {
+  const job = await makeJob(paid);
+  await finance.addLine(
+    { tenantId: paid.tenantId, workOrderId: job, name: "Service", itemType: "LABOUR", quantity: 1, unitPrice: total },
+    ACTOR,
+  );
+  const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR);
+  await finance.recordPayment(
+    paid.tenantId,
+    settlement.invoiceId,
+    { amount: paidAmount, method: "CASH", idempotencyKey: `refund-setup-${SUFFIX}-${job}` },
+    ACTOR,
+  );
+  return settlement.invoiceId;
+}
+
+/**
+ * Phase 9's other deferred item, closed this pass: RefundRequest and
+ * CreditNote existed since Phase 8 with no workflow driving them. The
+ * property that matters is the one PHASE_9.md states directly --
+ * "paid" nets out a completed refund from the payment rows rather than
+ * editing them, and an approved refund produces a real, numbered
+ * document through Billing, never just a status flip.
+ */
+describe("refunds: request, approve, and the credit note it produces", () => {
+  it("moves paid down and outstanding up once a refund is approved", async () => {
+    const invoiceId = await invoicedJobWithPayment("100.00", "100.00");
+    const before = await finance.settlement(invoiceId);
+    expect(before).toMatchObject({ paid: "100.00", settled: true });
+
+    const refund = await finance.requestRefund(paid.tenantId, invoiceId, "30.00", "Customer disputed one line", ACTOR);
+    expect(refund.status).toBe("PENDING");
+
+    // A request alone must not move money.
+    const stillFull = await finance.settlement(invoiceId);
+    expect(stillFull.paid).toBe("100.00");
+
+    const approval = await finance.approveRefund(refund.id, ACTOR);
+    expect(approval.creditNoteNumber).toMatch(/^CN-\d{6}$/);
+
+    const after = await finance.settlement(invoiceId);
+    expect(after.paid).toBe("70.00");
+    expect(after.outstanding).toBe("30.00");
+    expect(after.settled).toBe(false);
+  });
+
+  it("writes a real CreditNote row, not just a status change", async () => {
+    const invoiceId = await invoicedJobWithPayment("50.00", "50.00");
+    const refund = await finance.requestRefund(paid.tenantId, invoiceId, "50.00", "Full refund, job cancelled", ACTOR);
+    await finance.approveRefund(refund.id, ACTOR);
+
+    const stored = await prisma.creditNote.findFirst({ where: { invoiceId } });
+    expect(stored).not.toBeNull();
+    expect(stored?.amount.toFixed(2)).toBe("50.00");
+    expect(stored?.billingDocumentId).not.toBeNull();
+  });
+
+  it("refuses to refund more than was actually paid", async () => {
+    const invoiceId = await invoicedJobWithPayment("100.00", "40.00");
+
+    await expect(finance.requestRefund(paid.tenantId, invoiceId, "60.00", "Too much", ACTOR)).rejects.toMatchObject({
+      status: 400,
+      response: { code: "over_refund" },
+    });
+  });
+
+  it("rejecting a refund leaves the payment untouched and cannot be approved afterward", async () => {
+    const invoiceId = await invoicedJobWithPayment("80.00", "80.00");
+    const refund = await finance.requestRefund(paid.tenantId, invoiceId, "20.00", "Reconsidering", ACTOR);
+
+    await finance.rejectRefund(refund.id, ACTOR, "Customer withdrew the complaint");
+
+    const settlement = await finance.settlement(invoiceId);
+    expect(settlement.paid).toBe("80.00");
+
+    await expect(finance.approveRefund(refund.id, ACTOR)).rejects.toMatchObject({
+      status: 409,
+      response: { code: "refund_not_pending" },
+    });
+  });
+
+  it("refuses to decide the same refund twice", async () => {
+    const invoiceId = await invoicedJobWithPayment("60.00", "60.00");
+    const refund = await finance.requestRefund(paid.tenantId, invoiceId, "10.00", "Partial dispute", ACTOR);
+    await finance.approveRefund(refund.id, ACTOR);
+
+    await expect(finance.approveRefund(refund.id, ACTOR)).rejects.toMatchObject({
+      status: 409,
+      response: { code: "refund_not_pending" },
+    });
+  });
+});
+
+/**
+ * compliantBlocked: visibility only, per PHASE_9.md section 6 -- no
+ * invoice is ever refused because of it. Kept current on every issue
+ * rather than on a schedule, since FinanceConfiguration had no writer
+ * at all before this phase.
+ */
+describe("compliantBlocked", () => {
+  it("is set true for a country with no adapter beyond generic, and does not block issuing", async () => {
+    const invoiceId = await invoicedJob_forCompliance();
+
+    const configuration = await prisma.financeConfiguration.findUnique({ where: { tenantId: paid.tenantId } });
+    expect(configuration?.compliantBlocked).toBe(true);
+
+    // The invoice itself issued normally -- visibility only.
+    const stored = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
+    expect(stored.status).not.toBeNull();
+  });
+
+  it("is false once External Billing Mode is on, even with no adapter", async () => {
+    await prisma.financeConfiguration.upsert({
+      where: { tenantId: paid.tenantId },
+      create: { tenantId: paid.tenantId, externalBillingEnabled: true },
+      update: { externalBillingEnabled: true },
+    });
+
+    await invoicedJob_forCompliance();
+
+    const configuration = await prisma.financeConfiguration.findUniqueOrThrow({ where: { tenantId: paid.tenantId } });
+    expect(configuration.compliantBlocked).toBe(false);
+
+    await prisma.financeConfiguration.update({ where: { tenantId: paid.tenantId }, data: { externalBillingEnabled: false } });
+  });
+
+  async function invoicedJob_forCompliance(): Promise<string> {
+    const job = await makeJob(paid);
+    await finance.addLine(
+      { tenantId: paid.tenantId, workOrderId: job, name: "Service", itemType: "LABOUR", quantity: 1, unitPrice: "20.00" },
+      ACTOR,
+    );
+    const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR);
+    return settlement.invoiceId;
+  }
 });

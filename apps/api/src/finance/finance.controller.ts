@@ -4,7 +4,7 @@ import { SessionGuard } from "../auth/session.guard";
 import { CurrentSession } from "../auth/current-session.decorator";
 import { EffectiveAccessService } from "../access/effective-access.service";
 import { FinanceService } from "./finance.service";
-import { AddLineDto, IssueInvoiceDto, RecordPaymentDto } from "./finance.dto";
+import { AddLineDto, IssueInvoiceDto, RecordPaymentDto, RejectRefundDto, RequestRefundDto } from "./finance.dto";
 
 @Controller("finance")
 @UseGuards(SessionGuard)
@@ -69,6 +69,30 @@ export class FinanceController {
       { amount: dto.amount, method: dto.method, idempotencyKey: dto.idempotencyKey },
       this.actor(session),
     );
+  }
+
+  /**
+   * Refunds. Requesting and deciding are two different permissions on
+   * purpose -- a branch manager can raise a dispute; deciding it, by
+   * default, stays with the owner. See finance.service.ts's own note on
+   * why this isn't yet a structurally-enforced second-person check.
+   */
+  @Post("invoices/:id/refunds")
+  async requestRefund(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: RequestRefundDto) {
+    const tenantId = await this.require(session, "finance.refund.request");
+    return this.finance.requestRefund(tenantId, id, dto.amount, dto.reason, this.actor(session));
+  }
+
+  @Post("refunds/:id/approve")
+  async approveRefund(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    await this.require(session, "finance.refund.decide");
+    return this.finance.approveRefund(id, this.actor(session));
+  }
+
+  @Post("refunds/:id/reject")
+  async rejectRefund(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: RejectRefundDto) {
+    await this.require(session, "finance.refund.decide");
+    return this.finance.rejectRefund(id, this.actor(session), dto.reason);
   }
 
   private actor(session: SessionContext) {

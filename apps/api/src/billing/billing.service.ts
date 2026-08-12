@@ -32,6 +32,15 @@ const CLEARANCE_TO_DOCUMENT_STATUS: Record<ClearanceStatus, "PENDING" | "CLEARED
 };
 
 /**
+ * Countries `GenericBillingAdapter` is NOT a compliance gap for -- empty
+ * today, deliberately: no country adapter ships in Phase 9 (see the
+ * phase doc's exit criteria), so every country is compliant-blocked
+ * until `EgyptETAAdapter` or `SaudiZATCAAdapter` actually exist and are
+ * added here. This is the one line that changes when they do.
+ */
+const ADAPTER_COVERED_COUNTRIES = new Set<string>();
+
+/**
  * Billing -- a separate bounded system from Finance Core, per this
  * project's own recorded decision. Finance decides how much; this
  * decides whether the resulting document is legally sufficient, and
@@ -82,6 +91,14 @@ export class BillingService {
       where: { tenantId: candidate.tenantId },
       select: { externalBillingEnabled: true },
     });
+
+    // Kept current on every issue, not on a schedule -- the moment a
+    // tenant's country coverage or External Billing Mode changes is
+    // exactly the moment this flag needs to be right, and issuing an
+    // invoice is the one guaranteed touchpoint that happens regularly
+    // enough to keep it from ever going stale.
+    await this.refreshCompliantBlocked(client, candidate.tenantId, candidate.country, configuration?.externalBillingEnabled ?? false);
+
     if (configuration?.externalBillingEnabled) return null;
 
     const validation = this.adapter.validateInvoice(candidate);
@@ -174,6 +191,31 @@ export class BillingService {
     });
 
     return { creditNoteId: creditNote.id, creditNoteNumber: creditNote.creditNoteNumber ?? creditNoteNumber };
+  }
+
+  /**
+   * A tenant is compliant-blocked when its country has no adapter beyond
+   * the generic one and it is not in External Billing Mode -- the
+   * distinction named in docs/phases/PHASE_9.md section 6: this is a
+   * platform limitation, not a tenant choice, and visibility-only in
+   * this phase (no invoice is ever refused because of it; MOP is not
+   * the tenant's lawyer). Upserts the row, since nothing before this
+   * ever created one -- `FinanceConfiguration` existed in the schema
+   * since Phase 8 with no writer at all.
+   */
+  private async refreshCompliantBlocked(
+    client: PrismaService | Prisma.TransactionClient,
+    tenantId: string,
+    country: string,
+    externalBillingEnabled: boolean,
+  ): Promise<void> {
+    const compliantBlocked = !externalBillingEnabled && !ADAPTER_COVERED_COUNTRIES.has(country);
+
+    await client.financeConfiguration.upsert({
+      where: { tenantId },
+      create: { tenantId, compliantBlocked },
+      update: { compliantBlocked },
+    });
   }
 
   /** Same atomic-upsert pattern as FinanceService.nextInvoiceNumber(). */

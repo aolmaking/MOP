@@ -7,6 +7,7 @@ import {
   isCapabilityActive,
   outstanding,
   overpaid,
+  subtract,
   sum,
   type ChargeableItemType,
   type InvoiceCandidate,
@@ -418,6 +419,13 @@ export class FinanceService {
    * read from Invoice.paid. Those columns are a reporting convenience
    * that a bug could leave stale; the rows are what actually happened.
    */
+  /**
+   * `paid` nets out completed refunds, never edits a payment row.
+   * A payment is a fact about money that moved once; a refund is a
+   * separate fact about money that moved back, with its own reason and
+   * its own actor. Subtracting it here keeps both facts on the record
+   * instead of pretending the original payment was smaller than it was.
+   */
   async settlement(invoiceId: string): Promise<Settlement> {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: invoiceId },
@@ -425,13 +433,15 @@ export class FinanceService {
     });
     if (!invoice) throw new NotFoundException({ code: "invoice_not_found", message: "Invoice not found." });
 
-    const payments = await this.prisma.payment.findMany({
-      where: { invoiceId, status: "CONFIRMED" },
-      select: { amount: true },
-    });
+    const [payments, refunds] = await Promise.all([
+      this.prisma.payment.findMany({ where: { invoiceId, status: "CONFIRMED" }, select: { amount: true } }),
+      this.prisma.refundRequest.findMany({ where: { invoiceId, status: "COMPLETED" }, select: { amount: true } }),
+    ]);
 
     const total = invoice.total.toFixed(2);
-    const paid = sum(payments.map((payment) => payment.amount.toFixed(2)));
+    const grossPaid = sum(payments.map((payment) => payment.amount.toFixed(2)));
+    const refunded = sum(refunds.map((refund) => refund.amount.toFixed(2)));
+    const paid = subtract(grossPaid, refunded);
 
     return {
       invoiceId,
@@ -441,6 +451,113 @@ export class FinanceService {
       overpaid: overpaid(total, paid),
       settled: compare(paid, total) >= 0,
     };
+  }
+
+  // --- refunds ---------------------------------------------------------
+
+  /**
+   * A technician or manager asks for money back on an issued invoice.
+   * Sits at PENDING until someone else decides -- approving your own
+   * refund request is exactly the kind of thing Phase 19's separation-
+   * of-duties work will eventually gate explicitly; for now the decision
+   * simply requires a second call with a different actor, which the
+   * controller can enforce by permission.
+   */
+  async requestRefund(
+    tenantId: string,
+    invoiceId: string,
+    amount: Money,
+    reason: string,
+    actor: LifecycleActor,
+  ): Promise<{ id: string; status: "PENDING" }> {
+    await this.requireFinance(tenantId);
+
+    const settlement = await this.settlement(invoiceId);
+    if (compare(amount, settlement.paid) > 0) {
+      throw new BadRequestException({
+        code: "over_refund",
+        message: `Only ${settlement.paid} was actually paid; ${amount} cannot be refunded.`,
+      });
+    }
+
+    const requestId = await this.prisma.$transaction(async (tx) => {
+      const request = await tx.refundRequest.create({
+        data: { tenantId, invoiceId, amount, reason, requestedById: actor.accountId },
+        select: { id: true },
+      });
+      await this.emit(tx, tenantId, "finance.refund_requested", request.id, actor, { invoiceId, amount, reason });
+      return request.id;
+    });
+
+    return { id: requestId, status: "PENDING" };
+  }
+
+  /**
+   * Approved, and only now does money actually move -- a request on its
+   * own changes nothing. Produces a real CreditNote through Billing,
+   * because a refund without a document is money leaving with no
+   * artifact a customer or a tax authority could ever ask to see.
+   */
+  async approveRefund(refundRequestId: string, actor: LifecycleActor): Promise<{ id: string; creditNoteNumber: string }> {
+    const refund = await this.prisma.refundRequest.findUnique({ where: { id: refundRequestId } });
+    if (!refund) throw new NotFoundException({ code: "refund_not_found", message: "Refund request not found." });
+    if (refund.status !== "PENDING") {
+      throw new ConflictException({
+        code: "refund_not_pending",
+        message: `This refund is already ${refund.status.toLowerCase()}.`,
+      });
+    }
+
+    const creditNote = await this.prisma.$transaction(async (tx) => {
+      await tx.refundRequest.update({
+        where: { id: refundRequestId },
+        data: { status: "COMPLETED", decidedById: actor.accountId, decidedAt: new Date() },
+      });
+
+      const issued = await this.billing.issueCreditNote(
+        {
+          tenantId: refund.tenantId,
+          invoiceId: refund.invoiceId,
+          amount: refund.amount.toFixed(2),
+          reason: refund.reason,
+          issuedById: actor.accountId,
+        },
+        tx,
+      );
+
+      await this.emit(tx, refund.tenantId, "finance.refund_approved", refundRequestId, actor, {
+        invoiceId: refund.invoiceId,
+        amount: refund.amount.toFixed(2),
+        creditNoteNumber: issued.creditNoteNumber,
+      });
+
+      return issued;
+    });
+
+    await this.refreshCachedTotals(refund.invoiceId);
+
+    return { id: refundRequestId, creditNoteNumber: creditNote.creditNoteNumber };
+  }
+
+  async rejectRefund(refundRequestId: string, actor: LifecycleActor, reason?: string): Promise<{ id: string; status: "REJECTED" }> {
+    const refund = await this.prisma.refundRequest.findUnique({ where: { id: refundRequestId } });
+    if (!refund) throw new NotFoundException({ code: "refund_not_found", message: "Refund request not found." });
+    if (refund.status !== "PENDING") {
+      throw new ConflictException({
+        code: "refund_not_pending",
+        message: `This refund is already ${refund.status.toLowerCase()}.`,
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.refundRequest.update({
+        where: { id: refundRequestId },
+        data: { status: "REJECTED", decidedById: actor.accountId, decidedAt: new Date() },
+      });
+      await this.emit(tx, refund.tenantId, "finance.refund_rejected", refundRequestId, actor, { reason });
+    });
+
+    return { id: refundRequestId, status: "REJECTED" };
   }
 
   // --- internals -----------------------------------------------------

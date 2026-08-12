@@ -84,6 +84,13 @@ const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: "finance.invoice.view", module: "FINANCE" },
   { key: "finance.invoice.issue", module: "FINANCE" },
   { key: "finance.payment.record", module: "FINANCE" },
+  { key: "finance.refund.request", module: "FINANCE" },
+  // Deliberately a separate key from .request -- requesting and deciding
+  // a refund are different acts, and a role that can request should not
+  // automatically be able to approve its own request. See Phase 19's
+  // separation-of-duties work for where this gets enforced structurally;
+  // for now the two permissions can simply be granted to different roles.
+  { key: "finance.refund.decide", module: "FINANCE" },
 
   // Inventory
   { key: "inventory.home.view", module: "INVENTORY" },

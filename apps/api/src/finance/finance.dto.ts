@@ -67,3 +67,19 @@ export class RecordPaymentDto {
   @Length(8, 128)
   idempotencyKey!: string;
 }
+
+export class RequestRefundDto {
+  @Matches(MONEY, { message: "amount must be a money value with at most 2 decimal places, as a string" })
+  amount!: string;
+
+  @IsString()
+  @Length(1, 500)
+  reason!: string;
+}
+
+export class RejectRefundDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 500)
+  reason?: string;
+}
