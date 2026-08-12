@@ -83,7 +83,7 @@ Three doors closed earlier this arc, from the original audit:
 | 4 — Operations Spine | ✅ complete |
 | 5 — Branch Manager | ✅ **complete — 7 of 7 pages**, Team Setup closed |
 | 6 — Technician | ✅ complete — 6.A–6.G |
-| 7 — Inventory | 🟠 **engine done, 5 of 6 pages built** — Returns/Movements actions still owed, see PAGE_INVENTORY.md |
+| 7 — Inventory | ✅ **complete — 6 of 6 pages**, Returns/Movements closed |
 | 8 — Finance Core | 🟠 engine done; Owner "Money" page owed (Phase 10) |
 | **9 — Billing / Invoicing** | **🔵 next**, once the remaining page gap is acceptable |
 | 10–14 | ⬜ not started |
@@ -98,7 +98,7 @@ Platform Super Admin: 3 of 6 pages (Add Workshop Owner, Workshops,
 Builder Control partial). Governance Controls, Platform Reports and
 Workshop Live View still owed.
 
-**Verified at last commit:** 377 API/shared tests + 158 web tests, typecheck clean, all **four** custom lint rules passing, full build green (`corepack pnpm build`, confirmed standalone — the combined `typecheck && lint && test && build` run can OOM-kill the last step on this machine; run `build` separately if that happens). Pushed to `origin/main`.
+**Verified at last commit:** 391 API/shared tests + 163 web tests, typecheck clean, all **four** custom lint rules passing, full build green (`corepack pnpm build`, confirmed standalone — the combined `typecheck && lint && test && build` run can OOM-kill the last step on this machine; run `build` separately if that happens).
 
 ## 3. Completed work
 
@@ -186,9 +186,10 @@ Note also that `BILLING` = `EXTERNAL` is a real capability state, not on/off: to
 1. **CI was red on every commit until 2026-08-09, now fixed.** Cause: the pipeline ran lint/typecheck/test BEFORE build, but `@mop/shared` is consumed through its built `dist/` (see its package.json main/types), which does not exist in a fresh checkout. It passed locally only because dist had been built at some point. Fixed by making the ordering explicit in both the root scripts and the workflow. Reproduce any suspected CI failure locally with `rm -rf packages/shared/dist` first.
 2. **Two gates return `true` unconditionally** — `review.team_review_passed` and `qc.passed` in `gate-evaluator.service.ts`. The justification is that reaching a post-review state *is* the evidence, since the router will not route there otherwise. This is defensible but is still a hardcoded true, which the project elsewhere treats as a defect. **Revisit when Team Leader (Phase 10) and QC produce real records.**
 3. **`byStatus` uses `updatedAt`** as a proxy for "entered this state", because no `statusChangedAt` column exists. Honest but imprecise; a dedicated column would be exact.
-4. **Multiple partial issues against one part request** are not expressible (`IssuedItem.partRequestId` is unique). Deferred to Phase 7 with the reason recorded in `SCENARIOS.md` 3.5.
+4. ~~Multiple partial issues against one part request are not expressible~~ **Resolved.** `IssuedItem.partRequestId` is deliberately NOT unique (see the schema's own comment) precisely so this is expressible; fulfilment is derived by summing, never cached. This entry was stale.
 5. **Structured logging** is still outstanding from Phase 1.4. The correlation id it needs is already emitted.
 6. **Billing vs Finance split** is decided but only Finance-side contracts exist; no billing adapter is built yet (Phase 9).
+7. **No technician-facing HTTP endpoint exists for the part-request lifecycle at all** — found while closing Returns/Movements. `PartRequestService` (request, issue-receipt, return, everything) is called only from `InventoryController` and from tests; nothing in `apps/api/src/technician/` or the Work Card web page wires a "request a part" or "return a part" action, despite the Work Card being one of Phase 6's shipped "10 tools" pages. The Inventory Manager's side of the return queue is now fully built and tested (service-level, via direct `PartRequestService` calls in integration tests), but nothing in the product can *originate* a request or a return through the UI a real technician uses. Needs its own task against Phase 6, not silently absorbed into whatever's being built next.
 
 ## 7a. Looking at the app
 

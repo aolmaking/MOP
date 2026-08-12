@@ -101,6 +101,33 @@ export class InventoryApi {
     return this.http.post(`/api/v1/inventory/requests/${id}/reject`, { reason });
   }
 
+  movements(filters: MovementFilters): Observable<MovementPage> {
+    const params: Record<string, string> = {};
+    if (filters.warehouseId) params['warehouseId'] = filters.warehouseId;
+    if (filters.itemId) params['itemId'] = filters.itemId;
+    if (filters.type) params['type'] = filters.type;
+    if (filters.from) params['from'] = filters.from;
+    if (filters.to) params['to'] = filters.to;
+    if (filters.page) params['page'] = String(filters.page);
+    return this.http.get<MovementPage>('/api/v1/inventory/movements', { params });
+  }
+
+  openReturns(): Observable<{ returns: OpenReturn[] }> {
+    return this.http.get<{ returns: OpenReturn[] }>('/api/v1/inventory/returns');
+  }
+
+  acceptReturn(id: string, warehouseId: string, quantity: number, damaged: boolean): Observable<unknown> {
+    return this.http.post(`/api/v1/inventory/returns/${id}/accept`, { warehouseId, quantity, damaged });
+  }
+
+  rejectReturn(id: string, reason?: string): Observable<unknown> {
+    return this.http.post(`/api/v1/inventory/returns/${id}/reject`, { reason });
+  }
+
+  requestReturnClarification(id: string, question: string): Observable<unknown> {
+    return this.http.post(`/api/v1/inventory/returns/${id}/clarify`, { question });
+  }
+
   home(): Observable<InventoryHome> {
     return this.http.get<InventoryHome>('/api/v1/inventory/home');
   }
@@ -228,4 +255,52 @@ export interface InventoryReports {
   readonly requesters: readonly { requestedById: string; requests: number; averageFulfilmentHours: number | null }[];
   /** Null for a single-warehouse scope -- not an empty array. */
   readonly warehouseComparison: readonly { warehouseId: string; code: string; name: string; issued: number }[] | null;
+}
+
+/* ------------------------------------------------------------------ *
+ * Returns / Movements.
+ * ------------------------------------------------------------------ */
+
+export interface MovementRow {
+  readonly id: string;
+  readonly type: string;
+  readonly quantity: number;
+  readonly beforeQty: number;
+  readonly afterQty: number;
+  readonly referenceType: string | null;
+  readonly referenceId: string | null;
+  readonly actorId: string;
+  readonly createdAt: string;
+  readonly inventoryItem: { id: string; name: string; sku: string };
+  readonly warehouse: { id: string; name: string; code: string };
+}
+
+export interface MovementPage {
+  readonly rows: readonly MovementRow[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+export interface OpenReturn {
+  readonly partRequestId: string;
+  readonly status: string;
+  readonly itemId: string;
+  readonly itemName: string;
+  readonly sku: string;
+  readonly workOrderId: string;
+  readonly quantity: number;
+  readonly reason: string | null;
+  readonly clarificationQuestion: string | null;
+  readonly requestedById: string;
+  readonly requestedAt: string;
+}
+
+export interface MovementFilters {
+  warehouseId?: string;
+  itemId?: string;
+  type?: string;
+  from?: string;
+  to?: string;
+  page?: number;
 }

@@ -152,6 +152,10 @@ export const routes: Routes = [
         path: 'items/:id',
         loadComponent: () => import('./features/inventory/inventory-item').then((m) => m.InventoryItem),
       },
+      {
+        path: 'returns',
+        loadComponent: () => import('./features/inventory/inventory-returns').then((m) => m.InventoryReturns),
+      },
     ],
   },
   {

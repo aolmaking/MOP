@@ -239,7 +239,7 @@ describe("SCENARIOS.md 3.3 — a part comes back damaged", () => {
     await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, ACTOR);
     await parts.markArrived(request.id, ACTOR);
     await parts.receive(request.id, ACTOR);
-    await parts.requestReturn(request.id, ACTOR, "Arrived cracked");
+    await parts.requestReturn(request.id, 1, ACTOR, "Arrived cracked");
     await parts.acceptReturn(request.id, ACTOR);
 
     const before = await stock.balanceOf(full.itemId, full.warehouseId);
@@ -256,7 +256,7 @@ describe("SCENARIOS.md 3.3 — a part comes back damaged", () => {
     await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, ACTOR);
     await parts.markArrived(request.id, ACTOR);
     await parts.receive(request.id, ACTOR);
-    await parts.requestReturn(request.id, ACTOR, "Not needed");
+    await parts.requestReturn(request.id, 1, ACTOR, "Not needed");
     await parts.acceptReturn(request.id, ACTOR);
 
     const before = await stock.balanceOf(full.itemId, full.warehouseId);
@@ -287,7 +287,7 @@ describe("the capability profile decides, not an if-statement", () => {
 
     // The return edge does not exist in this profile -- refused by the
     // router, not by a hidden button.
-    await expect(parts.requestReturn(request.id, ACTOR)).rejects.toMatchObject({ status: 409 });
+    await expect(parts.requestReturn(request.id, 1, ACTOR)).rejects.toMatchObject({ status: 409 });
 
     // And the part can still be used, which is the point: removing
     // returns must not strand a part in the technician's hands.
@@ -304,5 +304,183 @@ describe("the capability profile decides, not an if-statement", () => {
       status: 409,
       response: { code: "transition_not_allowed" },
     });
+  });
+});
+
+/**
+ * Returns/Movements' four actions. The two the previous build was
+ * entirely missing -- Reject Return and Request Clarification -- plus
+ * the RETURN_PENDING bucket both rely on, and the PartReturnRequest row
+ * the queue reads that nothing used to write.
+ */
+async function receivedRequest(shop: Workshop, quantity: number) {
+  const request = await ask(shop, quantity);
+  await parts.approve(request.id, ACTOR);
+  await parts.issue({ partRequestId: request.id, warehouseId: shop.warehouseId, quantity }, ACTOR);
+  await parts.markArrived(request.id, ACTOR);
+  await parts.receive(request.id, ACTOR);
+  return request;
+}
+
+describe("Returns/Movements: requesting a return opens RETURN_PENDING", () => {
+  it("moves the quantity out of available and into returnPendingQty, not damaged or issued", async () => {
+    const request = await receivedRequest(full, 1);
+    const before = await stock.balanceOf(full.itemId, full.warehouseId);
+
+    await parts.requestReturn(request.id, 1, ACTOR, "Wrong size");
+
+    const after = await stock.balanceOf(full.itemId, full.warehouseId);
+    expect(after.returnPendingQty).toBe(before.returnPendingQty + 1);
+    // Requesting a return does not touch availableQty -- the part has not
+    // come back yet, it has only stopped being "with the technician".
+    expect(after.availableQty).toBe(before.availableQty);
+  });
+
+  it("writes a PartReturnRequest row the queue can read -- previously nothing did", async () => {
+    const request = await receivedRequest(full, 1);
+    await parts.requestReturn(request.id, 1, ACTOR, "Doesn't fit");
+
+    const row = await prisma.partReturnRequest.findUnique({ where: { partRequestId: request.id } });
+    expect(row).toMatchObject({ quantity: 1, reason: "Doesn't fit", resolvedAt: null });
+
+    const queue = await parts.openReturns(full.tenantId);
+    expect(queue.map((entry) => entry.partRequestId)).toContain(request.id);
+  });
+
+  it("refuses to return more than was issued", async () => {
+    const request = await receivedRequest(full, 1);
+    await expect(parts.requestReturn(request.id, 2, ACTOR)).rejects.toMatchObject({
+      status: 400,
+      response: { code: "over_return" },
+    });
+  });
+});
+
+describe("Returns/Movements: Request Clarification", () => {
+  it("asks a question without deciding, and it shows up on the queue row", async () => {
+    const request = await receivedRequest(full, 1);
+    await parts.requestReturn(request.id, 1, ACTOR, "Cracked casing");
+
+    await parts.requestClarification(request.id, ACTOR, "Is this the correct part number?");
+
+    const stored = await prisma.partRequest.findUniqueOrThrow({ where: { id: request.id } });
+    expect(stored.status).toBe("RETURN_CLARIFICATION_REQUESTED");
+
+    const row = await prisma.partReturnRequest.findUniqueOrThrow({ where: { partRequestId: request.id } });
+    expect(row.clarificationQuestion).toBe("Is this the correct part number?");
+  });
+
+  it("does not touch stock -- asking a question is not a decision about the part", async () => {
+    const request = await receivedRequest(full, 1);
+    await parts.requestReturn(request.id, 1, ACTOR, "Cracked casing");
+    const before = await stock.balanceOf(full.itemId, full.warehouseId);
+
+    await parts.requestClarification(request.id, ACTOR, "Which SKU is this?");
+
+    const after = await stock.balanceOf(full.itemId, full.warehouseId);
+    expect(after).toEqual(before);
+  });
+
+  it("the technician's reply loops back to RETURN_REQUESTED and clears the question", async () => {
+    const request = await receivedRequest(full, 1);
+    await parts.requestReturn(request.id, 1, ACTOR, "Cracked casing");
+    await parts.requestClarification(request.id, ACTOR, "Which SKU is this?");
+
+    await parts.respondToClarification(request.id, ACTOR, "BRK-4471, confirmed against the box");
+
+    const stored = await prisma.partRequest.findUniqueOrThrow({ where: { id: request.id } });
+    expect(stored.status).toBe("RETURN_REQUESTED");
+
+    const row = await prisma.partReturnRequest.findUniqueOrThrow({ where: { partRequestId: request.id } });
+    expect(row.clarificationQuestion).toBeNull();
+    expect(row.reason).toBe("BRK-4471, confirmed against the box");
+  });
+
+  it("can repeat: clarify, reply, clarify again", async () => {
+    const request = await receivedRequest(full, 1);
+    await parts.requestReturn(request.id, 1, ACTOR, "Cracked casing");
+
+    await parts.requestClarification(request.id, ACTOR, "First question");
+    await parts.respondToClarification(request.id, ACTOR, "First answer");
+    await parts.requestClarification(request.id, ACTOR, "Second question");
+
+    const stored = await prisma.partRequest.findUniqueOrThrow({ where: { id: request.id } });
+    expect(stored.status).toBe("RETURN_CLARIFICATION_REQUESTED");
+
+    const row = await prisma.partReturnRequest.findUniqueOrThrow({ where: { partRequestId: request.id } });
+    expect(row.clarificationQuestion).toBe("Second question");
+  });
+});
+
+describe("Returns/Movements: Reject Return", () => {
+  it("moves to RETURN_REJECTED, not the top-level REJECTED -- the part already left the shelf", async () => {
+    const request = await receivedRequest(full, 1);
+    await parts.requestReturn(request.id, 1, ACTOR, "Doesn't fit");
+
+    await parts.rejectReturn(request.id, ACTOR, "Shows clear signs of use");
+
+    const stored = await prisma.partRequest.findUniqueOrThrow({ where: { id: request.id } });
+    expect(stored.status).toBe("RETURN_REJECTED");
+  });
+
+  it("does not silently drop the part from tracking -- it must be resolved", async () => {
+    const request = await receivedRequest(full, 1);
+    await parts.requestReturn(request.id, 1, ACTOR);
+    await parts.rejectReturn(request.id, ACTOR, "Used, not defective");
+
+    // The exact resolution the spec names: mark it Used after all.
+    await parts.resolveRejectedReturn(request.id, ACTOR);
+
+    const stored = await prisma.partRequest.findUniqueOrThrow({ where: { id: request.id } });
+    expect(stored.status).toBe("USED");
+  });
+
+  it("marks the PartReturnRequest resolved, so it drops off the open queue", async () => {
+    const request = await receivedRequest(full, 1);
+    await parts.requestReturn(request.id, 1, ACTOR);
+    await parts.rejectReturn(request.id, ACTOR, "Used, not defective");
+
+    const queue = await parts.openReturns(full.tenantId);
+    expect(queue.map((entry) => entry.partRequestId)).not.toContain(request.id);
+  });
+});
+
+describe("Returns/Movements: Accept Return to Stock reverses RETURN_PENDING", () => {
+  it("the pending quantity returns to zero and availableQty gains it, in one transaction", async () => {
+    const request = await receivedRequest(full, 1);
+    await parts.requestReturn(request.id, 1, ACTOR);
+    const pending = await stock.balanceOf(full.itemId, full.warehouseId);
+    expect(pending.returnPendingQty).toBeGreaterThan(0);
+
+    await parts.acceptReturn(request.id, ACTOR);
+    await parts.completeReturn(request.id, full.warehouseId, 1, ACTOR);
+
+    const after = await stock.balanceOf(full.itemId, full.warehouseId);
+    expect(after.returnPendingQty).toBe(pending.returnPendingQty - 1);
+    expect(after.availableQty).toBe(pending.availableQty + 1);
+  });
+
+  it("accepting as damaged reverses the same pending quantity but credits damagedQty instead", async () => {
+    const request = await receivedRequest(full, 1);
+    await parts.requestReturn(request.id, 1, ACTOR);
+    const pending = await stock.balanceOf(full.itemId, full.warehouseId);
+
+    await parts.acceptReturn(request.id, ACTOR);
+    await parts.completeReturn(request.id, full.warehouseId, 1, ACTOR, { damaged: true });
+
+    const after = await stock.balanceOf(full.itemId, full.warehouseId);
+    expect(after.returnPendingQty).toBe(pending.returnPendingQty - 1);
+    expect(after.damagedQty).toBe(pending.damagedQty + 1);
+    expect(after.availableQty).toBe(pending.availableQty);
+  });
+
+  it("removes the request from the open-returns queue once resolved", async () => {
+    const request = await receivedRequest(full, 1);
+    await parts.requestReturn(request.id, 1, ACTOR);
+    await parts.acceptReturn(request.id, ACTOR);
+    await parts.completeReturn(request.id, full.warehouseId, 1, ACTOR);
+
+    const queue = await parts.openReturns(full.tenantId);
+    expect(queue.map((entry) => entry.partRequestId)).not.toContain(request.id);
   });
 });

@@ -5,7 +5,7 @@ import { CurrentSession } from "../auth/current-session.decorator";
 import { EffectiveAccessService } from "../access/effective-access.service";
 import { InventoryViewService } from "./inventory-view.service";
 import { PartRequestService } from "./part-request.service";
-import { IssueDto, ReturnDto } from "./inventory.dto";
+import { IssueDto, RejectReturnDto, RequestClarificationDto, ReturnDto } from "./inventory.dto";
 import { CatalogItemDto } from "./catalog.dto";
 import { InventoryHomeService } from "./inventory-home.service";
 import { CatalogService } from "./catalog.service";
@@ -141,13 +141,69 @@ export class InventoryController {
     );
   }
 
-  @Post("requests/:id/return")
-  async completeReturn(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: ReturnDto) {
-    await this.require(session, "inventory.request.issue");
-    await this.parts.completeReturn(id, dto.warehouseId, dto.quantity, this.actor(session), {
-      damaged: dto.damaged ?? false,
+  /**
+   * Returns/Movements' queue and its four actions.
+   *
+   * The ledger is server-side filtered and paginated, matching the
+   * spec's own reason: a busy multi-warehouse workshop can generate a
+   * lot of rows.
+   */
+  @Get("movements")
+  async movements(
+    @CurrentSession() session: SessionContext,
+    @Query("warehouseId") warehouseId?: string,
+    @Query("itemId") itemId?: string,
+    @Query("type") type?: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("page") page?: string,
+  ) {
+    const tenantId = await this.require(session, "inventory.movements.view");
+    return this.view.movements(tenantId, {
+      warehouseId,
+      inventoryItemId: itemId,
+      type: type as never,
+      from: from ? new Date(from) : undefined,
+      to: to ? new Date(to) : undefined,
+      page: page ? Number(page) : 1,
     });
+  }
+
+  @Get("returns")
+  async openReturns(@CurrentSession() session: SessionContext) {
+    const tenantId = await this.require(session, "inventory.movements.view");
+    return { returns: await this.parts.openReturns(tenantId) };
+  }
+
+  /**
+   * "Accept Return to Stock" / "Accept as Damaged" as one click, per the
+   * spec -- internally two transitions (RETURN_ACCEPTED, then
+   * RETURNED_TO_STOCK), because the workflow graph requires passing
+   * through the intent-to-accept state before the stock actually moves.
+   */
+  @Post("returns/:id/accept")
+  async acceptReturn(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: ReturnDto) {
+    await this.require(session, "inventory.stock.return.accept");
+    const actor = this.actor(session);
+    await this.parts.acceptReturn(id, actor);
+    await this.parts.completeReturn(id, dto.warehouseId, dto.quantity, actor, { damaged: dto.damaged ?? false });
     return { ok: true as const };
+  }
+
+  @Post("returns/:id/reject")
+  async rejectReturn(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: RejectReturnDto) {
+    await this.require(session, "inventory.stock.return.reject");
+    return this.parts.rejectReturn(id, this.actor(session), dto.reason);
+  }
+
+  @Post("returns/:id/clarify")
+  async requestClarification(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: RequestClarificationDto,
+  ) {
+    await this.require(session, "inventory.stock.return.clarify");
+    return this.parts.requestClarification(id, this.actor(session), dto.question);
   }
 
   private actor(session: SessionContext) {

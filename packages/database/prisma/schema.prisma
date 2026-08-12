@@ -170,6 +170,11 @@ enum StockMovementType {
   TRANSFER_OUT
   SUPPLIER_RECEIPT
   ADJUSTMENT
+  // A technician has sent a part back but it has not yet been accepted or
+  // rejected -- the part is neither sellable nor still issued. Reversed by
+  // a RETURN_TO_STOCK or DAMAGED movement of the same quantity when the
+  // inventory manager decides, never left standing on its own.
+  RETURN_PENDING
 }
 
 enum TransferStatus {
@@ -1016,6 +1021,12 @@ model PartReturnRequest {
   createdAt     DateTime  @default(now())
   resolvedAt    DateTime?
   resolvedById  String?
+  // The inventory manager's open question, set by Request Clarification
+  // and cleared the moment the technician replies or the request is
+  // finally accepted/rejected -- null means there is nothing outstanding
+  // to ask the technician, whether because nobody asked or because the
+  // loop already closed.
+  clarificationQuestion String?
 
   partRequest PartRequest @relation(fields: [partRequestId], references: [id], onDelete: Cascade)
 

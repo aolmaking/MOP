@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
-import type { Prisma, StockMovementType } from "@mop/database";
+import { Prisma, type StockMovementType } from "@mop/database";
 import { PrismaService } from "../database/prisma.service";
 
 /**
@@ -21,6 +21,10 @@ const EFFECTS: Record<StockMovementType, { bucket: StockBucket; direction: 1 | -
   SUPPLIER_RECEIPT: { bucket: "availableQty", direction: 1 },
   // A correction. Signed: the caller supplies the direction in `quantity`.
   ADJUSTMENT: { bucket: "availableQty", direction: 1 },
+  // Sent back but not yet accepted or rejected -- neither sellable nor
+  // still with the technician. Always reversed later by a RETURN_TO_STOCK
+  // or DAMAGED movement of the same quantity; never left standing alone.
+  RETURN_PENDING: { bucket: "returnPendingQty", direction: 1 },
 };
 
 export type StockBucket = "availableQty" | "reservedQty" | "issuedQty" | "returnPendingQty" | "damagedQty";
@@ -91,10 +95,16 @@ export class StockService {
     if (input.quantity === 0) {
       throw new BadRequestException({ code: "quantity_zero", message: "A movement of zero changes nothing." });
     }
-    if (input.quantity < 0 && input.type !== "ADJUSTMENT") {
+    // ADJUSTMENT is signed because it IS a correction. RETURN_PENDING is
+    // signed for a different reason: it is the one bucket meant to be
+    // opened and then reversed (a return requested, then accepted or
+    // rejected), never a standing, one-directional fact the way ISSUE or
+    // RETURN_TO_STOCK are -- a negative RETURN_PENDING is "this pending
+    // return has now been resolved", not a mistake being corrected.
+    if (input.quantity < 0 && input.type !== "ADJUSTMENT" && input.type !== "RETURN_PENDING") {
       throw new BadRequestException({
         code: "quantity_negative",
-        message: "Only an adjustment may be negative. Use the movement type that describes what happened.",
+        message: "Only an adjustment or a resolved pending return may be negative.",
       });
     }
 
@@ -102,28 +112,10 @@ export class StockService {
       const effect = EFFECTS[input.type];
       const delta = input.quantity * effect.direction;
 
-      // Locked for the duration so two concurrent issues of the last item
-      // cannot both read the same "before" and both succeed.
-      const existing = await client.warehouseStockBalance.findUnique({
-        where: {
-          inventoryItemId_warehouseId: {
-            inventoryItemId: input.inventoryItemId,
-            warehouseId: input.warehouseId,
-          },
-        },
-      });
-
-      const before = existing ? (existing[effect.bucket] as number) : 0;
-      const after = before + delta;
-
-      if (after < 0) {
-        throw new BadRequestException({
-          code: "insufficient_stock",
-          message: `Not enough stock: ${before} available, ${Math.abs(delta)} needed.`,
-        });
-      }
-
-      const balance = await client.warehouseStockBalance.upsert({
+      // Ensure the row exists. Not itself a race risk: two concurrent
+      // inserts of the same brand-new zero balance converge on the same
+      // zero either way, so a plain upsert is fine for this step alone.
+      await client.warehouseStockBalance.upsert({
         where: {
           inventoryItemId_warehouseId: {
             inventoryItemId: input.inventoryItemId,
@@ -135,9 +127,48 @@ export class StockService {
           inventoryItemId: input.inventoryItemId,
           warehouseId: input.warehouseId,
           ...ZERO,
-          [effect.bucket]: after,
         },
-        update: { [effect.bucket]: after },
+        update: {},
+      });
+
+      // Locked for the rest of this transaction with a real row lock.
+      // A plain SELECT -- which is what `findUnique` issued here before
+      // this fix -- takes no lock under Postgres's default READ COMMITTED
+      // isolation, so two concurrent movements against the same balance
+      // could both read the same "before" value and both proceed to
+      // succeed: the last unit of a part requested by two technicians at
+      // the same instant would be issued to both. `FOR UPDATE` is what
+      // makes the comment this method used to carry ("locked for the
+      // duration") actually true, rather than just asserted. See
+      // docs/scenarios3/EDGE_CASE_REGISTER.md, H6/E16 -- this was flagged
+      // as an unverified claim and confirmed as a real gap on inspection.
+      const [locked] = await client.$queryRaw<
+        { availableQty: number; reservedQty: number; issuedQty: number; returnPendingQty: number; damagedQty: number }[]
+      >(Prisma.sql`
+        SELECT "availableQty", "reservedQty", "issuedQty", "returnPendingQty", "damagedQty"
+        FROM "warehouse_stock_balances"
+        WHERE "inventoryItemId" = ${input.inventoryItemId} AND "warehouseId" = ${input.warehouseId}
+        FOR UPDATE
+      `);
+
+      const before = locked[effect.bucket];
+      const after = before + delta;
+
+      if (after < 0) {
+        throw new BadRequestException({
+          code: "insufficient_stock",
+          message: `Not enough stock: ${before} available, ${Math.abs(delta)} needed.`,
+        });
+      }
+
+      const balance = await client.warehouseStockBalance.update({
+        where: {
+          inventoryItemId_warehouseId: {
+            inventoryItemId: input.inventoryItemId,
+            warehouseId: input.warehouseId,
+          },
+        },
+        data: { [effect.bucket]: after },
       });
 
       await client.stockMovement.create({

@@ -122,6 +122,12 @@ export const PART_REQUEST_GRAPH: WorkflowGraph = {
     "RETURN_REQUESTED",
     "RETURN_ACCEPTED",
     "RETURNED_TO_STOCK",
+    // Both declared in the Prisma enum since the RETURN_CLARIFICATION_REQUESTED
+    // gap-fix migration, and both unreachable here until this fix -- the
+    // graph is what canTransition() actually checks, not the enum, so a
+    // state absent from `transitions` might as well not exist.
+    "RETURN_REJECTED",
+    "RETURN_CLARIFICATION_REQUESTED",
     "REJECTED",
     "UNAVAILABLE",
     "CANCELLED",
@@ -139,7 +145,21 @@ export const PART_REQUEST_GRAPH: WorkflowGraph = {
     // accept them back.
     { from: "RECEIVED_BY_TECHNICIAN", to: "RETURN_REQUESTED", requires: ["PART_RETURNS"] },
     { from: "RETURN_REQUESTED", to: "RETURN_ACCEPTED", requires: ["PART_RETURNS"] },
-    { from: "RETURN_REQUESTED", to: "REJECTED", requires: ["PART_RETURNS"] },
+    // A rejected RETURN is not the same event as a rejected REQUEST -- the
+    // part was already handed over, so the technician has to resolve it
+    // (typically by marking it Used after all) rather than the whole
+    // request quietly dying. Landing this on the top-level REJECTED
+    // terminal, as the graph did before this fix, was the exact bug
+    // Returns/Movements' spec named "the previous build was missing
+    // entirely" -- the state existed in the enum with nowhere to go.
+    { from: "RETURN_REQUESTED", to: "RETURN_REJECTED", requires: ["PART_RETURNS"] },
+    { from: "RETURN_REJECTED", to: "USED", requires: ["PART_RETURNS"] },
+    // Clarification: a question without a decision. Loops back to
+    // RETURN_REQUESTED on reply so the manager's next action (accept,
+    // reject, or ask again) is the same decision they'd have made from a
+    // first-time request -- the loop can repeat any number of times.
+    { from: "RETURN_REQUESTED", to: "RETURN_CLARIFICATION_REQUESTED", requires: ["PART_RETURNS"] },
+    { from: "RETURN_CLARIFICATION_REQUESTED", to: "RETURN_REQUESTED", requires: ["PART_RETURNS"] },
     { from: "RETURN_ACCEPTED", to: "RETURNED_TO_STOCK", requires: ["PART_RETURNS"] },
     { from: "DRAFT", to: "CANCELLED" },
     { from: "REQUESTED", to: "CANCELLED" },

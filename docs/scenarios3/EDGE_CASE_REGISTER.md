@@ -20,7 +20,7 @@
 | H3 | Invoice numbering is `count()+1`, not the unused `invoice_sequences` table | 8 — Finance Core | ⬜ open |
 | H4 | Customer decision can land against an already-closed work order | 4 — Operations Spine | ⬜ open |
 | H5 | Idempotency key check-then-insert race in `recordPayment()` | 8 — Finance Core | ⬜ open |
-| H6 | Stock decrement may be read-then-write rather than one atomic `UPDATE` | 7 — Inventory | ⬜ **verify first** — may already be correct |
+| H6 | Stock decrement may be read-then-write rather than one atomic `UPDATE` | 7 — Inventory | ✅ **fixed** — confirmed broken (plain `findUnique`, no lock), rewritten to `SELECT ... FOR UPDATE`, proven by a concurrent-request integration test |
 | H7 | No described path for deactivating a warehouse with nonzero stock | 7 — Inventory | ⬜ open |
 | H8 | Double-click on team-membership move can race its own transaction | 5 — Branch Manager (Team Setup) | ⬜ open |
 | H9 | RTL-override/zero-width characters break slugs, PDFs, audit rendering | 1 — Runnable and Provable (i18n/RTL foundation) | ⬜ open |
@@ -30,7 +30,7 @@
 | E13 | Capability rollback racing an in-flight lifecycle transition | 3 — Governance Runtime | ⬜ **design spike required** |
 | E14 | Two opposite platform actions (freeze/reactivate) race the same tenant | 19 — Governance Depth (24.1–24.3's control lever) | ⬜ open |
 | E15 | Halfway-point rounding needs one named, explicitly documented rule | 8 — Finance Core | ⬜ open |
-| E16 | `READ COMMITTED` anomaly verification for the stock decrement statement | 7 — Inventory | ⬜ **verification + concurrency test** |
+| E16 | `READ COMMITTED` anomaly verification for the stock decrement statement | 7 — Inventory | ✅ **fixed** — same fix as H6; `stock.integration.spec.ts`'s "concurrent issues of the last unit" suite fires genuinely simultaneous requests and asserts exactly one wins |
 | E17 | Schema migrations against a dormant/archived tenant's data | 18 — Tenant Relationships (18.D) | ⬜ open |
 | E18 | No lazy-rehash path or version tracking for password hashes | 1 — Runnable and Provable (auth baseline) | ⬜ open |
 | E19 | Stale decision-link token resolves against a since-reassigned asset | 4 — Operations Spine / 11 — Customer Portal | ⬜ open |

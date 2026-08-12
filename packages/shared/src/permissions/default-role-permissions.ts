@@ -91,6 +91,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "inventory.movements.view": true,
     "inventory.stock.return.accept": true,
     "inventory.stock.return.reject": true,
+    "inventory.stock.return.clarify": true,
     "reports.inventory.view": true,
   },
   TEAM_LEADER: {

@@ -15,8 +15,8 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| Built | **23** |
-| Remaining | **30** |
+| Built | **24** |
+| Remaining | **29** |
 
 Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built
 
@@ -53,7 +53,7 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | My Work | ✅ | `/tech/work` |
 | Work Card | ✅ | `/tech/card/:id` |
 
-## Inventory Manager — 5 / 6
+## Inventory Manager — 6 / 6 ✅
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
@@ -61,7 +61,7 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Technician Requests | ✅ | `/inventory/requests` | |
 | Inventory POS / Catalog Control | ✅ | `/inventory/catalog` | Paginated list + side-panel editor. Cost absent unless `inventory.cost.view`; quantity deliberately not settable here |
 | Quantity Control & Stock Status | ✅ | `/inventory/stock` | |
-| Returns / Movements | 🟡 | `/inventory/items/:id` | The ledger is built and readable. The spec's *actions* — accept/reject a return, request clarification — have no page |
+| Returns / Movements | ✅ | `/inventory/returns` | Queue (accept/reject/clarify, with the clarify↔reply loop) + tenant-wide filterable ledger. Two real backend bugs found and fixed while building this: RETURN_REJECTED and RETURN_CLARIFICATION_REQUESTED existed in the enum with no workflow-graph edge reaching them, and PartReturnRequest was never written by requestReturn |
 | Reports & Stock Insights | ✅ | `/inventory/reports` | Stock risk is velocity-based, per warehouse. Comparison section absent (not empty) for a single-warehouse scope |
 
 ## Tenant Owner — 1 / 8

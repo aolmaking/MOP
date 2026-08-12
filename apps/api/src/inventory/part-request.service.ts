@@ -202,7 +202,7 @@ export class PartRequestService {
     return this.move(partRequestId, "USED", actor);
   }
 
-  // --- returns (7.D) -------------------------------------------------
+  // --- returns (7.D, Returns/Movements) -------------------------------
 
   /**
    * A technician sends a part back.
@@ -211,9 +211,150 @@ export class PartRequestService {
    * simply has no edge there. The part can still be used; only the return
    * path disappears. That is the capability model doing its job rather
    * than a feature flag hiding a button.
+   *
+   * Writes the `PartReturnRequest` row the Returns/Movements queue reads
+   * from (previously left uncreated -- the model existed, nothing wrote
+   * it) and records a RETURN_PENDING stock movement against the
+   * warehouse the part was actually issued from, so the part is neither
+   * sellable nor still "with the technician" for the whole time it is
+   * in limbo between here and a decision.
    */
-  async requestReturn(partRequestId: string, actor: LifecycleActor, reason?: string) {
-    return this.move(partRequestId, "RETURN_REQUESTED", actor, { reason });
+  async requestReturn(partRequestId: string, quantity: number, actor: LifecycleActor, reason?: string) {
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      throw new BadRequestException({ code: "quantity_invalid", message: "Return a whole number, at least one." });
+    }
+
+    const request = await this.load(partRequestId);
+    await this.requireInventory(request.tenantId);
+
+    const issued = await this.fulfilment(partRequestId);
+    if (quantity > issued.issued) {
+      throw new BadRequestException({
+        code: "over_return",
+        message: `Only ${issued.issued} were issued; ${quantity} cannot come back.`,
+      });
+    }
+
+    const warehouseId = await this.issuedWarehouseOf(partRequestId);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.partReturnRequest.upsert({
+        where: { partRequestId },
+        create: { tenantId: request.tenantId, partRequestId, quantity, reason, requestedById: actor.accountId },
+        update: { quantity, reason, resolvedAt: null, resolvedById: null, clarificationQuestion: null },
+      });
+
+      await this.stock.record(
+        {
+          tenantId: request.tenantId,
+          inventoryItemId: request.inventoryItemId,
+          warehouseId,
+          type: "RETURN_PENDING",
+          quantity,
+          actorId: actor.accountId,
+          referenceType: "PartRequest",
+          referenceId: partRequestId,
+        },
+        tx,
+      );
+
+      await this.transition(tx, request, "RETURN_REQUESTED", actor);
+      await this.emit(tx, request.tenantId, "part_request.return_requested", partRequestId, actor, {
+        quantity,
+        reason,
+      });
+    });
+
+    return { id: partRequestId, status: "RETURN_REQUESTED" as const };
+  }
+
+  /**
+   * The inventory manager asks a question instead of deciding yet.
+   *
+   * Deliberately does not touch stock -- the RETURN_PENDING movement
+   * from `requestReturn` stands untouched through as many rounds of this
+   * loop as it takes; asking a question is not itself a decision about
+   * the part.
+   */
+  async requestClarification(partRequestId: string, actor: LifecycleActor, question: string) {
+    if (!question.trim()) {
+      throw new BadRequestException({ code: "question_required", message: "Say what you need to know." });
+    }
+
+    const request = await this.load(partRequestId);
+    await this.requireInventory(request.tenantId);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.partReturnRequest.update({ where: { partRequestId }, data: { clarificationQuestion: question } });
+      await this.transition(tx, request, "RETURN_CLARIFICATION_REQUESTED", actor);
+      await this.emit(tx, request.tenantId, "part_request.return_clarification_requested", partRequestId, actor, {
+        question,
+      });
+    });
+
+    return { id: partRequestId, status: "RETURN_CLARIFICATION_REQUESTED" as const };
+  }
+
+  /**
+   * The technician answers. Loops back to RETURN_REQUESTED so the
+   * manager's next move -- accept, reject, or ask again -- is the same
+   * decision as a first-time request, per the spec's explicit "this loop
+   * can repeat" note.
+   */
+  async respondToClarification(partRequestId: string, actor: LifecycleActor, response: string) {
+    if (!response.trim()) {
+      throw new BadRequestException({ code: "response_required", message: "Write a reply before sending it." });
+    }
+
+    const request = await this.load(partRequestId);
+    await this.requireInventory(request.tenantId);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.partReturnRequest.update({
+        where: { partRequestId },
+        // The question is answered, so it stops showing as outstanding;
+        // the reply itself is folded into `reason`, which is what the
+        // queue and the ledger both already read.
+        data: { clarificationQuestion: null, reason: response },
+      });
+      await this.transition(tx, request, "RETURN_REQUESTED", actor);
+      await this.emit(tx, request.tenantId, "part_request.return_clarified", partRequestId, actor, { response });
+    });
+
+    return { id: partRequestId, status: "RETURN_REQUESTED" as const };
+  }
+
+  /**
+   * The technician's return is refused -- not the same event as REJECTED,
+   * which is the whole request dying before a part was ever handed over.
+   * Here the part already left the shelf, so it does not silently vanish
+   * from tracking: the technician has to resolve it, typically by
+   * marking it Used after all (`resolveRejectedReturn`).
+   *
+   * This was the gap named directly in the spec ("the action the
+   * previous build was missing entirely") and it was two gaps, not one:
+   * no method, and a workflow graph with no edge into RETURN_REJECTED at
+   * all despite the state existing in the Prisma enum.
+   */
+  async rejectReturn(partRequestId: string, actor: LifecycleActor, reason?: string) {
+    const request = await this.load(partRequestId);
+    await this.requireInventory(request.tenantId);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.partReturnRequest.update({
+        where: { partRequestId },
+        data: { resolvedAt: new Date(), resolvedById: actor.accountId, clarificationQuestion: null, reason },
+      });
+      await this.transition(tx, request, "RETURN_REJECTED", actor);
+      await this.emit(tx, request.tenantId, "part_request.return_rejected", partRequestId, actor, { reason });
+    });
+
+    return { id: partRequestId, status: "RETURN_REJECTED" as const };
+  }
+
+  /** A rejected return is resolved by marking the part used after all. */
+  async resolveRejectedReturn(partRequestId: string, actor: LifecycleActor) {
+    return this.move(partRequestId, "USED", actor);
   }
 
   async acceptReturn(partRequestId: string, actor: LifecycleActor) {
@@ -221,12 +362,18 @@ export class PartRequestService {
   }
 
   /**
-   * The part physically comes back.
+   * The part physically comes back -- called after `acceptReturn`, in the
+   * same request from the caller's point of view (the controller wraps
+   * both into the single "Accept Return to Stock" / "Accept as Damaged"
+   * click the spec describes).
    *
    * `damaged` decides which bucket it lands in, and the two are not the
    * same event: sellable stock going up is a different claim about the
    * world from a damaged count going up (SCENARIOS.md 3.3). Damaged stock
-   * never becomes sellable, here or anywhere.
+   * never becomes sellable, here or anywhere. The RETURN_PENDING balance
+   * opened by `requestReturn` is reversed in the same transaction as the
+   * movement that replaces it, so the part is never counted twice and
+   * never silently disappears from every bucket at once.
    */
   async completeReturn(
     partRequestId: string,
@@ -251,6 +398,25 @@ export class PartRequestService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      // Reverses the RETURN_PENDING movement opened when the return was
+      // first requested -- a negative RETURN_PENDING quantity is the one
+      // place ADJUSTMENT-style signed movement isn't used, because this
+      // is a real, typed event (the pending return being resolved), not
+      // a correction.
+      await this.stock.record(
+        {
+          tenantId: request.tenantId,
+          inventoryItemId: request.inventoryItemId,
+          warehouseId,
+          type: "RETURN_PENDING",
+          quantity: -quantity,
+          actorId: actor.accountId,
+          referenceType: "PartRequest",
+          referenceId: partRequestId,
+        },
+        tx,
+      );
+
       await this.stock.record(
         {
           tenantId: request.tenantId,
@@ -265,6 +431,11 @@ export class PartRequestService {
         tx,
       );
 
+      await tx.partReturnRequest.update({
+        where: { partRequestId },
+        data: { resolvedAt: new Date(), resolvedById: actor.accountId, clarificationQuestion: null },
+      });
+
       await this.transition(tx, request, "RETURNED_TO_STOCK", actor);
 
       await this.emit(tx, request.tenantId, "part_request.returned", partRequestId, actor, {
@@ -273,6 +444,42 @@ export class PartRequestService {
         damaged: options.damaged ?? false,
       });
     });
+  }
+
+  /** Every open return, for the queue. Newest request first. */
+  async openReturns(tenantId: string) {
+    const rows = await this.prisma.partReturnRequest.findMany({
+      where: {
+        tenantId,
+        resolvedAt: null,
+        partRequest: { status: { in: ["RETURN_REQUESTED", "RETURN_CLARIFICATION_REQUESTED"] } },
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        partRequest: {
+          select: {
+            id: true,
+            status: true,
+            workOrderId: true,
+            inventoryItem: { select: { id: true, name: true, sku: true } },
+          },
+        },
+      },
+    });
+
+    return rows.map((row) => ({
+      partRequestId: row.partRequestId,
+      status: row.partRequest.status,
+      itemId: row.partRequest.inventoryItem.id,
+      itemName: row.partRequest.inventoryItem.name,
+      sku: row.partRequest.inventoryItem.sku,
+      workOrderId: row.partRequest.workOrderId,
+      quantity: row.quantity,
+      reason: row.reason,
+      clarificationQuestion: row.clarificationQuestion,
+      requestedById: row.requestedById,
+      requestedAt: row.createdAt,
+    }));
   }
 
   // --- reads ---------------------------------------------------------
@@ -308,6 +515,31 @@ export class PartRequestService {
     });
     if (!request) throw new NotFoundException({ code: "part_request_not_found", message: "Request not found." });
     return request;
+  }
+
+  /**
+   * Which warehouse a return's RETURN_PENDING movement belongs to.
+   *
+   * A request can be issued from more than one warehouse across several
+   * partial hand-overs; a return is asked about as one quantity, not
+   * per-warehouse, so this uses the most recent issue's warehouse -- the
+   * technician is returning what they most recently received, which is
+   * the overwhelmingly common case, and correct for the single-warehouse
+   * case that is nearly all of them.
+   */
+  private async issuedWarehouseOf(partRequestId: string): Promise<string> {
+    const latest = await this.prisma.issuedItem.findFirst({
+      where: { partRequestId },
+      orderBy: { issuedAt: "desc" },
+      select: { warehouseId: true },
+    });
+    if (!latest) {
+      throw new ConflictException({
+        code: "nothing_issued",
+        message: "Nothing has been issued against this request yet, so there is nothing to return.",
+      });
+    }
+    return latest.warehouseId;
   }
 
   private async requireInventory(tenantId: string): Promise<void> {

@@ -1,4 +1,4 @@
-import { IsBoolean, IsInt, IsOptional, IsString, Min } from "class-validator";
+import { IsBoolean, IsInt, IsOptional, IsString, Min, MinLength } from "class-validator";
 
 export class IssueDto {
   @IsString()
@@ -30,4 +30,16 @@ export class ReturnDto {
   @IsOptional()
   @IsBoolean()
   damaged?: boolean;
+}
+
+export class RejectReturnDto {
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class RequestClarificationDto {
+  @IsString()
+  @MinLength(1)
+  question!: string;
 }

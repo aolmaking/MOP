@@ -241,3 +241,71 @@ describe("the database enforces it too, not only the service", () => {
     await prisma.stockMovement.delete({ where: { id: allowed.id } });
   });
 });
+
+/**
+ * Concurrency. Edge case H6/E16 (docs/scenarios3/EDGE_CASE_REGISTER.md):
+ * the "locked for the duration" comment on StockService.record() used to
+ * describe a plain `findUnique`, which under Postgres's default READ
+ * COMMITTED isolation takes no row lock at all. Two technicians issuing
+ * the last unit of a part at the same instant could both read the same
+ * "before" value and both succeed -- over-issuing stock that was only
+ * ever there once, with the never-negative CHECK constraint powerless to
+ * catch it because neither individual transaction ever asked for a
+ * negative result.
+ *
+ * This suite fires genuinely concurrent requests -- not sequential
+ * awaits -- against a balance of exactly one unit, and proves only one
+ * of them can win.
+ */
+describe("concurrent issues of the last unit", () => {
+  let raceItemId: string;
+  let raceWarehouseId: string;
+
+  beforeAll(async () => {
+    raceWarehouseId = (await prisma.warehouse.create({ data: { tenantId, name: "Race store", code: `RC-${SUFFIX}` } }))
+      .id;
+    raceItemId = (
+      await prisma.inventoryItem.create({
+        data: { tenantId, sku: `RACE-${SUFFIX}`, name: "Contested filter", itemType: "PART", sellingPrice: "50.00" },
+      })
+    ).id;
+    await stock.record({
+      tenantId,
+      inventoryItemId: raceItemId,
+      warehouseId: raceWarehouseId,
+      type: "SUPPLIER_RECEIPT",
+      quantity: 1,
+      actorId: ACTOR,
+    });
+  }, 60_000);
+
+  it("lets exactly one of two simultaneous issues of the last unit succeed", async () => {
+    const attempt = () =>
+      stock.record({
+        tenantId,
+        inventoryItemId: raceItemId,
+        warehouseId: raceWarehouseId,
+        type: "ISSUE",
+        quantity: 1,
+        actorId: ACTOR,
+      });
+
+    // Fired together, not sequentially -- Promise.allSettled so the loser
+    // rejecting does not fail the other before both have had a chance to
+    // race. Without a real row lock, both could read availableQty: 1 and
+    // both compute 0, issuing one unit twice.
+    const [first, second] = await Promise.allSettled([attempt(), attempt()]);
+    const outcomes = [first, second];
+
+    expect(outcomes.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(outcomes.filter((r) => r.status === "rejected")).toHaveLength(1);
+
+    const final = await stock.balanceOf(raceItemId, raceWarehouseId);
+    expect(final.availableQty).toBe(0);
+
+    const movements = await prisma.stockMovement.count({
+      where: { tenantId, inventoryItemId: raceItemId, type: "ISSUE" },
+    });
+    expect(movements).toBe(1);
+  }, 30_000);
+});

@@ -193,7 +193,7 @@ describe("a day in the store", () => {
     await parts.issue({ partRequestId: third.id, warehouseId: shop.warehouseId, quantity: 1 }, ACTOR);
     await parts.markArrived(third.id, ACTOR);
     await parts.receive(third.id, ACTOR);
-    await parts.requestReturn(third.id, ACTOR, "Wrong size");
+    await parts.requestReturn(third.id, 1, ACTOR, "Wrong size");
     await parts.acceptReturn(third.id, ACTOR);
     await parts.completeReturn(third.id, shop.warehouseId, 1, ACTOR);
 
@@ -202,7 +202,7 @@ describe("a day in the store", () => {
     await parts.issue({ partRequestId: fourth.id, warehouseId: shop.warehouseId, quantity: 1 }, ACTOR);
     await parts.markArrived(fourth.id, ACTOR);
     await parts.receive(fourth.id, ACTOR);
-    await parts.requestReturn(fourth.id, ACTOR, "Cracked");
+    await parts.requestReturn(fourth.id, 1, ACTOR, "Cracked");
     await parts.acceptReturn(fourth.id, ACTOR);
     await parts.completeReturn(fourth.id, shop.warehouseId, 1, ACTOR, { damaged: true });
 
@@ -238,9 +238,14 @@ describe("a day in the store", () => {
       select: { type: true, quantity: true, beforeQty: true, afterQty: true },
     });
 
-    const running = { availableQty: 0, damagedQty: 0 };
+    const running = { availableQty: 0, damagedQty: 0, returnPendingQty: 0 };
     for (const movement of movements) {
-      const bucket = movement.type === "DAMAGED" ? "damagedQty" : "availableQty";
+      // RETURN_PENDING moves its own bucket -- opened when a return is
+      // requested, reversed when it's accepted or rejected -- and must
+      // not be folded into availableQty's chain, which is what a bare
+      // `type !== "DAMAGED"` check used to do before this test caught it.
+      const bucket =
+        movement.type === "DAMAGED" ? "damagedQty" : movement.type === "RETURN_PENDING" ? "returnPendingQty" : "availableQty";
       expect(movement.beforeQty).toBe(running[bucket]);
       running[bucket] = movement.afterQty;
     }

@@ -104,6 +104,7 @@ const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: "inventory.movements.view", module: "INVENTORY" },
   { key: "inventory.stock.return.accept", module: "INVENTORY" },
   { key: "inventory.stock.return.reject", module: "INVENTORY" },
+  { key: "inventory.stock.return.clarify", module: "INVENTORY" },
 
   // Team leader
   { key: "team.home.view", module: "TEAM_MANAGEMENT" },

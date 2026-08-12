@@ -1,0 +1,226 @@
+<section class="returns">
+  <header class="returns-head">
+    <h1 class="returns-title">Returns &amp; Movements</h1>
+    <nav class="tabs" aria-label="Returns and movements views">
+      <button type="button" class="tab" [attr.aria-pressed]="tab() === 'queue'" (click)="selectTab('queue')">
+        Return requests
+        @if (returns().length > 0) {
+          <span class="tab-count">{{ returns().length }}</span>
+        }
+      </button>
+      <button type="button" class="tab" [attr.aria-pressed]="tab() === 'ledger'" (click)="selectTab('ledger')">
+        Ledger
+      </button>
+    </nav>
+  </header>
+
+  <!-- ================= Queue ================= -->
+  @if (tab() === 'queue') {
+    @switch (queueState()) {
+      @case ('loading') {
+        <p class="state-body" aria-busy="true">Loading…</p>
+      }
+      @case ('forbidden') {
+        <div class="state">
+          <p class="state-title">You don't have access to returns</p>
+        </div>
+      }
+      @case ('error') {
+        <div class="state-error">
+          <app-error-banner [error]="queueError()" />
+          <button appButton variant="secondary" size="small" (click)="loadQueue()">Try again</button>
+        </div>
+      }
+      @case ('empty') {
+        <div class="state">
+          <p class="state-title">Nothing waiting on a decision</p>
+          <p class="state-body">Every return a technician has sent back has already been accepted, rejected, or answered.</p>
+        </div>
+      }
+      @case ('ready') {
+        <ul class="queue">
+          @for (row of returns(); track row.partRequestId) {
+            <li class="return-card" [attr.data-status]="row.status">
+              <div class="return-main">
+                <div class="return-item">
+                  <span class="return-name">{{ row.itemName }}</span>
+                  <span class="return-sku">{{ row.sku }}</span>
+                </div>
+                <span class="return-qty">{{ row.quantity }}</span>
+                <span class="return-when">{{ when(row.requestedAt) }}</span>
+              </div>
+
+              @if (row.reason) {
+                <p class="return-reason">"{{ row.reason }}"</p>
+              }
+
+              @if (row.status === 'RETURN_CLARIFICATION_REQUESTED' && row.clarificationQuestion) {
+                <p class="return-question">
+                  <span class="return-question-label">Asked:</span>
+                  {{ row.clarificationQuestion }}
+                  <span class="return-question-waiting">waiting on the technician</span>
+                </p>
+              }
+
+              @if (row.status !== 'RETURN_CLARIFICATION_REQUESTED') {
+                <div class="return-actions">
+                  <button appButton variant="primary" size="small" [disabled]="busyId() === row.partRequestId" (click)="startAccept(row)">
+                    Accept
+                  </button>
+                  <button appButton variant="secondary" size="small" [disabled]="busyId() === row.partRequestId" (click)="startClarify(row)">
+                    Ask a question
+                  </button>
+                  <button appButton variant="secondary" size="small" [disabled]="busyId() === row.partRequestId" (click)="startReject(row)">
+                    Reject
+                  </button>
+                </div>
+              } @else {
+                <p class="return-waiting-note">Waiting on a reply before this can be accepted or rejected.</p>
+              }
+
+              @if (isOpen(row, 'accept')) {
+                <div class="return-form">
+                  <app-form-field label="Warehouse" [required]="true" hint="Which room the part is physically going back into.">
+                    <select [value]="formWarehouseId()" (change)="formWarehouseId.set($any($event.target).value)">
+                      @for (warehouse of warehouses(); track warehouse.id) {
+                        <option [value]="warehouse.id">{{ warehouse.name }} ({{ warehouse.code }})</option>
+                      }
+                    </select>
+                  </app-form-field>
+
+                  <label class="damaged-check">
+                    <input type="checkbox" [checked]="formDamaged()" (change)="formDamaged.set($any($event.target).checked)" />
+                    <span>
+                      <strong>Damaged</strong> — goes to the damaged bucket, never back into sellable stock.
+                    </span>
+                  </label>
+
+                  <div class="return-form-actions">
+                    <button appButton variant="secondary" size="small" (click)="cancelAction()">Cancel</button>
+                    <button appButton variant="primary" size="small" [disabled]="busyId() === row.partRequestId" (click)="confirmAccept(row)">
+                      {{ formDamaged() ? 'Accept as damaged' : 'Accept to stock' }}
+                    </button>
+                  </div>
+                </div>
+              }
+
+              @if (isOpen(row, 'reject')) {
+                <div class="return-form">
+                  <app-form-field label="Why (optional)" hint="Shown to the technician, who must resolve it.">
+                    <textarea rows="2" [value]="formText()" (input)="formText.set($any($event.target).value)"></textarea>
+                  </app-form-field>
+                  <div class="return-form-actions">
+                    <button appButton variant="secondary" size="small" (click)="cancelAction()">Cancel</button>
+                    <button appButton variant="primary" size="small" [disabled]="busyId() === row.partRequestId" (click)="confirmReject(row)">
+                      Reject return
+                    </button>
+                  </div>
+                </div>
+              }
+
+              @if (isOpen(row, 'clarify')) {
+                <div class="return-form">
+                  <app-form-field label="Question" [required]="true" hint="e.g. Is this the correct part number? The SKU doesn't match what was issued.">
+                    <textarea rows="2" [value]="formText()" (input)="formText.set($any($event.target).value)"></textarea>
+                  </app-form-field>
+                  <div class="return-form-actions">
+                    <button appButton variant="secondary" size="small" (click)="cancelAction()">Cancel</button>
+                    <button appButton variant="primary" size="small" [disabled]="busyId() === row.partRequestId" (click)="confirmClarify(row)">
+                      Send question
+                    </button>
+                  </div>
+                </div>
+              }
+            </li>
+          }
+        </ul>
+      }
+    }
+  }
+
+  <!-- ================= Ledger ================= -->
+  @if (tab() === 'ledger') {
+    <div class="ledger-controls">
+      <label class="filter">
+        <span class="filter-label">Type</span>
+        <select class="filter-input" [value]="filterType()" (change)="onFilterType($any($event.target).value)">
+          <option value="">All types</option>
+          @for (type of movementTypes; track type) {
+            <option [value]="type">{{ type.toLowerCase().replace('_', ' ') }}</option>
+          }
+        </select>
+      </label>
+    </div>
+
+    @switch (ledgerState()) {
+      @case ('loading') {
+        <p class="state-body" aria-busy="true">Loading…</p>
+      }
+      @case ('forbidden') {
+        <div class="state">
+          <p class="state-title">You don't have access to the movements ledger</p>
+        </div>
+      }
+      @case ('error') {
+        <div class="state-error">
+          <app-error-banner [error]="ledgerError()" />
+          <button appButton variant="secondary" size="small" (click)="reloadLedger()">Try again</button>
+        </div>
+      }
+      @case ('empty') {
+        <div class="state">
+          <p class="state-title">No movements match this filter</p>
+        </div>
+      }
+      @case ('ready') {
+        @if (ledger(); as page) {
+          <div class="table-scroll">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">When</th>
+                  <th scope="col">Item</th>
+                  <th scope="col">Warehouse</th>
+                  <th scope="col">Type</th>
+                  <th scope="col" class="col-num">Qty</th>
+                  <th scope="col" class="col-num">Before</th>
+                  <th scope="col" class="col-num">After</th>
+                  <th scope="col">Reference</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of page.rows; track row.id) {
+                  <tr [attr.data-type]="row.type">
+                    <td class="cell-mono">{{ when(row.createdAt) }}</td>
+                    <td>
+                      {{ row.inventoryItem.name }}
+                      <span class="cell-faint">{{ row.inventoryItem.sku }}</span>
+                    </td>
+                    <td class="cell-mono">{{ row.warehouse.code }}</td>
+                    <td><span class="badge" [attr.data-type]="row.type">{{ row.type.toLowerCase().replace('_', ' ') }}</span></td>
+                    <td class="col-num cell-mono">{{ delta(row) }}</td>
+                    <td class="col-num cell-mono">{{ row.beforeQty }}</td>
+                    <td class="col-num cell-mono">{{ row.afterQty }}</td>
+                    <td class="cell-faint">{{ row.referenceType ?? '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          @if (totalPages() > 1) {
+            <nav class="pager" aria-label="Ledger pages">
+              <button appButton variant="secondary" size="small" [disabled]="page.page === 1" (click)="goToPage(page.page - 1)">
+                Previous
+              </button>
+              <span class="pager-position">Page {{ page.page }} of {{ totalPages() }} · {{ page.total }} movements</span>
+              <button appButton variant="secondary" size="small" [disabled]="page.page === totalPages()" (click)="goToPage(page.page + 1)">
+                Next
+              </button>
+            </nav>
+          }
+        }
+      }
+    }
+  }
+</section>

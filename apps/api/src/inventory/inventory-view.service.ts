@@ -259,4 +259,80 @@ export class InventoryViewService {
   fulfilment(partRequestId: string) {
     return this.parts.fulfilment(partRequestId);
   }
+
+  /**
+   * The tenant-wide ledger -- Returns/Movements' own page, distinct from
+   * one item's ledger on the Item page. Server-side paginated from the
+   * start: "a busy multi-warehouse workshop can generate a lot of ledger
+   * rows" is the spec's own reason, and this table is built assuming
+   * that rather than discovering it later.
+   */
+  async movements(tenantId: string, filters: MovementFilters): Promise<MovementPage> {
+    const pageSize = Math.min(Math.max(filters.pageSize ?? 50, 1), 200);
+    const page = Math.max(filters.page ?? 1, 1);
+
+    const where = {
+      tenantId,
+      ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
+      ...(filters.inventoryItemId ? { inventoryItemId: filters.inventoryItemId } : {}),
+      ...(filters.type ? { type: filters.type } : {}),
+      ...(filters.from || filters.to
+        ? { createdAt: { ...(filters.from ? { gte: filters.from } : {}), ...(filters.to ? { lte: filters.to } : {}) } }
+        : {}),
+    };
+
+    const [rows, total] = await Promise.all([
+      this.prisma.stockMovement.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          type: true,
+          quantity: true,
+          beforeQty: true,
+          afterQty: true,
+          referenceType: true,
+          referenceId: true,
+          actorId: true,
+          createdAt: true,
+          inventoryItem: { select: { id: true, name: true, sku: true } },
+          warehouse: { select: { id: true, name: true, code: true } },
+        },
+      }),
+      this.prisma.stockMovement.count({ where }),
+    ]);
+
+    return { rows, total, page, pageSize };
+  }
+}
+
+export interface MovementFilters {
+  readonly warehouseId?: string;
+  readonly inventoryItemId?: string;
+  readonly type?: import("@mop/database").StockMovementType;
+  readonly from?: Date;
+  readonly to?: Date;
+  readonly page?: number;
+  readonly pageSize?: number;
+}
+
+export interface MovementPage {
+  readonly rows: readonly {
+    id: string;
+    type: import("@mop/database").StockMovementType;
+    quantity: number;
+    beforeQty: number;
+    afterQty: number;
+    referenceType: string | null;
+    referenceId: string | null;
+    actorId: string;
+    createdAt: Date;
+    inventoryItem: { id: string; name: string; sku: string };
+    warehouse: { id: string; name: string; code: string };
+  }[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
 }
