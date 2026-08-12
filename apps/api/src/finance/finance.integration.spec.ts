@@ -361,3 +361,46 @@ describe("a workshop that does not handle money through MOP", () => {
     expect(stored.status).toBe("CLOSED");
   });
 });
+
+/**
+ * Edge case H3 (docs/scenarios3/EDGE_CASE_REGISTER.md): invoice numbering
+ * used to be `tx.invoice.count({ where: { tenantId } }) + 1`, computed
+ * inside the caller's own transaction, with the (tenantId, invoiceNumber)
+ * unique constraint as "the backstop" per its own comment. Two branches
+ * of the same tenant closing out at the same moment could both count N
+ * and race the constraint -- a real transaction abort at the worst
+ * possible moment. This fires genuinely concurrent invoice issuance
+ * against ten separate jobs on the same tenant and proves every number
+ * that comes out is unique, sequential, and none were lost to a retry
+ * nobody wrote.
+ */
+describe("invoice numbering under real concurrency", () => {
+  it("gives every simultaneously-issued invoice on one tenant a distinct, sequential number", async () => {
+    const jobs = await Promise.all(Array.from({ length: 10 }, () => makeJob(paid)));
+
+    await Promise.all(
+      jobs.map((job) =>
+        finance.addLine(
+          { tenantId: paid.tenantId, workOrderId: job, name: "Service", itemType: "LABOUR", quantity: 1, unitPrice: "50.00" },
+          ACTOR,
+        ),
+      ),
+    );
+
+    // Fired together, not sequentially -- this is the whole point.
+    // Without the fix, some of these could throw on the unique
+    // constraint, or worse, two could silently agree on the same number
+    // if the constraint were ever loosened.
+    const results = await Promise.allSettled(jobs.map((job) => finance.issueInvoice(paid.tenantId, job, ACTOR)));
+
+    expect(results.every((r) => r.status === "fulfilled")).toBe(true);
+
+    const invoices = await prisma.invoice.findMany({
+      where: { workOrderId: { in: jobs } },
+      select: { invoiceNumber: true },
+    });
+    const numbers = invoices.map((invoice) => invoice.invoiceNumber);
+
+    expect(new Set(numbers).size).toBe(10);
+  });
+});

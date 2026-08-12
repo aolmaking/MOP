@@ -10,7 +10,7 @@ import {
   sum,
   type Money,
 } from "@mop/shared";
-import type { Prisma } from "@mop/database";
+import { Prisma } from "@mop/database";
 import { PrismaService } from "../database/prisma.service";
 import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 import { OperationEventsService } from "../operations/operation-events.service";
@@ -393,11 +393,31 @@ export class FinanceService {
   /**
    * Sequential per workshop, and allocated inside the caller's
    * transaction so two invoices issued at the same moment cannot collide.
-   * The unique constraint on (tenantId, invoiceNumber) is the backstop.
+   *
+   * `InvoiceSequence` is a single atomic upsert-increment
+   * (`INSERT ... ON CONFLICT DO UPDATE SET "lastNumber" = "lastNumber" + 1`),
+   * which Postgres itself locks the row for -- no separate SELECT-then-
+   * write step is needed here the way the stock balance's decrement
+   * needed one (that case had a business-rule rejection between reading
+   * and writing; this one is a pure increment, which the database can do
+   * in one statement).
+   *
+   * This used to be `tx.invoice.count({ where: { tenantId } }) + 1`, with
+   * the `(tenantId, invoiceNumber)` unique constraint as "the backstop" --
+   * meaning two invoices issued for the same tenant at the same instant
+   * could both count N and race the constraint, aborting one transaction
+   * at the worst possible moment. The `invoice_sequences` table this
+   * method now actually uses has existed in the schema the whole time.
+   * See docs/scenarios3/EDGE_CASE_REGISTER.md, H3.
    */
   private async nextInvoiceNumber(tx: Prisma.TransactionClient, tenantId: string): Promise<string> {
-    const count = await tx.invoice.count({ where: { tenantId } });
-    return `INV-${String(count + 1).padStart(6, "0")}`;
+    const [row] = await tx.$queryRaw<{ lastNumber: number }[]>(Prisma.sql`
+      INSERT INTO "invoice_sequences" ("tenantId", "lastNumber")
+      VALUES (${tenantId}, 1)
+      ON CONFLICT ("tenantId") DO UPDATE SET "lastNumber" = "invoice_sequences"."lastNumber" + 1
+      RETURNING "lastNumber"
+    `);
+    return `INV-${String(row.lastNumber).padStart(6, "0")}`;
   }
 
   private async requireFinance(tenantId: string): Promise<void> {

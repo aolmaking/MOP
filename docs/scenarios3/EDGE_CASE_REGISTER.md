@@ -17,7 +17,7 @@
 |---|---|---|---|
 | H1 | Concurrent blockers on one work order can overwrite each other | 4 — Operations Spine | ⬜ open |
 | H2 | Capability check-then-write gap around `PartRequestService.approve()` | 3 / 7 | ⬜ open |
-| H3 | Invoice numbering is `count()+1`, not the unused `invoice_sequences` table | 8 — Finance Core | ⬜ open |
+| H3 | Invoice numbering is `count()+1`, not the unused `invoice_sequences` table | 8 — Finance Core | ✅ **fixed** — rewritten to a single atomic `INSERT ... ON CONFLICT DO UPDATE` against `invoice_sequences`, proven by a 10-way concurrent-issuance integration test |
 | H4 | Customer decision can land against an already-closed work order | 4 — Operations Spine | ⬜ open |
 | H5 | Idempotency key check-then-insert race in `recordPayment()` | 8 — Finance Core | ⬜ open |
 | H6 | Stock decrement may be read-then-write rather than one atomic `UPDATE` | 7 — Inventory | ✅ **fixed** — confirmed broken (plain `findUnique`, no lock), rewritten to `SELECT ... FOR UPDATE`, proven by a concurrent-request integration test |
@@ -29,7 +29,7 @@
 | E12 | Clock skew between API replicas disagrees about token/window expiry | 13 — System Automation, 20 — Operational Resilience | ⬜ open |
 | E13 | Capability rollback racing an in-flight lifecycle transition | 3 — Governance Runtime | ⬜ **design spike required** |
 | E14 | Two opposite platform actions (freeze/reactivate) race the same tenant | 19 — Governance Depth (24.1–24.3's control lever) | ⬜ open |
-| E15 | Halfway-point rounding needs one named, explicitly documented rule | 8 — Finance Core | ⬜ open |
+| E15 | Halfway-point rounding needs one named, explicitly documented rule | 8 — Finance Core | ✅ **already resolved** — verified on inspection: `roundHalfUp()` in `packages/shared/src/money/money.ts` is the single named function, used everywhere, and the convention (half-up, matching a human's paper arithmetic) is documented inline and in `PHASE_8.md` §2 |
 | E16 | `READ COMMITTED` anomaly verification for the stock decrement statement | 7 — Inventory | ✅ **fixed** — same fix as H6; `stock.integration.spec.ts`'s "concurrent issues of the last unit" suite fires genuinely simultaneous requests and asserts exactly one wins |
 | E17 | Schema migrations against a dormant/archived tenant's data | 18 — Tenant Relationships (18.D) | ⬜ open |
 | E18 | No lazy-rehash path or version tracking for password hashes | 1 — Runnable and Provable (auth baseline) | ⬜ open |
