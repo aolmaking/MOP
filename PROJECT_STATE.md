@@ -2,24 +2,43 @@
 
 > **Purpose:** everything needed to continue MOP in a fresh session without the previous conversation.
 > **Companion:** [`CLAUDE.md`](./CLAUDE.md) holds permanent knowledge (architecture, rules, toolchain). This holds *where we are*.
-> **Last updated:** 2026-08-09, after Phase 8 completed.
+> **Last updated:** 2026-08-12, after closing the Inventory/Branch Manager/Platform page gap and drafting Phases 15–17.
 > **Keep this current.** Update it at the end of any phase task, and before ending a long session.
 
 ---
 
 ## 1. Current objective
 
-**Close the page gap before starting Phase 9.**
+**Two tracks are open at once.** Continue closing the remaining page gap
+toward Phase 9, and carry forward the newly-drafted Phases 15–17
+(specialization) whose scenario research is now written.
 
-An audit against `detailed-specs/` found the spec requires **53 pages** and **15 exist**. Phase 7 had been marked complete with three of its six pages built, because completion was measured against what had been made rather than against the spec. [`PAGE_INVENTORY.md`](docs/PAGE_INVENTORY.md) now tracks every page and is the definition of done.
+The page-gap audit against `detailed-specs/` originally found the spec
+requires **53 pages** against **15 built**. [`PAGE_INVENTORY.md`](docs/PAGE_INVENTORY.md)
+tracks every page and is the definition of done; it now reads **23 of
+53**. Closed since the last update: Inventory Home / Catalog Control /
+Reports (Inventory Manager now 5/6), Team Setup (Branch Manager now
+**7/7, complete** — required a new permission-resolver layer, since team
+management is owner-delegated, not capability- or role-gated), and the
+Workshops list (Platform Super Admin now 3/6 — the fourth "finished
+system with no door": `WorkshopsService`, freeze/reactivate and the
+health service had existed since Phase 2 with no page).
 
-Three of the gaps are **finished systems with no door** — built, tested, and unreachable by any human:
+**New:** [`docs/scenarios/`](docs/scenarios/) holds 20 detailed
+walkthroughs across four deliberately different workshop shapes
+(1-branch single-operator, 4-branch dealership network, field-service
+heavy-equipment, 6-branch quick-lube chain), written to discover what
+MOP is missing for real, differently-specialized workshops — not what's
+missing from the page count. [`FINDINGS_SYNTHESIS.md`](docs/scenarios/FINDINGS_SYNTHESIS.md)
+consolidates 78 findings into **three new phases, 15–17**, added to
+`PHASE_MAP.md` and detailed in `docs/phases/PHASE_15.md`–`PHASE_17.md`.
+They are drafted, not started — no code yet.
 
-1. **Invite Accept.** Add Workshop writes `inviteTokenHash` and nothing redeems it, so every owner created through the product cannot log in.
-2. **Customer Decision Page.** `secureToken` appears nowhere in the API. The customer cannot approve anything.
-3. **Audit & Change History.** `AuditLog` is written on every risky action; `audit/` has no controller.
+Three doors closed earlier this arc, from the original audit:
 
-Those come first. Then the pages owed by phases already run.
+1. **Invite Accept.** Add Workshop writes `inviteTokenHash` and nothing redeems it, so every owner created through the product cannot log in. *(closed)*
+2. **Customer Decision Page.** `secureToken` appears nowhere in the API. The customer cannot approve anything. *(closed)*
+3. **Audit & Change History.** `AuditLog` is written on every risky action; `audit/` has no controller. *(closed)*
 
 ## 2. Where we are
 
@@ -29,14 +48,21 @@ Those come first. Then the pages owed by phases already run.
 | 2 — Design Completeness | ✅ complete |
 | 3 — Governance Runtime | 🟢 4 of 5. Capability UI moved to Phase 5 (5.F) |
 | 4 — Operations Spine | ✅ complete |
-| 5 — Branch Manager | 🟠 6 of 7 pages — Team Setup owed |
+| 5 — Branch Manager | ✅ **complete — 7 of 7 pages**, Team Setup closed |
 | 6 — Technician | ✅ complete — 6.A–6.G |
-| 7 — Inventory | 🟠 **engine done, 3 of 6 pages built** — see PAGE_INVENTORY.md |
+| 7 — Inventory | 🟠 **engine done, 5 of 6 pages built** — Returns/Movements actions still owed, see PAGE_INVENTORY.md |
 | 8 — Finance Core | 🟠 engine done; Owner "Money" page owed (Phase 10) |
-| **9 — Billing / Invoicing** | **🔵 next** |
+| **9 — Billing / Invoicing** | **🔵 next**, once the remaining page gap is acceptable |
 | 10–14 | ⬜ not started |
+| 15 — Specialization Discovery | ⬜ **drafted**, not started — `docs/phases/PHASE_15.md` |
+| 16 — Specialization Structure | ⬜ **drafted**, not started — `docs/phases/PHASE_16.md` |
+| 17 — Specialization at Creation | ⬜ **drafted**, not started — `docs/phases/PHASE_17.md` |
 
-**Verified at last commit:** 560 tests (121 shared + 292 API + 147 web), typecheck clean, all **four** custom lint rules passing, full build green. Pushed to `origin/main`.
+Platform Super Admin: 3 of 6 pages (Add Workshop Owner, Workshops,
+Builder Control partial). Governance Controls, Platform Reports and
+Workshop Live View still owed.
+
+**Verified at last commit:** 377 API/shared tests + 158 web tests, typecheck clean, all **four** custom lint rules passing, full build green (`corepack pnpm build`, confirmed standalone — the combined `typecheck && lint && test && build` run can OOM-kill the last step on this machine; run `build` separately if that happens). Pushed to `origin/main`.
 
 ## 3. Completed work
 
@@ -56,7 +82,17 @@ Those come first. Then the pages owed by phases already run.
 
 **Documentation.** Vision, systems, capability model, scenarios, three engineering charters, design language, phase map and per-phase docs. README + CONTRIBUTING as the repository front door.
 
+**Page-gap closure (this arc).** Inventory Home (7 triage cards, per-warehouse breakdown), Catalog Control (paginated editor, cost gated behind a new `inventory.cost.view` permission defaulting false), and Reports (velocity-based stock risk per warehouse, warehouse comparison suppressed rather than shown as a one-bar chart) for Inventory Manager. Team Setup for Branch Manager, which required a **new permission-resolver layer** — `DelegationLayer`, position 8 of what is now a 10-layer chain (`permission-resolver.service.ts`) — because team management is owner-delegated per workshop, a decision neither the capability engine nor a role template owns. The Workshops list for Platform Super Admin: server-side paged/sorted/filtered table, a details drawer (its own component, split out after the combined page tripped the CSS budget), and freeze/reactivate with a live-computed impact preview.
+
+**Scenario research (this arc).** 20 scenarios across `docs/scenarios/`, four workshops chosen to be as structurally different as possible, each finding 3–4 core product mistakes by walking the software step by step. Synthesized into `FINDINGS_SYNTHESIS.md` and three new phases (15–17) added to `PHASE_MAP.md`, detailed in their own phase docs. No code from this track yet — it is planning output, matching this project's rule that re-planning at a phase boundary is expected, silent drift is not.
+
 ## 4. Current task — what to do next
+
+**Two directions are both legitimate next steps; pick based on what's asked for.**
+
+**A — Continue the page-gap track toward Phase 9.** Remaining: Returns/Movements actions (accept/reject a return, request clarification — Inventory Manager's last owed page), Platform's Governance Controls / Platform Reports / Workshop Live View, then Phase 9 (Billing/Invoicing) as originally planned. See §1 above.
+
+**B — Start Phase 15.** The scenario research is done; Phase 15 is drafted and ready to build against. Its exit criteria and the primitives it owns (service card, measurement form, position taxonomy, credential, blocker reason) are in `docs/phases/PHASE_15.md`. Do not start Phase 17's creation-time UI before 15 and 16 exist — see that document's closing note, which names Phase 7's own history as the cautionary case.
 
 **Write `docs/phases/PHASE_9.md` first, then build it.** The detail document comes before any code, as in Phases 5–8.
 

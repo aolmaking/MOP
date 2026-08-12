@@ -123,6 +123,24 @@ Real background jobs on a **separate worker process** — the current in-process
 ### Phase 14 — Internationalization & Release Readiness
 Arabic translation pass on the Phase 1 foundation, country invoice adapters as needed, security review, performance, summary tables, permission-key assertion check.
 
+### Phase 15 — Specialization Discovery
+Settle the schema for **specialization primitives** — service cards, measurement/diagnostic forms, position taxonomies, credentials, blocker reasons — the way Phase 2 settled scenario schema questions. Proves each primitive against a real case from `docs/scenarios/`. No authoring UI.
+
+**Exit:** every primitive has a written schema verdict; at least one service card, one measurement form and one credential work end-to-end against a seeded workshop.
+**Detail:** [`phases/PHASE_15.md`](./phases/PHASE_15.md)
+
+### Phase 16 — Specialization Structure
+Build the structural concepts specializations attach to, found independently across every scenario workshop: scheduling/promise time, resources (lifts, bays, crews), work-order linkage (comeback, follow-up, parent/child), payer attribution, SLA/expected-duration with alerting, a location/site entity, append-only addenda on closed work orders, a generic attachment capability, and a network-vs-branch specialization override (structurally close to the capability engine).
+
+**Exit:** scheduling, SLA and attachments ship; anything deferred is recorded here with the phase that carries it, never dropped silently.
+**Detail:** [`phases/PHASE_16.md`](./phases/PHASE_16.md)
+
+### Phase 17 — Specialization at Creation
+Where the user's core idea lands: the super admin declares a workshop's specializations — service cards, resource types, branch structure, network-lock policy — **at `Add Workshop Owner`**, not as a settings page discovered later. Adds bulk staff provisioning, bulk customer/asset/catalog import, and a regional-manager role for multi-branch chains.
+
+**Exit:** a super admin can stand up each of the four scenario workshop shapes using only the product, with zero direct database access.
+**Detail:** [`phases/PHASE_17.md`](./phases/PHASE_17.md)
+
 ---
 
 ## Dependencies
@@ -134,11 +152,15 @@ Phase 2 ──┘                          ├──> Phase 8 ──> Phase 9
                                      ├──> Phase 10
                                      ├──> Phase 11
                                      └──> Phase 12 ──> Phase 13 ──> Phase 14
+
+Phase 15 ──> Phase 16 ──> Phase 17
 ```
 
 Phases 1 and 2 can run concurrently — one is code, the other is writing. Everything else is a hard dependency: Phase 3 needs Phase 2's schema verdicts, and Phase 4 needs Phase 3's capability runtime.
 
 Phases 5–12 are drawn as parallel because they *depend* only on Phase 4, not because they should be built simultaneously. Recommended order is as numbered: Branch Manager and Technician first, since they exercise the spine hardest and will expose its defects while it is still cheap to change.
+
+**Phases 15–17 are a separate chain, numbered after 14 but not gated behind it.** They depend on Phase 4 (the spine) and touch Phase 7/8/9's finance and inventory models, but not on 10–14's specific content — a discovery spike could run earlier if a real pilot workshop needed it sooner. 15 → 16 → 17 is a hard internal order regardless of when the chain starts: 15 settles what a specialization *is* before 16 builds what it attaches to, before 17 builds the screen that declares one. See `phases/PHASE_17.md`'s closing note for why skipping this order repeats a mistake this project already made once, in Phase 7.
 
 ## What "done" means for any phase
 
