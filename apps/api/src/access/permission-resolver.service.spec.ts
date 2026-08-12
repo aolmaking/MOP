@@ -6,6 +6,7 @@ import { TenantCapabilityLayer } from "./layers/tenant-capability.layer";
 import { ModuleEnabledLayer } from "./layers/module-enabled.layer";
 import { FeatureEnabledLayer } from "./layers/feature-enabled.layer";
 import { WorkshopConfigurationLayer } from "./layers/workshop-configuration.layer";
+import { DelegationLayer } from "./layers/delegation.layer";
 import { RolePermissionTemplateLayer } from "./layers/role-permission-template.layer";
 import { UserOverrideLayer } from "./layers/user-override.layer";
 import { createSession } from "./test-support/session-fixture";
@@ -23,6 +24,7 @@ describe("PermissionResolverService", () => {
     const moduleEnabledInstance = new ModuleEnabledLayer();
     const featureEnabledInstance = new FeatureEnabledLayer();
     const workshopConfigurationInstance = new WorkshopConfigurationLayer();
+    const delegationInstance = new DelegationLayer();
     const rolePermissionTemplateInstance = new RolePermissionTemplateLayer();
     const userOverrideInstance = new UserOverrideLayer();
 
@@ -36,6 +38,7 @@ describe("PermissionResolverService", () => {
       | "moduleEnabled"
       | "featureEnabled"
       | "workshopConfiguration"
+      | "delegation"
       | "rolePermissionTemplate"
       | "userOverride",
       PermissionLayer
@@ -47,6 +50,7 @@ describe("PermissionResolverService", () => {
       moduleEnabled: moduleEnabledInstance,
       featureEnabled: featureEnabledInstance,
       workshopConfiguration: workshopConfigurationInstance,
+      delegation: delegationInstance,
       rolePermissionTemplate: rolePermissionTemplateInstance,
       userOverride: userOverrideInstance,
     };
@@ -64,6 +68,7 @@ describe("PermissionResolverService", () => {
       moduleEnabledInstance,
       featureEnabledInstance,
       workshopConfigurationInstance,
+      delegationInstance,
       rolePermissionTemplateInstance,
       userOverrideInstance,
     );
@@ -97,6 +102,7 @@ describe("PermissionResolverService", () => {
       layers.moduleEnabled,
       layers.featureEnabled,
       layers.workshopConfiguration,
+      layers.delegation,
       layers.rolePermissionTemplate,
       layers.userOverride,
     ].map((layer) => jest.spyOn(layer, "evaluate"));
@@ -115,6 +121,7 @@ describe("PermissionResolverService", () => {
     stub(layers.moduleEnabled, null);
     stub(layers.featureEnabled, null);
     stub(layers.workshopConfiguration, null);
+    stub(layers.delegation, null);
     const rolePermissionSpy = jest.spyOn(layers.rolePermissionTemplate, "evaluate");
     const userOverrideSpy = jest.spyOn(layers.userOverride, "evaluate");
 
@@ -133,6 +140,7 @@ describe("PermissionResolverService", () => {
     stub(layers.moduleEnabled, null);
     stub(layers.featureEnabled, null);
     stub(layers.workshopConfiguration, null);
+    stub(layers.delegation, null);
     stub(layers.rolePermissionTemplate, { allowed: false, locked: false, reason: "role denies" });
     stub(layers.userOverride, { allowed: true, locked: true, reason: "personally granted" });
 
@@ -157,7 +165,7 @@ describe("PermissionResolverService", () => {
     expect(rolePermissionSpy).not.toHaveBeenCalled();
   });
 
-  it("evaluates layers in the documented 1-9 order", async () => {
+  it("evaluates layers in the documented 1-10 order", async () => {
     const { service, layers } = build();
     const callOrder: string[] = [];
     Object.entries(layers).forEach(([label, layer]) => {
@@ -177,6 +185,7 @@ describe("PermissionResolverService", () => {
       "moduleEnabled",
       "featureEnabled",
       "workshopConfiguration",
+      "delegation",
       "rolePermissionTemplate",
       "userOverride",
     ]);

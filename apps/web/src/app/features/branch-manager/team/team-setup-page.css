@@ -1,0 +1,330 @@
+/*
+ * Team Setup -- a roster.
+ *
+ * One card per team, because a team is a group of named people and the
+ * question asked of it ("who is on this?") is answered by a list under a
+ * heading, not by a row in a grid. The unassigned group is the same
+ * shape as a team card and sits in the same flow, so the eye reads it as
+ * one more group rather than as an exception.
+ */
+
+.team {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 82rem;
+}
+
+.team-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--text);
+}
+
+.team-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.team-count {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.team-new {
+  margin-inline-start: auto;
+}
+
+.roster {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.team-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  /* The job-card spine again, so a reader who learned it elsewhere in
+     the product reads this without being taught twice. */
+  border-inline-start: 3px solid var(--brand);
+  border-radius: var(--radius-sm);
+}
+
+/* Nobody's team yet: no colour, because it is not a problem, it is
+   just work outstanding. */
+.team-card-loose {
+  border-inline-start-color: var(--border-strong);
+}
+
+.team-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding-block-end: var(--space-2);
+  border-block-end: 1px solid var(--border);
+}
+
+.team-card-name {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.team-card-branch {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.leader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.leader-label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.leader-select,
+.creator select,
+.creator input {
+  inline-size: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-base);
+}
+
+.members {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+}
+
+.member {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+  border-block-end: 1px solid var(--border);
+}
+
+.member:last-child {
+  border-block-end: 0;
+}
+
+.member-name {
+  font-size: var(--text-base);
+}
+
+.member-since {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.member-remove {
+  margin-inline-start: auto;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.member-remove:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.member-remove:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.member-remove:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.team-empty {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.team-add {
+  align-self: flex-start;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.team-add:hover:not(:disabled) {
+  border-color: var(--brand);
+}
+
+.team-add:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  list-style: none;
+}
+
+.picker-option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  inline-size: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: 0;
+  border-block-end: 1px solid var(--border);
+  color: inherit;
+  font-family: inherit;
+  font-size: var(--text-base);
+  text-align: start;
+  cursor: pointer;
+}
+
+.picker li:last-child .picker-option {
+  border-block-end: 0;
+}
+
+.picker-option:hover:not(:disabled) {
+  background: var(--surface-raised);
+}
+
+.picker-option:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.picker-note {
+  margin-inline-start: auto;
+  color: var(--warning);
+  font-size: var(--text-xs);
+}
+
+.history-summary {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-block-start: var(--space-2);
+  list-style: none;
+}
+
+.history-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.history-dates {
+  margin-inline-start: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.creator {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.creator-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.creator-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--space-4);
+}
+
+.creator-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.creator-error {
+  padding: var(--space-3);
+  background: var(--danger-bg);
+  border-inline-start: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+  color: var(--danger-strong);
+  font-size: var(--text-base);
+}
+
+.state,
+.state-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.state-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.state-body {
+  color: var(--text-muted);
+  font-size: var(--text-base);
+  max-inline-size: 44rem;
+}

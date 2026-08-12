@@ -1,0 +1,208 @@
+<section class="team">
+  <header class="team-head">
+    <h1 class="team-title">Teams</h1>
+    @if (data(); as d) {
+      <p class="team-count">{{ d.teams.length }} teams · {{ d.technicians.length }} technicians</p>
+      @if (canCreate()) {
+        <button appButton variant="primary" size="small" class="team-new" (click)="startCreate()">New team</button>
+      }
+    }
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+    @case ('not-delegated') {
+      <!-- Not a failure. The owner keeps team structure by default, and
+           saying "permission denied" would read as a bug. -->
+      <div class="state">
+        <p class="state-title">Team setup stays with the workshop owner</p>
+        <p class="state-body">{{ refusal() }}</p>
+        <p class="state-body">
+          If your workshop wants you to manage teams, the owner can hand it over from Organization &amp; Access.
+        </p>
+      </div>
+    }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+    @case ('empty') {
+      <div class="state">
+        <p class="state-title">No teams and no technicians</p>
+        <p class="state-body">Teams appear here once your branches have staff to put in them.</p>
+      </div>
+    }
+    @case ('ready') {
+      @if (data(); as d) {
+        @if (creating()) {
+          <form class="creator" (submit)="$event.preventDefault(); create()">
+            <h2 class="creator-title">New team</h2>
+
+            @if (formError(); as message) {
+              <p class="creator-error" role="alert">{{ message }}</p>
+            }
+
+            <div class="creator-row">
+              <app-form-field label="Name" [required]="true">
+                <input type="text" [value]="draftName()" (input)="draftName.set($any($event.target).value)" />
+              </app-form-field>
+
+              <app-form-field label="Branch" [required]="true">
+                <select [value]="draftBranchId()" (change)="draftBranchId.set($any($event.target).value)">
+                  @for (branch of d.branches; track branch.id) {
+                    <option [value]="branch.id">{{ branch.name }}</option>
+                  }
+                </select>
+              </app-form-field>
+
+              <app-form-field
+                label="Team leader"
+                [required]="true"
+                hint="Only staff who already hold the Team Leader role."
+              >
+                <select [value]="draftLeaderId()" (change)="draftLeaderId.set($any($event.target).value)">
+                  @for (leader of d.eligibleLeaders; track leader.id) {
+                    <option [value]="leader.id">{{ leader.fullName }}</option>
+                  }
+                </select>
+              </app-form-field>
+            </div>
+
+            <div class="creator-actions">
+              <button appButton variant="secondary" type="button" (click)="cancelCreate()">Cancel</button>
+              <button appButton variant="primary" type="submit" [disabled]="busy()">
+                {{ busy() ? 'Creating…' : 'Create team' }}
+              </button>
+            </div>
+          </form>
+        }
+
+        @if (d.teams.length === 0) {
+          <div class="state">
+            <p class="state-title">No teams yet</p>
+            <p class="state-body">
+              @if (canCreate()) {
+                Create one and start putting technicians in it.
+              } @else {
+                A team needs a branch and someone who already holds the Team Leader role. Ask the owner to appoint one.
+              }
+            </p>
+          </div>
+        }
+
+        <div class="roster">
+          @for (team of d.teams; track team.id) {
+            <article class="team-card">
+              <header class="team-card-head">
+                <h2 class="team-card-name">{{ team.name }}</h2>
+                @if (team.branchName) {
+                  <span class="team-card-branch">{{ team.branchName }}</span>
+                }
+              </header>
+
+              <label class="leader">
+                <span class="leader-label">Led by</span>
+                <select
+                  class="leader-select"
+                  [value]="team.leader?.id ?? ''"
+                  [disabled]="busy()"
+                  (change)="changeLeader(team, $any($event.target).value)"
+                >
+                  @for (leader of d.eligibleLeaders; track leader.id) {
+                    <option [value]="leader.id">{{ leader.fullName }}</option>
+                  }
+                </select>
+              </label>
+
+              @if (team.members.length === 0) {
+                <p class="team-empty">Nobody on this team yet.</p>
+              } @else {
+                <ul class="members">
+                  @for (member of team.members; track member.membershipId) {
+                    <li class="member">
+                      <span class="member-name">{{ member.fullName }}</span>
+                      <span class="member-since">since {{ day(member.startedAt) }}</span>
+                      <button
+                        type="button"
+                        class="member-remove"
+                        [disabled]="busy()"
+                        (click)="move(member.technicianId, null)"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  }
+                </ul>
+              }
+
+              <button type="button" class="team-add" [disabled]="busy()" (click)="togglePicker(team.id)">
+                {{ picking() === team.id ? 'Close' : 'Add technician' }}
+              </button>
+
+              @if (picking() === team.id) {
+                <ul class="picker">
+                  @for (technician of d.technicians; track technician.id) {
+                    @if (technician.currentTeamId !== team.id) {
+                      <li>
+                        <button type="button" class="picker-option" [disabled]="busy()" (click)="move(technician.id, team.id)">
+                          <span>{{ technician.fullName }}</span>
+                          <!-- Said out loud: moving someone takes them off
+                               the team they are on, and that must not be a
+                               surprise after the click. -->
+                          @if (technician.currentTeamId) {
+                            <span class="picker-note">moves from another team</span>
+                          }
+                        </button>
+                      </li>
+                    }
+                  }
+                </ul>
+              }
+
+              @if (team.past.length > 0) {
+                <details class="history">
+                  <summary class="history-summary">Membership history</summary>
+                  <ul class="history-list">
+                    @for (member of team.past; track member.membershipId) {
+                      <li class="history-row">
+                        <span>{{ member.fullName }}</span>
+                        <span class="history-dates">
+                          {{ day(member.startedAt) }} — {{ member.endedAt ? day(member.endedAt) : '' }}
+                        </span>
+                      </li>
+                    }
+                  </ul>
+                </details>
+              }
+            </article>
+          }
+
+          <!-- Loose technicians sit beside the teams because they ARE the
+               work this page exists to finish, not a footnote under it. -->
+          @if (unassigned().length > 0) {
+            <article class="team-card team-card-loose">
+              <header class="team-card-head">
+                <h2 class="team-card-name">Not on a team</h2>
+                <span class="team-card-branch">{{ unassigned().length }}</span>
+              </header>
+
+              <ul class="members">
+                @for (technician of unassigned(); track technician.id) {
+                  <li class="member">
+                    <span class="member-name">{{ technician.fullName }}</span>
+                  </li>
+                }
+              </ul>
+
+              <p class="team-empty">Add them from a team above.</p>
+            </article>
+          }
+        </div>
+      }
+    }
+  }
+</section>

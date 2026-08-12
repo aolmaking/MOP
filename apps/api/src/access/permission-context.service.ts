@@ -1,12 +1,12 @@
 import { Injectable } from "@nestjs/common";
-import type { CapabilityProfile, SessionContext } from "@mop/shared";
+import { DELEGATION_KEYS, type CapabilityProfile, type SessionContext } from "@mop/shared";
 import { PrismaService } from "../database/prisma.service";
 import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 
 /**
  * Everything the permission layers need, loaded once.
  *
- * Six of the nine layers used to issue their own query per `can()` call,
+ * Six of the layers used to issue their own query per `can()` call,
  * so resolving ten permission keys for one page cost sixty round-trips on
  * the hottest path in the system. This loads the same data once and hands
  * every layer an in-memory snapshot.
@@ -33,6 +33,11 @@ export interface PermissionContext {
   readonly userOverrides: ReadonlyMap<string, { allowed: boolean; reason: string | null }>;
   /** Permission keys this workshop's configuration denies for the session's role. */
   readonly configurationDeniedKeys: ReadonlySet<string>;
+  /**
+   * Delegation switches this owner has turned ON. Absence means off:
+   * a delegation nobody has granted is not a delegation.
+   */
+  readonly activeDelegations: ReadonlySet<string>;
 }
 
 const EMPTY_CONTEXT: PermissionContext = {
@@ -42,6 +47,7 @@ const EMPTY_CONTEXT: PermissionContext = {
   roleTemplate: new Map(),
   userOverrides: new Map(),
   configurationDeniedKeys: new Set(),
+  activeDelegations: new Set(),
 };
 
 @Injectable()
@@ -56,10 +62,24 @@ export class PermissionContextService {
     // every layer that reads this context defers for them anyway.
     if (!session.tenantId) return EMPTY_CONTEXT;
 
-    const [locks, tenant, capabilities, roleRows, overrideRows, configuration] = await Promise.all([
+    const [controlSettings, tenant, capabilities, roleRows, overrideRows, configuration] = await Promise.all([
+      // Platform locks and owner delegations are both ControlSetting rows
+      // for this tenant, so they load as ONE query and are partitioned by
+      // type below. Two obvious queries would be a seventh round trip on
+      // the hottest path in the system, and the point of this service is
+      // that resolving twenty keys costs the same as resolving one.
       this.prisma.controlSetting.findMany({
-        where: { scope: "PLATFORM", tenantId: session.tenantId, type: "role_permission_lock", active: true },
-        select: { key: true, value: true },
+        where: {
+          tenantId: session.tenantId,
+          active: true,
+          OR: [
+            { scope: "PLATFORM", type: "role_permission_lock" },
+            // Keyed from the registry, so a stale row for a delegation
+            // that no longer exists cannot grant anything.
+            { scope: "TENANT", type: "delegation", key: { in: [...DELEGATION_KEYS] } },
+          ],
+        },
+        select: { key: true, value: true, type: true },
       }),
       this.prisma.tenant.findUnique({
         where: { id: session.tenantId },
@@ -86,6 +106,9 @@ export class PermissionContextService {
       }),
     ]);
 
+    const locks = controlSettings.filter((row) => row.type === "role_permission_lock");
+    const delegations = controlSettings.filter((row) => row.type === "delegation");
+
     return {
       platformLocks: new Map(
         locks
@@ -99,6 +122,12 @@ export class PermissionContextService {
         overrideRows.map((row) => [row.permissionKey, { allowed: row.allowed, reason: row.reason }]),
       ),
       configurationDeniedKeys: new Set(deniedKeysForRole(configuration?.roleExperience, session.role)),
+      // Only `true` counts. A row whose value is anything else -- absent,
+      // null, a string left by a half-written migration -- is not a
+      // decision the owner made, and must not read as one.
+      activeDelegations: new Set(
+        delegations.filter((row) => (row.value as { enabled?: boolean })?.enabled === true).map((row) => row.key),
+      ),
     };
   }
 }

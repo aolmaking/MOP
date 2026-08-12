@@ -13,6 +13,7 @@ import { TenantCapabilityLayer } from "./layers/tenant-capability.layer";
 import { ModuleEnabledLayer } from "./layers/module-enabled.layer";
 import { FeatureEnabledLayer } from "./layers/feature-enabled.layer";
 import { WorkshopConfigurationLayer } from "./layers/workshop-configuration.layer";
+import { DelegationLayer } from "./layers/delegation.layer";
 import { RolePermissionTemplateLayer } from "./layers/role-permission-template.layer";
 import { UserOverrideLayer } from "./layers/user-override.layer";
 
@@ -27,6 +28,7 @@ import { UserOverrideLayer } from "./layers/user-override.layer";
     ModuleEnabledLayer,
     FeatureEnabledLayer,
     WorkshopConfigurationLayer,
+    DelegationLayer,
     RolePermissionTemplateLayer,
     UserOverrideLayer,
     PermissionContextService,

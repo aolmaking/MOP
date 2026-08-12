@@ -4,7 +4,7 @@ import type { LayerDecision, LayerResult, PermissionLayer } from "../types";
 import type { PermissionContext } from "../permission-context.service";
 
 /**
- * Layer 9: a named exception granted or revoked for one specific person on
+ * Layer 10: a named exception granted or revoked for one specific person on
  * top of their role's template. Last in the chain, so it locks whenever a
  * row exists -- there is nothing after it to defer to.
  */

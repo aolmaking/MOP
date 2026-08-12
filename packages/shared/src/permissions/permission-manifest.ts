@@ -111,6 +111,9 @@ const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: "team.workorders.view", module: "TEAM_MANAGEMENT" },
   { key: "team.supervision_note.create", module: "TEAM_MANAGEMENT" },
   { key: "team.issue.flag_to_branch_manager", module: "TEAM_MANAGEMENT" },
+  // Assignable only once the owner has delegated -- see
+  // DELEGATED_PERMISSIONS. Granting it without delegation still denies.
+  { key: "team_setup.branch.manage", module: "TEAM_MANAGEMENT" },
 
   // Reports
   { key: "reports.owner.view", module: "REPORTS" },

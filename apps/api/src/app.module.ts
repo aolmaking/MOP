@@ -15,6 +15,7 @@ import { PlatformModule } from "./platform/platform.module";
 import { BranchManagerModule } from "./branch-manager/branch-manager.module";
 import { TechnicianModule } from "./technician/technician.module";
 import { InventoryModule } from "./inventory/inventory.module";
+import { TeamModule } from "./team/team.module";
 import { FinanceModule } from "./finance/finance.module";
 import { CustomerModule } from "./customer/customer.module";
 import { OwnerModule } from "./owner/owner.module";
@@ -47,6 +48,7 @@ import { HealthController } from "./health/health.controller";
     BranchManagerModule,
     TechnicianModule,
     InventoryModule,
+    TeamModule,
     FinanceModule,
     CustomerModule,
     OwnerModule,

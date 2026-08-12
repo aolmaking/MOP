@@ -6,8 +6,8 @@ import type { LayerResult } from "./types";
 
 /**
  * The only access-control entry point controllers/services should inject.
- * Wraps PermissionResolverService (layers 1-8, "can this session ever do
- * X") and ScopeResolverService (layer 9, "which records"), so callers never
+ * Wraps PermissionResolverService (layers 1-10, "can this session ever do
+ * X") and ScopeResolverService (record scoping, "which records"), so callers never
  * reach into the layer arrays directly.
  *
  * Takes `session` as an explicit argument rather than reading it off a

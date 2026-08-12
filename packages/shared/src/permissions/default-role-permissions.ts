@@ -54,6 +54,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     // see tenant-owner.md's Pricing page.
     "finance.invoice.issue": false,
     "finance.payment.record": false,
+    // True in the template, and still denied until the owner delegates.
+    // The template says "this role would do this if allowed to"; the
+    // delegation layer says whether anyone but the owner may at all.
+    "team_setup.branch.manage": true,
   },
   TECHNICIAN: {
     "task.view_assigned": true,

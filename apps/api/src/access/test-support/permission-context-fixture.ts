@@ -13,6 +13,7 @@ export function createContext(overrides: Partial<PermissionContext> = {}): Permi
     roleTemplate: new Map(),
     userOverrides: new Map(),
     configurationDeniedKeys: new Set(),
+    activeDelegations: new Set(),
     ...overrides,
   };
 }

@@ -41,6 +41,9 @@ const MANAGER_PERMISSIONS = [
   "workorders.branch.manage_blockers",
   "customer.intake.create",
   "decisions.branch.view",
+  // Granted in the template AND still denied until the owner delegates,
+  // which is the pair the demo exists to show.
+  "team_setup.branch.manage",
 ];
 
 const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000);
@@ -63,6 +66,7 @@ async function main() {
   const manager = await ensureManager(tenant.id);
   const technician = await ensureTechnician(tenant.id);
   await ensureOwner(tenant.id);
+  await ensureDelegatedTeams(tenant.id, branch.id);
   await clearDemoWork(tenant.id);
   await createStuckJobs(tenant.id, branch.id, technician.staffUserId);
 
@@ -77,6 +81,76 @@ async function main() {
   console.log(`  Technician  ${TECHNICIAN_EMAIL} / ${TECHNICIAN_PASSWORD}`);
   console.log(`              lands on http://localhost:4200/tech\n`);
   console.log(`  Manager account ${manager.id}`);
+}
+
+const TEAM_LEADER_EMAIL = "leader-demo@apex-motors.local";
+const TEAM_LEADER_PASSWORD = "ChangeMe-Leader-123";
+
+/**
+ * Turns on the owner's team-setup delegation and gives the branch
+ * manager something to manage.
+ *
+ * Delegation is OFF by default and stays off for every other workshop.
+ * It is switched on here because the alternative -- shipping the page
+ * with no way to reach it -- is how a surface goes unlooked-at for a
+ * phase. A second workshop with it off is what proves the switch works,
+ * and the base seed's second tenant provides that for free.
+ */
+async function ensureDelegatedTeams(tenantId: string, branchId: string): Promise<void> {
+  const existing = await prisma.controlSetting.findFirst({
+    where: { scope: "TENANT", tenantId, type: "delegation", key: "team_setup.delegate" },
+  });
+
+  if (existing) {
+    await prisma.controlSetting.update({
+      where: { id: existing.id },
+      data: { value: { enabled: true }, active: true },
+    });
+  } else {
+    await prisma.controlSetting.create({
+      data: {
+        scope: "TENANT",
+        tenantId,
+        key: "team_setup.delegate",
+        value: { enabled: true },
+        type: "delegation",
+        active: true,
+        reason: "Demo: the owner has handed team structure to the branch manager",
+        createdBy: "seed-demo",
+      },
+    });
+  }
+
+  const account =
+    (await prisma.account.findFirst({ where: { email: TEAM_LEADER_EMAIL } })) ??
+    (await prisma.account.create({
+      data: {
+        accountType: "TENANT_STAFF",
+        tenantId,
+        email: TEAM_LEADER_EMAIL,
+        passwordHash: hashPassword(TEAM_LEADER_PASSWORD),
+        status: "ACTIVE",
+      },
+    }));
+
+  const leader =
+    (await prisma.staffUser.findUnique({ where: { accountId: account.id } })) ??
+    (await prisma.staffUser.create({
+      data: {
+        accountId: account.id,
+        tenantId,
+        fullName: "Nadia Kamal",
+        role: "TEAM_LEADER",
+        branchScope: [branchId],
+        warehouseScope: [],
+        categoryScope: ["CARS"],
+      },
+    }));
+
+  const team = await prisma.team.findFirst({ where: { tenantId, name: "Bay One" } });
+  if (!team) {
+    await prisma.team.create({ data: { tenantId, branchId, name: "Bay One", teamLeaderId: leader.id } });
+  }
 }
 
 async function ensureManager(tenantId: string) {

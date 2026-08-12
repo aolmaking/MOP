@@ -8,12 +8,13 @@ import { TenantCapabilityLayer } from "./layers/tenant-capability.layer";
 import { ModuleEnabledLayer } from "./layers/module-enabled.layer";
 import { FeatureEnabledLayer } from "./layers/feature-enabled.layer";
 import { WorkshopConfigurationLayer } from "./layers/workshop-configuration.layer";
+import { DelegationLayer } from "./layers/delegation.layer";
 import { RolePermissionTemplateLayer } from "./layers/role-permission-template.layer";
 import { UserOverrideLayer } from "./layers/user-override.layer";
 import { PermissionContextService, type PermissionContext } from "./permission-context.service";
 
 /**
- * Layers 1-9 of the Effective Permission Resolver: "can this session ever
+ * Layers 1-10 of the Effective Permission Resolver: "can this session ever
  * do X". A literal ordered array that IS actually iterated -- the old
  * project's permission hierarchy was a decorative array nothing walked;
  * this is the fix for that specific failure.
@@ -38,6 +39,7 @@ export class PermissionResolverService {
     moduleEnabled: ModuleEnabledLayer,
     featureEnabled: FeatureEnabledLayer,
     workshopConfiguration: WorkshopConfigurationLayer,
+    delegation: DelegationLayer,
     rolePermissionTemplate: RolePermissionTemplateLayer,
     userOverride: UserOverrideLayer,
   ) {
@@ -50,6 +52,10 @@ export class PermissionResolverService {
     // never be able to resurrect a function the workshop does not perform.
     // Granting inventory.request.issue in a workshop with no inventory
     // still denies.
+    //
+    // Delegation (8) narrows for the same reason one step lower down:
+    // team management is the owner's, and a role template that offers it
+    // must not be able to hand it over on the owner's behalf.
     this.layers = [
       platformControl,
       planEntitlement,
@@ -58,6 +64,7 @@ export class PermissionResolverService {
       moduleEnabled,
       featureEnabled,
       workshopConfiguration,
+      delegation,
       rolePermissionTemplate,
       userOverride,
     ];

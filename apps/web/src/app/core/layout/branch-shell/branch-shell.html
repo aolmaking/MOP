@@ -2,7 +2,7 @@
   <nav class="rail" aria-label="Branch navigation">
     <div class="rail-brand">MOP</div>
 
-    @for (item of navigation; track item.route) {
+    @for (item of navigation(); track item.route) {
       <a [routerLink]="item.route" routerLinkActive="rail-link--active" class="rail-link">{{ item.label }}</a>
     }
 

@@ -15,8 +15,8 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| Built | **21** |
-| Remaining | **32** |
+| Built | **22** |
+| Remaining | **31** |
 
 Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built
 
@@ -33,7 +33,7 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Platform Reports | ⬜ | — | |
 | Workshop Live View | ⬜ | — | |
 
-## Branch Manager — 6 / 7
+## Branch Manager — 7 / 7 ✅
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
@@ -43,7 +43,7 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Work Order Workspace | ✅ | `/branch/work-orders/:id` | |
 | Approvals & Customer Decisions | ✅ | `/branch/approvals` | |
 | Delivery & Payments Status | ✅ | `/branch/delivery` | |
-| Team Setup | ⬜ | — | Deliberately deferred in PHASE_5.md §3 as "optional seventh, shown only when the owner delegates it". Still owed |
+| Team Setup | ✅ | `/branch/team` | Delegation-gated. The rail entry is absent, not locked, until the owner turns on `team_setup.delegate` |
 
 ## Technician — 3 / 3 ✅
 

@@ -76,6 +76,13 @@ export const routes: Routes = [
         loadComponent: () => import('./features/finance/take-payment').then((m) => m.TakePayment),
       },
       {
+        // Reachable only where the owner has delegated team management.
+        // The route always exists; the page itself says so when it has
+        // not been, which is better than a 404 that looks like a bug.
+        path: 'team',
+        loadComponent: () => import('./features/branch-manager/team/team-setup-page').then((m) => m.TeamSetupPage),
+      },
+      {
         path: 'work-orders',
         loadComponent: () =>
           import('./features/branch-manager/work-orders/work-orders-board').then((m) => m.WorkOrdersBoard),

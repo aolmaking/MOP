@@ -7,6 +7,7 @@ import { TenantCapabilityLayer } from "./layers/tenant-capability.layer";
 import { ModuleEnabledLayer } from "./layers/module-enabled.layer";
 import { FeatureEnabledLayer } from "./layers/feature-enabled.layer";
 import { WorkshopConfigurationLayer } from "./layers/workshop-configuration.layer";
+import { DelegationLayer } from "./layers/delegation.layer";
 import { RolePermissionTemplateLayer } from "./layers/role-permission-template.layer";
 import { UserOverrideLayer } from "./layers/user-override.layer";
 import { createSession } from "./test-support/session-fixture";
@@ -17,7 +18,7 @@ import type { CapabilityResolutionService } from "../capabilities/capability-res
  * The guarantee this file protects: permission resolution costs a constant
  * number of queries per request, no matter how many keys are checked.
  *
- * Before the per-request context, six of nine layers queried the database
+ * Before the per-request context, six of the layers queried the database
  * on every `can()` call -- so a page checking ten permissions cost sixty
  * round-trips on the hottest path in the system.
  */
@@ -74,6 +75,7 @@ function buildHarness() {
     new ModuleEnabledLayer(),
     new FeatureEnabledLayer(),
     new WorkshopConfigurationLayer(),
+    new DelegationLayer(),
     new RolePermissionTemplateLayer(),
     new UserOverrideLayer(),
   );
