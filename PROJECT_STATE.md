@@ -85,7 +85,7 @@ Three doors closed earlier this arc, from the original audit:
 | 6 — Technician | ✅ complete — 6.A–6.G |
 | 7 — Inventory | ✅ **complete — 6 of 6 pages**, Returns/Movements closed |
 | 8 — Finance Core | 🟠 engine done; Owner "Money" page owed (Phase 10) |
-| **9 — Billing / Invoicing** | **🔵 next**, once the remaining page gap is acceptable |
+| **9 — Billing / Invoicing** | 🟢 in progress — see §4 |
 | 10–14 | ⬜ not started |
 | 15 — Specialization Discovery | ⬜ **drafted**, not started — `docs/phases/PHASE_15.md` |
 | 16 — Specialization Structure | ⬜ **drafted**, not started — `docs/phases/PHASE_16.md` |
@@ -98,7 +98,13 @@ Platform Super Admin: 3 of 6 pages (Add Workshop Owner, Workshops,
 Builder Control partial). Governance Controls, Platform Reports and
 Workshop Live View still owed.
 
-**Verified at last commit:** 391 API/shared tests + 163 web tests, typecheck clean, all **four** custom lint rules passing, full build green (`corepack pnpm build`, confirmed standalone — the combined `typecheck && lint && test && build` run can OOM-kill the last step on this machine; run `build` separately if that happens).
+**Verified at last commit:** 519 API/shared tests + 163 web tests, typecheck clean, all **four** custom lint rules passing, full build green.
+
+**Phase 9 (this arc, in progress).** `docs/phases/PHASE_9.md` written first. Built and tested: `BillingModule` (`GenericBillingAdapter` + `BillingService`), `BillingDocument` as its own model distinct from `Invoice` (Finance keeps the settlement record; Billing gets its own row, lifecycle, immutable snapshot), wired into `FinanceService.issueInvoice()` as a typed-contract call in the same transaction, External Billing Mode made load-bearing (suppresses document creation, proven by test), the adapter seam proven swappable (a test-only adapter produces a differently-shaped document from the same snapshot without the amount changing), and `CreditNote` issuance with real sequential numbering (`credit_note_sequences`, same atomic-upsert pattern as invoices). Found and fixed a real gap in `docs/SYSTEMS.md`'s own quoted adapter interface while implementing it: `generateCreditNote`/`generateDebitNote` had no `amount` parameter (silently assumed a credit note always refunds the full invoice) and no numbering parameter — both docs corrected alongside the code.
+
+**Still owed within Phase 9:** the refund-approval workflow (`RefundRequest` PENDING → APPROVED calling `BillingService.issueCreditNote`) — the credit-note mechanism is built and tested directly; nothing yet drives it from an approval decision. `compliantBlocked` on `FinanceConfiguration` (schema field added; not yet computed or surfaced on the Workshops list). `EgyptETAAdapter`/`SaudiZATCAAdapter` are explicitly out of scope per the phase doc's exit criteria.
+
+**Also fixed this arc, found while reading code for the first time, not by design:** `FinanceService.nextInvoiceNumber()` was `tx.invoice.count()+1` racing a unique-constraint backstop, rewritten to a real atomic upsert against the previously-unused `InvoiceSequence` table, proven by a 10-way concurrent-issuance test. `StockService.record()`'s "locked for the duration" comment was untrue — a plain `findUnique` takes no row lock under Postgres's default `READ COMMITTED`; rewritten to `SELECT ... FOR UPDATE`, proven by a concurrent-issue test. Both are edge cases H3 and H6/E16 in `docs/scenarios3/EDGE_CASE_REGISTER.md`, now marked fixed there.
 
 ## 3. Completed work
 

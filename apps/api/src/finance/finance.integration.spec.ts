@@ -18,13 +18,16 @@ import { CapabilityResolutionService } from "../capabilities/capability-resoluti
 import { OperationEventsService } from "../operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../operations/customer-safe-projection.service";
 import { AuditService } from "../audit/audit.service";
+import { BillingService } from "../billing/billing.service";
+import { GenericBillingAdapter } from "../billing/generic-billing-adapter.service";
 import type { PrismaService } from "../database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
 
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
-const finance = new FinanceService(asService, new CapabilityResolutionService(asService), events);
+const billing = new BillingService(asService, new GenericBillingAdapter());
+const finance = new FinanceService(asService, new CapabilityResolutionService(asService), events, billing);
 
 const ACTOR = { accountId: "cashier-1", displayName: "Cashier", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `fin-${Date.now()}`;
@@ -126,8 +129,13 @@ afterAll(async () => {
     if (!shop) continue;
     const where = { tenantId: shop.tenantId };
     await prisma.payment.deleteMany({ where });
+    await prisma.creditNote.deleteMany({ where });
+    await prisma.billingDocument.deleteMany({ where });
     await prisma.invoiceLine.deleteMany({ where });
     await prisma.invoice.deleteMany({ where });
+    await prisma.creditNoteSequence.deleteMany({ where: { tenantId: shop.tenantId } });
+    await prisma.invoiceSequence.deleteMany({ where: { tenantId: shop.tenantId } });
+    await prisma.financeConfiguration.deleteMany({ where: { tenantId: shop.tenantId } });
     await prisma.runningInvoiceLine.deleteMany({ where });
     await prisma.runningInvoice.deleteMany({ where });
     await prisma.operationEvent.deleteMany({ where });

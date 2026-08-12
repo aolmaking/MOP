@@ -1200,12 +1200,13 @@ model Invoice {
   issuedById       String
   issuedAt         DateTime      @default(now())
 
-  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  workOrder   WorkOrder       @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
-  lines       InvoiceLine[]
-  payments    Payment[]
-  refunds     RefundRequest[]
-  creditNotes CreditNote[]
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  workOrder       WorkOrder        @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  lines           InvoiceLine[]
+  payments        Payment[]
+  refunds         RefundRequest[]
+  creditNotes     CreditNote[]
+  billingDocument BillingDocument?
 
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId, status])
@@ -1289,19 +1290,67 @@ model RefundRequest {
   @@map("refund_requests")
 }
 
+// A Billing artifact, not a Finance one -- it has its own sequential
+// number (CreditNoteSequence, the same atomic-upsert pattern as
+// InvoiceSequence) and corrects a BillingDocument, not an Invoice
+// directly. Phase 8 created this table and never wrote it; Phase 9 wires
+// it to the refund approval flow.
 model CreditNote {
-  id         String   @id @default(cuid())
-  tenantId   String
-  invoiceId  String
-  amount     Decimal  @db.Decimal(12, 2)
-  reason     String
-  issuedById String
-  createdAt  DateTime @default(now())
+  id               String   @id @default(cuid())
+  tenantId         String
+  invoiceId        String
+  billingDocumentId String?
+  creditNoteNumber String?
+  amount           Decimal  @db.Decimal(12, 2)
+  reason           String
+  issuedById       String
+  createdAt        DateTime @default(now())
 
-  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  invoice         Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  billingDocument BillingDocument? @relation(fields: [billingDocumentId], references: [id], onDelete: SetNull)
 
+  @@unique([tenantId, creditNoteNumber])
   @@index([tenantId, invoiceId])
   @@map("credit_notes")
+}
+
+model CreditNoteSequence {
+  tenantId   String @id
+  lastNumber Int    @default(0)
+
+  @@map("credit_note_sequences")
+}
+
+enum BillingDocumentStatus {
+  PENDING
+  CLEARED
+  REJECTED
+  CLEARANCE_FAILED
+}
+
+// The legal document, distinct from Invoice (Finance's own settlement
+// record -- running balance, paid, numbering stay there). Billing gets
+// its own row, its own lifecycle, and an immutable rendered snapshot
+// captured at the moment the invoice-issued contract was handed to it,
+// never re-read from Invoice later -- the same reason
+// InvoiceLine.lockedUnitPrice exists, applied one level up.
+model BillingDocument {
+  id                 String                 @id @default(cuid())
+  tenantId           String
+  invoiceId          String                 @unique
+  documentNumber     String
+  adapterName        String
+  status             BillingDocumentStatus  @default(PENDING)
+  qrPayload          String?
+  clearanceReference String?
+  snapshot           Json
+  createdAt          DateTime               @default(now())
+
+  invoice     Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  creditNotes CreditNote[]
+
+  @@unique([tenantId, documentNumber])
+  @@map("billing_documents")
 }
 
 model FinanceConfiguration {
@@ -1312,6 +1361,14 @@ model FinanceConfiguration {
   // existing, even though MOP did not produce it.
   externalBillingEnabled    Boolean         @default(false)
   externalInvoiceReference  String?
+  // Set when this tenant's country has no BillingCountryAdapter beyond
+  // the generic one and External Billing Mode is off -- operationally
+  // fine, legally insufficient the moment an invoice is actually issued.
+  // Visibility only in Phase 9: this flags the situation everywhere it
+  // matters (the Workshops list drawer) without hard-blocking issuance,
+  // because MOP is not the tenant's lawyer and a workshop may have its
+  // own arrangement. See docs/phases/PHASE_9.md section 6.
+  compliantBlocked          Boolean         @default(false)
   technicianPriceVisible    Boolean         @default(false)
   customerInvoiceVisible    Boolean         @default(true)
   discountApprovalThreshold Decimal         @default(0) @db.Decimal(12, 2)

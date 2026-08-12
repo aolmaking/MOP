@@ -110,12 +110,15 @@ Billing's whole reason to exist as a separate system is that the last step diffe
 ```ts
 interface BillingCountryAdapter {
   validateInvoice(candidate: InvoiceCandidate): BillingValidationResult;
-  generateDocument(invoice: InvoiceSnapshot): BillingDocument;
+  generateDocument(invoice: InvoiceSnapshot): BillingDocumentArtifact;
   submitForClearance(invoice: InvoiceSnapshot): ClearanceSubmissionResult;
   getClearanceStatus(invoiceId: string): ClearanceStatus;
   generateQr(invoice: InvoiceSnapshot): QrPayload;
-  generateCreditNote(invoice: InvoiceSnapshot, reason: string): CreditNoteDocument;
-  generateDebitNote(invoice: InvoiceSnapshot, reason: string): DebitNoteDocument;
+  // amount + a sequence number: both missing from the original draft
+  // below, found while actually implementing it in Phase 9. A credit
+  // note is not always the full invoice, and needs its own numbering.
+  generateCreditNote(invoice: InvoiceSnapshot, amount: string, reason: string, creditNoteNumber: string): CreditNoteDocument;
+  generateDebitNote(invoice: InvoiceSnapshot, amount: string, reason: string, debitNoteNumber: string): DebitNoteDocument;
 }
 ```
 

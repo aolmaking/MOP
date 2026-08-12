@@ -8,12 +8,16 @@ import {
   outstanding,
   overpaid,
   sum,
+  type ChargeableItemType,
+  type InvoiceCandidate,
+  type InvoiceSnapshot,
   type Money,
 } from "@mop/shared";
 import { Prisma } from "@mop/database";
 import { PrismaService } from "../database/prisma.service";
 import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 import { OperationEventsService } from "../operations/operation-events.service";
+import { BillingService } from "../billing/billing.service";
 import type { LifecycleActor } from "../operations/work-order-lifecycle.service";
 
 export interface AddLineInput {
@@ -77,6 +81,7 @@ export class FinanceService {
     private readonly prisma: PrismaService,
     private readonly capabilities: CapabilityResolutionService,
     private readonly events: OperationEventsService,
+    private readonly billing: BillingService,
   ) {}
 
   /**
@@ -214,6 +219,17 @@ export class FinanceService {
       });
     }
 
+    // Everything Billing needs, fetched here rather than left for it to
+    // read itself -- Billing must never reach into Operations' or
+    // Finance's own tables to decide what to invoice, per SYSTEMS.md.
+    const [workOrder, tenant] = await Promise.all([
+      this.prisma.workOrder.findUniqueOrThrow({
+        where: { id: workOrderId },
+        select: { branchId: true, customerId: true },
+      }),
+      this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { country: true, currency: true } }),
+    ]);
+
     const computed = invoiceTotal(
       running.lines.map((line) => ({
         unitPrice: line.unitPrice.toFixed(2),
@@ -261,6 +277,66 @@ export class FinanceService {
         workOrderId,
         total: computed.total,
       });
+
+      const stored = await tx.invoice.findUniqueOrThrow({
+        where: { id: invoice.id },
+        select: { invoiceNumber: true, issuedAt: true },
+      });
+
+      const candidateLines = running.lines.map((line, index) => ({
+        name: line.name,
+        itemType: line.itemType as ChargeableItemType,
+        // The running invoice does not currently track provenance
+        // per line -- NOT_APPLICABLE is honest rather than guessed.
+        provenance: "NOT_APPLICABLE" as const,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice.toFixed(2),
+        labourPrice: line.laborPrice.toFixed(2),
+        lineTotal: computed.lines[index].total,
+        taxCode: null,
+        sourceType: "MANUAL" as const,
+        sourceId: invoice.id,
+      }));
+
+      const candidate: InvoiceCandidate = {
+        tenantId,
+        branchId: workOrder.branchId,
+        customerId: workOrder.customerId,
+        workOrderId,
+        currency: tenant.currency,
+        country: tenant.country,
+        billingProfile: "DEFAULT",
+        invoiceType: "STANDARD",
+        lines: candidateLines,
+        taxBreakdown: [],
+        subtotal: computed.subtotal,
+        discountTotal: computed.discount,
+        taxTotal: computed.tax,
+        total: computed.total,
+        amountPaid: ZERO,
+        createdById: actor.accountId,
+        createdAt: stored.issuedAt.toISOString(),
+      };
+
+      const snapshot: InvoiceSnapshot = {
+        tenantId,
+        invoiceId: invoice.id,
+        invoiceNumber: stored.invoiceNumber,
+        currency: tenant.currency,
+        country: tenant.country,
+        lines: candidateLines,
+        taxBreakdown: [],
+        subtotal: computed.subtotal,
+        discountTotal: computed.discount,
+        taxTotal: computed.tax,
+        total: computed.total,
+        issuedAt: stored.issuedAt.toISOString(),
+      };
+
+      // Same transaction, deliberately -- an invoice must never exist
+      // without its billing document at least attempted, the same
+      // discipline StockService uses for a part leaving the shelf.
+      await this.billing.issueDocument(candidate, snapshot, tx);
 
       return invoice.id;
     });

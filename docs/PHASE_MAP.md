@@ -49,7 +49,7 @@
 | 6 — Technician | ✅ complete — 3/3 pages |
 | 7 — Inventory | 🟢 5/6 pages — Returns/Movements actions owed |
 | 8 — Finance Core | 🟠 engine done; Owner Money page owed (Phase 10) |
-| 9 — Billing / Invoicing | 🔵 next in the original chain |
+| 9 — Billing / Invoicing | 🟢 GenericBillingAdapter + BillingDocument + credit notes built and tested; refund-approval workflow calling issueCreditNote still owed |
 | 10 — Team Leader & People/Performance | ⬜ not started |
 | 11 — Customer Portal | ⬜ not started |
 | 12 — Reporting & Data Analyst | ⬜ not started |
@@ -97,7 +97,7 @@ Inventory Home · Technician Requests · Catalog Control · Quantity Control & S
 Pricing catalog, discounts, tax policy, running balance, payments, deposits, financial reports engine — all built. **Owed:** the Owner's own Money page (Phase 10), and refunds/credit notes (explicitly deferred to Phase 9).
 **Edge cases owed:** H3 — invoice numbering is `count()+1` against a mocked-up unique-constraint backstop; the schema's own `invoice_sequences` table sits unused. H5 — the idempotency check-then-insert has its own race window. E15 — halfway-point rounding needs one named, documented rule.
 
-### Phase 9 — Billing / Invoicing 🔵
+### Phase 9 — Billing / Invoicing 🟢
 Separate bounded system. Legal invoice document, numbering, immutable snapshots, credit/debit notes, `GenericBillingAdapter` behind the country-adapter seam. **Sharpened by Workshop 2 (scenarios 6, 9, 10):** the country-adapter seam is not optional infrastructure for a hypothetical future market — it is the difference between a tenant being legally able to trade and not, the moment a second country's tenant exists. ZATCA (Saudi) and ETA (Egypt) are the two adapters named for this phase's first pass; a tenant onboarded into a country without a ready adapter must be flagged **compliant-blocked** (see Phase 20.D), never silently allowed to issue invoices the law doesn't recognize.
 
 ### Phase 10 — Team Leader & People/Performance

@@ -14,6 +14,8 @@ Billing is a **separate bounded system**, per this project's own recorded decisi
 
 The reason this separation earns its own phase rather than living inside Phase 8: Egypt's ETA and Saudi Arabia's ZATCA (confirmed as a real, not hypothetical, gap by Workshop 2's scenario 6 this session) make issuing an invoice a multi-step **clearance** process — validate, submit, wait, receive a QR/hash, possibly be rejected and have to resubmit. `FinanceService.issueInvoice()` today issues synchronously, in one transaction, and always succeeds once past validation. Retrofitting an asynchronous, possibly-failing clearance step into that flow later is a rewrite. Building the seam now, even with only a generic adapter behind it, is not.
 
+**A real note on "asynchronous," checked against the actual codebase before writing the rest of this document:** `OperationEventsService.emit()` — this project's only existing event mechanism — writes an `OperationEvent` row and an audit row. It has no subscriber, listener, or dispatch mechanism anywhere; nothing in the codebase currently *reads* an `OperationEvent` to act on it. Building genuine async dispatch (a queue, or NestJS's `EventEmitter2`) is real infrastructure work that belongs to Phase 13, System Automation, which already exists in the roadmap specifically because "the current in-process scheduler double-fires the moment there are two API replicas" — the same class of problem a hand-rolled event consumer would walk straight into. This phase does **not** invent that infrastructure. "Billing consumes `InvoiceCandidateCreated`" means: `FinanceService` constructs the typed contract payload and passes it to `BillingService` through an injected dependency, synchronously, in the same request — module and data boundaries are real (Billing never reads Operations' or Finance's tables directly, only the typed payload it's handed), but the *dispatch* is a direct call, not a queue. Moving it onto a real queue is Phase 13's job, and is named here so the distinction is never silently assumed away.
+
 ---
 
 ## 2. What already exists, and what this phase actually adds
@@ -44,12 +46,15 @@ Already designed, quoted from `SYSTEMS.md` rather than re-invented:
 ```ts
 interface BillingCountryAdapter {
   validateInvoice(candidate: InvoiceCandidate): BillingValidationResult;
-  generateDocument(invoice: InvoiceSnapshot): BillingDocument;
+  generateDocument(invoice: InvoiceSnapshot): BillingDocumentArtifact;
   submitForClearance(invoice: InvoiceSnapshot): ClearanceSubmissionResult;
   getClearanceStatus(invoiceId: string): ClearanceStatus;
   generateQr(invoice: InvoiceSnapshot): QrPayload;
-  generateCreditNote(invoice: InvoiceSnapshot, reason: string): CreditNoteDocument;
-  generateDebitNote(invoice: InvoiceSnapshot, reason: string): DebitNoteDocument;
+  // amount + a sequence number: both missing from the original draft
+  // below, found while actually implementing it in Phase 9. A credit
+  // note is not always the full invoice, and needs its own numbering.
+  generateCreditNote(invoice: InvoiceSnapshot, amount: string, reason: string, creditNoteNumber: string): CreditNoteDocument;
+  generateDebitNote(invoice: InvoiceSnapshot, amount: string, reason: string, debitNoteNumber: string): DebitNoteDocument;
 }
 ```
 
@@ -92,7 +97,7 @@ This phase adds a tenant-level flag, distinct from a capability the tenant chose
 ## 7. Exit criteria
 
 1. `GenericBillingAdapter` implements every method of `BillingCountryAdapter`; a second, deliberately different test adapter (built only for the test suite, not shipped) proves the seam is real by producing a differently-shaped document from the same `InvoiceSnapshot`.
-2. Billing consumes `InvoiceCandidateCreated` asynchronously — a `BillingDocument` is created in response to the event, not inline inside `FinanceService.issueInvoice()`'s transaction.
+2. Billing consumes `InvoiceCandidateCreated` through a typed contract call, not by reading Finance's tables directly — a `BillingDocument` is created by `BillingService`, a separate module, never inline inside `FinanceService`'s own class. Genuine queue-based async dispatch is explicitly Phase 13's infrastructure, not invented here.
 3. A refund, once approved, produces a real `CreditNote` with its own sequential number, and the invoice's derived `paid`/`balance` reflect it without any column being written by hand.
 4. External Billing Mode is respected: no `BillingDocument` is created for a tenant with `externalBillingEnabled: true`, and the delivery gate still passes on `externalInvoiceReference` being present.
 5. `compliantBlocked` is computed, stored, and visible on the Workshops list drawer for any tenant whose country has no adapter beyond generic.

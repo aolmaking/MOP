@@ -140,6 +140,114 @@ export interface InvoiceIssued {
 }
 
 // ---------------------------------------------------------------------------
+// The Billing country-adapter seam (Phase 9, docs/SYSTEMS.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * The immutable rendered form of an invoice, handed to an adapter once --
+ * never re-derived from Invoice later. Distinct from `InvoiceCandidate`:
+ * the candidate is Finance's proposal; the snapshot is what Billing
+ * actually committed to a document, after `validateInvoice` accepted it.
+ */
+export interface InvoiceSnapshot {
+  readonly tenantId: string;
+  readonly invoiceId: string;
+  readonly invoiceNumber: string;
+  readonly currency: string;
+  readonly country: string;
+  readonly lines: readonly InvoiceCandidateLine[];
+  readonly taxBreakdown: readonly TaxBreakdownEntry[];
+  readonly subtotal: string;
+  readonly discountTotal: string;
+  readonly taxTotal: string;
+  readonly total: string;
+  readonly issuedAt: string;
+}
+
+export interface BillingValidationResult {
+  readonly valid: boolean;
+  /** Empty when valid. Each one names the field and the reason -- never a bare "invalid". */
+  readonly errors: readonly { readonly field: string; readonly message: string }[];
+}
+
+export interface QrPayload {
+  readonly format: string;
+  /** Base64 or an encoded string, adapter-defined. Null means the adapter has no QR to offer -- honest absence, never a fabricated code. */
+  readonly data: string | null;
+}
+
+export interface ClearanceSubmissionResult {
+  readonly status: ClearanceStatus;
+  readonly clearanceReference: string | null;
+  readonly rejectionReason: string | null;
+}
+
+/** What an adapter actually returns from `generateDocument` -- the artifact itself, not yet cleared. */
+export interface BillingDocumentArtifact {
+  readonly adapterName: string;
+  readonly documentNumber: string;
+  readonly qr: QrPayload;
+  readonly renderedAt: string;
+}
+
+export interface CreditNoteDocument {
+  readonly adapterName: string;
+  readonly creditNoteNumber: string;
+  readonly originalInvoiceNumber: string;
+  /** May be less than the original invoice total -- a partial refund. */
+  readonly amount: string;
+  readonly reason: string;
+  readonly issuedAt: string;
+}
+
+export interface DebitNoteDocument {
+  readonly adapterName: string;
+  readonly debitNoteNumber: string;
+  readonly originalInvoiceNumber: string;
+  readonly amount: string;
+  readonly reason: string;
+  readonly issuedAt: string;
+}
+
+/**
+ * The seam itself, quoted in `docs/SYSTEMS.md` before any code existed
+ * to implement it. `GenericBillingAdapter` implements every method
+ * jurisdiction-agnostically; `EgyptETAAdapter` / `SaudiZATCAAdapter` are
+ * not built yet (Phase 9's exit criteria are explicit about this) -- the
+ * point of typing the interface here, in `@mop/shared`, is that a real
+ * country adapter can be added without Finance or Billing's own service
+ * code changing at all.
+ */
+export interface BillingCountryAdapter {
+  readonly name: string;
+  validateInvoice(candidate: InvoiceCandidate): BillingValidationResult;
+  generateDocument(invoice: InvoiceSnapshot): BillingDocumentArtifact;
+  submitForClearance(invoice: InvoiceSnapshot): ClearanceSubmissionResult;
+  getClearanceStatus(invoiceId: string): ClearanceStatus;
+  generateQr(invoice: InvoiceSnapshot): QrPayload;
+  /**
+   * `amount` and `creditNoteNumber` are additions to `docs/SYSTEMS.md`'s
+   * original two-argument signature, made while actually implementing
+   * this interface for the first time: the original silently assumed a
+   * credit note always refunds the full invoice, which is false for any
+   * partial refund, and had no numbering parameter at all despite credit
+   * notes needing their own sequence, same as invoices.
+   */
+  generateCreditNote(
+    invoice: InvoiceSnapshot,
+    amount: string,
+    reason: string,
+    creditNoteNumber: string,
+  ): CreditNoteDocument;
+  generateDebitNote(
+    invoice: InvoiceSnapshot,
+    amount: string,
+    reason: string,
+    debitNoteNumber: string,
+  ): DebitNoteDocument;
+}
+
+// ---------------------------------------------------------------------------
 // Operations -> everyone: gate outcomes
 // ---------------------------------------------------------------------------
 
