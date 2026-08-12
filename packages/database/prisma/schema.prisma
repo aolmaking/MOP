@@ -549,6 +549,25 @@ model TeamMembership {
   @@map("team_memberships")
 }
 
+// The one place in the product where a note is deliberately hidden from
+// the person it's about (docs/detailed-specs/team-leader.md). Never
+// exposed on any technician-facing endpoint -- enforced by absence from
+// that API shape entirely, never hidden client-side.
+model SupervisionNote {
+  id           String   @id @default(cuid())
+  tenantId     String
+  technicianId String
+  authorId     String
+  body         String
+  // A lightweight escalation, not a state change: flags the note for a
+  // Branch Manager's attention without touching any WorkOrder or Task.
+  escalated    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, technicianId])
+  @@map("supervision_notes")
+}
+
 model Customer {
   id           String               @id @default(cuid())
   tenantId     String

@@ -4,6 +4,8 @@ import { AuthModule } from "../auth/auth.module";
 import { AccessModule } from "../access/access.module";
 import { AuditController } from "./audit.controller";
 import { AuditQueryService } from "./audit-query.service";
+import { OwnerHomeController } from "./owner-home.controller";
+import { OwnerHomeService } from "./owner-home.service";
 
 /**
  * The Tenant Owner's surfaces.
@@ -14,7 +16,7 @@ import { AuditQueryService } from "./audit-query.service";
  */
 @Module({
   imports: [DatabaseModule, AuthModule, AccessModule],
-  controllers: [AuditController],
-  providers: [AuditQueryService],
+  controllers: [AuditController, OwnerHomeController],
+  providers: [AuditQueryService, OwnerHomeService],
 })
 export class OwnerModule {}

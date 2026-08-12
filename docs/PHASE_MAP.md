@@ -100,8 +100,8 @@ Pricing catalog, discounts, tax policy, running balance, payments, deposits, fin
 ### Phase 9 — Billing / Invoicing ✅
 Separate bounded system. Legal invoice document, numbering, immutable snapshots, credit/debit notes, `GenericBillingAdapter` behind the country-adapter seam. **Sharpened by Workshop 2 (scenarios 6, 9, 10):** the country-adapter seam is not optional infrastructure for a hypothetical future market — it is the difference between a tenant being legally able to trade and not, the moment a second country's tenant exists. ZATCA (Saudi) and ETA (Egypt) are the two adapters named for this phase's first pass; a tenant onboarded into a country without a ready adapter must be flagged **compliant-blocked** (see Phase 20.D), never silently allowed to issue invoices the law doesn't recognize.
 
-### Phase 10 — Team Leader & People/Performance
-Teams, membership history, supervision, technician performance, **the Owner's Money/Home page** (long overdue per this project's own repeated audits), **exit-reason and rehire-eligibility on staff deactivation** (found missing in Workshop 3, scenario 14, and recurring in Workshop 5's fraud-investigation account-state findings — build the vocabulary once here rather than patching it into Phase 19's restricted-account state later).
+### Phase 10 — Team Leader & People/Performance ✅ (narrowed — see `phases/PHASE_10.md`)
+Team Leader's four pages (Home, Technicians, Vehicles/Work Orders, Technician Performance Reports), all `managedTechnicianIds`-scoped, and Owner Home. **Re-planned at this phase boundary, recorded rather than silently dropped:** the Owner's Money page (folded into the remaining six Owner pages, its own future pass) and exit-reason/rehire-eligibility on staff deactivation (pushed to Phase 19, where the restricted-account-state vocabulary belongs) were both named in this entry originally but did not land this pass. **Detail:** [`phases/PHASE_10.md`](./phases/PHASE_10.md)
 
 ### Phase 11 — Customer Portal
 Portal home, my assets, current service, decision page, invoice status, safe technical history, public decision links.

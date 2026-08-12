@@ -22,6 +22,7 @@ import type { PermissionKey } from "./permission-manifest";
  */
 export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partial<Record<PermissionKey, boolean>>>>> = {
   TENANT_OWNER: {
+    "dashboard.owner.view": true,
     "organization.access.manage": true,
     "organization.forms.manage": true,
     "organization.messages.manage": true,
@@ -36,6 +37,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "audit.own_tenant.view": true,
   },
   TENANT_ADMIN: {
+    "dashboard.owner.view": true,
     "organization.access.manage": true,
     "organization.forms.manage": true,
     "organization.messages.manage": true,

@@ -123,6 +123,9 @@ const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   // DELEGATED_PERMISSIONS. Granting it without delegation still denies.
   { key: "team_setup.branch.manage", module: "TEAM_MANAGEMENT" },
 
+  // Owner dashboard
+  { key: "dashboard.owner.view", module: "REPORTS" },
+
   // Reports
   { key: "reports.owner.view", module: "REPORTS" },
   { key: "reports.inventory.view", module: "REPORTS" },
