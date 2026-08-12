@@ -1,0 +1,218 @@
+<section class="reports">
+  <header class="reports-head">
+    <h1 class="reports-title">Reports</h1>
+    @if (data(); as d) {
+      <p class="reports-window">last {{ d.windowDays }} days</p>
+    }
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to inventory reports</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+    @case ('ready') {
+      @if (data(); as d) {
+        @if (!hasAnything()) {
+          <div class="state">
+            <p class="state-title">Nothing to report yet</p>
+            <p class="state-body">
+              These numbers come from parts issued and returned. Once the store has been used for a few days, this page
+              fills in.
+            </p>
+          </div>
+        } @else {
+          <!-- Stock risk first: it is the only section that is about
+               something that has not happened yet, and the only one
+               that can still be acted on. -->
+          <section class="panel panel-wide">
+            <header class="panel-head">
+              <h2 class="panel-title">Stock risk</h2>
+              <p class="panel-note">Days left at the rate this warehouse has actually been using it.</p>
+            </header>
+
+            @if (d.stockRisk.length === 0) {
+              <p class="panel-empty">Nothing is on track to run out in the next {{ d.windowDays }} days.</p>
+            } @else {
+              <div class="table-scroll">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Item</th>
+                      <th scope="col">Warehouse</th>
+                      <th scope="col" class="col-num">On hand</th>
+                      <th scope="col" class="col-num">Per day</th>
+                      <th scope="col" class="col-num">Days left</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (row of d.stockRisk; track row.itemId + row.warehouseCode) {
+                      <tr [attr.data-tone]="riskTone(row.daysLeft)">
+                        <td class="cell-name">
+                          <a class="cell-link" [routerLink]="['/inventory/items', row.itemId]">{{ row.name }}</a>
+                          <span class="cell-sku">{{ row.sku }}</span>
+                        </td>
+                        <td class="cell-mono">{{ row.warehouseCode }}</td>
+                        <td class="col-num cell-mono">{{ row.available }}</td>
+                        <td class="col-num cell-mono">{{ row.velocity }}</td>
+                        <td class="col-num cell-mono cell-days">
+                          <!-- Null means not moving. Said in words rather
+                               than shown as a huge number, which would
+                               read as plenty of runway. -->
+                          @if (row.daysLeft === null) {
+                            <span class="cell-faint">not moving</span>
+                          } @else {
+                            {{ row.daysLeft }}
+                          }
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </section>
+
+          <div class="grid">
+            <section class="panel">
+              <header class="panel-head">
+                <h2 class="panel-title">Most used</h2>
+                <p class="panel-note">By units issued.</p>
+              </header>
+
+              @if (d.usage.length === 0) {
+                <p class="panel-empty">Nothing issued in this window.</p>
+              } @else {
+                <ol class="bars">
+                  @for (row of d.usage; track row.itemId) {
+                    <li class="bar-row">
+                      <a class="bar-label" [routerLink]="['/inventory/items', row.itemId]">{{ row.name }}</a>
+                      <span class="bar-track">
+                        <span class="bar-fill" [style.inline-size]="usageWidth(row.issued)"></span>
+                      </span>
+                      <span class="bar-value">{{ row.issued }}</span>
+                    </li>
+                  }
+                </ol>
+              }
+            </section>
+
+            <section class="panel">
+              <header class="panel-head">
+                <h2 class="panel-title">By category</h2>
+                <p class="panel-note">Where the consumption sits.</p>
+              </header>
+
+              @if (d.categoryUsage.length === 0) {
+                <p class="panel-empty">Nothing issued in this window.</p>
+              } @else {
+                <ol class="bars">
+                  @for (row of d.categoryUsage; track row.category) {
+                    <li class="bar-row">
+                      <span class="bar-label">{{ row.category }}</span>
+                      <span class="bar-track">
+                        <span class="bar-fill" [style.inline-size]="categoryWidth(row.issued)"></span>
+                      </span>
+                      <span class="bar-value">{{ row.issued }}</span>
+                    </li>
+                  }
+                </ol>
+              }
+            </section>
+
+            <section class="panel">
+              <header class="panel-head">
+                <h2 class="panel-title">Returns</h2>
+                <p class="panel-note">Parts that came back.</p>
+              </header>
+
+              @if (d.returns.total === 0) {
+                <p class="panel-empty">Nothing returned in this window.</p>
+              } @else {
+                <div class="figures">
+                  <div class="figure">
+                    <span class="figure-value">{{ d.returns.total }}</span>
+                    <span class="figure-label">units back</span>
+                  </div>
+                  <div class="figure">
+                    <span class="figure-value">{{ d.returns.backToStock }}</span>
+                    <span class="figure-label">to the shelf</span>
+                  </div>
+                  <div class="figure figure-bad">
+                    <span class="figure-value">{{ d.returns.damaged }}</span>
+                    <span class="figure-label">damaged</span>
+                  </div>
+                </div>
+                <p class="figures-note">{{ damageShare() }} of returned volume was written off.</p>
+              }
+            </section>
+
+            <section class="panel">
+              <header class="panel-head">
+                <h2 class="panel-title">Who asks, and how long they wait</h2>
+                <p class="panel-note">Measured to the first issue — that is when the job unblocks.</p>
+              </header>
+
+              @if (d.requesters.length === 0) {
+                <p class="panel-empty">No requests in this window.</p>
+              } @else {
+                <ul class="requesters">
+                  @for (row of d.requesters; track row.requestedById) {
+                    <li class="requester">
+                      <span class="requester-id">{{ row.requestedById }}</span>
+                      <span class="requester-stat">
+                        <span class="requester-value">{{ row.requests }}</span>
+                        <span class="requester-unit">requests</span>
+                      </span>
+                      <span class="requester-stat">
+                        @if (row.averageFulfilmentHours === null) {
+                          <span class="cell-faint">nothing issued</span>
+                        } @else {
+                          <span class="requester-value">{{ row.averageFulfilmentHours }}</span>
+                          <span class="requester-unit">h average wait</span>
+                        }
+                      </span>
+                    </li>
+                  }
+                </ul>
+              }
+            </section>
+          </div>
+
+          <!-- Present only when there is more than one warehouse to
+               compare. The server sends null, not an array of one. -->
+          @if (d.warehouseComparison; as comparison) {
+            <section class="panel panel-wide">
+              <header class="panel-head">
+                <h2 class="panel-title">Across your warehouses</h2>
+                <p class="panel-note">Units issued from each. Deliberately not summed into one number.</p>
+              </header>
+
+              <ol class="bars">
+                @for (row of comparison; track row.warehouseId) {
+                  <li class="bar-row">
+                    <span class="bar-label">{{ row.name }}</span>
+                    <span class="bar-track">
+                      <span class="bar-fill" [style.inline-size]="warehouseWidth(row.issued)"></span>
+                    </span>
+                    <span class="bar-value">{{ row.issued }}</span>
+                  </li>
+                }
+              </ol>
+            </section>
+          }
+        }
+      }
+    }
+  }
+</section>

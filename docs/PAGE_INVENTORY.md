@@ -15,8 +15,8 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| Built | **18** |
-| Remaining | **35** |
+| Built | **21** |
+| Remaining | **32** |
 
 Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built
 
@@ -53,16 +53,16 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | My Work | ✅ | `/tech/work` |
 | Work Card | ✅ | `/tech/card/:id` |
 
-## Inventory Manager — 3 / 6
+## Inventory Manager — 5 / 6
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
-| Inventory Home | ⬜ | — | The spec's card-based home. `/inventory` currently redirects straight to Requests |
+| Inventory Home | ✅ | `/inventory/home` | Seven triage cards, per-warehouse breakdown on each. Now the role's landing page |
 | Technician Requests | ✅ | `/inventory/requests` | |
-| Inventory POS / Catalog Control | ⬜ | — | Item create/edit, pricing, POS visibility. No catalog management exists at all |
+| Inventory POS / Catalog Control | ✅ | `/inventory/catalog` | Paginated list + side-panel editor. Cost absent unless `inventory.cost.view`; quantity deliberately not settable here |
 | Quantity Control & Stock Status | ✅ | `/inventory/stock` | |
 | Returns / Movements | 🟡 | `/inventory/items/:id` | The ledger is built and readable. The spec's *actions* — accept/reject a return, request clarification — have no page |
-| Reports & Stock Insights | ⬜ | — | |
+| Reports & Stock Insights | ✅ | `/inventory/reports` | Stock risk is velocity-based, per warehouse. Comparison section absent (not empty) for a single-warehouse scope |
 
 ## Tenant Owner — 1 / 8
 

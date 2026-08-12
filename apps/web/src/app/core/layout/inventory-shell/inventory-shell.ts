@@ -23,8 +23,11 @@ export class InventoryShell {
   protected readonly session = this.authStore.session;
 
   protected readonly navigation = [
+    { label: 'Home', route: '/inventory/home' },
     { label: 'Requests', route: '/inventory/requests' },
     { label: 'Stock', route: '/inventory/stock' },
+    { label: 'Catalog', route: '/inventory/catalog' },
+    { label: 'Reports', route: '/inventory/reports' },
   ];
 
   async logout(): Promise<void> {

@@ -8,6 +8,9 @@ import { InventoryController } from "./inventory.controller";
 import { InventoryViewService } from "./inventory-view.service";
 import { StockService } from "./stock.service";
 import { PartRequestService } from "./part-request.service";
+import { InventoryHomeService } from "./inventory-home.service";
+import { CatalogService } from "./catalog.service";
+import { InventoryReportsService } from "./inventory-reports.service";
 
 /**
  * Inventory.
@@ -20,7 +23,14 @@ import { PartRequestService } from "./part-request.service";
 @Module({
   imports: [DatabaseModule, AuthModule, AccessModule, CapabilitiesModule, OperationEventsModule],
   controllers: [InventoryController],
-  providers: [StockService, PartRequestService, InventoryViewService],
+  providers: [
+    StockService,
+    PartRequestService,
+    InventoryViewService,
+    InventoryHomeService,
+    CatalogService,
+    InventoryReportsService,
+  ],
   exports: [StockService, PartRequestService],
 })
 export class InventoryModule {}

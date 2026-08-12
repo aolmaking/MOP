@@ -6,6 +6,10 @@ import { EffectiveAccessService } from "../access/effective-access.service";
 import { InventoryViewService } from "./inventory-view.service";
 import { PartRequestService } from "./part-request.service";
 import { IssueDto, ReturnDto } from "./inventory.dto";
+import { CatalogItemDto } from "./catalog.dto";
+import { InventoryHomeService } from "./inventory-home.service";
+import { CatalogService } from "./catalog.service";
+import { InventoryReportsService } from "./inventory-reports.service";
 
 /**
  * The inventory manager's surfaces.
@@ -21,7 +25,75 @@ export class InventoryController {
     private readonly view: InventoryViewService,
     private readonly parts: PartRequestService,
     private readonly access: EffectiveAccessService,
+    private readonly home: InventoryHomeService,
+    private readonly catalog: CatalogService,
+    private readonly reports: InventoryReportsService,
   ) {}
+
+  /** Daily triage. Counts are per warehouse, never blended. */
+  @Get("home")
+  async inventoryHome(@CurrentSession() session: SessionContext) {
+    const tenantId = await this.require(session, "inventory.home.view");
+    return this.home.build(tenantId, session.warehouseScope);
+  }
+
+  @Get("catalog")
+  async catalogList(
+    @CurrentSession() session: SessionContext,
+    @Query("q") query?: string,
+    @Query("category") category?: string,
+    @Query("stockTracked") stockTracked?: string,
+    @Query("page") page?: string,
+  ) {
+    const tenantId = await this.require(session, "inventory.catalog.manage");
+    return this.catalog.list(
+      tenantId,
+      {
+        query,
+        category,
+        stockTracked: stockTracked === undefined ? undefined : stockTracked === "true",
+        page: page ? Number(page) : 1,
+      },
+      await this.maySeeCost(session),
+    );
+  }
+
+  @Get("catalog/:id")
+  async catalogGet(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const tenantId = await this.require(session, "inventory.catalog.manage");
+    return this.catalog.get(tenantId, id, await this.maySeeCost(session));
+  }
+
+  @Post("catalog")
+  async catalogCreate(@CurrentSession() session: SessionContext, @Body() dto: CatalogItemDto) {
+    const tenantId = await this.require(session, "inventory.catalog.manage");
+    return this.catalog.create(tenantId, dto, await this.maySeeCost(session));
+  }
+
+  @Post("catalog/:id")
+  async catalogUpdate(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: CatalogItemDto,
+  ) {
+    const tenantId = await this.require(session, "inventory.catalog.manage");
+    return this.catalog.update(tenantId, id, dto, await this.maySeeCost(session));
+  }
+
+  @Get("reports")
+  async inventoryReports(@CurrentSession() session: SessionContext) {
+    const tenantId = await this.require(session, "reports.inventory.view");
+    return this.reports.build(tenantId, session.warehouseScope);
+  }
+
+  /**
+   * Cost is hidden unless explicitly granted -- the same discipline as the
+   * technician's price gate, applied to the inventory side. Checked here
+   * rather than in the service, so a caller cannot forget to ask.
+   */
+  private async maySeeCost(session: SessionContext): Promise<boolean> {
+    return this.access.can(session, "inventory.cost.view");
+  }
 
   @Get("requests")
   async requests(@CurrentSession() session: SessionContext) {

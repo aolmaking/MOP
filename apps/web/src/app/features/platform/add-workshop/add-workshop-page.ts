@@ -16,12 +16,7 @@ import { FormField } from '../../../shared/form-field/form-field';
 import { ButtonDirective } from '../../../shared/button/button.directive';
 import type { PresentedError } from '../../../core/api/error.interceptor';
 import { uniquenessValidator } from './uniqueness.validator';
-
-const CATEGORIES = [
-  { value: 'CARS', label: 'Cars' },
-  { value: 'MOTORCYCLES', label: 'Motorcycles' },
-  { value: 'HEAVY_EQUIPMENT', label: 'Heavy Equipment' },
-] as const;
+import { OPERATING_CATEGORIES as CATEGORIES } from '@mop/shared';
 
 function deriveSlug(name: string): string {
   return name

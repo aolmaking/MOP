@@ -17,4 +17,5 @@ export * from "./contracts/cross-system";
 export * from "./operations/blocker-routing";
 export * from "./operations/attention-ranking";
 export * from "./operations/work-order-lanes";
+export * from "./operations/categories";
 export * from "./money/money";

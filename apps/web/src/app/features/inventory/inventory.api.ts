@@ -100,4 +100,132 @@ export class InventoryApi {
   reject(id: string, reason?: string): Observable<unknown> {
     return this.http.post(`/api/v1/inventory/requests/${id}/reject`, { reason });
   }
+
+  home(): Observable<InventoryHome> {
+    return this.http.get<InventoryHome>('/api/v1/inventory/home');
+  }
+
+  catalog(filters: { q?: string; category?: string; stockTracked?: boolean; page?: number }): Observable<CatalogPage> {
+    const params: Record<string, string> = {};
+    if (filters.q) params['q'] = filters.q;
+    if (filters.category) params['category'] = filters.category;
+    if (filters.stockTracked !== undefined) params['stockTracked'] = String(filters.stockTracked);
+    if (filters.page) params['page'] = String(filters.page);
+    return this.http.get<CatalogPage>('/api/v1/inventory/catalog', { params });
+  }
+
+  createItem(draft: CatalogDraft): Observable<CatalogItem> {
+    return this.http.post<CatalogItem>('/api/v1/inventory/catalog', draft);
+  }
+
+  updateItem(id: string, draft: CatalogDraft): Observable<CatalogItem> {
+    return this.http.post<CatalogItem>(`/api/v1/inventory/catalog/${id}`, draft);
+  }
+
+  reports(): Observable<InventoryReports> {
+    return this.http.get<InventoryReports>('/api/v1/inventory/reports');
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Inventory Home, Catalog Control, Reports.
+ * ------------------------------------------------------------------ */
+
+export interface WarehouseSlice {
+  readonly warehouseId: string;
+  readonly code: string;
+  readonly name: string;
+  readonly count: number;
+}
+
+/** A total that carries its own breakdown, so no screen recomputes it. */
+export interface ScopedCount {
+  readonly total: number;
+  readonly byWarehouse: readonly WarehouseSlice[];
+}
+
+export interface FastMovingItem {
+  readonly itemId: string;
+  readonly name: string;
+  readonly sku: string;
+  readonly movements: number;
+  readonly quantity: number;
+}
+
+export interface InventoryHome {
+  readonly warehouses: readonly { id: string; code: string; name: string }[];
+  readonly pendingRequests: ScopedCount;
+  readonly toDispatch: ScopedCount;
+  readonly awaitingArrival: ScopedCount;
+  readonly returnRequests: ScopedCount;
+  readonly lowStock: ScopedCount;
+  readonly criticalStock: ScopedCount;
+  readonly outOfStock: ScopedCount;
+  readonly fastMoving: readonly FastMovingItem[];
+}
+
+export interface CatalogItem {
+  readonly id: string;
+  readonly sku: string;
+  readonly name: string;
+  readonly itemType: string;
+  readonly category: string | null;
+  readonly subcategory: string | null;
+  readonly compatibleCategories: readonly string[];
+  readonly lowStockThreshold: number;
+  readonly criticalStockThreshold: number;
+  readonly sellingPrice: string;
+  /** Null when this reader may not see cost -- the server omits it. */
+  readonly cost: string | null;
+  readonly workOrderUsable: boolean;
+  readonly posVisible: boolean;
+  readonly stockTracked: boolean;
+  readonly barcode: string | null;
+  readonly supplier: string | null;
+  readonly notes: string | null;
+  readonly onHand: number;
+}
+
+export interface CatalogPage {
+  readonly items: readonly CatalogItem[];
+  readonly total: number;
+  readonly categories: readonly string[];
+}
+
+export interface CatalogDraft {
+  sku: string;
+  name: string;
+  itemType: string;
+  category?: string;
+  subcategory?: string;
+  compatibleCategories?: string[];
+  lowStockThreshold?: number;
+  criticalStockThreshold?: number;
+  sellingPrice: string;
+  cost?: string;
+  workOrderUsable?: boolean;
+  posVisible?: boolean;
+  stockTracked?: boolean;
+  barcode?: string;
+  supplier?: string;
+  notes?: string;
+}
+
+export interface InventoryReports {
+  readonly windowDays: number;
+  readonly usage: readonly { itemId: string; name: string; sku: string; issued: number; movements: number }[];
+  readonly categoryUsage: readonly { category: string; issued: number }[];
+  readonly stockRisk: readonly {
+    itemId: string;
+    name: string;
+    sku: string;
+    warehouseCode: string;
+    available: number;
+    velocity: number;
+    daysLeft: number | null;
+  }[];
+  readonly returns: { total: number; backToStock: number; damaged: number };
+  readonly requesters: readonly { requestedById: string; requests: number; averageFulfilmentHours: number | null }[];
+  /** Null for a single-warehouse scope -- not an empty array. */
+  readonly warehouseComparison: readonly { warehouseId: string; code: string; name: string; issued: number }[] | null;
 }

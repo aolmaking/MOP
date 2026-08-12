@@ -95,6 +95,10 @@ const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: "inventory.transfer.create", module: "INVENTORY" },
   { key: "inventory.supplier_order.create", module: "INVENTORY" },
   { key: "inventory.catalog.manage", module: "INVENTORY" },
+  // Cost is what the workshop PAID, which is margin. Hidden unless
+  // explicitly granted -- the same discipline as the technician's price
+  // gate, applied to the inventory side (inventory-manager.md, Catalog).
+  { key: "inventory.cost.view", module: "INVENTORY" },
   { key: "inventory.stock.view", module: "INVENTORY" },
   { key: "inventory.stock.adjust", module: "INVENTORY" },
   { key: "inventory.movements.view", module: "INVENTORY" },

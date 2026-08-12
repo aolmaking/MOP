@@ -114,7 +114,21 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./core/layout/inventory-shell/inventory-shell').then((m) => m.InventoryShell),
     children: [
-      { path: '', pathMatch: 'full', redirectTo: 'requests' },
+      { path: '', pathMatch: 'full', redirectTo: 'home' },
+      {
+        // The spec's default landing page for this role: daily triage
+        // before anything else, the storekeeper's Attention Center.
+        path: 'home',
+        loadComponent: () => import('./features/inventory/inventory-home').then((m) => m.InventoryHomePage),
+      },
+      {
+        path: 'catalog',
+        loadComponent: () => import('./features/inventory/inventory-catalog').then((m) => m.InventoryCatalog),
+      },
+      {
+        path: 'reports',
+        loadComponent: () => import('./features/inventory/inventory-reports').then((m) => m.InventoryReportsPage),
+      },
       {
         path: 'requests',
         loadComponent: () => import('./features/inventory/inventory-requests').then((m) => m.InventoryRequests),

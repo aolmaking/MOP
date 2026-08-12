@@ -1,0 +1,350 @@
+/*
+ * Catalog Control -- master data.
+ *
+ * A table earns its place here: every row is the same kind of thing and
+ * the columns are genuinely comparable down their length, which is the
+ * claim a table makes. The editor is a side panel rather than a route,
+ * because the work is comparative -- "what did I set on the other brake
+ * pad?" -- and a full-page navigation throws that away.
+ */
+
+.catalog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 90rem;
+}
+
+.catalog-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--text);
+}
+
+.catalog-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.catalog-count {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.catalog-new {
+  margin-inline-start: auto;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.filter-input {
+  inline-size: 100%;
+  min-inline-size: 12rem;
+  max-inline-size: 22rem;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-base);
+}
+
+.filter-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Scrolls inside itself: a wide catalog must never make the whole page
+   scroll sideways. */
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.table th {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border-block-end: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-align: start;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--space-2) var(--space-3);
+  border-block-end: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-block-end: 0;
+}
+
+.table tbody tr:hover td {
+  background: var(--surface);
+}
+
+.cell-name {
+  font-size: var(--text-base);
+}
+
+.cell-mono {
+  font-family: var(--font-mono);
+}
+
+.cell-faint {
+  color: var(--text-faint);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+}
+
+.col-num {
+  text-align: end;
+}
+
+.col-action {
+  text-align: end;
+  white-space: nowrap;
+}
+
+.cell-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.flag {
+  padding: 1px var(--space-2);
+  background: var(--neutral-badge-bg);
+  border-radius: var(--radius-sm);
+  color: var(--neutral-badge);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.pager-position {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+/* --- the editor ------------------------------------------------- */
+
+.editor-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: hsl(var(--shadow-color) / 0.6);
+}
+
+.editor {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 21;
+  display: flex;
+  flex-direction: column;
+  inline-size: min(38rem, 100vw);
+  background: var(--surface-raised);
+  border-inline-start: 1px solid var(--border-strong);
+}
+
+.editor-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-block-end: 1px solid var(--border);
+}
+
+.editor-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.editor-close {
+  margin-inline-start: auto;
+  padding: 0 var(--space-2);
+  background: none;
+  border: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xl);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.editor-close:hover {
+  color: var(--text);
+}
+
+.editor-close:focus-visible {
+  outline: 2px solid var(--focus-ring);
+}
+
+.editor-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-4);
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+.editor-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--space-4);
+}
+
+.editor-error {
+  padding: var(--space-3);
+  background: var(--danger-bg);
+  border-inline-start: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+  color: var(--danger-strong);
+  font-size: var(--text-base);
+}
+
+.editor-note {
+  padding-block-start: var(--space-2);
+  border-block-start: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.editor-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-block-start: 1px solid var(--border);
+}
+
+.chips,
+.toggles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+}
+
+.chips-legend {
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 500;
+}
+
+.chips-hint {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-label);
+  cursor: pointer;
+}
+
+.chip[aria-pressed='true'] {
+  background: var(--accent-muted);
+  border-color: var(--brand);
+  color: var(--text);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggle-label {
+  font-size: var(--text-base);
+}
+
+.toggle-hint {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.state,
+.state-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.state-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.state-body {
+  color: var(--text-muted);
+  font-size: var(--text-base);
+}

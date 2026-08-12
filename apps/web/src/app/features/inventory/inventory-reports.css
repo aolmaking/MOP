@@ -1,0 +1,333 @@
+/*
+ * Reports & Stock Insights.
+ *
+ * Each section takes the shape its question needs. A ranked bar list
+ * answers "which is biggest" at a glance; a table answers "which do I
+ * order first" by sorting; three figures answer "how bad were the
+ * returns" without either. Forcing all three into one card grid would
+ * make every question look the same shape, which is how a reporting
+ * page becomes wallpaper nobody reads.
+ *
+ * Bars are drawn in CSS from the numbers already in the response. No
+ * chart library: a horizontal proportion is a div with a width, and the
+ * dependency would only make it harder to theme.
+ */
+
+.reports {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 84rem;
+}
+
+.reports-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--text);
+}
+
+.reports-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.reports-window {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  gap: var(--space-4);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-block-end: var(--space-2);
+  border-block-end: 1px solid var(--border);
+}
+
+.panel-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.panel-note {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.panel-empty {
+  color: var(--text-faint);
+  font-size: var(--text-base);
+}
+
+/* --- bars ------------------------------------------------------- */
+
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: minmax(6rem, 12rem) 1fr 3rem;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.bar-label {
+  overflow: hidden;
+  color: inherit;
+  font-size: var(--text-sm);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.bar-label:hover {
+  text-decoration: underline;
+}
+
+a.bar-label:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.bar-track {
+  block-size: 10px;
+  background: var(--bg);
+  border-radius: 1px;
+}
+
+.bar-fill {
+  display: block;
+  block-size: 100%;
+  background: var(--brand);
+  border-radius: 1px;
+}
+
+.bar-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-align: end;
+}
+
+/* --- figures ---------------------------------------------------- */
+
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+}
+
+.figure-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
+.figure-label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+/* Written-off stock is money gone, so it is the one number here that
+   carries colour. */
+.figure-bad .figure-value {
+  color: var(--danger);
+}
+
+.figures-note {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+/* --- requesters ------------------------------------------------- */
+
+.requesters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.requester {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding-block-end: var(--space-2);
+  border-block-end: 1px solid var(--border);
+}
+
+.requester:last-child {
+  padding-block-end: 0;
+  border-block-end: 0;
+}
+
+.requester-id {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.requester-stat {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.requester-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+}
+
+.requester-unit {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+/* --- risk table -------------------------------------------------- */
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.table th {
+  padding: var(--space-2) var(--space-3);
+  border-block-end: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-align: start;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--space-2) var(--space-3);
+  border-block-end: 1px solid var(--border);
+}
+
+.table tbody tr:last-child td {
+  border-block-end: 0;
+}
+
+/* The urgency spine again, on rows this time -- the same device as the
+   job card, so a reader who has learned it once reads it everywhere. */
+.table tbody tr td:first-child {
+  border-inline-start: 3px solid transparent;
+}
+
+.table tbody tr[data-tone='urgent'] td:first-child {
+  border-inline-start-color: var(--danger);
+}
+
+.table tbody tr[data-tone='active'] td:first-child {
+  border-inline-start-color: var(--brand);
+}
+
+.cell-name {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.cell-link {
+  color: inherit;
+  font-size: var(--text-base);
+  text-decoration: none;
+}
+
+.cell-link:hover {
+  text-decoration: underline;
+}
+
+.cell-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.cell-sku {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.cell-mono {
+  font-family: var(--font-mono);
+}
+
+.cell-days {
+  font-size: var(--text-md);
+}
+
+.cell-faint {
+  color: var(--text-faint);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+}
+
+.col-num {
+  text-align: end;
+}
+
+.state,
+.state-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.state-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.state-body {
+  color: var(--text-muted);
+  font-size: var(--text-base);
+  max-inline-size: 44rem;
+}

@@ -1,0 +1,135 @@
+<section class="home">
+  <header class="home-head">
+    <h1 class="home-title">Inventory</h1>
+    @if (data(); as d) {
+      <p class="home-scope">
+        @if (d.warehouses.length === 1) {
+          {{ d.warehouses[0].name }}
+        } @else {
+          {{ d.warehouses.length }} warehouses
+        }
+      </p>
+    }
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to inventory</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+    @case ('ready') {
+      <!-- Band one: people waiting on this desk. -->
+      <h2 class="band-title">Waiting on you</h2>
+      <div class="cards">
+        @for (card of flow(); track card.key) {
+          <article class="card" [attr.data-tone]="tone(card)">
+            <a class="card-hit" [routerLink]="card.link">
+              <span class="card-count">{{ card.count.total }}</span>
+              <span class="card-label">{{ card.label }}</span>
+              <span class="card-meaning">{{ card.meaning }}</span>
+            </a>
+
+            @if (hasBreakdown(card)) {
+              <button
+                type="button"
+                class="card-disclosure"
+                [attr.aria-expanded]="expanded() === card.key"
+                (click)="toggle(card.key)"
+              >
+                {{ expanded() === card.key ? 'Hide' : 'By warehouse' }}
+              </button>
+              @if (expanded() === card.key) {
+                <ul class="slices">
+                  @for (slice of slices(card); track slice.warehouseId) {
+                    <li class="slice">
+                      <span class="slice-code">{{ slice.code }}</span>
+                      <span class="slice-bar" [style.inline-size]="share(card, slice.count)"></span>
+                      <span class="slice-count">{{ slice.count }}</span>
+                    </li>
+                  }
+                </ul>
+              }
+            }
+          </article>
+        }
+      </div>
+
+      <!-- Band two: what the room itself is short of. Three separate
+           counts, never one "low stock" bucket -- they are acted on
+           differently and a single number would flatten that. -->
+      <h2 class="band-title">Shelves</h2>
+      <div class="cards cards-shelf">
+        @for (card of shelves(); track card.key) {
+          <article class="card" [attr.data-tone]="tone(card)">
+            <a class="card-hit" [routerLink]="card.link">
+              <span class="card-count">{{ card.count.total }}</span>
+              <span class="card-label">{{ card.label }}</span>
+              <span class="card-meaning">{{ card.meaning }}</span>
+            </a>
+
+            @if (hasBreakdown(card)) {
+              <button
+                type="button"
+                class="card-disclosure"
+                [attr.aria-expanded]="expanded() === card.key"
+                (click)="toggle(card.key)"
+              >
+                {{ expanded() === card.key ? 'Hide' : 'By warehouse' }}
+              </button>
+              @if (expanded() === card.key) {
+                <ul class="slices">
+                  @for (slice of slices(card); track slice.warehouseId) {
+                    <li class="slice">
+                      <span class="slice-code">{{ slice.code }}</span>
+                      <span class="slice-bar" [style.inline-size]="share(card, slice.count)"></span>
+                      <span class="slice-count">{{ slice.count }}</span>
+                    </li>
+                  }
+                </ul>
+              }
+            }
+          </article>
+        }
+      </div>
+
+      @if (data(); as d) {
+        <h2 class="band-title">Moving fastest — last 30 days</h2>
+        @if (d.fastMoving.length === 0) {
+          <p class="state-body">Nothing has been issued in the last 30 days.</p>
+        } @else {
+          <ol class="movers">
+            @for (item of d.fastMoving; track item.itemId) {
+              <li class="mover">
+                <a class="mover-link" [routerLink]="['/inventory/items', item.itemId]">
+                  <span class="mover-name">{{ item.name }}</span>
+                  <span class="mover-sku">{{ item.sku }}</span>
+                </a>
+                <!-- Both numbers, because they answer different
+                     questions: many small issues is a consumable to keep
+                     stocked, one large issue is a job that happened. -->
+                <span class="mover-stat">
+                  <span class="mover-value">{{ item.quantity }}</span>
+                  <span class="mover-unit">units</span>
+                </span>
+                <span class="mover-stat">
+                  <span class="mover-value">{{ item.movements }}</span>
+                  <span class="mover-unit">times</span>
+                </span>
+              </li>
+            }
+          </ol>
+        }
+      }
+    }
+  }
+</section>

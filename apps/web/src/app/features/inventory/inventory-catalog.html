@@ -1,0 +1,321 @@
+<section class="catalog">
+  <header class="catalog-head">
+    <h1 class="catalog-title">Catalog</h1>
+    @if (page(); as p) {
+      <p class="catalog-count">{{ p.total }} items</p>
+    }
+    <button appButton variant="primary" size="small" class="catalog-new" (click)="startNew()">Add item</button>
+  </header>
+
+  <div class="filters">
+    <label class="filter">
+      <span class="visually-hidden">Search by name, SKU or barcode</span>
+      <input
+        type="search"
+        class="filter-input"
+        placeholder="Name, SKU, barcode"
+        autocomplete="off"
+        [value]="query()"
+        (input)="onQuery($any($event.target).value)"
+      />
+    </label>
+
+    @if (page(); as p) {
+      @if (p.categories.length > 0) {
+        <label class="filter">
+          <span class="visually-hidden">Category</span>
+          <select class="filter-input" [value]="category()" (change)="onCategory($any($event.target).value)">
+            <option value="">All categories</option>
+            @for (name of p.categories; track name) {
+              <option [value]="name">{{ name }}</option>
+            }
+          </select>
+        </label>
+      }
+    }
+
+    <label class="filter filter-check">
+      <input type="checkbox" [checked]="trackedOnly()" (change)="onTracked($any($event.target).checked)" />
+      <span>Stock-tracked only</span>
+    </label>
+  </div>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to the catalog</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="reload()">Try again</button>
+      </div>
+    }
+    @case ('empty') {
+      <div class="state">
+        <p class="state-title">The catalog is empty</p>
+        <p class="state-body">Add the first item and it becomes requestable by technicians.</p>
+        <button appButton variant="primary" size="small" (click)="startNew()">Add item</button>
+      </div>
+    }
+    @case ('no-results') {
+      <div class="state">
+        <p class="state-title">Nothing matches those filters</p>
+        <p class="state-body">Try a different name, SKU or category.</p>
+      </div>
+    }
+    @case ('ready') {
+      @if (page(); as p) {
+        <div class="table-scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th scope="col">Item</th>
+                <th scope="col">SKU</th>
+                <th scope="col">Category</th>
+                <th scope="col" class="col-num">Price</th>
+                @if (maySeeCost()) {
+                  <th scope="col" class="col-num">Cost</th>
+                }
+                <th scope="col" class="col-num">On hand</th>
+                <th scope="col">Flags</th>
+                <th scope="col"><span class="visually-hidden">Edit</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of p.items; track item.id) {
+                <tr>
+                  <td class="cell-name">{{ item.name }}</td>
+                  <td class="cell-mono">{{ item.sku }}</td>
+                  <td>{{ item.category ?? '—' }}</td>
+                  <td class="col-num cell-mono">{{ item.sellingPrice }}</td>
+                  @if (maySeeCost()) {
+                    <td class="col-num cell-mono">{{ item.cost ?? '—' }}</td>
+                  }
+                  <td class="col-num cell-mono">
+                    <!-- Read-only, deliberately: stock is a balance
+                         produced by movements, never a catalog field. -->
+                    @if (item.stockTracked) {
+                      {{ item.onHand }}
+                    } @else {
+                      <span class="cell-faint">not tracked</span>
+                    }
+                  </td>
+                  <td class="cell-flags">
+                    @if (!item.workOrderUsable) {
+                      <span class="flag">not on jobs</span>
+                    }
+                    @if (!item.posVisible) {
+                      <span class="flag">hidden</span>
+                    }
+                  </td>
+                  <td class="col-action">
+                    <button appButton variant="secondary" size="small" (click)="startEdit(item)">Edit</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        @if (totalPages() > 1) {
+          <nav class="pager" aria-label="Catalog pages">
+            <button
+              appButton
+              variant="secondary"
+              size="small"
+              [disabled]="pageNumber() === 1"
+              (click)="goToPage(pageNumber() - 1)"
+            >
+              Previous
+            </button>
+            <span class="pager-position">Page {{ pageNumber() }} of {{ totalPages() }}</span>
+            <button
+              appButton
+              variant="secondary"
+              size="small"
+              [disabled]="pageNumber() === totalPages()"
+              (click)="goToPage(pageNumber() + 1)"
+            >
+              Next
+            </button>
+          </nav>
+        }
+      }
+    }
+  }
+
+  @if (editing(); as mode) {
+    <div class="editor-scrim" (click)="cancelEdit()"></div>
+    <aside class="editor" role="dialog" aria-modal="true" aria-label="Item details">
+      <header class="editor-head">
+        <h2 class="editor-title">{{ mode === 'new' ? 'New item' : 'Edit item' }}</h2>
+        <button type="button" class="editor-close" (click)="cancelEdit()" aria-label="Close">×</button>
+      </header>
+
+      <div class="editor-body">
+        @if (saveError(); as message) {
+          <p class="editor-error" role="alert">{{ message }}</p>
+        }
+
+        <app-form-field label="Name" [required]="true">
+          <input type="text" [value]="draft().name" (input)="patch('name', $any($event.target).value)" />
+        </app-form-field>
+
+        <div class="editor-row">
+          <app-form-field label="SKU" [required]="true" hint="Unique in this workshop.">
+            <input type="text" [value]="draft().sku" (input)="patch('sku', $any($event.target).value)" />
+          </app-form-field>
+
+          <app-form-field label="Barcode">
+            <input type="text" [value]="draft().barcode ?? ''" (input)="patch('barcode', $any($event.target).value)" />
+          </app-form-field>
+        </div>
+
+        <div class="editor-row">
+          <app-form-field label="Category">
+            <input
+              type="text"
+              [value]="draft().category ?? ''"
+              (input)="patch('category', $any($event.target).value)"
+            />
+          </app-form-field>
+
+          <app-form-field label="Subcategory">
+            <input
+              type="text"
+              [value]="draft().subcategory ?? ''"
+              (input)="patch('subcategory', $any($event.target).value)"
+            />
+          </app-form-field>
+        </div>
+
+        <fieldset class="chips">
+          <legend class="chips-legend">Fits</legend>
+          <p class="chips-hint">A part usable on cars and motorcycles is entered once, with both.</p>
+          <div class="chips-row">
+            @for (category of categories; track category.value) {
+              <button
+                type="button"
+                class="chip"
+                [attr.aria-pressed]="isCompatible(category.value)"
+                (click)="toggleCategory(category.value)"
+              >
+                {{ category.label }}
+              </button>
+            }
+          </div>
+        </fieldset>
+
+        <div class="editor-row">
+          <app-form-field label="Selling price" [required]="true" hint="In this workshop's currency.">
+            <input
+              type="text"
+              inputmode="decimal"
+              [value]="draft().sellingPrice"
+              (input)="patch('sellingPrice', $any($event.target).value)"
+            />
+          </app-form-field>
+
+          <!-- Absent entirely when this reader may not see cost. Not
+               disabled, not blanked: anyone can open developer tools. -->
+          @if (maySeeCost()) {
+            <app-form-field label="Cost">
+              <input
+                type="text"
+                inputmode="decimal"
+                [value]="draft().cost ?? ''"
+                (input)="patch('cost', $any($event.target).value)"
+              />
+            </app-form-field>
+          }
+        </div>
+
+        <div class="editor-row">
+          <app-form-field label="Low stock threshold">
+            <input
+              type="number"
+              min="0"
+              [value]="draft().lowStockThreshold ?? 0"
+              (input)="patchNumber('lowStockThreshold', $any($event.target).value)"
+            />
+          </app-form-field>
+
+          <app-form-field label="Critical stock threshold">
+            <input
+              type="number"
+              min="0"
+              [value]="draft().criticalStockThreshold ?? 0"
+              (input)="patchNumber('criticalStockThreshold', $any($event.target).value)"
+            />
+          </app-form-field>
+        </div>
+
+        <app-form-field label="Supplier">
+          <input type="text" [value]="draft().supplier ?? ''" (input)="patch('supplier', $any($event.target).value)" />
+        </app-form-field>
+
+        <fieldset class="toggles">
+          <legend class="visually-hidden">Availability</legend>
+
+          <label class="toggle">
+            <input
+              type="checkbox"
+              [checked]="draft().workOrderUsable ?? true"
+              (change)="patch('workOrderUsable', $any($event.target).checked)"
+            />
+            <span class="toggle-text">
+              <span class="toggle-label">Usable on work orders</span>
+              <span class="toggle-hint">Technicians can request it.</span>
+            </span>
+          </label>
+
+          <label class="toggle">
+            <input
+              type="checkbox"
+              [checked]="draft().posVisible ?? true"
+              (change)="patch('posVisible', $any($event.target).checked)"
+            />
+            <span class="toggle-text">
+              <span class="toggle-label">Visible in the catalog</span>
+              <span class="toggle-hint">Off hides it from search without deleting it.</span>
+            </span>
+          </label>
+
+          <label class="toggle">
+            <input
+              type="checkbox"
+              [checked]="draft().stockTracked ?? true"
+              (change)="patch('stockTracked', $any($event.target).checked)"
+            />
+            <span class="toggle-text">
+              <span class="toggle-label">Track quantity</span>
+              <span class="toggle-hint">Off means it exists for pricing only — no counting, no low-stock alerts.</span>
+            </span>
+          </label>
+        </fieldset>
+
+        <app-form-field label="Notes">
+          <textarea rows="3" [value]="draft().notes ?? ''" (input)="patch('notes', $any($event.target).value)"></textarea>
+        </app-form-field>
+
+        <!-- Said plainly rather than shown as a disabled field, which
+             would read as broken instead of deliberate. -->
+        <p class="editor-note">
+          Quantity is set on Stock, not here — it changes only through a recorded movement.
+        </p>
+      </div>
+
+      <footer class="editor-foot">
+        <button appButton variant="secondary" (click)="cancelEdit()">Cancel</button>
+        <button appButton variant="primary" [disabled]="saving()" (click)="save()">
+          {{ saving() ? 'Saving…' : mode === 'new' ? 'Add item' : 'Save changes' }}
+        </button>
+      </footer>
+    </aside>
+  }
+</section>

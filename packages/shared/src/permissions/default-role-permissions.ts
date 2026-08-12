@@ -79,6 +79,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "inventory.transfer.create": true,
     "inventory.supplier_order.create": true,
     "inventory.catalog.manage": true,
+    // Explicitly false, not merely absent: managing the catalog does not
+    // imply seeing margin. An owner grants this deliberately.
+    "inventory.cost.view": false,
     "inventory.stock.view": true,
     "inventory.stock.adjust": true,
     "inventory.movements.view": true,
