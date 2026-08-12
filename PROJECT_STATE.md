@@ -2,7 +2,7 @@
 
 > **Purpose:** everything needed to continue MOP in a fresh session without the previous conversation.
 > **Companion:** [`CLAUDE.md`](./CLAUDE.md) holds permanent knowledge (architecture, rules, toolchain). This holds *where we are*.
-> **Last updated:** 2026-08-12, after closing the Inventory/Branch Manager/Platform page gap, drafting Phases 15–17, and completing a second 40-scenario platform-layer discovery pass that drafted Phases 18–20.
+> **Last updated:** 2026-08-12, after closing the Inventory/Branch Manager/Platform page gap, drafting Phases 15–17, completing a second 40-scenario platform-layer discovery pass that drafted Phases 18–20, and a third 20-item edge-case hardening pass attributed against existing phases.
 > **Keep this current.** Update it at the end of any phase task, and before ending a long session.
 
 ---
@@ -124,15 +124,19 @@ Workshop Live View still owed.
 
 **Second scenario pass (this arc).** 40 scenarios across `docs/scenarios2/`, eight tenant profiles chosen to stress the platform layer specifically — super admin control, workshop creation using only the product, and the server under genuine multi-tenant load — rather than any one workshop's daily operation. Synthesized into `SYNTHESIS.md` with a full cross-reference table, and three more new phases (18–20) added to `PHASE_MAP.md`, detailed in their own phase docs. Also no code yet.
 
+**Third scenario pass — edge cases (this arc).** 20 items across `docs/scenarios3/` — 10 hard, 10 extremely hard — not persona-driven, a direct audit for rare conditions a real deployment will eventually hit: concurrent writes racing each other (blockers, team-membership moves, invoice numbering, payment idempotency, freeze/reactivate), clock and calendar edge cases (leap-year warranty dates, replica clock skew, database failover), and data-integrity edge cases (hard-deleting a `ControlSetting` row instead of deactivating it, migrations against a dormant archived tenant). Two real, previously-unverified findings worth flagging specifically: `FinanceService.nextInvoiceNumber()` computes `count()+1` inside a transaction and relies on a unique-constraint backstop, while the schema already has an unused `invoice_sequences` table sitting right next to it (H3); and the stock-never-negative guarantee's actual atomicity (single `UPDATE` vs. read-then-write) was never verified against the generated SQL (H6/E16). None of these earned a new phase — `PHASE_MAP.md` gained rule 8 instead: a hardening pass attaches to the phase that already owns the affected system, via `docs/scenarios3/EDGE_CASE_REGISTER.md`, not a new phase number. Each affected phase (1, 3, 4, 5, 7, 8, 15, 18, 19, 20) now carries an inline "Edge cases owed" note.
+
 ## 4. Current task — what to do next
 
-**Three directions are now legitimate next steps; pick based on what's asked for.**
+**Four directions are now legitimate next steps; pick based on what's asked for.**
 
 **A — Continue the page-gap track toward Phase 9.** Remaining: Returns/Movements actions (accept/reject a return, request clarification — Inventory Manager's last owed page), Platform's Governance Controls / Platform Reports / Workshop Live View, then Phase 9 (Billing/Invoicing) as originally planned. Before finalizing Phase 9's scope, read `docs/phases/PHASE_20.md` §20.D — the country-adapter seam is sharper than originally scoped; a tenant onboarded into a country without a ready adapter needs an explicit **compliant-blocked** state, not silent non-compliance. See §1 above.
 
 **B — Start Phase 15.** The scenario research is done; Phase 15 is drafted and ready to build against. Its exit criteria and the primitives it owns (service card, measurement form, position taxonomy, credential, blocker reason) are in `docs/phases/PHASE_15.md`. Do not start Phase 17's creation-time UI before 15 and 16 exist — see that document's closing note, which names Phase 7's own history as the cautionary case. Also note Phase 17's scope was sharpened this session: a fixed starter-profile library under-covers reality on day one (Workshop 1 of `docs/scenarios2/`), so Phase 17 must ship an explicit "start from nothing" authoring path as a first-class option, not a fallback.
 
 **C — Start Phase 18.** Independent of both other tracks, gated only behind Phase 3 (already complete). `docs/phases/PHASE_18.md` names six sub-items (18.A–18.F); 18.A (external stakeholder access) and 18.D (the tenant archive/retention lifecycle) are the two with the clearest, smallest schema surface and are the recommended starting point if this track is picked. 18.F (merge/split) is a design decision, not an implementation, and should be scoped last within this phase.
+
+**D — Work the edge-case register.** Independent of the other three; each item is small and attaches to already-complete phases, so this is the lowest-risk, fastest-to-land track if a quick win is wanted. Start with the two flagged **verify first** in `docs/scenarios3/EDGE_CASE_REGISTER.md` (H6/E16, the stock-decrement atomicity question, and H3, the invoice-numbering race) — both are a few hours of reading generated SQL plus one concurrency-specific integration test each, and both touch money or inventory correctness directly, which the register's own severity note ranks above the more dramatic-sounding items like E20's database failover.
 
 **Write `docs/phases/PHASE_9.md` first, then build it.** The detail document comes before any code, as in Phases 5–8.
 

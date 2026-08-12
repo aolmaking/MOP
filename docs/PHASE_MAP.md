@@ -1,8 +1,8 @@
 # MOP Phase Map
 
 > **What this is:** the single, linear plan for all remaining work. One numbering scheme, one order, one place.
-> **Companion:** [`docs/PAGE_INVENTORY.md`](./PAGE_INVENTORY.md) tracks the 53 spec'd pages against what's built — the definition of "done" for Phases 5–12. [`docs/scenarios/`](./scenarios/) and [`docs/scenarios2/`](./scenarios2/) are the two discovery passes that produced Phases 15–20.
-> **Date:** 2026-08-12, after the 40-scenario platform-layer discovery pass and its synthesis.
+> **Companion:** [`docs/PAGE_INVENTORY.md`](./PAGE_INVENTORY.md) tracks the 53 spec'd pages against what's built — the definition of "done" for Phases 5–12. [`docs/scenarios/`](./scenarios/) and [`docs/scenarios2/`](./scenarios2/) are the two discovery passes that produced Phases 15–20. [`docs/scenarios3/`](./scenarios3/) is a third pass — 20 edge cases, not persona-driven — that did not earn new phases but is attributed against the phases above; see rule 8 below.
+> **Date:** 2026-08-12, after the 40-scenario platform-layer discovery pass, its synthesis, and a 20-item edge-case hardening pass.
 
 ---
 
@@ -20,7 +20,7 @@
 | Auth | 4 account types, DB-backed sessions, refresh rotation, lockout, rate limiting |
 | Money | `Decimal` in DB, `string` across API, dedicated `lint-money.mjs` guarding it |
 | Pages | **23 of 53 spec'd pages built** — see `PAGE_INVENTORY.md` for the full per-role breakdown |
-| Discovery | Two full scenario-discovery passes complete: 20 workshop-floor scenarios (`docs/scenarios/`), 40 platform-layer scenarios (`docs/scenarios2/`) |
+| Discovery | Three discovery passes complete: 20 workshop-floor scenarios (`docs/scenarios/`), 40 platform-layer scenarios (`docs/scenarios2/`), 20 edge cases (`docs/scenarios3/`) |
 
 **Not yet true:** Phases 9–14 (Billing, People, Customer Portal, Reporting, Automation, i18n release) have not started. Phases 18–20, named by this session's platform-layer discovery pass, did not exist before today.
 
@@ -33,6 +33,7 @@
 5. **Every role phase closes with a cross-system scenario walkthrough**, never a page checklist. This is the specific discipline that would have caught v11.9's disconnected-pages failure.
 6. **A phase may not be marked complete while any page or scenario finding it owns is unaddressed.** `PAGE_INVENTORY.md` and the two scenario syntheses are the definitions of done; measuring "complete" against what was built rather than what was required is the exact mistake Phase 7 was originally marked complete under.
 7. **A discovery pass earns a phase, not a patch.** When a scenario walkthrough finds a gap that is structural — missing vocabulary, missing platform-relationship model, missing resilience story — it gets its own phase with its own exit criteria, not a scattered set of tickets absorbed silently into whichever phase happens to be active.
+8. **A hardening pass earns a register entry, not a phase.** When a discovery pass finds gaps that are *not* structural — a race condition, an unverified claim, an undocumented rule — those attach to the phase that already owns the affected system, tracked in a register, not spun into a new phase number. `docs/scenarios3/EDGE_CASE_REGISTER.md` is this project's first such register; a phase is not done while an edge case attributed to it is neither fixed nor explicitly, reasonedly deferred.
 
 ---
 
@@ -68,27 +69,33 @@ Total page inventory: **23 of 53** spec'd pages built. See `PAGE_INVENTORY.md` f
 
 ### Phase 1 — Runnable and Provable ✅
 Reproducible environment, DB path verified end-to-end, CI green, rate limiting, boot-time config validation, systematic money serialization, per-request permission-context caching, i18n/RTL foundation (logical CSS, `dir` handling, bidi isolation).
+**Edge cases owed:** H9 (RTL-override/zero-width characters must be sanitized wherever a slug, filename, or legal document is generated), E18 (no lazy-rehash path or version tracking for password hashes).
 
 ### Phase 2 — Design Completeness ✅
 Scenario × capability matrix, typed cross-system contracts, gate registry, schema verdict for every scenario.
 
 ### Phase 3 — Governance Runtime ✅
 `TenantCapability` time-ranged schema, capability resolution in the resolver, change pipeline (draft → validate → live-data preconditions → impact preview → apply → audit → rollback), Super Admin capability-shaping UI, historical interpretation.
+**Edge case owed:** E13 — capability rollback racing an in-flight lifecycle transition; design spike required, see `docs/scenarios3/EDGE_CASE_REGISTER.md`.
 
 ### Phase 4 — Operations Spine ✅
 `WorkflowRouter` driven by the capability graph, intake, ownership transfer, work order/task lifecycle, inspections/faults/blockers, capability-aware Finish Gate.
+**Edge cases owed:** H1 (concurrent blockers can overwrite each other), H2 (capability check-then-write gap), H4 (decision approval landing on an already-closed work order), E19 (stale decision token after asset reassignment).
 
 ### Phase 5 — Branch Manager ✅
 Attention Center · Customer Intake · Work Orders board · Work Order Workspace · Approvals · Delivery & Payments · **Team Setup**, delegation-gated.
+**Edge cases owed:** H8 (double-click races the team-membership transaction), H10 (`ControlSetting` must never be hard-deleted).
 
 ### Phase 6 — Technician ✅
 Now · My Work · Work Card, 10 tools, mobile/tablet-first, no sidebar.
 
 ### Phase 7 — Inventory 🟢
 Inventory Home · Technician Requests · Catalog Control · Quantity Control & Stock Status · Reports & Stock Insights. **Owed:** Returns/Movements' accept/reject/clarify actions — the ledger is built and readable; the actions have no page yet.
+**Edge cases owed:** H6/E16 — the stock-never-negative guarantee needs verifying as a single atomic `UPDATE`, not read-then-write, plus a concurrency-specific integration test; H7 — no described path for deactivating a warehouse with nonzero stock.
 
 ### Phase 8 — Finance Core 🟠
 Pricing catalog, discounts, tax policy, running balance, payments, deposits, financial reports engine — all built. **Owed:** the Owner's own Money page (Phase 10), and refunds/credit notes (explicitly deferred to Phase 9).
+**Edge cases owed:** H3 — invoice numbering is `count()+1` against a mocked-up unique-constraint backstop; the schema's own `invoice_sequences` table sits unused. H5 — the idempotency check-then-insert has its own race window. E15 — halfway-point rounding needs one named, documented rule.
 
 ### Phase 9 — Billing / Invoicing 🔵
 Separate bounded system. Legal invoice document, numbering, immutable snapshots, credit/debit notes, `GenericBillingAdapter` behind the country-adapter seam. **Sharpened by Workshop 2 (scenarios 6, 9, 10):** the country-adapter seam is not optional infrastructure for a hypothetical future market — it is the difference between a tenant being legally able to trade and not, the moment a second country's tenant exists. ZATCA (Saudi) and ETA (Egypt) are the two adapters named for this phase's first pass; a tenant onboarded into a country without a ready adapter must be flagged **compliant-blocked** (see Phase 20.D), never silently allowed to issue invoices the law doesn't recognize.
@@ -110,6 +117,7 @@ Real background jobs on a separate worker process — the in-process scheduler d
 
 ### Phase 15 — Specialization Discovery
 Settle the schema for specialization primitives — service cards, measurement/diagnostic forms, position taxonomies, credentials, blocker reasons. No authoring UI.
+**Edge case owed:** E11 — decide and document the leap-year warranty-date rule before the warranty field ships, not after.
 **Detail:** [`phases/PHASE_15.md`](./phases/PHASE_15.md)
 
 ### Phase 16 — Specialization Structure
@@ -122,14 +130,17 @@ The super admin declares a workshop's specializations at `Add Workshop Owner`, n
 
 ### Phase 18 — Tenant Relationships 🆕
 External stakeholder access, multi-tenant identity, time-bounded access grants, the tenant archive/retention lifecycle, tenant groups for portfolio reporting, and a deliberate design decision on tenant merge/split. The single most-recurring finding across the 40-scenario platform pass: `Tenant.id` is treated everywhere as permanent and singular, and real businesses are sold, merged, split, invested in, and closed.
+**Edge cases owed:** H10 (`ControlSetting` hard-delete, restated here since delegation is this phase's natural home), E17 (schema migrations against a dormant/archived tenant's data need an explicit reconciliation policy).
 **Detail:** [`phases/PHASE_18.md`](./phases/PHASE_18.md)
 
 ### Phase 19 — Governance Depth 🆕
 Separation of duties, a dispute state distinct from work-order lifecycle status, a forensic-reason refund taxonomy, a restricted-pending-investigation account state, historical permission reconstruction, properly-bounded support impersonation, point-in-time reporting snapshots. Everything the permission and audit systems need once the platform stops assuming every actor is acting in good faith.
+**Edge case owed:** E14 — two opposite platform actions (freeze/reactivate) racing the same tenant needs an optimistic-concurrency guard, the same shape of fix as 24.1–24.3's missing single-account control lever.
 **Detail:** [`phases/PHASE_19.md`](./phases/PHASE_19.md)
 
 ### Phase 20 — Operational Resilience at Scale 🆕
 Multi-tenant load/concurrency testing, tenant-configuration-change atomicity, bulk provisioning and import with branch-scoped rollback, country as a real configuration axis (legal identity fields, tenant-configurable working week, compliant-blocked state), a deliberate offline-architecture decision, shared-device identity, and bandwidth-aware client design. The least visible, most likely to be deprioritized, and — per the scenarios that found it — most likely to actually break a real deployment first.
+**Edge cases owed:** E12 (clock skew between API replicas disagreeing about token/window expiry — 20.A/20.B's natural extension), E20 (no documented database-failover recovery procedure — a config decision and a rehearsed runbook, not a feature).
 **Detail:** [`phases/PHASE_20.md`](./phases/PHASE_20.md)
 
 ---
