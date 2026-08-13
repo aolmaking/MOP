@@ -168,6 +168,14 @@ export const routes: Routes = [
         // may already have resolved to the Branch Manager's path.
         providers: [{ provide: TEAM_API_BASE_PATH, useValue: '/api/v1/organization/teams' }, TeamApi],
       },
+      {
+        path: 'messages',
+        loadComponent: () => import('./features/owner/messages/messages-page').then((m) => m.MessagesPage),
+      },
+      {
+        path: 'forms',
+        loadComponent: () => import('./features/owner/forms/forms-page').then((m) => m.FormsPage),
+      },
     ],
   },
   {

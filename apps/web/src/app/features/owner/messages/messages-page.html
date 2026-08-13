@@ -1,0 +1,82 @@
+<section class="messages">
+  <header class="head">
+    <h1 class="title">Messages &amp; Templates</h1>
+    <p class="sub">Every customer- and staff-facing message this workshop sends.</p>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to this page</p>
+        <p class="state-body">Messages &amp; Templates is only visible to the workshop owner.</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('ready') {
+      <div class="layout">
+        <nav class="picker" aria-label="Templates">
+          @for (t of templates(); track t.key) {
+            <button
+              type="button"
+              class="picker-item"
+              [class.picker-item--active]="t.key === selectedKey()"
+              (click)="select(t.key)"
+            >
+              <span>{{ t.label }}</span>
+              @if (!t.isPublished) {
+                <span class="badge badge--draft">Using default</span>
+              }
+            </button>
+          }
+        </nav>
+
+        @if (selected(); as t) {
+          <div class="editor">
+            @if (publishError(); as err) {
+              <app-error-banner [error]="err" />
+            }
+
+            <div class="toolbar">
+              <span class="toolbar-label">Insert:</span>
+              @for (v of t.availableVariables; track v) {
+                <button type="button" class="var-chip" (click)="insertVariable(v)">{{ '{{' + v + '}}' }}</button>
+              }
+            </div>
+
+            <textarea
+              class="body-input"
+              rows="6"
+              [ngModel]="draft()"
+              (ngModelChange)="updateDraft($event)"
+            ></textarea>
+
+            <div class="preview">
+              <h2 class="preview-title">Preview</h2>
+              <p class="preview-body">{{ preview() }}</p>
+            </div>
+
+            <div class="editor-actions">
+              <span class="version-note">
+                {{ t.isPublished ? 'Currently published: v' + t.version : 'No version published yet -- sending uses the platform default.' }}
+              </span>
+              <button appButton variant="primary" [disabled]="publishing()" (click)="publish()">
+                {{ publishing() ? 'Publishing…' : 'Publish' }}
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+</section>

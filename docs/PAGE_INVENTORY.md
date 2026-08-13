@@ -15,8 +15,8 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| Built | **35** |
-| Remaining | **18** |
+| Built | **37** |
+| Remaining | **16** |
 
 Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built
 
@@ -64,14 +64,14 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Returns / Movements | ✅ | `/inventory/returns` | Queue (accept/reject/clarify, with the clarify↔reply loop) + tenant-wide filterable ledger. Two real backend bugs found and fixed while building this: RETURN_REJECTED and RETURN_CLARIFICATION_REQUESTED existed in the enum with no workflow-graph edge reaching them, and PartReturnRequest was never written by requestReturn |
 | Reports & Stock Insights | ✅ | `/inventory/reports` | Stock risk is velocity-based, per warehouse. Comparison section absent (not empty) for a single-warehouse scope |
 
-## Tenant Owner — 3 / 8 (Organization & Access complete; Home and Audit also built)
+## Tenant Owner — 5 / 8 (Organization & Access, Messages & Templates complete; Home and Audit also built; Forms & Fields partial)
 
 | Page | State | Notes |
 |---|:--:|---|
 | Owner Home | ✅ | `/owner/home`. Six cards per `PHASE_10.md` §4: open work orders, waiting-customer, waiting-parts, waiting-payment, low stock (all links), recent changes. Built in a later pass than Phase 10's own commit — see `PHASE_10.md` §6 |
 | Organization & Access | ✅ | `/owner/organization`, `/owner/organization/teams` | All four tabs. **Staff**: invite (real Account+StaffUser, invite-token flow reused from Add Workshop Owner), scope edit, activate/deactivate and lock/unlock (writes both `Account.status`, what `AuthService.login` enforces, and the `StaffUser` mirror fields, in one transaction). **Branches**: create, deactivate (blocked while non-terminal `WorkOrder`s exist, using `WORK_ORDER_GRAPH.terminal` rather than a second hardcoded status list). **Warehouses**: create, plus the Branch↔Warehouse matrix (`BranchWarehouseAccess`). **Teams**: reuses Branch Manager's `TeamSetupService`/`TeamSetupPage` verbatim via `TEAM_API_BASE_PATH` token override (unscoped branchScope = every branch) — no second implementation of the same CRUD |
-| Forms & Fields | ⬜ | |
-| Messages & Templates | ⬜ | |
+| Forms & Fields | 🟡 | `/owner/forms` — Full definition/authoring contract: add/archive/restore custom fields per form, category/role scope, customer-visible/reportable/required flags, `CustomFieldDefinition` model. `validateValues()` is the reusable validation link (required-ness, SELECT option membership, category-scope filtering) any future form-recording service calls — proven against the spec's own "Battery Voltage on Quick Inspection" worked example. No consuming UI exists yet for any of the 9 forms' *values* (there is no inspection-recording page, no intake custom-field capture, etc. — those are separate, unbuilt pages), so this is the authoring half of the chain, ready the moment each consuming page is built |
+| Messages & Templates | ✅ | `/owner/messages` — All 8 templates, `MessageTemplate` model (immutable per-version rows, mirroring `WorkshopPolicy`'s time-ranged discipline), variable-insertion toolbar, live preview, Publish blocked with the exact missing-variable name until every required `{{var}}` is present. A real platform-default body backs every template before an Owner ever publishes one, so `currentBody()` never returns empty. No message-sending code exists yet anywhere in the product (WhatsApp/Ask Customer panel are unbuilt) — this is the complete, real source of truth ready for that code to read from, deliberately not a second hardcoded copy |
 | Pricing & Financial Configuration | ⬜ | `FinanceConfiguration` exists in the schema, unreachable |
 | Reports & Analytics | ⬜ | |
 | Audit & Change History | 🟡 | `/owner/audit` — filterable, with inline diffs. **Rollback not built**: it deep-links to Control Center and Owner pages that do not exist yet. Timestamps use the reader's locale, not the workshop's timezone (the session does not carry it) |

@@ -1,0 +1,171 @@
+<section class="forms">
+  <header class="head">
+    <div>
+      <h1 class="title">Forms &amp; Fields</h1>
+      <p class="sub">Safe, additive customization -- add a field, don't break history.</p>
+    </div>
+    @if (state() === 'ready') {
+      <button appButton variant="primary" (click)="openAdd()">+ Add Field</button>
+    }
+  </header>
+
+  <nav class="picker" aria-label="Forms">
+    @for (key of formKeys; track key) {
+      <button type="button" class="picker-item" [class.picker-item--active]="key === selectedForm()" (click)="selectForm(key)">
+        {{ key }}
+      </button>
+    }
+  </nav>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to this page</p>
+        <p class="state-body">Forms &amp; Fields is only visible to the workshop owner.</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('ready') {
+      @if (form(); as f) {
+        <section class="field-group">
+          <h2 class="group-title">Core fields</h2>
+          <ul class="core-list">
+            @for (field of f.coreFields; track field) {
+              <li class="core-item">
+                <span class="lock-icon" aria-hidden="true">🔒</span>
+                {{ field }}
+              </li>
+            }
+          </ul>
+        </section>
+
+        <section class="field-group">
+          <h2 class="group-title">Custom fields</h2>
+          @if (liveFields().length === 0) {
+            <p class="state-body">No custom fields yet on this form.</p>
+          } @else {
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Category</th>
+                  <th>Role</th>
+                  <th>Customer visible</th>
+                  <th>Reportable</th>
+                  <th>Required</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (field of liveFields(); track field.id) {
+                  <tr>
+                    <td>{{ field.label }}</td>
+                    <td>{{ field.fieldType }}</td>
+                    <td>{{ field.categoryScope.length ? field.categoryScope.join(', ') : 'All' }}</td>
+                    <td>{{ field.roleScope.length ? field.roleScope.join(', ') : 'Any' }}</td>
+                    <td>{{ field.customerVisible ? 'Yes' : 'No' }}</td>
+                    <td>{{ field.reportable ? 'Yes' : 'No' }}</td>
+                    <td>{{ field.required ? 'Yes' : 'No' }}</td>
+                    <td>
+                      <button appButton variant="ghost" size="small" (click)="toggleArchived(field.id, true)">Archive</button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </section>
+
+        @if (archivedFields().length > 0) {
+          <section class="field-group">
+            <h2 class="group-title">Archived fields</h2>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (field of archivedFields(); track field.id) {
+                  <tr>
+                    <td>{{ field.label }} <span class="archived-tag">(archived field)</span></td>
+                    <td>{{ field.fieldType }}</td>
+                    <td>
+                      <button appButton variant="ghost" size="small" (click)="toggleArchived(field.id, false)">Restore</button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </section>
+        }
+      }
+    }
+  }
+
+  @if (showAdd()) {
+    <div class="modal-backdrop" (click)="showAdd.set(false)">
+      <div class="modal" (click)="$event.stopPropagation()">
+        <h2 class="modal-title">Add Field</h2>
+        @if (addError(); as err) {
+          <app-error-banner [error]="err" />
+        }
+
+        <label class="field">
+          <span class="field-label">Field name</span>
+          <input type="text" [ngModel]="draft().label" (ngModelChange)="updateDraft('label', $event)" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Field type</span>
+          <select [ngModel]="draft().fieldType" (ngModelChange)="updateDraft('fieldType', $event)">
+            @for (type of fieldTypes; track type) {
+              <option [value]="type">{{ type }}</option>
+            }
+          </select>
+        </label>
+
+        @if (needsOptions()) {
+          <label class="field">
+            <span class="field-label">Options (comma-separated)</span>
+            <input type="text" [ngModel]="optionsText()" (ngModelChange)="optionsText.set($event)" />
+          </label>
+        }
+
+        <label class="field field--checkbox">
+          <input type="checkbox" [ngModel]="draft().customerVisible" (ngModelChange)="updateDraft('customerVisible', $event)" />
+          <span>Customer visible</span>
+        </label>
+
+        <label class="field field--checkbox">
+          <input type="checkbox" [ngModel]="draft().reportable" (ngModelChange)="updateDraft('reportable', $event)" />
+          <span>Reportable</span>
+        </label>
+
+        <label class="field field--checkbox">
+          <input type="checkbox" [ngModel]="draft().required" (ngModelChange)="updateDraft('required', $event)" />
+          <span>Required</span>
+        </label>
+
+        <div class="modal-actions">
+          <button appButton variant="secondary" (click)="showAdd.set(false)">Cancel</button>
+          <button appButton variant="primary" [disabled]="!draft().label.trim()" (click)="submitAdd()">Add</button>
+        </div>
+      </div>
+    </div>
+  }
+</section>

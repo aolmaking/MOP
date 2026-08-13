@@ -368,6 +368,8 @@ model Tenant {
   configuration           TenantConfiguration?
   capabilities            TenantCapability[]
   policies                WorkshopPolicy[]
+  messageTemplates        MessageTemplate[]
+  customFieldDefinitions  CustomFieldDefinition[]
   configurationVersions   TenantConfigurationVersion[]
   controlSettings         ControlSetting[]
   rolePermissions         RolePermission[]
@@ -2001,6 +2003,75 @@ model TenantConfigurationVersion {
 
   @@unique([tenantId, version])
   @@map("tenant_configuration_versions")
+}
+
+// Owner's Messages & Templates page (docs/detailed-specs/tenant-owner.md).
+// Deliberately a separate model from TenantConfiguration.messageTemplates
+// (the Builder/Super-Admin-side JSON blob written empty at tenant
+// creation and read by nothing) -- that column is Builder Control's
+// starting-shape config, a different subsystem at a different authority
+// level; conflating the two would let an Owner's published template
+// silently overwrite, or be overwritten by, Super Admin's Builder draft.
+//
+// Never mutated after publish: every edit inserts a new, higher-version
+// row rather than updating the current one, mirroring WorkshopPolicy's
+// time-ranged discipline. This is what "a later template edit doesn't
+// retroactively change what a past audit entry shows was actually sent"
+// requires -- an audit entry can record a `templateVersion` and that
+// version's exact body stays readable forever, never rewritten in place.
+model MessageTemplate {
+  id            String   @id @default(cuid())
+  tenantId      String
+  templateKey   String
+  body          String
+  version       Int
+  publishedById String
+  publishedAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, templateKey, version])
+  @@index([tenantId, templateKey])
+  @@map("message_templates")
+}
+
+// Owner's Forms & Fields page (docs/detailed-specs/tenant-owner.md).
+// Additive only, by design: adding a row here can never break an
+// existing record, because nothing reads this table to decide how to
+// interpret already-stored data -- every consuming form's own fields
+// column (see e.g. Inspection.fields) stores whatever was captured under
+// whatever definition existed at fill time, and archiving a definition
+// here never touches those already-stored values.
+model CustomFieldDefinition {
+  id            String   @id @default(cuid())
+  tenantId      String
+  formKey       String
+  fieldKey      String
+  label         String
+  fieldType     String
+  // For fieldType = SELECT: array of { key, label }. Null otherwise.
+  options       Json?
+  // Empty array means "all categories this workshop operates."
+  categoryScope CategoryCode[]
+  // Which staff roles fill this field in. Empty means any role that can
+  // reach the form at all.
+  roleScope     String[]
+  customerVisible Boolean @default(false)
+  reportable    Boolean  @default(false)
+  required      Boolean  @default(false)
+  order         Int      @default(0)
+  // Archived, never deleted -- past records that captured a value under
+  // this definition keep showing it, tagged (archived field). Restoring
+  // un-archives it back into the live form at the same `order`.
+  isArchived    Boolean  @default(false)
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, formKey, fieldKey])
+  @@index([tenantId, formKey, isArchived])
+  @@map("custom_field_definitions")
 }
 
 // ============================================================================
