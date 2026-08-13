@@ -39,20 +39,34 @@ export interface PolicyOption {
 }
 
 /**
- * A policy's relevance predicate. Deliberately a plain function over the
- * workshop's active capabilities, not a declarative expression language
- * -- PHASE_21.md S3.4's rule against a "second, worse programming
- * language" applies here as much as it does to consumption. Kept to
- * capability-profile input only for this first slice: relevance derived
- * from specializations or from a PRIOR POLICY ANSWER is real (the model
- * allows for it) but not yet needed by any policy in this registry, and
- * PHASE_21.md S9's relevance-graph audit found that thematic links
- * between decisions are easy to mis-record as formal dependencies when
- * that richer form is used without care. Extend `RelevanceContext` only
- * when a real policy needs it.
+ * A policy's relevance predicate. Deliberately a plain function, not a
+ * declarative expression language -- PHASE_21.md S3.4's rule against a
+ * "second, worse programming language" applies here as much as it does
+ * to consumption.
+ *
+ * Carries all three inputs PHASE_21.md S3.2 names -- capabilities,
+ * specializations, and prior policy answers -- completing the interface
+ * the design record specifies (Phase 22's conformance review found the
+ * first cut had stopped at capabilities only, with the other two named
+ * in a comment but not actually wired through).
+ *
+ * `priorAnswers` carries a real risk PHASE_21.md S9's audit already
+ * proved out once: a predicate could read another policy's answer
+ * without that dependency ever being declared in `dependsOnPolicies`,
+ * which would make the relevance graph a lie -- the validator's
+ * acyclicity check only sees declared edges, not what a predicate
+ * function actually reads. The discipline that keeps this safe is
+ * enforced by convention plus a runtime guard, not by the type system
+ * alone: `isPolicyRelevant` builds `priorAnswers` scoped to exactly
+ * `dependsOnPolicies`' declared keys, so a predicate reading a key it
+ * never declared simply finds it absent rather than silently seeing a
+ * real, undeclared answer.
  */
 export interface RelevanceContext {
   readonly capabilities: CapabilityProfile;
+  readonly specializations: ReadonlySet<string>;
+  /** Scoped to this policy's own `dependsOnPolicies` -- see the doc comment above for why that scoping is load-bearing, not incidental. */
+  readonly priorAnswers: ReadonlyMap<string, string>;
 }
 
 export type RelevancePredicate = (context: RelevanceContext) => boolean;
@@ -108,8 +122,27 @@ export interface PolicyDefinition {
   readonly dependsOnPolicies: readonly string[];
 }
 
-/** Convenience most callers want: is this policy active for a workshop with this capability profile? */
-export function isPolicyRelevant(definition: PolicyDefinition, profile: CapabilityProfile): boolean {
+/**
+ * Full relevance evaluation: capabilities, specializations, and prior
+ * answers together, matching PHASE_21.md S3.2's model exactly. `allAnswers`
+ * is the workshop's complete current answer set (policy key -> chosen
+ * option key); this function narrows it to `definition.dependsOnPolicies`
+ * before handing it to the predicate, which is what keeps the relevance
+ * graph honest -- see `RelevanceContext`'s own doc comment.
+ */
+export function isPolicyRelevant(
+  definition: PolicyDefinition,
+  profile: CapabilityProfile,
+  specializations: ReadonlySet<string> = new Set(),
+  allAnswers: ReadonlyMap<string, string> = new Map(),
+): boolean {
   if (definition.dependsOnCapabilities.some((key) => !isCapabilityActive(profile, key))) return false;
-  return definition.relevantWhen({ capabilities: profile });
+
+  const scopedAnswers = new Map<string, string>();
+  for (const depKey of definition.dependsOnPolicies) {
+    const value = allAnswers.get(depKey);
+    if (value !== undefined) scopedAnswers.set(depKey, value);
+  }
+
+  return definition.relevantWhen({ capabilities: profile, specializations, priorAnswers: scopedAnswers });
 }

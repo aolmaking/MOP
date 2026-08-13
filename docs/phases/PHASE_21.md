@@ -496,6 +496,27 @@ Based on everything above, if and when the owner opens implementation:
 4. **S-01b (resource occupancy) waits on Phase 17's setup-time authoring**, unchanged from `PHASE_16.md`'s own sequencing — this phase confirmed that ordering was already correct rather than changing it.
 5. **Money policy authority (§8.C) should be the first thing the owner rules on**, before Governance Controls' layout is drawn, since it decides whether that page has one audience or two.
 
+## 18a. Phase 22 conformance review (post-implementation audit)
+
+Performed before adding any more policies, at the project owner's explicit request: verify the implementation built so far still conforms to this document's model, rather than the model quietly simplifying to fit whatever shipped first.
+
+**Method:** each of the 10 areas requested was checked against the actual committed code (`packages/shared/src/policies/`, `apps/api/src/policies/`), not against intent. Three real, fixable gaps were found and fixed; the rest conformed or were confirmed correctly deferred.
+
+| # | Area | Verdict |
+|---|---|---|
+| 1 | `WorkshopPolicy` vs. the 18-field model | ✅ **Conforms.** The 18 fields describe a *definition* (question, options, default, relevance, …); the table correctly stores only the *chosen answer* plus provenance, mirroring `TenantCapability`/`CapabilityDefinition`'s own split exactly |
+| 2 | `PolicyDefinition` vs. the full inventory | 🟠 **Partial, correctly deferred.** `PolicyOption` is enum-only — no parameterized options (P-06's threshold value, P-24's numbering scheme) yet. Not fixed: no registered policy needs it, and `value: String` can hold an encoded value later without a migration. Recorded, not built speculatively |
+| 3 | Relevance: capabilities + specializations + prior answers | 🔧 **Fixed.** The first cut only ever received a capability profile — `RelevanceContext` named the other two in a comment but never carried them. Now carries all three; `isPolicyRelevant` scopes `priorAnswers` to exactly `dependsOnPolicies`' declared keys so a predicate cannot read an undeclared dependency, which is what keeps the relevance graph's acyclicity check honest |
+| 4 | DAG validation against the real graph | ✅ **Conforms.** `validatePolicyRegistry`'s cycle check operates on declared `dependsOnPolicies` edges structurally — unaffected by #3's fix, and already proven against the exact two- and three-policy cycle shapes §9.1 found by hand |
+| 5 | `PolicyResolutionService`: defaults, explicit values, not-yet-applicable, relevance, scope | 🔧 **Fixed the "not-yet-applicable" gap.** `resolveValue` could return a default for a policy that is not relevant at all, with no way to distinguish that from a real answer. New `isRelevant()` makes the distinction explicit without changing `resolveValue`'s existing contract. Scope hierarchy (branch/account) deliberately still absent — §8.B is OPEN |
+| 6 | `PolicySource` vs. the OPEN authority question | ✅ **Conforms.** Still `PLATFORM \| DEFAULT \| MIGRATION \| SYSTEM` — no `OWNER_CONFIGURATION` value, unchanged since first built |
+| 7 | `apply()`/`set()`: premature or appropriately narrow | ✅ **Confirmed appropriately narrow.** A direct write with an audit row, not the full draft/impact-preview/rollback pipeline §3.6 describes for GOVERNED policies. Building that pipeline now, for three low-blast-radius policies, would be the premature machinery the review was watching for — left narrow on purpose, and now stated as a decision rather than an implicit gap |
+| 8 | P-18 coupling to the policy engine | ✅ **Conforms.** `CustomerDecisionService.recordOnBehalf()` makes exactly one `resolveValue` call for its own policy key. No broader coupling found |
+| 9 | Schema evolution | ✅ **Conforms.** `value: String` absorbs future parameterized options without a migration; `PolicySource` is additively extensible; a future `PolicyOverride` table for scope (§8.B) needs no change to `WorkshopPolicy` itself |
+| 10 | "One Core + Capability + Typed Policy," not a generic config framework | 🔧 **One real miss, fixed.** `mutability` was declared on every `PolicyDefinition` but never enforced anywhere — a decorative field, exactly the `VISION.md` §6 "decorative abstraction" failure mode this project explicitly organizes against. Fixed the enforceable part: `set()` now refuses an empty or throwaway `reason` (GOVERNED-class accountability). `IMMUTABLE_AFTER_FIRST_USE` enforcement is *not* built — "has real data been created under this policy" is domain-specific (only `FinanceService` would know for an invoice-numbering policy) and no such policy is registered yet; building a generic hook for zero consumers would itself have been the generic-framework mistake #10 exists to catch. Documented as the owning domain's responsibility instead |
+
+**Net result:** the abstraction is still a typed policy layer, not a configuration framework — every fix above completed an interface Phase 21 already specified, none invented new capability, and the two deliberately-deferred items (#2, #7's full pipeline, #10's immutability hook) are named as decisions, not silent gaps.
+
 ## 18. Stop boundary
 
 This phase does not open Phase 22, does not build Governance Controls, does not implement a policy engine, questionnaire UI, or any production code. Per the owner's explicit instruction, work stops here for review.

@@ -14,13 +14,15 @@ import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { PolicyResolutionService } from "./policy-resolution.service";
 import { AuditService } from "../audit/audit.service";
+import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 import type { PrismaService } from "../database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
 
 const audit = new AuditService(asService);
-const policies = new PolicyResolutionService(asService, audit);
+const capabilities = new CapabilityResolutionService(asService);
+const policies = new PolicyResolutionService(asService, audit, capabilities);
 
 const ACTOR = { accountId: "platform-account", displayName: "Platform Admin", actorType: "PLATFORM" as const };
 const SUFFIX = `pol-${Date.now()}`;
@@ -93,6 +95,20 @@ describe("set -- changes a workshop's policy value", () => {
     ).rejects.toMatchObject({ status: 400, response: { code: "invalid_policy_value" } });
   });
 
+  // Phase 22 conformance review: a policy change is GOVERNED-class
+  // accountability, the same weight as a capability change -- an empty
+  // or throwaway reason must not be accepted silently.
+  it("refuses an empty or too-short reason", async () => {
+    await expect(policies.set(tenantId, "TIME_TRACKING", "OFF", ACTOR, "PLATFORM", "")).rejects.toMatchObject({
+      status: 400,
+      response: { code: "reason_required" },
+    });
+    await expect(policies.set(tenantId, "TIME_TRACKING", "OFF", ACTOR, "PLATFORM", "short")).rejects.toMatchObject({
+      status: 400,
+      response: { code: "reason_required" },
+    });
+  });
+
   it("stores the new value and resolveValue reflects it", async () => {
     await policies.set(tenantId, "TIME_TRACKING", "REQUIRED", ACTOR, "PLATFORM", "This workshop bills by the hour.");
 
@@ -155,5 +171,43 @@ describe("resolveCurrent -- only explicit overrides, not the full registry", () 
     const current = await policies.resolveCurrent(tenantId);
     expect(current.has("TIME_TRACKING")).toBe(true);
     expect(current.has("QC_MANDATORY")).toBe(false);
+  });
+});
+
+// Phase 22 conformance review: the first cut of PolicyResolutionService
+// could resolve a value for an irrelevant policy without ever saying so.
+// isRelevant() is the fix -- proven here against a real capability
+// profile, not a synthetic one, since QC_MANDATORY's own relevance
+// predicate depends on the QC capability actually being read from
+// TenantCapability rows.
+describe("isRelevant -- against a real capability profile", () => {
+  it("TIME_TRACKING is always relevant", async () => {
+    expect(await policies.isRelevant(tenantId, "TIME_TRACKING")).toBe(true);
+  });
+
+  it("QC_MANDATORY is irrelevant while this tenant has QC disabled, relevant once re-enabled", async () => {
+    await prisma.tenantCapability.create({
+      data: { tenantId, capabilityKey: "QC", status: "DISABLED", source: "PLATFORM", configuredBy: "test" },
+    });
+    expect(await policies.isRelevant(tenantId, "QC_MANDATORY")).toBe(false);
+
+    // Supersede with an ENABLED row, matching the real one-open-row
+    // discipline TenantCapability itself requires.
+    const now = new Date();
+    await prisma.tenantCapability.updateMany({
+      where: { tenantId, capabilityKey: "QC", effectiveTo: null },
+      data: { effectiveTo: now },
+    });
+    await prisma.tenantCapability.create({
+      data: { tenantId, capabilityKey: "QC", status: "ENABLED", source: "PLATFORM", configuredBy: "test", effectiveFrom: now },
+    });
+    expect(await policies.isRelevant(tenantId, "QC_MANDATORY")).toBe(true);
+  });
+
+  it("refuses an unknown policy key rather than silently returning false", async () => {
+    await expect(policies.isRelevant(tenantId, "NOT_A_REAL_POLICY")).rejects.toMatchObject({
+      status: 404,
+      response: { code: "unknown_policy" },
+    });
   });
 });

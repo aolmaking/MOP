@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma, PolicySource } from "@mop/database";
-import { POLICY_REGISTRY, policyDefinition } from "@mop/shared";
+import { POLICY_REGISTRY, isPolicyRelevant, policyDefinition } from "@mop/shared";
 import { PrismaService } from "../database/prisma.service";
 import { AuditService } from "../audit/audit.service";
+import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 
 export interface PolicyActor {
   readonly accountId: string;
@@ -26,13 +27,53 @@ export interface PolicyActor {
  * in this service enforces that, which is deliberate -- the enforcement
  * belongs to whichever controller is built once S8.C resolves, not to
  * this resolution layer.
+ *
+ * **`IMMUTABLE_AFTER_FIRST_USE` is declared on `PolicyDefinition` but
+ * deliberately not enforced here.** What makes a policy "used" is
+ * domain-specific (an invoice numbering scheme is used the moment the
+ * first invoice is issued -- a fact `FinanceService` knows and this
+ * service has no way to check generically). No policy registered today
+ * carries that mutability, so building a generic "has real data"
+ * mechanism now would be exactly the speculative, no-consumer
+ * abstraction Phase 22's conformance review was watching for. When a
+ * real `IMMUTABLE_AFTER_FIRST_USE` policy is registered, its owning
+ * domain must check its own precondition before calling `set()`.
  */
 @Injectable()
 export class PolicyResolutionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly capabilities: CapabilityResolutionService,
   ) {}
+
+  /**
+   * Whether this policy is relevant for this workshop right now --
+   * PHASE_21.md S3.2's full model (capabilities + specializations +
+   * prior answers), not capabilities alone. `specializations` is a
+   * parameter rather than resolved internally: nothing in this codebase
+   * yet exposes "this workshop's declared specialization keys" as one
+   * queryable set (Phase 15's definitions are scoped per specialization
+   * type, not collected into one list), so a caller that has that
+   * information passes it in; one that doesn't gets capability- and
+   * prior-answer-based relevance evaluated correctly and specialization
+   * predicates evaluated against an empty set, which is the same "no
+   * declared specialization" reading `isCapabilityActive` already uses
+   * for an absent capability row.
+   */
+  async isRelevant(tenantId: string, policyKey: string, specializations: ReadonlySet<string> = new Set()): Promise<boolean> {
+    const definition = policyDefinition(policyKey);
+    if (!definition) {
+      throw new NotFoundException({ code: "unknown_policy", message: `"${policyKey}" is not a registered policy.` });
+    }
+
+    const [profile, allAnswers] = await Promise.all([
+      this.capabilities.resolveCurrent(tenantId),
+      this.resolveCurrent(tenantId),
+    ]);
+
+    return isPolicyRelevant(definition, profile, specializations, allAnswers);
+  }
 
   /** Every policy this workshop has an explicit row for right now. Registry defaults fill in the rest -- use `resolveValue` for one key's effective value. */
   async resolveCurrent(tenantId: string, tx?: Prisma.TransactionClient): Promise<ReadonlyMap<string, string>> {
@@ -116,6 +157,12 @@ export class PolicyResolutionService {
       throw new BadRequestException({
         code: "invalid_policy_value",
         message: `"${value}" is not one of ${definition.key}'s declared options.`,
+      });
+    }
+    if (!reason?.trim() || reason.trim().length < 10) {
+      throw new BadRequestException({
+        code: "reason_required",
+        message: "A real reason (at least 10 characters) is required to change a policy.",
       });
     }
 
