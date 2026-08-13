@@ -1,0 +1,37 @@
+<section class="assets">
+  <h1 class="assets-title">My Assets</h1>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">We can't open this right now</p>
+        <p class="state-body">Please contact your workshop for help.</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+    @case ('empty') {
+      <div class="state">
+        <p class="state-title">Nothing here yet</p>
+        <p class="state-body">Once your workshop links a vehicle to your account, it will show up here.</p>
+      </div>
+    }
+    @case ('ready') {
+      <div class="grid">
+        @for (asset of assets(); track asset.id) {
+          <article class="card">
+            <bdi class="card-identifier">{{ identifier(asset) }}</bdi>
+            <span class="card-category">{{ category(asset.category) }}</span>
+          </article>
+        }
+      </div>
+    }
+  }
+</section>

@@ -1,0 +1,31 @@
+<div class="portal">
+  <header class="portal-head">
+    <span class="portal-brand">MOP</span>
+    @if (session(); as s) {
+      <button type="button" class="portal-logout" (click)="logout()">Sign out</button>
+    }
+  </header>
+
+  <main class="portal-content">
+    <router-outlet />
+  </main>
+
+  <!--
+    At the bottom, not in a sidebar -- the same reasoning as the
+    technician shell: a phone held one-handed puts the top corners out
+    of thumb reach.
+  -->
+  <nav class="portal-nav" aria-label="Portal navigation">
+    @for (item of navigation; track item.route) {
+      <a
+        class="portal-nav-link"
+        routerLinkActive="portal-nav-link--active"
+        [routerLinkActiveOptions]="{ exact: item.route === '/customer' }"
+        [routerLink]="item.route"
+        >{{ item.label }}</a
+      >
+    }
+  </nav>
+</div>
+
+<app-toast-container />

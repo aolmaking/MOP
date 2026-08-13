@@ -148,6 +148,27 @@ export const routes: Routes = [
     ],
   },
   {
+    // The Customer Portal shell -- bottom nav like the technician shell,
+    // for the same reason (a phone held one-handed), though the two
+    // personas are otherwise unrelated. See docs/phases/PHASE_11.md.
+    path: 'customer',
+    canActivate: [authGuard],
+    loadComponent: () => import('./core/layout/customer-shell/customer-shell').then((m) => m.CustomerShell),
+    children: [
+      { path: '', loadComponent: () => import('./features/customer/portal-home').then((m) => m.PortalHome) },
+      { path: 'assets', loadComponent: () => import('./features/customer/my-assets').then((m) => m.MyAssets) },
+      {
+        path: 'service',
+        loadComponent: () => import('./features/customer/current-service').then((m) => m.CurrentService),
+      },
+      {
+        path: 'invoices',
+        loadComponent: () => import('./features/customer/invoice-status').then((m) => m.InvoiceStatus),
+      },
+      { path: 'history', loadComponent: () => import('./features/customer/safe-history').then((m) => m.SafeHistory) },
+    ],
+  },
+  {
     // The inventory manager sits at a desk and works long sessions, so
     // this is a rail like the platform and branch sides -- the opposite
     // requirement to the technician's, which is why they are separate

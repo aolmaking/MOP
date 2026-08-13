@@ -1,0 +1,113 @@
+.invoices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 32rem;
+}
+
+.invoices-title {
+  color: var(--white);
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  list-style: none;
+}
+
+.invoice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border-inline-start: 3px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.invoice--open {
+  border-inline-start-color: var(--warning);
+}
+
+.invoice-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.invoice-number {
+  color: var(--white);
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.invoice-when {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.invoice-amounts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+
+.amount {
+  display: flex;
+  flex-direction: column;
+}
+
+.amount-label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.amount-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.amount-value--open {
+  color: var(--warning);
+}
+
+.invoice-flag {
+  align-self: flex-start;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  color: var(--warning);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+.state,
+.state-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.state-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.state-body {
+  color: var(--text-muted);
+  font-size: var(--text-base);
+}

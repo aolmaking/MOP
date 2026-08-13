@@ -32,6 +32,12 @@ describe('landingRouteFor', () => {
     );
   });
 
+  it('sends a customer to their own portal', () => {
+    expect(landingRouteFor({ role: 'CUSTOMER', landingPage: 'customer-portal-home' } as SessionContext)).toBe(
+      '/customer',
+    );
+  });
+
   it('falls back to the placeholder for roles whose home is not built', () => {
     // Deliberately '/' and not a guess: the placeholder names the phase
     // that builds their home, which is more honest than a wrong page.
