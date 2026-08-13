@@ -15,23 +15,23 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| Built | **33** |
-| Remaining | **20** |
+| Built | **34** |
+| Remaining | **19** |
 
 Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built
 
 ---
 
-## Platform Super Admin — 3 / 6
+## Platform Super Admin — 4 / 6
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
 | Add Workshop Owner | ✅ | `/platform/workshops/new` | Phase 2 |
 | Workshops | ✅ | `/platform/workshops` | Server-side paged/sorted/filtered, details drawer, freeze/reactivate with impact preview. The API existed since Phase 2 with no UI |
-| Control Center — Governance Controls | ⬜ | — | Freeze/reactivate exist in the API; no page |
+| Control Center — Governance Controls | ⬜ | — | Freeze/reactivate exist in the API; no page. Rail link to `/platform/control-center` has been dead since Phase 2 |
 | Control Center — Builder Control | 🟡 | `/platform/workshops/:id/capabilities` | Capability shaping is built (5.F). The spec's Builder Control is broader |
-| Platform Reports | ⬜ | — | |
-| Workshop Live View | ⬜ | — | |
+| Platform Reports | ✅ | `/platform/reports`, `/platform/reports/:id` | Level 1 (aggregate totals + per-workshop card grid) and Level 2's Usage Overview section only. Feature Usage, Builder Adoption, Operational Activity, Commercial Snapshot, and Health & Risk are named as owed, not built as empty tabs |
+| Workshop Live View | ⬜ | — | Rail link to `/platform/live-view` has been dead since Phase 2 |
 
 ## Branch Manager — 7 / 7 ✅
 

@@ -61,9 +61,9 @@
 | **18 — Tenant Relationships** | 🟠 18.A/D/E shipped; 18.B/C deferred; 18.F design decision written |
 | **19 — Governance Depth** | 🟠 19.B/C/D shipped; 19.A data-only (enforcement reverted); 19.E/F/G deferred |
 | **20 — Operational Resilience at Scale** | 🟠 20.B shipped; 20.E design decision written; 20.A/C/D/F deferred |
-| Platform Super Admin (cross-cutting) | 🟠 3/6 pages — Governance Controls, Reports, Live View owed |
+| Platform Super Admin (cross-cutting) | 🟠 4/6 pages — Governance Controls, Live View owed |
 
-Total page inventory: **33 of 53** spec'd pages built (Owner Home, all four Team Leader pages, and all five Customer Portal pages closed this pass; other phases' page counts may have moved further and not yet be reflected here). See `PAGE_INVENTORY.md` for the per-role table.
+Total page inventory: **34 of 53** spec'd pages built (Platform Reports — Level 1 + Usage Overview — closed this pass; other phases' page counts may have moved further and not yet be reflected here). See `PAGE_INVENTORY.md` for the per-role table.
 
 ## The phases
 

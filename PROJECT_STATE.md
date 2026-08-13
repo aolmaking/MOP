@@ -98,11 +98,25 @@ Three doors closed earlier this arc, from the original audit:
 | **19 — Governance Depth** | 🟠 **19.B/C/D shipped** — `WorkOrderDispute`, refund `reasonCategory`, `StaffRestrictionService` + a new `StaffRestrictionLayer` fully wired into the permission resolver; 19.A's enforcement built then reverted (broke 22 existing tests modeling a legitimate single-storekeeper shop — needs a per-workshop policy, not a global rule); 19.E/F/G deferred — `docs/phases/PHASE_19.md` |
 | **20 — Operational Resilience at Scale** | 🟠 **20.B shipped** — `PermissionContextService.load()` now runs inside one REPEATABLE READ transaction, closing the mid-flight capability-change race; 20.E's written decision: no offline-capable clients, connectivity is a stated requirement; 20.A/C/D/F deferred with reasons — `docs/phases/PHASE_20.md` |
 
-Platform Super Admin: 3 of 6 pages (Add Workshop Owner, Workshops,
-Builder Control partial). Governance Controls, Platform Reports and
-Workshop Live View still owed.
+Platform Super Admin: 4 of 6 pages (Add Workshop Owner, Workshops,
+Builder Control partial, **Platform Reports**). Governance Controls and
+Workshop Live View still owed — their rail links have been dead since
+Phase 2.
 
-**Verified at last commit:** 434 API tests + 163 web tests, typecheck clean, all **five** custom lint rules passing (audit boundary, directional CSS, touch targets, money, permission keys), full build green.
+**Platform Reports (closed this session, 2026-08-13).** Found already
+implemented and uncommitted on this working tree at session start
+(`PlatformReportsController`/`Service`, two web pages) — verified
+complete against the full gate rather than rebuilt, then committed.
+Level 1 (aggregate totals + per-workshop card grid, reusing
+`WorkshopsService.list()`'s paging/sort/search) and Level 2's Usage
+Overview section only; the spec's other five Level 2 sections (Feature
+Usage, Builder Adoption, Operational Activity, Commercial Snapshot,
+Health & Risk) are named as owed in `PAGE_INVENTORY.md`, not built as
+empty tabs. `usageScore` is this project's own defined composite (a
+recency bucket off `lastActivityAt`) since the source spec names "a
+composite" without pinning a formula.
+
+**Verified at last commit:** 480 API tests + 225 web tests + 121 shared tests, typecheck clean, all **five** custom lint rules passing (audit boundary, directional CSS, touch targets, money, permission keys), full build green.
 
 **Phase 9 (this arc, in progress).** `docs/phases/PHASE_9.md` written first. Built and tested: `BillingModule` (`GenericBillingAdapter` + `BillingService`), `BillingDocument` as its own model distinct from `Invoice` (Finance keeps the settlement record; Billing gets its own row, lifecycle, immutable snapshot), wired into `FinanceService.issueInvoice()` as a typed-contract call in the same transaction, External Billing Mode made load-bearing (suppresses document creation, proven by test), the adapter seam proven swappable (a test-only adapter produces a differently-shaped document from the same snapshot without the amount changing), and `CreditNote` issuance with real sequential numbering (`credit_note_sequences`, same atomic-upsert pattern as invoices). Found and fixed a real gap in `docs/SYSTEMS.md`'s own quoted adapter interface while implementing it: `generateCreditNote`/`generateDebitNote` had no `amount` parameter (silently assumed a credit note always refunds the full invoice) and no numbering parameter — both docs corrected alongside the code.
 
