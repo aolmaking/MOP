@@ -84,7 +84,7 @@ Scenario × capability matrix, typed cross-system contracts, gate registry, sche
 
 ### Phase 5 — Branch Manager ✅
 Attention Center · Customer Intake · Work Orders board · Work Order Workspace · Approvals · Delivery & Payments · **Team Setup**, delegation-gated.
-**Edge cases owed:** H10 (`ControlSetting` must never be hard-deleted). H8 (double-click races the team-membership transaction) fixed — see `EDGE_CASE_REGISTER.md`.
+**Edge cases owed:** none open. H8 (double-click races the team-membership transaction) and H10 (`ControlSetting` hard-delete) fixed — see `EDGE_CASE_REGISTER.md`.
 
 ### Phase 6 — Technician ✅
 Now · My Work · Work Card, 10 tools, mobile/tablet-first, no sidebar.
@@ -130,7 +130,7 @@ The super admin declares a workshop's specializations at `Add Workshop Owner`, n
 
 ### Phase 18 — Tenant Relationships 🟠 (18.A/D/E shipped, 18.B/C deferred, 18.F decided — see `phases/PHASE_18.md`)
 External stakeholder access, multi-tenant identity, time-bounded access grants, the tenant archive/retention lifecycle, tenant groups for portfolio reporting, and a deliberate design decision on tenant merge/split. The single most-recurring finding across the 40-scenario platform pass: `Tenant.id` is treated everywhere as permanent and singular, and real businesses are sold, merged, split, invested in, and closed. **Shipped:** `TenantStakeholder` (18.A, narrow view-only grants independent of StaffRole); the archive lifecycle with two clocks never conflated (18.D) plus a real fix making `TenantStatusLayer`'s `READ_ONLY` status literally allow reads, which it previously did not; `TenantGroup` summary-only portfolio aggregation (18.E). **18.F's deliverable is a written decision, not code:** no first-class merge/split — a documented export/reimport-and-archive manual procedure instead, because rewriting `AuditLog.tenantId` on historical rows would conflict with the audit-boundary discipline `tools/lint-audit-boundary.mjs` exists to enforce. 18.B and 18.C deferred, each with a specific reason.
-**Edge cases owed:** H10 (`ControlSetting` hard-delete, restated here since delegation is this phase's natural home), E17 (schema migrations against a dormant/archived tenant's data need an explicit reconciliation policy).
+**Edge cases owed:** E17 (schema migrations against a dormant/archived tenant's data need an explicit reconciliation policy). H10 (`ControlSetting` hard-delete) fixed — see `EDGE_CASE_REGISTER.md`.
 **Detail:** [`phases/PHASE_18.md`](./phases/PHASE_18.md)
 
 ### Phase 19 — Governance Depth 🟠 (19.B/C/D shipped; 19.A enforcement reverted; 19.E/F/G deferred — see `phases/PHASE_19.md`)
