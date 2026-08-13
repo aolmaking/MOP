@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { Prisma } from "@mop/database";
 import { DELEGATION_KEYS, type CapabilityProfile, type SessionContext } from "@mop/shared";
 import { PrismaService } from "../database/prisma.service";
 import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
@@ -62,15 +63,34 @@ export class PermissionContextService {
     // every layer that reads this context defers for them anyway.
     if (!session.tenantId) return EMPTY_CONTEXT;
 
+    // Phase 20.B -- these five reads used to run as independent
+    // `Promise.all` queries, each against whatever was committed at the
+    // instant IT ran. A capability change or plan reassignment
+    // committing between two of those reads meant this one context
+    // could combine pre-change and post-change data into one
+    // internally-inconsistent snapshot -- exactly the race
+    // docs/phases/PHASE_20.md's 20.B names. `REPEATABLE READ` gives the
+    // whole transaction one consistent snapshot as of its first query,
+    // so every read below sees the same "before" or the same "after",
+    // never a mix.
+    return this.prisma.$transaction(
+      (tx) => this.loadWithin(tx, session),
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+  }
+
+  private async loadWithin(tx: Prisma.TransactionClient, session: SessionContext): Promise<PermissionContext> {
+    const tenantId = session.tenantId!;
+
     const [controlSettings, tenant, capabilities, roleRows, overrideRows, configuration] = await Promise.all([
       // Platform locks and owner delegations are both ControlSetting rows
       // for this tenant, so they load as ONE query and are partitioned by
       // type below. Two obvious queries would be a seventh round trip on
       // the hottest path in the system, and the point of this service is
       // that resolving twenty keys costs the same as resolving one.
-      this.prisma.controlSetting.findMany({
+      tx.controlSetting.findMany({
         where: {
-          tenantId: session.tenantId,
+          tenantId,
           active: true,
           OR: [
             { scope: "PLATFORM", type: "role_permission_lock" },
@@ -81,27 +101,27 @@ export class PermissionContextService {
         },
         select: { key: true, value: true, type: true },
       }),
-      this.prisma.tenant.findUnique({
-        where: { id: session.tenantId },
+      tx.tenant.findUnique({
+        where: { id: tenantId },
         select: { plan: { select: { allowedModules: true } } },
       }),
-      this.capabilities.resolveCurrent(session.tenantId),
+      this.capabilities.resolveCurrent(tenantId, tx),
       // Role rows are only meaningful for tenant staff; a customer session
       // has no StaffRole to key them by.
       session.staffUserId
-        ? this.prisma.rolePermission.findMany({
-            where: { tenantId: session.tenantId, role: session.role as never },
+        ? tx.rolePermission.findMany({
+            where: { tenantId, role: session.role as never },
             select: { permissionKey: true, allowed: true },
           })
         : Promise.resolve([]),
       session.staffUserId
-        ? this.prisma.userPermissionOverride.findMany({
+        ? tx.userPermissionOverride.findMany({
             where: { staffUserId: session.staffUserId },
             select: { permissionKey: true, allowed: true, reason: true },
           })
         : Promise.resolve([]),
-      this.prisma.tenantConfiguration.findUnique({
-        where: { tenantId: session.tenantId },
+      tx.tenantConfiguration.findUnique({
+        where: { tenantId },
         select: { roleExperience: true },
       }),
     ]);

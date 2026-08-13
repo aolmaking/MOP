@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import type { Prisma } from "@mop/database";
 import type { CapabilityKey, CapabilityProfile, CapabilityStatus } from "@mop/shared";
 import { CAPABILITY_KEYS } from "@mop/shared";
 import { PrismaService } from "../database/prisma.service";
@@ -24,8 +25,9 @@ export class CapabilityResolutionService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** The tenant's shape right now. Capabilities with no row default to ENABLED. */
-  async resolveCurrent(tenantId: string): Promise<CapabilityProfile> {
-    const rows = await this.prisma.tenantCapability.findMany({
+  async resolveCurrent(tenantId: string, tx?: Prisma.TransactionClient): Promise<CapabilityProfile> {
+    const client = tx ?? this.prisma;
+    const rows = await client.tenantCapability.findMany({
       where: { tenantId, effectiveTo: null },
       select: { capabilityKey: true, status: true },
     });

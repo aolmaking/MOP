@@ -59,6 +59,13 @@ function buildHarness() {
     },
   } as unknown as PrismaService;
 
+  // load() wraps its reads in a REPEATABLE READ transaction (Phase 20.B) --
+  // the mock's callback just runs against the same mock, since there is no
+  // real isolation to simulate here, only the shape of the call.
+  (prisma as unknown as { $transaction: unknown }).$transaction = jest.fn(
+    (callback: (tx: PrismaService) => unknown) => callback(prisma),
+  );
+
   const capabilities = {
     resolveCurrent: jest.fn(async () => {
       counters.capabilities += 1;
@@ -84,7 +91,7 @@ function buildHarness() {
 
   const totalQueries = () => Object.values(counters).reduce((sum, count) => sum + count, 0);
 
-  return { resolver, contextService, counters, totalQueries };
+  return { resolver, contextService, counters, totalQueries, prisma };
 }
 
 const session = createSession({
@@ -95,6 +102,17 @@ const session = createSession({
 });
 
 describe("PermissionContextService", () => {
+  it("Phase 20.B -- loads its five sources inside one REPEATABLE READ transaction, so a concurrent capability change cannot be read as a mid-flight mix", async () => {
+    const { contextService, prisma } = buildHarness();
+
+    await contextService.load(session);
+
+    expect(prisma.$transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      { isolationLevel: "RepeatableRead" },
+    );
+  });
+
   it("loads each source exactly once", async () => {
     const { contextService, counters } = buildHarness();
 

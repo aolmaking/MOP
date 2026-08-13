@@ -60,7 +60,7 @@
 | 17 — Specialization at Creation | 🟠 17.A backend seam shipped; wizard UI and 17.B–E owed |
 | **18 — Tenant Relationships** | 🟠 18.A/D/E shipped; 18.B/C deferred; 18.F design decision written |
 | **19 — Governance Depth** | 🟠 19.B/C/D shipped; 19.A data-only (enforcement reverted); 19.E/F/G deferred |
-| **20 — Operational Resilience at Scale** | ⬜ **new** — not started |
+| **20 — Operational Resilience at Scale** | 🟠 20.B shipped; 20.E design decision written; 20.A/C/D/F deferred |
 | Platform Super Admin (cross-cutting) | 🟠 3/6 pages — Governance Controls, Reports, Live View owed |
 
 Total page inventory: **28 of 53** spec'd pages built (Owner Home and all four Team Leader pages closed this pass; other phases' page counts may have moved further and not yet be reflected here). See `PAGE_INVENTORY.md` for the per-role table.
@@ -138,8 +138,8 @@ Separation of duties, a dispute state distinct from work-order lifecycle status,
 **Edge case owed:** E14 — two opposite platform actions (freeze/reactivate) racing the same tenant needs an optimistic-concurrency guard, the same shape of fix as 24.1–24.3's missing single-account control lever.
 **Detail:** [`phases/PHASE_19.md`](./phases/PHASE_19.md)
 
-### Phase 20 — Operational Resilience at Scale 🆕
-Multi-tenant load/concurrency testing, tenant-configuration-change atomicity, bulk provisioning and import with branch-scoped rollback, country as a real configuration axis (legal identity fields, tenant-configurable working week, compliant-blocked state), a deliberate offline-architecture decision, shared-device identity, and bandwidth-aware client design. The least visible, most likely to be deprioritized, and — per the scenarios that found it — most likely to actually break a real deployment first.
+### Phase 20 — Operational Resilience at Scale 🟠 (20.B shipped, 20.E decided, 20.A/C/D/F deferred — see `phases/PHASE_20.md`)
+Multi-tenant load/concurrency testing, tenant-configuration-change atomicity, bulk provisioning and import with branch-scoped rollback, country as a real configuration axis (legal identity fields, tenant-configurable working week, compliant-blocked state), a deliberate offline-architecture decision, shared-device identity, and bandwidth-aware client design. The least visible, most likely to be deprioritized, and — per the scenarios that found it — most likely to actually break a real deployment first. **Shipped:** 20.B — `PermissionContextService.load()` now runs its five reads inside one `REPEATABLE READ` transaction, closing the race where a capability change committing mid-flight could produce an internally-inconsistent permission snapshot. **20.E's deliverable is a written decision, not code:** MOP does not commit to offline-capable clients — connectivity is a stated requirement, named explicitly rather than discovered by a workshop the hard way. 20.A (needs a real load-testing harness), 20.C (depends on Phase 17's still-deferred bulk pieces), and 20.D (a multi-part deliverable needing full scenario proof) are deferred with reasons; 20.F's two small items are genuinely available to pick up next.
 **Edge cases owed:** E12 (clock skew between API replicas disagreeing about token/window expiry — 20.A/20.B's natural extension), E20 (no documented database-failover recovery procedure — a config decision and a rehearsed runbook, not a feature).
 **Detail:** [`phases/PHASE_20.md`](./phases/PHASE_20.md)
 

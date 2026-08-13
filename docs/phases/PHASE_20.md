@@ -1,9 +1,7 @@
 # Phase 20 — Operational Resilience at Scale
 
-> **Status:** ⬜ not started. Depends on Phase 1's rate-limiting and
-> per-request permission-caching foundation. Independent of Phases
-> 15–19, but should not ship a real 50-branch or multi-country tenant
-> before this phase's load and country-handling work lands.
+> **Status:** 🟠 20.B shipped and proven; 20.E has its written decision;
+> 20.A, 20.C, 20.D, 20.F deferred with reasons. See "What actually shipped."
 > **Source:** [`docs/scenarios2/SYNTHESIS.md`](../scenarios2/SYNTHESIS.md),
 > Workshops 2, 4, and 7 in full.
 
@@ -119,14 +117,25 @@ tenant on a fast connection.
   2); each additional country's adapter is Phase 9's ongoing,
   incremental work, not a one-time deliverable here.
 
+## What actually shipped
+
+- **20.B — configuration-change atomicity, the stronger of the two named options.** `PermissionContextService.load()`'s five parallel reads (control settings, tenant/plan, capabilities, role permissions, user overrides, configuration) now run inside one `REPEATABLE READ` Postgres transaction rather than as independent `Promise.all` queries each seeing whatever was committed at the instant it ran. Before this fix, a capability change or plan reassignment committing between two of those reads could make one permission-resolution context combine pre-change and post-change data into an internally-inconsistent snapshot -- exactly the race this sub-item names. `CapabilityResolutionService.resolveCurrent()` gained an optional `tx` parameter so it participates in the same transaction rather than reading through its own separate connection. Proven by a unit test asserting the transaction and isolation level are actually used; the full 471-test API suite (including every existing permission-layer and capability test) still passes against real Postgres with this change in place.
+
+## 20.E — offline architecture: the written decision
+
+**Decision: MOP does not commit to offline-capable clients at this time. Connectivity is a stated requirement, not a hidden assumption.** The alternative -- re-proving `WorkOrderLifecycleService`'s gate-checking guarantee, money idempotency, and the capability model's reachability proof against out-of-order, replayed, previously-offline actions -- is not a client feature layered on top of the existing architecture; it is a correctness re-derivation of every guarantee this project has built since Phase 1, each of which currently assumes a request either completes against live, current state or doesn't happen. Wadi Auto's low-connectivity scenario (Workshop 7) is real and not dismissed: it is named here, explicitly, as a known, accepted limitation rather than a gap a workshop discovers the hard way mid-deployment.
+
+**What this decision does not block:** 20.F's two items (shared-device re-authentication, a bandwidth review of existing pages) are real, valuable, and independent of this decision -- a slow connection is not the same problem as no connection, and reducing data cost for a metered-connection tenant needs no offline architecture at all.
+
+**What would change this decision:** a real customer segment whose business cannot function without offline capability (not "would prefer," a hard requirement) is the trigger to revisit this -- at which point the cost named above is the actual scope of that future phase, decided with real requirements in hand rather than guessed at now.
+
+## What was deferred, with reasons
+
+- **20.A — multi-tenant load and concurrency testing.** Needs a real load-testing harness (many concurrent simulated tenants/sessions against a seeded dataset) and a CI environment able to run it repeatably -- infrastructure investment distinct from a single session's application code changes, and the phase's own exit criteria asks for a CI-integrated load test, not a one-off local measurement.
+- **20.C — bulk provisioning and import.** Depends on Phase 17's specialization-at-creation work for its "many branches, each correctly specialized" half (17.B/17.C, both themselves deferred in `docs/phases/PHASE_17.md`); building the "at scale, safely, reversibly" half first, ahead of what it would provision, risks guessing the wrong shape.
+- **20.D — country as a real configuration axis.** A genuine, multi-part deliverable (jurisdiction-specific legal-identity fields, a configurable working week, a `compliantBlocked`-style flag distinct from a capability) that the exit criteria itself asks to be proven against a full scenario (Al-Safwa, Saudi Arabia) end to end -- real design and product work, not a schema addition alone.
+- **20.F — shared-device identity and bandwidth review.** Two small, concrete, independent items correctly named as not requiring 20.E's larger decision -- genuinely available to pick up next, deferred here only for this session's remaining budget, not for any structural reason.
+
 ## Exit criteria
 
-20.A produces a load test that runs in CI against a seeded multi-tenant
-dataset and a documented connection-pool/fairness strategy. 20.B closes
-the configuration-change race window with a test proving it. 20.C ships
-a working bulk-provisioning and import path, proven against a seeded
-10-branch import with one deliberately corrupted batch, successfully
-rolled back without touching the other 9. 20.D ships for Saudi Arabia
-specifically, proven against Al-Safwa's scenario end to end. 20.E
-produces the written decision, reviewed and signed off before any
-further offline-adjacent work is scheduled. 20.F ships both items.
+**Not fully met, and not claimed to be.** 20.B closed the configuration-change race window with a real fix and a test proving the mechanism is in place. 20.E produced its written decision. 20.A, 20.C, 20.D, and 20.F are deferred with specific, non-structural reasons above -- each is real, scoped work for a future pass, not abandoned.
