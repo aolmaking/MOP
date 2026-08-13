@@ -1,0 +1,32 @@
+.customers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: var(--space-3);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.panel-title {
+  color: var(--white);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.panel-hint {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}

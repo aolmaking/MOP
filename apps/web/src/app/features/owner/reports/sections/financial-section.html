@@ -1,0 +1,54 @@
+<div class="financial">
+  <section class="panel">
+    <h2 class="panel-title">Revenue vs. Collected</h2>
+    <p class="panel-hint">Revenue is what was invoiced; Collected is cash actually received -- never the same number.</p>
+    @if (data().trend.length === 0) {
+      <p class="empty">No invoices or payments in this range yet.</p>
+    } @else {
+      <app-trend-chart [labels]="trendLabels()" [series]="trendSeries()" />
+    }
+  </section>
+
+  <div class="grid-2">
+    <section class="panel">
+      <h2 class="panel-title">Labor vs. Parts</h2>
+      <app-bar-list
+        [items]="[
+          { label: 'Labor', value: data().laborRevenue, displayValue: fmtMoney(data().laborRevenue) },
+          { label: 'Parts', value: data().partsRevenue, displayValue: fmtMoney(data().partsRevenue) },
+        ]"
+      />
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Payment methods</h2>
+      <app-bar-list [items]="paymentMethodItems()" color="var(--success)" />
+    </section>
+  </div>
+
+  <div class="grid-2">
+    <section class="panel">
+      <h2 class="panel-title">Revenue by branch</h2>
+      <app-bar-list [items]="branchItems()" />
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Top services by revenue</h2>
+      <app-bar-list [items]="serviceItems()" />
+    </section>
+  </div>
+
+  <div class="grid-2">
+    <section class="panel">
+      <h2 class="panel-title">Outstanding balance aging</h2>
+      <p class="panel-hint">By time since invoice issue -- there is no per-invoice due date, only a workshop-wide default.</p>
+      <app-bar-list [items]="agingItems()" color="var(--danger)" />
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Discounts</h2>
+      <p class="discount-total">{{ fmtMoney(data().discountsTotal) }}</p>
+      <p class="panel-hint">Approved discounts in this period.</p>
+    </section>
+  </div>
+</div>

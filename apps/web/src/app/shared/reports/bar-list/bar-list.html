@@ -1,0 +1,15 @@
+@if (items().length === 0) {
+  <p class="bar-list-empty">No data in this range yet.</p>
+} @else {
+  <ul class="bar-list">
+    @for (item of items(); track item.label) {
+      <li class="bar-row">
+        <span class="bar-label">{{ item.label }}</span>
+        <span class="bar-track">
+          <span class="bar-fill" [style.inline-size.%]="widthPercent(item.value)" [style.background]="color()"></span>
+        </span>
+        <span class="bar-value">{{ item.displayValue }}</span>
+      </li>
+    }
+  </ul>
+}

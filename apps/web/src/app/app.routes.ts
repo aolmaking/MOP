@@ -180,6 +180,10 @@ export const routes: Routes = [
         path: 'pricing',
         loadComponent: () => import('./features/owner/pricing/pricing-page').then((m) => m.PricingPage),
       },
+      {
+        path: 'reports',
+        loadComponent: () => import('./features/owner/reports/reports-page').then((m) => m.ReportsPage),
+      },
     ],
   },
   {

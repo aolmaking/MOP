@@ -1,0 +1,87 @@
+<section class="reports">
+  <header class="head">
+    <div>
+      <h1 class="title">Reports &amp; Analytics</h1>
+      <p class="sub">What's happening in your workshop, and where to look next.</p>
+    </div>
+    <div class="filters">
+      <label class="filter-field">
+        <span>From</span>
+        <input type="date" [ngModel]="from()" (ngModelChange)="from.set($event)" />
+      </label>
+      <label class="filter-field">
+        <span>To</span>
+        <input type="date" [ngModel]="to()" (ngModelChange)="to.set($event)" />
+      </label>
+      @if (activeTab() === 'financial') {
+        <label class="filter-field">
+          <span>Group by</span>
+          <select [ngModel]="groupBy()" (ngModelChange)="groupBy.set($event)">
+            <option value="day">Day</option>
+            <option value="week">Week</option>
+            <option value="month">Month</option>
+          </select>
+        </label>
+      }
+      <button appButton variant="secondary" size="small" (click)="applyFilters()">Apply</button>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Report sections">
+    @for (tab of tabs; track tab.key) {
+      <button type="button" class="tab" [class.tab--active]="tab.key === activeTab()" (click)="switchTab(tab.key)">
+        {{ tab.label }}
+      </button>
+    }
+  </nav>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to this page</p>
+        <p class="state-body">Reports &amp; Analytics is only visible to the workshop owner.</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('ready') {
+      @switch (activeTab()) {
+        @case ('overview') {
+          @if (overview(); as data) {
+            <app-overview-section [data]="data" />
+          }
+        }
+        @case ('operations') {
+          @if (operations(); as data) {
+            <app-operations-section [data]="data" />
+          }
+        }
+        @case ('financial') {
+          @if (financial(); as data) {
+            <app-financial-section [data]="data" />
+          }
+        }
+        @case ('inventory') {
+          @if (inventory(); as data) {
+            <app-inventory-section [data]="data" />
+          }
+        }
+        @case ('customers') {
+          @if (customers(); as data) {
+            <app-customers-section [data]="data" />
+          }
+        }
+      }
+    }
+  }
+</section>

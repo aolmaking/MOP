@@ -1,0 +1,45 @@
+<div class="inventory">
+  <div class="kpi-grid">
+    <app-kpi-card label="Inventory Value" [value]="fmt(data().totalInventoryValue)" meaning="at current selling price" />
+    <app-kpi-card label="Dead Stock" [value]="fmt(data().deadStock.length)" meaning="items with zero movement, ever" [invert]="true" />
+    <app-kpi-card
+      label="Returns"
+      [value]="data().operational.returns.total.toString()"
+      [meaning]="data().operational.returns.damaged + ' damaged'"
+    />
+  </div>
+
+  <div class="grid-2">
+    <section class="panel">
+      <h2 class="panel-title">Most profitable parts</h2>
+      <p class="panel-hint">Revenue minus cost, from actual work-order part lines with a recorded cost.</p>
+      <app-bar-list [items]="profitableItems()" color="var(--success)" />
+      @if (noCostItems().length > 0) {
+        <p class="panel-hint">{{ noCostItems().length }} part(s) sold this period have no recorded cost -- profit not shown for them.</p>
+      }
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Dead stock</h2>
+      <p class="panel-hint">On hand, never issued or transferred out -- distinct from merely slow-moving.</p>
+      <app-bar-list [items]="deadStockItems()" color="var(--danger)" />
+    </section>
+  </div>
+
+  <div class="grid-2">
+    <section class="panel">
+      <h2 class="panel-title">Stockout risk (soonest first)</h2>
+      <p class="panel-hint">Based on consumption velocity over the last {{ data().operational.windowDays }} days.</p>
+      <app-bar-list [items]="stockRiskItems()" color="var(--danger)" />
+    </section>
+
+    @if (data().operational.warehouseComparison; as comparison) {
+      <section class="panel">
+        <h2 class="panel-title">Warehouse comparison</h2>
+        <app-bar-list
+          [items]="comparison.map((w) => ({ label: w.name, value: w.issued, displayValue: w.issued + ' issued' }))"
+        />
+      </section>
+    }
+  </div>
+</div>

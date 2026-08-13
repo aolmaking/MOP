@@ -1,0 +1,48 @@
+<div class="overview">
+  @if (data().alerts.length > 0) {
+    <ul class="alerts">
+      @for (alert of data().alerts; track alert.key) {
+        <li class="alert" [class.alert--warning]="alert.severity === 'WARNING'">
+          <span>{{ alert.message }}</span>
+          <a [routerLink]="alert.link">Investigate →</a>
+        </li>
+      }
+    </ul>
+  }
+
+  <div class="kpi-grid">
+    <app-kpi-card
+      label="Revenue"
+      [value]="fmtMoney(data().revenue.current)"
+      [percentChange]="data().revenue.percentChange"
+      meaning="invoiced this period"
+    />
+    <app-kpi-card
+      label="Collected"
+      [value]="fmtMoney(data().collected.current)"
+      [percentChange]="data().collected.percentChange"
+      meaning="cash actually received"
+    />
+    <app-kpi-card label="Outstanding" [value]="fmtMoney(data().outstandingBalance)" meaning="owed right now, all-time" [invert]="true" />
+    <app-kpi-card
+      label="Work Orders Created"
+      [value]="data().workOrdersCreated.current.toString()"
+      [percentChange]="data().workOrdersCreated.percentChange"
+    />
+    <app-kpi-card
+      label="Work Orders Closed"
+      [value]="data().workOrdersClosed.current.toString()"
+      [percentChange]="data().workOrdersClosed.percentChange"
+    />
+    <app-kpi-card label="Avg. Completion Time" [value]="fmtHours(data().averageCompletionHours)" />
+    <app-kpi-card label="Average Order Value" [value]="fmtMoney(data().averageOrderValue)" />
+    <app-kpi-card
+      label="Active Customers"
+      [value]="data().activeCustomers.current.toString()"
+      [percentChange]="data().activeCustomers.percentChange"
+    />
+    <app-kpi-card label="Inventory Value" [value]="fmtMoney(data().inventoryValue)" meaning="at current selling price" />
+  </div>
+
+  <p class="hint">For a revenue breakdown by branch/service, open the Financial tab. For workload and cycle time, open Operations.</p>
+</div>

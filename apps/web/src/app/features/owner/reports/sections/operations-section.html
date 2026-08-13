@@ -1,0 +1,38 @@
+<div class="operations">
+  <div class="kpi-grid">
+    <app-kpi-card label="Delayed Jobs" [value]="data().delayedJobs.toString()" meaning="past their promised time" [invert]="true" />
+    <app-kpi-card label="Reopened Jobs" [value]="data().reopenedJobs.toString()" [invert]="true" />
+    <app-kpi-card
+      label="Cancellation Rate"
+      [value]="data().cancellationRate.toFixed(1) + '%'"
+      meaning="of work orders created this period"
+      [invert]="true"
+    />
+  </div>
+
+  <div class="grid-2">
+    <section class="panel">
+      <h2 class="panel-title">Status distribution</h2>
+      <p class="panel-hint">Current snapshot, not date-ranged.</p>
+      <app-bar-list [items]="statusItems()" />
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Average time in status</h2>
+      <p class="panel-hint">From real transition history in this period -- where jobs actually spend their time.</p>
+      <app-bar-list [items]="timeInStatusItems()" color="var(--danger)" />
+    </section>
+  </div>
+
+  <div class="grid-2">
+    <section class="panel">
+      <h2 class="panel-title">Branch comparison</h2>
+      <app-bar-list [items]="branchItems()" />
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Technician workload (top 10)</h2>
+      <app-bar-list [items]="technicianItems()" />
+    </section>
+  </div>
+</div>

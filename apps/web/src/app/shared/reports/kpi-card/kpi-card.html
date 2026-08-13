@@ -1,0 +1,10 @@
+<div class="kpi">
+  <span class="kpi-label">{{ label() }}</span>
+  <span class="kpi-value">{{ value() }}</span>
+  <div class="kpi-foot">
+    <span class="kpi-change" [class]="'kpi-change--' + trend()">{{ changeLabel() }}</span>
+    @if (meaning(); as m) {
+      <span class="kpi-meaning">{{ m }}</span>
+    }
+  </div>
+</div>

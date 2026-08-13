@@ -1,0 +1,20 @@
+<div class="customers">
+  <div class="kpi-grid">
+    <app-kpi-card label="New Customers" [value]="data().newCustomers.toString()" />
+    <app-kpi-card label="Active Customers" [value]="data().activeCustomers.toString()" meaning="had a work order this period" />
+    <app-kpi-card label="Returning Customers" [value]="data().returningCustomers.toString()" />
+    <app-kpi-card
+      label="Inactive Customers"
+      [value]="data().inactiveCustomers.toString()"
+      [meaning]="'no visit in ' + data().inactivityThresholdDays + '+ days'"
+      [invert]="true"
+    />
+    <app-kpi-card label="Avg. Visits / Active Customer" [value]="data().averageVisitsPerActiveCustomer.toFixed(1)" />
+  </div>
+
+  <section class="panel">
+    <h2 class="panel-title">Top customers by value</h2>
+    <p class="panel-hint">Total invoiced this period -- not visit count alone.</p>
+    <app-bar-list [items]="topCustomerItems()" />
+  </section>
+</div>

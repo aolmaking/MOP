@@ -34,6 +34,6 @@ import { WarehouseService } from "./warehouse.service";
     InventoryReportsService,
     WarehouseService,
   ],
-  exports: [StockService, PartRequestService],
+  exports: [StockService, PartRequestService, InventoryReportsService],
 })
 export class InventoryModule {}

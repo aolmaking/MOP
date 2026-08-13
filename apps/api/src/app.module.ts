@@ -27,6 +27,7 @@ import { GovernanceModule } from "./governance/governance.module";
 import { OrganizationModule } from "./organization/organization.module";
 import { MessagesModule } from "./messages/messages.module";
 import { FormsModule } from "./forms/forms.module";
+import { ReportsModule } from "./reports/reports.module";
 import { HealthController } from "./health/health.controller";
 
 @Module({
@@ -68,6 +69,7 @@ import { HealthController } from "./health/health.controller";
     OrganizationModule,
     MessagesModule,
     FormsModule,
+    ReportsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

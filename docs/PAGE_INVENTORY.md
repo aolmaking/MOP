@@ -15,8 +15,8 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| Built | **38** |
-| Remaining | **15** |
+| Built | **39** |
+| Remaining | **14** |
 
 Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built
 
@@ -64,7 +64,7 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Returns / Movements | ✅ | `/inventory/returns` | Queue (accept/reject/clarify, with the clarify↔reply loop) + tenant-wide filterable ledger. Two real backend bugs found and fixed while building this: RETURN_REJECTED and RETURN_CLARIFICATION_REQUESTED existed in the enum with no workflow-graph edge reaching them, and PartReturnRequest was never written by requestReturn |
 | Reports & Stock Insights | ✅ | `/inventory/reports` | Stock risk is velocity-based, per warehouse. Comparison section absent (not empty) for a single-warehouse scope |
 
-## Tenant Owner — 6 / 8 (Organization & Access, Messages & Templates complete; Home and Audit also built; Forms & Fields and Pricing partial)
+## Tenant Owner — 7 / 8 (Organization & Access, Messages & Templates complete; Home and Audit also built; Forms & Fields, Pricing, and Reports & Analytics partial)
 
 | Page | State | Notes |
 |---|:--:|---|
@@ -73,7 +73,7 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Forms & Fields | 🟡 | `/owner/forms` — Full definition/authoring contract: add/archive/restore custom fields per form, category/role scope, customer-visible/reportable/required flags, `CustomFieldDefinition` model. `validateValues()` is the reusable validation link (required-ness, SELECT option membership, category-scope filtering) any future form-recording service calls — proven against the spec's own "Battery Voltage on Quick Inspection" worked example. No consuming UI exists yet for any of the 9 forms' *values* (there is no inspection-recording page, no intake custom-field capture, etc. — those are separate, unbuilt pages), so this is the authoring half of the chain, ready the moment each consuming page is built |
 | Messages & Templates | ✅ | `/owner/messages` — All 8 templates, `MessageTemplate` model (immutable per-version rows, mirroring `WorkshopPolicy`'s time-ranged discipline), variable-insertion toolbar, live preview, Publish blocked with the exact missing-variable name until every required `{{var}}` is present. A real platform-default body backs every template before an Owner ever publishes one, so `currentBody()` never returns empty. No message-sending code exists yet anywhere in the product (WhatsApp/Ask Customer panel are unbuilt) — this is the complete, real source of truth ready for that code to read from, deliberately not a second hardcoded copy |
 | Pricing & Financial Configuration | 🟡 | `/owner/pricing` — Service Catalog (effective-dated, same discipline as `WorkshopPolicy`/`MessageTemplate`: a price edit closes the old row and opens a new one, never rewrites what an issued invoice already printed), Tax/VAT, Discounts & Deposits, Payment Methods, Invoice Settings, Delivery Payment Gate. `FinanceConfiguration` existed in the schema since Phase 8, genuinely read by `gate-evaluator.service.ts` and `decision.service.ts`, upserted only for `compliantBlocked` — this is the first real Owner-facing writer. **"Who Can Handle Money" deliberately not built this pass**: it needs to respect Super Admin's platform-lock `ControlSetting`s the same way Builder Control's Permission Matrix does, which is its own self-contained mechanism worth its own pass rather than bolted on here |
-| Reports & Analytics | ⬜ | |
+| Reports & Analytics | 🟡 | `/owner/reports` — Full Workshop Intelligence subsystem: Overview, Operations, Financial, Inventory, Customers tabs, all sharing one date-range/branch query contract (`date-range.util.ts`). Real historical calculation where the data supports it (`averageTimeInStatus` reconstructs per-status duration from `work_order.status_changed` OperationEvent history, not a snapshot — `lifecycle-duration.util.ts`); honest about what isn't derivable (`profit: null` when a part line never recorded a cost, `topServicesByRevenue` explicitly grouped by invoice-line text since no stable serviceId exists). Reuses `InventoryReportsService` (Inventory Manager's own velocity-based stock risk) rather than a second implementation. **Not built this pass**: per-role report-visibility control (needs the same platform-lock mechanism as Pricing's "Who Can Handle Money" — see that page's note), Data Analyst's own surfaces (separate role, its own page inventory entry, would consume this same backend), Service/Staff as fully separate tabs (folded into Financial/Operations respectively — a full second axis wasn't justified by data depth beyond what's already there) |
 | Audit & Change History | 🟡 | `/owner/audit` — filterable, with inline diffs. **Rollback not built**: it deep-links to Control Center and Owner pages that do not exist yet. Timestamps use the reader's locale, not the workshop's timezone (the session does not carry it) |
 | Workflow Health / Operations Integrity | ⬜ | |
 
