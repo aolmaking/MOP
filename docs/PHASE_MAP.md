@@ -50,15 +50,15 @@
 | 7 — Inventory | 🟢 5/6 pages — Returns/Movements actions owed |
 | 8 — Finance Core | 🟠 engine done; Owner Money page owed (Phase 10) |
 | 9 — Billing / Invoicing | ✅ complete — GenericBillingAdapter, BillingDocument, credit notes, refund workflow, compliantBlocked all built and tested |
-| 10 — Team Leader & People/Performance | ⬜ not started |
-| 11 — Customer Portal | ⬜ not started |
+| 10 — Team Leader & People/Performance | ✅ complete (narrowed) — API and all 5 web pages (4 Team Leader + Owner Home) built and reachable; see `PHASE_10.md` §6 |
+| 11 — Customer Portal | 🟠 API complete; 4 web pages owed |
 | 12 — Reporting & Data Analyst | ⬜ not started |
 | 13 — System Automation | ⬜ not started |
 | 14 — Internationalization & Release Readiness | 🟠 permission-key lint + a perf fix shipped; translation pass owed |
 | 15 — Specialization Discovery | ✅ schema settled, 3/5 primitives proven end-to-end |
 | 16 — Specialization Structure | ✅ minimum bar met (16.A/E/H); 16.I design spike written |
 | 17 — Specialization at Creation | 🟠 17.A backend seam shipped; wizard UI and 17.B–E owed |
-| **18 — Tenant Relationships** | ⬜ **new** — not started |
+| **18 — Tenant Relationships** | 🟠 18.A/D/E shipped; 18.B/C deferred; 18.F design decision written |
 | **19 — Governance Depth** | ⬜ **new** — not started |
 | **20 — Operational Resilience at Scale** | ⬜ **new** — not started |
 | Platform Super Admin (cross-cutting) | 🟠 3/6 pages — Governance Controls, Reports, Live View owed |
@@ -128,8 +128,8 @@ Shipped: promised time and expected-duration on `WorkOrder` (16.A/16.E), a real 
 The super admin declares a workshop's specializations at `Add Workshop Owner`, not as a settings page discovered later. **Sharpened by Workshop 1, scenario 1:** a fixed library of starter profiles will always under-cover reality — the very first specialized tenant tested against this phase's original draft (Apex Motorsport) fit none of the four profiles named. This phase must ship an explicit "start from nothing" authoring path as a first-class option alongside the profile library, not a fallback. **Shipped this pass:** `CreateWorkshopDto.starterSpecializationProfile` + `PlatformService.seedStarterSpecializations()`, seeding Nafath's oil-change card or Delta's hydraulic form atomically inside workshop creation's existing transaction, proven by two new HTTP integration tests — the backend seam, not the wizard UI (no starter-profile picker exists on the form yet, and the "start from nothing" path this note demands is still owed). Branch definition (17.B), bulk staff provisioning (17.C), bulk data import (17.D), and the regional-manager role (17.E) are each real, scoped work not started this pass.
 **Detail:** [`phases/PHASE_17.md`](./phases/PHASE_17.md)
 
-### Phase 18 — Tenant Relationships 🆕
-External stakeholder access, multi-tenant identity, time-bounded access grants, the tenant archive/retention lifecycle, tenant groups for portfolio reporting, and a deliberate design decision on tenant merge/split. The single most-recurring finding across the 40-scenario platform pass: `Tenant.id` is treated everywhere as permanent and singular, and real businesses are sold, merged, split, invested in, and closed.
+### Phase 18 — Tenant Relationships 🟠 (18.A/D/E shipped, 18.B/C deferred, 18.F decided — see `phases/PHASE_18.md`)
+External stakeholder access, multi-tenant identity, time-bounded access grants, the tenant archive/retention lifecycle, tenant groups for portfolio reporting, and a deliberate design decision on tenant merge/split. The single most-recurring finding across the 40-scenario platform pass: `Tenant.id` is treated everywhere as permanent and singular, and real businesses are sold, merged, split, invested in, and closed. **Shipped:** `TenantStakeholder` (18.A, narrow view-only grants independent of StaffRole); the archive lifecycle with two clocks never conflated (18.D) plus a real fix making `TenantStatusLayer`'s `READ_ONLY` status literally allow reads, which it previously did not; `TenantGroup` summary-only portfolio aggregation (18.E). **18.F's deliverable is a written decision, not code:** no first-class merge/split — a documented export/reimport-and-archive manual procedure instead, because rewriting `AuditLog.tenantId` on historical rows would conflict with the audit-boundary discipline `tools/lint-audit-boundary.mjs` exists to enforce. 18.B and 18.C deferred, each with a specific reason.
 **Edge cases owed:** H10 (`ControlSetting` hard-delete, restated here since delegation is this phase's natural home), E17 (schema migrations against a dormant/archived tenant's data need an explicit reconciliation policy).
 **Detail:** [`phases/PHASE_18.md`](./phases/PHASE_18.md)
 

@@ -325,6 +325,13 @@ model Tenant {
   primaryCategory          CategoryCode
   currency                 String       // ISO 4217, e.g. "EGP", "USD", "AED" -- one currency per workshop
   timezone                 String       // IANA identifier, e.g. "Africa/Cairo" -- all timestamps stored in UTC, converted for display using this
+  // Phase 18.D -- two clocks, never conflated. `archivedAt` is when the
+  // tenant stopped being a live subscription; `retentionUntil` is when
+  // the platform's LEGAL obligation to keep the data ends, which can
+  // outlive the subscription by years (Scenario 2's roll-cage records).
+  // Both null for a tenant that has never been archived.
+  archivedAt               DateTime?
+  retentionUntil           DateTime?
   createdAt                DateTime     @default(now())
   updatedAt                DateTime     @updatedAt
 
@@ -355,6 +362,8 @@ model Tenant {
   rolePages               RolePage[]
   auditLogs               AuditLog[]
   operationEvents         OperationEvent[]
+  stakeholders            TenantStakeholder[]
+  groupMemberships        TenantGroupMember[]
   liveViewSessions        PlatformLiveViewSession[]
 
   @@index([status])
@@ -462,6 +471,12 @@ model Account {
   staff    StaffUser?
   customer Customer?
   sessions Session[]
+
+  // A stakeholder relationship to OTHER tenants, distinct from `tenant`
+  // above (the one tenant this account's own StaffUser/Customer row
+  // belongs to, if any). Phase 18.A: a person can be a real employee of
+  // one tenant and a narrow, view-only stakeholder of several others.
+  stakeholderOf TenantStakeholder[]
 
   @@unique([tenantId, email])
   @@index([accountType, tenantId])
@@ -747,6 +762,78 @@ model Attachment {
 
   @@index([tenantId, targetType, targetId])
   @@map("attachments")
+}
+
+// ============================================================================
+// TENANT RELATIONSHIPS (Phase 18)
+//
+// `Tenant.id` is treated everywhere else in this schema as permanent,
+// isolated, and singular -- correctly so; CLAUDE.md names that isolation
+// as load-bearing. These three models are the exception the phase found:
+// real businesses have relationships TO a tenant (a stakeholder, Phase
+// 18.A) and ACROSS tenants (a portfolio group, Phase 18.E) that are not
+// themselves tenant-scoped operational data.
+// ============================================================================
+
+// A person with a legitimate, ongoing need to see part of a tenant
+// without being its employee -- an investor, a franchisor, a parent
+// company. Deliberately independent of StaffUser: a stakeholder's
+// permission set is narrow and explicit (financial-only, branch-scoped,
+// never an operational StaffRole), not a role borrowed from the staff
+// enum and then trusted to stay narrow by convention.
+model TenantStakeholder {
+  id          String    @id @default(cuid())
+  tenantId    String
+  accountId   String
+  label       String
+  // Explicit, narrow keys -- e.g. "finance.summary.view_only",
+  // "branch.status.view_only" -- never a StaffRole. A stakeholder that
+  // needs more than a handful of narrow view permissions is a sign they
+  // should be a real StaffUser with a real role, not a sign this list
+  // should grow to look like one.
+  permissions String[]
+  branchScope String[]
+  grantedById String
+  grantedAt   DateTime  @default(now())
+  revokedAt   DateTime?
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, revokedAt])
+  @@index([accountId])
+  @@map("tenant_stakeholders")
+}
+
+// A named, read-only aggregate view across several tenants -- a holding
+// company's portfolio, a franchise's owned-vs-licensed split. Explicitly
+// summary-only (Phase 18.E): this model and its members exist to answer
+// "how is my portfolio doing," never to drill into one tenant's
+// row-level detail, which stays a Phase 19 separation-of-duties question.
+model TenantGroup {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  members TenantGroupMember[]
+
+  @@map("tenant_groups")
+}
+
+model TenantGroupMember {
+  id            String   @id @default(cuid())
+  tenantGroupId String
+  tenantId      String
+  addedAt       DateTime @default(now())
+
+  tenantGroup TenantGroup @relation(fields: [tenantGroupId], references: [id], onDelete: Cascade)
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantGroupId, tenantId])
+  @@index([tenantId])
+  @@map("tenant_group_members")
 }
 
 model Customer {
