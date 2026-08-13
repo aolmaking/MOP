@@ -7,6 +7,7 @@
 process.env.DATABASE_URL ??=
   "postgresql://mop_dev:mop_dev_secret@localhost:5432/mop_platform_test?schema=public";
 
+import { scryptSync } from "node:crypto";
 import { PrismaClient } from "@mop/database";
 import type { PrismaService } from "../database/prisma.service";
 import { AuthService, LOCKOUT_THRESHOLD, MultipleAccountsError, TenantUnavailableError } from "./auth.service";
@@ -126,6 +127,52 @@ describe("AuthService (integration)", () => {
     const session = await prisma.session.findUnique({ where: { id: parseToken(cookies.accessToken.value)!.sessionId } });
     expect(session).not.toBeNull();
     expect(session!.revokedAt).toBeNull();
+  });
+
+  // P-62 (E18): the one integration proof that matters -- a real login
+  // against a real stored legacy-format hash actually rewrites the row,
+  // not just that the pure function says it should.
+  it("P-62/E18 -- upgrades a legacy-format password hash on successful login", async () => {
+    const email = `legacy-${Date.now()}@example.com`;
+    const password = "legacy-format-password-123";
+    const legacySalt = "aabbccddeeff00112233445566778899";
+    // Reconstructed by hand to match exactly what hashPassword() used to
+    // write before P-62, with no version encoded.
+    const legacyHashHex = scryptSync(password, legacySalt, 64, { N: 131072, r: 8, p: 1, maxmem: 256 * 1024 * 1024 }).toString(
+      "hex",
+    );
+    const legacyHash = `scrypt$${legacySalt}$${legacyHashHex}`;
+
+    const account = await prisma.account.create({
+      data: { accountType: "TENANT_STAFF", tenantId, email, passwordHash: legacyHash, status: "ACTIVE" },
+    });
+    await prisma.staffUser.create({
+      data: {
+        accountId: account.id,
+        tenantId,
+        fullName: "Legacy Hash Account",
+        role: "BRANCH_MANAGER",
+        branchScope: ["branch-1"],
+        warehouseScope: [],
+        categoryScope: ["CARS"],
+      },
+    });
+
+    const before = await prisma.account.findUniqueOrThrow({ where: { id: account.id } });
+    expect(before.passwordHash).toBe(legacyHash);
+
+    await service.login(email, password);
+
+    const after = await prisma.account.findUniqueOrThrow({ where: { id: account.id } });
+    expect(after.passwordHash).not.toBe(legacyHash);
+    expect(after.passwordHash!.split("$")).toHaveLength(6); // upgraded to the versioned format
+
+    // And the new hash still authenticates the same password correctly.
+    await expect(service.login(email, password)).resolves.toBeDefined();
+    // A second successful login does not need to rehash again -- the
+    // stored hash should now be stable.
+    const stable = await prisma.account.findUniqueOrThrow({ where: { id: account.id } });
+    expect(stable.passwordHash).toBe(after.passwordHash);
   });
 
   it("rejects an incorrect password with a generic message", async () => {

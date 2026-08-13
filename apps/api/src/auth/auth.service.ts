@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import type { EffectiveRole, SessionContext } from "@mop/shared";
 import { PrismaService } from "../database/prisma.service";
-import { dummyVerifyForTimingSafety, hashPassword, verifyPassword } from "./password.util";
+import { dummyVerifyForTimingSafety, hashPassword, needsRehash, verifyPassword } from "./password.util";
 import { issueToken, newSessionId, parseToken, secretMatchesHash } from "./token.util";
 
 export const LOCKOUT_THRESHOLD = 5;
@@ -84,9 +84,16 @@ export class AuthService {
       );
     }
 
+    // P-62 (E18): the one place we ever have the plaintext password and
+    // an authenticated account at the same time -- if this hash is on
+    // weaker parameters than today's target, or is the pre-versioning
+    // legacy format, replace it now rather than leaving it at whatever
+    // strength it was created under indefinitely.
+    const rehash = account.passwordHash && needsRehash(account.passwordHash) ? hashPassword(password) : undefined;
+
     await this.prisma.account.update({
       where: { id: account.id },
-      data: { failedLoginCount: 0, lockedUntil: null },
+      data: { failedLoginCount: 0, lockedUntil: null, ...(rehash ? { passwordHash: rehash } : {}) },
     });
 
     const context = await this.resolveContextForAccount(account.id);

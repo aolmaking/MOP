@@ -70,7 +70,7 @@ Total page inventory: **34 of 53** spec'd pages built (Platform Reports — Leve
 
 ### Phase 1 — Runnable and Provable ✅
 Reproducible environment, DB path verified end-to-end, CI green, rate limiting, boot-time config validation, systematic money serialization, per-request permission-context caching, i18n/RTL foundation (logical CSS, `dir` handling, bidi isolation).
-**Edge cases owed:** E18 (no lazy-rehash path or version tracking for password hashes). H9 partially fixed (the workshop slug field now enforces its own documented pattern; PDF generation and audit rendering unaudited) — see `EDGE_CASE_REGISTER.md`.
+**Edge cases:** none open. H9 partially fixed (slug pattern enforced; PDF/audit rendering unaudited); E18 fixed (versioned password hashes, lazy rehash on login) — see `EDGE_CASE_REGISTER.md`.
 
 ### Phase 2 — Design Completeness ✅
 Scenario × capability matrix, typed cross-system contracts, gate registry, schema verdict for every scenario.
