@@ -33,7 +33,7 @@
 | E16 | `READ COMMITTED` anomaly verification for the stock decrement statement | 7 — Inventory | ✅ **fixed** — same fix as H6; `stock.integration.spec.ts`'s "concurrent issues of the last unit" suite fires genuinely simultaneous requests and asserts exactly one wins |
 | E17 | Schema migrations against a dormant/archived tenant's data | 18 — Tenant Relationships (18.D) | ⬜ open |
 | E18 | No lazy-rehash path or version tracking for password hashes | 1 — Runnable and Provable (auth baseline) | ⬜ open |
-| E19 | Stale decision-link token resolves against a since-reassigned asset | 4 — Operations Spine / 11 — Customer Portal | ⬜ open |
+| E19 | Stale decision-link token resolves against a since-reassigned asset | 4 — Operations Spine / 11 — Customer Portal | ✅ **fixed, per the scenario's own named fix direction** — `EDGE_CASES_EXTREME.md`'s own analysis is explicit that the fix is *not* to block or silently re-scope a stale-ownership answer (the token was legitimately sent to that customer); it's to make sure staff reading the response later can plainly see the asset changed hands in between, so a human makes the judgment call. `CustomerDecisionService.respond()` now compares the asset's live `currentOwnerCustomerId` against the request's `customerId` at response time and records `ownershipChangedSinceRequest` on the audit row, bumped to `HIGH` risk when true. Proven by two tests: one that transfers ownership before responding and checks the audit row, one that confirms an ordinary response stays `MEDIUM` |
 | E20 | No documented database-failover recovery procedure | 20 — Operational Resilience at Scale | ⬜ **documentation + config decision** |
 
 ## How to read "verify first"

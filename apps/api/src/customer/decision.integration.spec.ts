@@ -365,6 +365,51 @@ describe("the answer reaches the rest of the system", () => {
     expect(event?.actorType).toBe("CUSTOMER");
   });
 
+  it("E19 -- flags a response as stale-ownership when the asset changed hands after the link was sent", async () => {
+    // The token was legitimately sent to made's customer -- the fix here
+    // is not to block or re-scope the answer, it's to make sure the
+    // branch manager reading the audit trail can plainly see the asset
+    // changed hands in between. docs/scenarios3/EDGE_CASE_REGISTER.md,
+    // E19.
+    const made = await makeRequest();
+    const newOwner = await prisma.customer.create({
+      data: { tenantId, fullName: "New Owner", phone: `011${Date.now() % 10000000}` },
+    });
+    const workOrder = await prisma.customerDecisionRequest.findUniqueOrThrow({
+      where: { id: made.requestId },
+      select: { workOrder: { select: { assetId: true } } },
+    });
+    await prisma.asset.update({ where: { id: workOrder.workOrder.assetId }, data: { currentOwnerCustomerId: newOwner.id } });
+
+    await decisions.respond(made.token, [{ itemId: made.normalItemId, decision: "APPROVED" }]);
+
+    const auditRow = await prisma.auditLog.findFirst({
+      where: { tenantId, action: "customer_decision.responded", targetId: made.requestId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    expect(auditRow?.riskLevel).toBe("HIGH");
+    expect(auditRow?.after).toMatchObject({ ownershipChangedSinceRequest: true });
+
+    // Restore the shared fixture asset's ownership -- makeRequest() reuses
+    // the module-level assetId for every call, so leaving this changed
+    // would falsely flag every later test in this file.
+    await prisma.asset.update({ where: { id: workOrder.workOrder.assetId }, data: { currentOwnerCustomerId: customerId } });
+  });
+
+  it("E19 -- does not flag a normal response where ownership never changed", async () => {
+    const made = await makeRequest();
+
+    await decisions.respond(made.token, [{ itemId: made.normalItemId, decision: "APPROVED" }]);
+
+    const auditRow = await prisma.auditLog.findFirst({
+      where: { tenantId, action: "customer_decision.responded", targetId: made.requestId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    expect(auditRow?.riskLevel).toBe("MEDIUM");
+  });
+
   it("resolves the request once every item is answered", async () => {
     const made = await makeRequest();
 

@@ -80,7 +80,7 @@ Scenario × capability matrix, typed cross-system contracts, gate registry, sche
 
 ### Phase 4 — Operations Spine ✅
 `WorkflowRouter` driven by the capability graph, intake, ownership transfer, work order/task lifecycle, inspections/faults/blockers, capability-aware Finish Gate.
-**Edge cases owed:** E19 (stale decision token after asset reassignment). H1 (concurrent blockers), H2 (capability check-then-write gap), and H4 (decision landing on an already-closed work order) fixed — see `EDGE_CASE_REGISTER.md`.
+**Edge cases:** none open. H1 (concurrent blockers), H2 (capability check-then-write gap), H4 (decision landing on an already-closed work order), and E19 (stale-ownership decision, flagged in the audit trail rather than blocked) fixed — see `EDGE_CASE_REGISTER.md`.
 
 ### Phase 5 — Branch Manager ✅
 Attention Center · Customer Intake · Work Orders board · Work Order Workspace · Approvals · Delivery & Payments · **Team Setup**, delegation-gated.

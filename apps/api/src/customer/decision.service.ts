@@ -184,6 +184,18 @@ export class CustomerDecisionService {
       }
     }
 
+    // E19, docs/scenarios3/EDGE_CASE_REGISTER.md: the token is scoped to
+    // the request, not re-derived from current ownership, and that stays
+    // correct -- the link was legitimately sent to `request.customerId`,
+    // and the fix this scenario names is explicitly NOT to block or
+    // silently re-scope the answer. It's to make sure a branch manager
+    // reading this response later can see, plainly, that the asset
+    // changed hands after the request went out and before it was
+    // answered -- a fact this codebase had no way to surface until now.
+    const ownershipChangedSinceRequest =
+      request.workOrder.asset.currentOwnerCustomerId !== null &&
+      request.workOrder.asset.currentOwnerCustomerId !== request.customerId;
+
     await this.prisma.$transaction(async (tx) => {
       for (const answer of answers) {
         await tx.customerDecisionItem.update({
@@ -223,11 +235,21 @@ export class CustomerDecisionService {
           actorType: "CUSTOMER",
           targetType: "CustomerDecisionRequest",
           targetId: request.id,
-          riskLevel: "MEDIUM",
+          // Bumped to HIGH specifically for a stale-ownership answer --
+          // this is exactly the kind of thing that should stand out in
+          // the audit trail rather than blend into routine MEDIUM noise.
+          riskLevel: ownershipChangedSinceRequest ? "HIGH" : "MEDIUM",
+          after: ownershipChangedSinceRequest ? { ownershipChangedSinceRequest: true } : undefined,
           payload: {
             workOrderId: request.workOrderId,
             answered: answers.length,
             fullyResolved: remaining === 0,
+            // Named so a branch manager reading the audit trail sees the
+            // fact directly, not just a risk-level color. The system
+            // never decides this invalidates the answer -- per the
+            // scenario's own fix direction, that judgment call stays
+            // human.
+            ownershipChangedSinceRequest,
           },
         },
         tx,
@@ -260,7 +282,12 @@ export class CustomerDecisionService {
         expiresAt: true,
         respondedAt: true,
         tenant: { select: { name: true } },
-        workOrder: { select: { status: true, asset: { select: { plateNumber: true, serialNumber: true } } } },
+        workOrder: {
+          select: {
+            status: true,
+            asset: { select: { plateNumber: true, serialNumber: true, currentOwnerCustomerId: true } },
+          },
+        },
         items: {
           select: {
             id: true,
