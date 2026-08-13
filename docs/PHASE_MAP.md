@@ -61,7 +61,8 @@
 | **18 — Tenant Relationships** | 🟠 18.A/D/E shipped; 18.B/C deferred; 18.F design decision written |
 | **19 — Governance Depth** | 🟠 19.B/C/D shipped; 19.A data-only (enforcement reverted); 19.E/F/G deferred |
 | **20 — Operational Resilience at Scale** | 🟠 20.B shipped; 20.E design decision written; 20.A/C/D/F deferred |
-| Platform Super Admin (cross-cutting) | 🟠 4/6 pages — Governance Controls, Live View owed |
+| **21 — Policy & Decision Architecture** | 🟠 **model defined, inventory in tranches** — 16 of ~70 decisions fully written; no implementation, by design |
+| Platform Super Admin (cross-cutting) | 🟠 4/6 pages — Governance Controls, Live View owed (**Governance Controls now gated behind Phase 21** — it is the page that surfaces policies) |
 
 Total page inventory: **34 of 53** spec'd pages built (Platform Reports — Level 1 + Usage Overview — closed this pass; other phases' page counts may have moved further and not yet be reflected here). See `PAGE_INVENTORY.md` for the per-role table.
 
@@ -143,6 +144,14 @@ Multi-tenant load/concurrency testing, tenant-configuration-change atomicity, bu
 **Edge cases owed:** E12 (clock skew between API replicas disagreeing about token/window expiry — 20.A/20.B's natural extension), E20 (no documented database-failover recovery procedure — a config decision and a rehearsed runbook, not a feature).
 **Detail:** [`phases/PHASE_20.md`](./phases/PHASE_20.md)
 
+### Phase 21 — Policy & Decision Architecture 🟠 (documents only, by design — see `phases/PHASE_21.md`)
+The third axis of variation. The capability engine decides *whether a step exists*; the specialization engine decides *what it is called*; nothing decides *under what rule it passes* — so that class of decision keeps getting hardcoded, and Phase 19.A was reverted for exactly this reason. Three independent sources converge on the gap: the canonical spec's own Builder Control describes a **Workflow Policy** tab naming eleven policies, none of which exists as a typed thing; `docs/scenarios/` recorded the delivery gate drawing **opposite complaints** from two workshops; and 19.A's global separation-of-duties rule broke 22 tests modelling a legitimate single-storekeeper shop.
+
+Its load-bearing idea, from the project owner: **decision sets are derived, not enumerated.** Each policy declares a relevance predicate over capabilities, specializations, and prior answers, so one workshop faces 15 questions and another 40 without either being a special case. Its sharpest design decision: **a policy may never change reachability** — anything that could is a mis-classified capability. That keeps the capability engine's proof intact and gives an objective test for a distinction that prose could not settle.
+
+**Deliverable is documents, not code:** [`POLICY_DECISION_INVENTORY.md`](./POLICY_DECISION_INVENTORY.md), ~70 decisions identified, 16 fully written against the owner's 18-field schema, every one carrying a default with a written reason. **Gates Governance Controls**, which is the page that would surface policies.
+**Detail:** [`phases/PHASE_21.md`](./phases/PHASE_21.md)
+
 ---
 
 ## Dependencies
@@ -158,6 +167,10 @@ Phase 15 ──> Phase 16 ──> Phase 17
 Phase 3 ──┬──> Phase 18 ──> Phase 19 ──> Phase 12 (point-in-time reports)
           └──> Phase 20 (independent, but gates any real multi-country
                           or 50-branch tenant going live before it lands)
+
+Phase 21 (Policy & Decision Architecture) ──┬──> Governance Controls page
+                                            ├──> Phase 19.A (blocked on P-07 today)
+                                            └──> Phase 22 (policy engine, unopened)
 ```
 
 Phases 1 and 2 can run concurrently. Everything in the original 3–14

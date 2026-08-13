@@ -270,6 +270,23 @@ except this demo manager holds `workorders.branch.view` — without
 
 **Edge-case register state after this session:** H1, H2, H3, H4, H5, H6/E16, H8, H9 (partial), H10, E14, E15, E19 fixed or closed — 12 of 20 items. Still open: H7 (no path for deactivating a warehouse with nonzero stock — a real feature gap, not a bug), E11 (leap-year warranty-date policy — decide before the warranty field ships), E12 (clock skew between replicas), E13 (capability rollback racing a lifecycle transition — design spike required), E17 (migrations against a dormant tenant), E18 (no password-hash lazy-rehash path), E20 (no documented database-failover runbook).
 
+## 12. Phase 21 opened — Policy & Decision Architecture (documents only)
+
+**A new phase was opened at the project owner's direction, and it changes what happens next.** After reviewing `docs/ARCHITECTURE_DECISION_INVENTORY.md` (which argued against multiple workshop architectures and identified *policy* as the real missing axis), the owner accepted the diagnosis and sharpened it: policy questions should be **contextual and dynamic**, so that a workshop's model and capabilities determine *which* decisions it even faces — 15 questions for one workshop, 40 for another — with a documented **Default** per decision and a `Use Recommended Defaults` path at creation.
+
+That refinement is what makes the layer tractable, and it is now the phase's load-bearing idea: **decision sets are derived, not enumerated.**
+
+- [`docs/phases/PHASE_21.md`](docs/phases/PHASE_21.md) — the model: the decision-record schema, the relevance predicate (a DAG over capabilities/specializations/prior answers, cycles rejected at registration), the defaults doctrine (a default without a written reason cannot be registered), typed exhaustive consumption (so adding an option is a compile error, not an `if`), time-ranging, and the governed change pipeline.
+- [`docs/POLICY_DECISION_INVENTORY.md`](docs/POLICY_DECISION_INVENTORY.md) — ~70 decisions identified across 10 domains; 16 written in full against the owner's 18-field schema; complete compact register for the rest.
+
+**The sharpest thing to come out of it:** an objective test separating capability from policy — *a policy may never change reachability; anything that could is a mis-classified capability.* It keeps the capability engine's proof intact, and it already did real work: `REOPEN_ALLOWED` (P-16) and `REVIEW_REQUIRED` (P-09) were caught by it, and it puts this document in **explicit disagreement with the canonical spec** about QC, which the spec lists under Workflow Policy and the test classifies as a capability.
+
+**Also validated the owner's instinct harder than expected:** the canonical spec's own Builder Control already describes a **Workflow Policy** tab naming eleven policies — none of which exists as a typed thing today. The layer was specified years ago and never built.
+
+**Governance Controls is now explicitly gated behind Phase 21**, since it is the page that would surface policies and building it first would hardcode the answers.
+
+**Still owed in Phase 21:** tranches 2–5 (54 decisions), the full relevance graph, and S-01 — whether MOP has scheduling at all, the only entry whose *type* is undecided and which gates five others. It needs its own scenario pass.
+
 **What's next, in priority order:**
 
 - **The 7 remaining edge cases are no longer bug-fix-shaped** — every item left is either a genuinely new feature (H7: warehouse deactivation with nonzero stock; E18: password lazy-rehash), a policy decision that has to be written down before code (E11: leap-year warranty rule; E13: capability-rollback design spike), an infrastructure/ops concern with no application code to change (E12: replica clock skew; E20: failover runbook), or a data-reconciliation policy for a feature that's itself still mostly unbuilt (E17: dormant-tenant migrations, blocked on Phase 18's archive lifecycle maturing further). None of these are a quick, well-scoped "read the code, find the gap, fix it, test it" pass the way H1/H2/H4/H5/H8/H9/H10/E14/E19 were — each needs its own short design note (in the relevant phase doc, per this project's own re-planning rule) before code, not a chunk like the ones above.
