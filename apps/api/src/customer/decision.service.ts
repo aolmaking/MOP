@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@mop/database";
+import { WORK_ORDER_GRAPH } from "@mop/shared";
 import { PrismaService } from "../database/prisma.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 
@@ -119,6 +120,25 @@ export class CustomerDecisionService {
    */
   async respond(token: string, answers: readonly SubmittedAnswer[]): Promise<PublicDecision> {
     const request = await this.resolve(token);
+
+    // H4, docs/scenarios3/EDGE_CASE_REGISTER.md -- a decision request can
+    // sit unanswered while the work order it belongs to reaches CLOSED or
+    // CANCELLED through some other path (e.g. the branch manager resolves
+    // it at the counter instead of waiting on the link). The whole point
+    // of this flow is proving informed consent BEFORE work proceeds;
+    // recording an answer after the job is already finished would create
+    // exactly the record this flow exists to prevent -- one that implies
+    // the customer was asked and answered ahead of the work, when the
+    // answer actually arrived after. Refused here rather than silently
+    // accepted, with a message the branch manager should read directly to
+    // the customer rather than leaving them to resubmit into the same
+    // wall.
+    if (WORK_ORDER_GRAPH.terminal.includes(request.workOrder.status)) {
+      throw new ConflictException({
+        code: "work_order_already_closed",
+        message: "This job has already been completed or cancelled. Please contact the workshop directly.",
+      });
+    }
 
     if (request.expiresAt !== null && request.expiresAt.getTime() <= Date.now()) {
       throw new BadRequestException({
@@ -240,7 +260,7 @@ export class CustomerDecisionService {
         expiresAt: true,
         respondedAt: true,
         tenant: { select: { name: true } },
-        workOrder: { select: { asset: { select: { plateNumber: true, serialNumber: true } } } },
+        workOrder: { select: { status: true, asset: { select: { plateNumber: true, serialNumber: true } } } },
         items: {
           select: {
             id: true,

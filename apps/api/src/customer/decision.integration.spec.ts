@@ -41,11 +41,13 @@ interface Made {
   normalItemId: string;
 }
 
-async function makeRequest(options: { expiresAt?: Date | null; answered?: boolean } = {}): Promise<Made> {
+async function makeRequest(
+  options: { expiresAt?: Date | null; answered?: boolean; workOrderStatus?: string } = {},
+): Promise<Made> {
   const token = randomBytes(24).toString("hex");
 
   const workOrder = await prisma.workOrder.create({
-    data: { tenantId, branchId, assetId, customerId, status: "AWAITING_CUSTOMER_APPROVAL" },
+    data: { tenantId, branchId, assetId, customerId, status: (options.workOrderStatus ?? "AWAITING_CUSTOMER_APPROVAL") as never },
   });
 
   const request = await prisma.customerDecisionRequest.create({
@@ -294,6 +296,30 @@ describe("the three link states", () => {
     await expect(
       decisions.respond(made.token, [{ itemId: made.normalItemId, decision: "REJECTED" }]),
     ).rejects.toMatchObject({ status: 400, response: { code: "already_answered" } });
+  });
+
+  it("H4 -- refuses to record a decision against a work order that has already closed", async () => {
+    // The whole point of this flow is proving informed consent BEFORE
+    // work proceeds. If the branch manager resolved things at the
+    // counter instead of waiting on the link, and the job is already
+    // CLOSED, an answer arriving now would falsely read as having come
+    // before the work. docs/scenarios3/EDGE_CASE_REGISTER.md, H4.
+    const made = await makeRequest({ workOrderStatus: "CLOSED" });
+
+    await expect(
+      decisions.respond(made.token, [{ itemId: made.normalItemId, decision: "APPROVED" }]),
+    ).rejects.toMatchObject({ status: 409, response: { code: "work_order_already_closed" } });
+
+    const item = await prisma.customerDecisionItem.findUniqueOrThrow({ where: { id: made.normalItemId } });
+    expect(item.decision).toBe("PENDING");
+  });
+
+  it("H4 -- same refusal for a work order that was cancelled instead", async () => {
+    const made = await makeRequest({ workOrderStatus: "CANCELLED" });
+
+    await expect(
+      decisions.respond(made.token, [{ itemId: made.normalItemId, decision: "APPROVED" }]),
+    ).rejects.toMatchObject({ status: 409, response: { code: "work_order_already_closed" } });
   });
 });
 
