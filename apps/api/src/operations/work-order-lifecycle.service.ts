@@ -6,7 +6,7 @@ import {
   type GateResult,
   type WorkflowIntent,
 } from "@mop/shared";
-import type { WorkOrderStatus } from "@mop/database";
+import type { Prisma, WorkOrderStatus } from "@mop/database";
 import { PrismaService } from "../database/prisma.service";
 import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 import { OperationEventsService } from "./operation-events.service";
@@ -53,12 +53,22 @@ export class WorkOrderLifecycleService {
   /**
    * Moves a work order by intent. Refuses anything the graph does not
    * allow, and anything a gate blocks.
+   *
+   * `options.tx` lets a caller that already holds a row lock on this work
+   * order (see `TechnicianWorkService`'s blocker methods, H1 in
+   * `docs/scenarios3/EDGE_CASE_REGISTER.md`) fold the actual status write
+   * into that same transaction instead of opening a second one afterward
+   * -- otherwise the decision to move ("nothing else is blocking this
+   * anymore") and the write that acts on it are two different
+   * transactions, and a second caller's own decision can land in the gap
+   * between them. Every other caller omits it and gets the original
+   * self-contained transaction, unchanged.
    */
   async apply(
     workOrderId: string,
     intent: WorkflowIntent,
     actor: LifecycleActor,
-    options: { readonly reason?: string } = {},
+    options: { readonly reason?: string; readonly tx?: Prisma.TransactionClient } = {},
   ): Promise<TransitionResult> {
     const workOrder = await this.prisma.workOrder.findUnique({
       where: { id: workOrderId },
@@ -103,7 +113,7 @@ export class WorkOrderLifecycleService {
       }
     }
 
-    await this.prisma.$transaction(async (tx) => {
+    const run = async (tx: Prisma.TransactionClient): Promise<void> => {
       // Conditional on the status we routed from: if something else moved
       // this work order in the meantime, our decision was made against a
       // state that no longer exists and must not be applied.
@@ -144,7 +154,13 @@ export class WorkOrderLifecycleService {
         },
         tx,
       );
-    });
+    };
+
+    if (options.tx) {
+      await run(options.tx);
+    } else {
+      await this.prisma.$transaction(run);
+    }
 
     return { workOrderId, from: workOrder.status, to: target, gates: gateResult };
   }

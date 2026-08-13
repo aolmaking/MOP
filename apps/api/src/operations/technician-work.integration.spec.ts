@@ -237,6 +237,36 @@ describe("blockers", () => {
     await work.resolveBlocker(second.id, ACTOR);
     expect((await prisma.workOrder.findUnique({ where: { id: workOrderId } }))?.status).toBe("IN_PROGRESS");
   }, 120_000);
+
+  it("H1 -- a genuinely concurrent report and resolve on the same work order never leave it wrongly unblocked", async () => {
+    // taskA's blocker is the only thing holding the work order BLOCKED.
+    // Fire its resolution at the exact same moment a second, real blocker
+    // is reported on taskB -- without the row lock, resolveBlocker's
+    // "anything else still open" count can run before taskB's insert has
+    // committed, see zero, and unblock a work order that a moment later
+    // turns out to still have taskB's blocker open on it.
+    // docs/scenarios3/EDGE_CASE_REGISTER.md, H1.
+    const workOrderId = await workOrderInProgress();
+    const taskA = await work.createTask(workOrderId, "A", ACTOR);
+    const taskB = await work.createTask(workOrderId, "B", ACTOR);
+
+    const first = await work.reportBlocker({ taskId: taskA.id, reason: "TOOL_MISSING" }, ACTOR);
+
+    await Promise.all([
+      work.resolveBlocker(first.id, ACTOR),
+      work.reportBlocker({ taskId: taskB.id, reason: "UNCLEAR_DIAGNOSIS" }, ACTOR),
+    ]);
+
+    const openCount = await prisma.taskBlocker.count({
+      where: { task: { workOrderId }, status: { in: ["OPEN", "ESCALATED"] } },
+    });
+    const workOrder = await prisma.workOrder.findUnique({ where: { id: workOrderId } });
+
+    // taskB's blocker is genuinely still open -- the work order must
+    // reflect that, whichever call happened to run first.
+    expect(openCount).toBe(1);
+    expect(workOrder?.status).toBe("BLOCKED");
+  }, 120_000);
 });
 
 describe("tasks and the finish gate together", () => {

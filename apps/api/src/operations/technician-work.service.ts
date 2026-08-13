@@ -248,6 +248,17 @@ export class TechnicianWorkService {
    * Reporting a blocker records it, moves the work order to BLOCKED
    * through the lifecycle, and carries its audience on the event so the
    * right roles can surface it.
+   *
+   * Locks the WorkOrder row before writing (H1,
+   * `docs/scenarios3/EDGE_CASE_REGISTER.md`): a technician reporting a new
+   * blocker and a storekeeper resolving the work order's last open one can
+   * race so that `resolveBlocker`'s "is anything still blocking this"
+   * count reads before this create has committed, wrongly unblocking a
+   * work order that, a moment later, turns out to still have an open
+   * blocker on it. Both methods take the same `FOR UPDATE` lock on the
+   * work order first, so whichever one runs first is fully visible to
+   * the other before it decides anything -- same discipline as the
+   * stock-balance lock, H6/E16.
    */
   async reportBlocker(input: ReportBlockerInput, actor: LifecycleActor) {
     const task = await this.prisma.task.findUnique({
@@ -258,7 +269,9 @@ export class TechnicianWorkService {
 
     const route = routeForBlocker(input.reason);
 
-    const blocker = await this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "work_orders" WHERE id = ${task.workOrderId} FOR UPDATE`;
+
       const created = await tx.taskBlocker.create({
         data: {
           tenantId: task.tenantId,
@@ -296,14 +309,15 @@ export class TechnicianWorkService {
         tx,
       );
 
+      // Still inside the same locked transaction, so this decision and
+      // the create above are one atomic unit against a concurrent
+      // resolveBlocker's own decision. The work order may already be
+      // BLOCKED from another task, in which case the graph refuses --
+      // correctly, and it is not an error.
+      await this.moveIfPossible(task.workOrderId, "REPORT_BLOCKER", actor, input.reason, tx);
+
       return created;
     });
-
-    // The work order may already be BLOCKED from another task, in which
-    // case the graph refuses -- correctly, and it is not an error.
-    await this.moveIfPossible(task.workOrderId, "REPORT_BLOCKER", actor, input.reason);
-
-    return blocker;
   }
 
   async resolveBlocker(blockerId: string, actor: LifecycleActor) {
@@ -313,7 +327,18 @@ export class TechnicianWorkService {
     });
     if (!blocker) throw new NotFoundException({ code: "blocker_not_found", message: "Blocker not found." });
 
+    // "Still blocked", and the resulting decision to unblock the work
+    // order, both happen inside the same transaction, after the same
+    // FOR UPDATE lock reportBlocker takes and while still holding it --
+    // not as separate queries/writes afterward. A concurrent
+    // reportBlocker either committed its new blocker before this
+    // transaction acquired the lock (so the count below sees it and
+    // correctly does not unblock) or is still waiting on the lock (so it
+    // genuinely did not exist yet when this decided, and will re-block
+    // the work order itself once it proceeds).
     await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "work_orders" WHERE id = ${blocker.task.workOrderId} FOR UPDATE`;
+
       await tx.taskBlocker.update({
         where: { id: blockerId },
         data: { status: "RESOLVED", resolvedAt: new Date() },
@@ -334,15 +359,16 @@ export class TechnicianWorkService {
         },
         tx,
       );
-    });
 
-    // Only unblock the work order once nothing else is holding it.
-    const stillBlocked = await this.prisma.taskBlocker.count({
-      where: { task: { workOrderId: blocker.task.workOrderId }, status: { in: ["OPEN", "ESCALATED"] } },
+      const stillBlocked = await tx.taskBlocker.count({
+        where: { task: { workOrderId: blocker.task.workOrderId }, status: { in: ["OPEN", "ESCALATED"] } },
+      });
+
+      // Only unblock the work order once nothing else is holding it.
+      if (stillBlocked === 0) {
+        await this.moveIfPossible(blocker.task.workOrderId, "RESOLVE_BLOCKER", actor, undefined, tx);
+      }
     });
-    if (stillBlocked === 0) {
-      await this.moveIfPossible(blocker.task.workOrderId, "RESOLVE_BLOCKER", actor);
-    }
   }
 
   /**
@@ -360,9 +386,10 @@ export class TechnicianWorkService {
     intent: "REPORT_BLOCKER" | "RESOLVE_BLOCKER",
     actor: LifecycleActor,
     reason?: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<void> {
     try {
-      await this.lifecycle.apply(workOrderId, intent, actor, { reason });
+      await this.lifecycle.apply(workOrderId, intent, actor, { reason, tx });
     } catch {
       // Not available from the work order's current state; the record
       // stands on its own.

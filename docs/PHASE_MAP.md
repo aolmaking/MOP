@@ -80,7 +80,7 @@ Scenario × capability matrix, typed cross-system contracts, gate registry, sche
 
 ### Phase 4 — Operations Spine ✅
 `WorkflowRouter` driven by the capability graph, intake, ownership transfer, work order/task lifecycle, inspections/faults/blockers, capability-aware Finish Gate.
-**Edge cases owed:** H1 (concurrent blockers can overwrite each other), H2 (capability check-then-write gap), H4 (decision approval landing on an already-closed work order), E19 (stale decision token after asset reassignment).
+**Edge cases owed:** H4 (decision approval landing on an already-closed work order), E19 (stale decision token after asset reassignment). H1 (concurrent blockers) and H2 (capability check-then-write gap) fixed — see `EDGE_CASE_REGISTER.md`.
 
 ### Phase 5 — Branch Manager ✅
 Attention Center · Customer Intake · Work Orders board · Work Order Workspace · Approvals · Delivery & Payments · **Team Setup**, delegation-gated.
@@ -89,13 +89,13 @@ Attention Center · Customer Intake · Work Orders board · Work Order Workspace
 ### Phase 6 — Technician ✅
 Now · My Work · Work Card, 10 tools, mobile/tablet-first, no sidebar.
 
-### Phase 7 — Inventory 🟢
-Inventory Home · Technician Requests · Catalog Control · Quantity Control & Stock Status · Reports & Stock Insights. **Owed:** Returns/Movements' accept/reject/clarify actions — the ledger is built and readable; the actions have no page yet.
-**Edge cases owed:** H6/E16 — the stock-never-negative guarantee needs verifying as a single atomic `UPDATE`, not read-then-write, plus a concurrency-specific integration test; H7 — no described path for deactivating a warehouse with nonzero stock.
+### Phase 7 — Inventory ✅ complete — 6/6 pages
+Inventory Home · Technician Requests · Catalog Control · Quantity Control & Stock Status · Returns/Movements (accept/reject/clarify, closed in an earlier arc) · Reports & Stock Insights.
+**Edge cases owed:** H7 — no described path for deactivating a warehouse with nonzero stock. H6/E16 fixed — see `EDGE_CASE_REGISTER.md`.
 
 ### Phase 8 — Finance Core 🟠
-Pricing catalog, discounts, tax policy, running balance, payments, deposits, financial reports engine — all built. **Owed:** the Owner's own Money page (Phase 10), and refunds/credit notes (explicitly deferred to Phase 9).
-**Edge cases owed:** H3 — invoice numbering is `count()+1` against a mocked-up unique-constraint backstop; the schema's own `invoice_sequences` table sits unused. H5 — the idempotency check-then-insert has its own race window. E15 — halfway-point rounding needs one named, documented rule.
+Pricing catalog, discounts, tax policy, running balance, payments, deposits, financial reports engine — all built. **Owed:** the Owner's own Money page (Phase 10), and refunds/credit notes (explicitly deferred to Phase 9, since shipped there).
+**Edge cases owed:** E15 — halfway-point rounding needs one named, documented rule (already verified resolved on inspection, see the register). H3 and H5 fixed — see `EDGE_CASE_REGISTER.md`.
 
 ### Phase 9 — Billing / Invoicing ✅
 Separate bounded system. Legal invoice document, numbering, immutable snapshots, credit/debit notes, `GenericBillingAdapter` behind the country-adapter seam. **Sharpened by Workshop 2 (scenarios 6, 9, 10):** the country-adapter seam is not optional infrastructure for a hypothetical future market — it is the difference between a tenant being legally able to trade and not, the moment a second country's tenant exists. ZATCA (Saudi) and ETA (Egypt) are the two adapters named for this phase's first pass; a tenant onboarded into a country without a ready adapter must be flagged **compliant-blocked** (see Phase 20.D), never silently allowed to issue invoices the law doesn't recognize.
