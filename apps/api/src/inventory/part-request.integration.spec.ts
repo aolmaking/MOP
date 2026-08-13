@@ -177,6 +177,34 @@ describe("SCENARIOS.md 3.1 — the normal flow", () => {
   });
 });
 
+describe("H2 — concurrent decisions on one request cannot both win", () => {
+  it("lets exactly one of a simultaneous approve/reject pair land, the other sees a real conflict", async () => {
+    // Both read REQUESTED, both pass canTransition against that same
+    // stale read -- without the fix, the loser's plain update-by-id
+    // would silently overwrite whichever status won, instead of the
+    // graph having any say. docs/scenarios3/EDGE_CASE_REGISTER.md's H2.
+    const request = await ask(full, 1);
+
+    const results = await Promise.allSettled([parts.approve(request.id, ACTOR), parts.reject(request.id, ACTOR, "duplicate")]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(fulfilled.length).toBe(1);
+    expect(rejected.length).toBe(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({
+      status: 409,
+      response: { code: "concurrent_transition" },
+    });
+
+    // The stored status is exactly whichever one actually won -- never
+    // left in a state neither caller asked for.
+    const stored = await prisma.partRequest.findUniqueOrThrow({ where: { id: request.id } });
+    const winner = (fulfilled[0] as PromiseFulfilledResult<{ id: string; status: string }>).value.status;
+    expect(stored.status).toBe(winner);
+    expect(["APPROVED", "REJECTED"]).toContain(stored.status);
+  });
+});
+
 describe("Phase 19.A — approval is attributed, even though enforcement is deferred", () => {
   it("records who approved a request, readable later for a future separation-of-duties policy", async () => {
     const request = await ask(full, 1);

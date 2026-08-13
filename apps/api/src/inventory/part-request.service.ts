@@ -643,6 +643,14 @@ export class PartRequestService {
    * the profile has removed is refused here rather than anywhere else,
    * which is what stops "returns are off" from becoming a hidden button
    * instead of an absent edge.
+   *
+   * The write is conditional on `request.status`, the value `load()` read
+   * before this transaction opened (H2, `docs/scenarios3/EDGE_CASE_REGISTER.md`)
+   * -- otherwise two concurrent decisions on the same request (e.g. one
+   * approving, one marking unavailable) would both pass `canTransition`
+   * against the same stale status and the second write would silently
+   * clobber the first rather than the graph having any say over it.
+   * Mirrors `WorkOrderLifecycleService`'s own guarded `updateMany`.
    */
   private async transition(
     tx: Prisma.TransactionClient,
@@ -659,13 +667,21 @@ export class PartRequestService {
       });
     }
 
-    await tx.partRequest.update({
-      where: { id: request.id },
+    const updated = await tx.partRequest.updateMany({
+      where: { id: request.id, status: request.status },
       // Phase 19.A -- recorded only on the transition INTO approved, never
       // overwritten by a later transition, so `issue()` can always ask
       // "who approved this" regardless of how many steps happened since.
       data: { status: to, ...(to === "APPROVED" ? { approvedById: actor.accountId } : {}) },
     });
+
+    if (updated.count === 0) {
+      throw new ConflictException({
+        code: "concurrent_transition",
+        message: "This part request changed while you were working on it. Reload and try again.",
+      });
+    }
+
     request.status = to;
   }
 
