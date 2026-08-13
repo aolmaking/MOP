@@ -46,4 +46,6 @@ export interface SessionContext {
   enabledFeatures: string[];
   tenantStatus: string | null;
   landingPage: string;
+  /** Phase 19.D -- a StaffUser-scoped restriction, distinct from the tenant-wide freeze. Absent for non-staff sessions. */
+  staffRestrictionStatus?: string;
 }

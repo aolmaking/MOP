@@ -80,7 +80,7 @@ export class FinanceController {
   @Post("invoices/:id/refunds")
   async requestRefund(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: RequestRefundDto) {
     const tenantId = await this.require(session, "finance.refund.request");
-    return this.finance.requestRefund(tenantId, id, dto.amount, dto.reason, this.actor(session));
+    return this.finance.requestRefund(tenantId, id, dto.amount, dto.reason, this.actor(session), dto.reasonCategory);
   }
 
   @Post("refunds/:id/approve")

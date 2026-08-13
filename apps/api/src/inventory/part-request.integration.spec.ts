@@ -177,6 +177,16 @@ describe("SCENARIOS.md 3.1 — the normal flow", () => {
   });
 });
 
+describe("Phase 19.A — approval is attributed, even though enforcement is deferred", () => {
+  it("records who approved a request, readable later for a future separation-of-duties policy", async () => {
+    const request = await ask(full, 1);
+    await parts.approve(request.id, ACTOR);
+
+    const stored = await prisma.partRequest.findUniqueOrThrow({ where: { id: request.id } });
+    expect(stored.approvedById).toBe(ACTOR.accountId);
+  });
+});
+
 describe("SCENARIOS.md 3.5 — partial fulfilment through the service", () => {
   it("stays un-issued until fully covered, then advances", async () => {
     const request = await ask(full, 3);

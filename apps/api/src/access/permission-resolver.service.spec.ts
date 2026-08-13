@@ -2,6 +2,7 @@ import { PermissionResolverService } from "./permission-resolver.service";
 import { PlatformControlLayer } from "./layers/platform-control.layer";
 import { PlanEntitlementLayer } from "./layers/plan-entitlement.layer";
 import { TenantStatusLayer } from "./layers/tenant-status.layer";
+import { StaffRestrictionLayer } from "./layers/staff-restriction.layer";
 import { TenantCapabilityLayer } from "./layers/tenant-capability.layer";
 import { ModuleEnabledLayer } from "./layers/module-enabled.layer";
 import { FeatureEnabledLayer } from "./layers/feature-enabled.layer";
@@ -19,6 +20,7 @@ describe("PermissionResolverService", () => {
     const platformControlInstance = new PlatformControlLayer();
     const planEntitlementInstance = new PlanEntitlementLayer();
     const tenantStatusInstance = new TenantStatusLayer();
+    const staffRestrictionInstance = new StaffRestrictionLayer();
     // Resolution is stubbed per-test below; the resolver only cares about ordering.
     const tenantCapabilityInstance = new TenantCapabilityLayer();
     const moduleEnabledInstance = new ModuleEnabledLayer();
@@ -34,6 +36,7 @@ describe("PermissionResolverService", () => {
       | "platformControl"
       | "planEntitlement"
       | "tenantStatus"
+      | "staffRestriction"
       | "tenantCapability"
       | "moduleEnabled"
       | "featureEnabled"
@@ -46,6 +49,7 @@ describe("PermissionResolverService", () => {
       platformControl: platformControlInstance,
       planEntitlement: planEntitlementInstance,
       tenantStatus: tenantStatusInstance,
+      staffRestriction: staffRestrictionInstance,
       tenantCapability: tenantCapabilityInstance,
       moduleEnabled: moduleEnabledInstance,
       featureEnabled: featureEnabledInstance,
@@ -64,6 +68,7 @@ describe("PermissionResolverService", () => {
       platformControlInstance,
       planEntitlementInstance,
       tenantStatusInstance,
+      staffRestrictionInstance,
       tenantCapabilityInstance,
       moduleEnabledInstance,
       featureEnabledInstance,
@@ -165,7 +170,7 @@ describe("PermissionResolverService", () => {
     expect(rolePermissionSpy).not.toHaveBeenCalled();
   });
 
-  it("evaluates layers in the documented 1-10 order", async () => {
+  it("evaluates layers in the documented order", async () => {
     const { service, layers } = build();
     const callOrder: string[] = [];
     Object.entries(layers).forEach(([label, layer]) => {
@@ -181,6 +186,7 @@ describe("PermissionResolverService", () => {
       "platformControl",
       "planEntitlement",
       "tenantStatus",
+      "staffRestriction",
       "tenantCapability",
       "moduleEnabled",
       "featureEnabled",

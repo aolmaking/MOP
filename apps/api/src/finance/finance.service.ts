@@ -469,6 +469,10 @@ export class FinanceService {
     amount: Money,
     reason: string,
     actor: LifecycleActor,
+    // Phase 19.C -- routine vs. remediation of a disputed/fraudulent
+    // charge. Defaults to ROUTINE: most refunds are exactly that, and a
+    // requester should have to actively say otherwise, not the reverse.
+    reasonCategory: "ROUTINE" | "DISPUTE_REMEDIATION" = "ROUTINE",
   ): Promise<{ id: string; status: "PENDING" }> {
     await this.requireFinance(tenantId);
 
@@ -482,10 +486,10 @@ export class FinanceService {
 
     const requestId = await this.prisma.$transaction(async (tx) => {
       const request = await tx.refundRequest.create({
-        data: { tenantId, invoiceId, amount, reason, requestedById: actor.accountId },
+        data: { tenantId, invoiceId, amount, reason, reasonCategory, requestedById: actor.accountId },
         select: { id: true },
       });
-      await this.emit(tx, tenantId, "finance.refund_requested", request.id, actor, { invoiceId, amount, reason });
+      await this.emit(tx, tenantId, "finance.refund_requested", request.id, actor, { invoiceId, amount, reason, reasonCategory });
       return request.id;
     });
 

@@ -234,6 +234,18 @@ enum RefundRequestStatus {
   COMPLETED
 }
 
+// Phase 19.C.
+enum RefundReasonCategory {
+  ROUTINE
+  DISPUTE_REMEDIATION
+}
+
+// Phase 19.D.
+enum StaffRestrictionStatus {
+  NONE
+  RESTRICTED_PENDING_INVESTIGATION
+}
+
 enum CustomerDecisionStatus {
   PENDING
   SENT
@@ -511,6 +523,14 @@ model StaffUser {
   categoryScope  CategoryCode[]
   isActive       Boolean        @default(true)
   lockedAt       DateTime?
+  // Phase 19.D -- a third state between "active" and the platform-wide
+  // tenant freeze, which Workshop 5 scenario 24 found is the only lever
+  // that previously existed and is far too large a hammer for a single
+  // account under investigation. Curtailed, pending resolution -- not a
+  // declaration of guilt.
+  restrictionStatus StaffRestrictionStatus @default(NONE)
+  restrictedAt      DateTime?
+  restrictedReason  String?
   createdAt      DateTime       @default(now())
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
@@ -836,6 +856,31 @@ model TenantGroupMember {
   @@map("tenant_group_members")
 }
 
+// Phase 19.B -- a closed work order's factual accuracy formally in
+// question needs a visible flag that travels everywhere the record is
+// shown, without altering WorkOrderStatus (WorkOrderLifecycleService's
+// exclusive domain, unchanged) and without deleting or editing history.
+// Non-destructive by construction: this table only ever adds a row: no
+// column here can rewrite anything WorkOrder or Task already recorded.
+model WorkOrderDispute {
+  id             String    @id @default(cuid())
+  tenantId       String
+  workOrderId    String
+  raisedById     String
+  reason         String
+  status         String    @default("OPEN")
+  createdAt      DateTime  @default(now())
+  resolvedAt     DateTime?
+  resolvedById   String?
+  resolutionNote String?
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, workOrderId])
+  @@index([tenantId, status])
+  @@map("work_order_disputes")
+}
+
 model Customer {
   id           String               @id @default(cuid())
   tenantId     String
@@ -1012,6 +1057,7 @@ model WorkOrder {
   decisionRequests   CustomerDecisionRequest[]
   timelineEvents     CustomerTimelineEvent[]
   safeHistoryEntries SafeTechnicalHistory[]
+  disputes           WorkOrderDispute[]
 
   @@index([tenantId, status])
   @@index([tenantId, branchId, status])
@@ -1207,6 +1253,12 @@ model PartRequest {
   taskId          String?
   inventoryItemId String
   requestedById   String
+  // Phase 19.A -- who approved it, so `issue()` can refuse the same
+  // account both approving and issuing the same request (separation of
+  // duties: INVENTORY_MANAGER's default role grants both permissions,
+  // which let one account close the loop with no second person ever
+  // required to look at it).
+  approvedById    String?
   quantity        Int
   urgency         String            @default("normal")
   reason          String?
@@ -1586,6 +1638,11 @@ model RefundRequest {
   invoiceId     String
   amount        Decimal             @db.Decimal(12, 2)
   reason        String
+  // Phase 19.C -- a routine reversal and remediation of a disputed or
+  // fraudulent charge carry different audit, reporting, and potential
+  // legal-disclosure weight; today's `reason` free-text field cannot be
+  // relied on to distinguish them at scale.
+  reasonCategory RefundReasonCategory @default(ROUTINE)
   status        RefundRequestStatus @default(PENDING)
   requestedById String
   decidedById   String?

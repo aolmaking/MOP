@@ -575,7 +575,7 @@ export class PartRequestService {
   private async load(id: string) {
     const request = await this.prisma.partRequest.findUnique({
       where: { id },
-      select: { id: true, tenantId: true, status: true, inventoryItemId: true, workOrderId: true },
+      select: { id: true, tenantId: true, status: true, inventoryItemId: true, workOrderId: true, approvedById: true },
     });
     if (!request) throw new NotFoundException({ code: "part_request_not_found", message: "Request not found." });
     return request;
@@ -659,9 +659,14 @@ export class PartRequestService {
       });
     }
 
-    await tx.partRequest.update({ where: { id: request.id }, data: { status: to } });
+    await tx.partRequest.update({
+      where: { id: request.id },
+      // Phase 19.A -- recorded only on the transition INTO approved, never
+      // overwritten by a later transition, so `issue()` can always ask
+      // "who approved this" regardless of how many steps happened since.
+      data: { status: to, ...(to === "APPROVED" ? { approvedById: actor.accountId } : {}) },
+    });
     request.status = to;
-    void actor;
   }
 
   private async emit(

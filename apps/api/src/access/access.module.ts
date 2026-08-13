@@ -9,6 +9,7 @@ import { ScopeResolverService } from "./scope-resolver.service";
 import { PlatformControlLayer } from "./layers/platform-control.layer";
 import { PlanEntitlementLayer } from "./layers/plan-entitlement.layer";
 import { TenantStatusLayer } from "./layers/tenant-status.layer";
+import { StaffRestrictionLayer } from "./layers/staff-restriction.layer";
 import { TenantCapabilityLayer } from "./layers/tenant-capability.layer";
 import { ModuleEnabledLayer } from "./layers/module-enabled.layer";
 import { FeatureEnabledLayer } from "./layers/feature-enabled.layer";
@@ -24,6 +25,7 @@ import { UserOverrideLayer } from "./layers/user-override.layer";
     PlatformControlLayer,
     PlanEntitlementLayer,
     TenantStatusLayer,
+    StaffRestrictionLayer,
     TenantCapabilityLayer,
     ModuleEnabledLayer,
     FeatureEnabledLayer,

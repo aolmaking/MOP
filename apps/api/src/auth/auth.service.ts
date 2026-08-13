@@ -278,6 +278,7 @@ export class AuthService {
         enabledFeatures: tenant.configuration?.enabledFeatures ?? [],
         tenantStatus: tenant.status,
         landingPage: LANDING_PAGES[staff.role as EffectiveRole],
+        staffRestrictionStatus: staff.restrictionStatus,
       };
     }
 

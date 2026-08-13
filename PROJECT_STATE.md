@@ -95,7 +95,7 @@ Three doors closed earlier this arc, from the original audit:
 | **16 — Specialization Structure** | ✅ **minimum bar met** — promised time + SLA overrun (Attention Center, proven by test) + generic Attachment table; 16.I design spike written; 16.B/C/D/F/G deferred with reasons — `docs/phases/PHASE_16.md` |
 | **17 — Specialization at Creation** | 🟠 **17.A backend seam shipped** — starter-profile seeding (Nafath oil-change / Delta hydraulic form) atomic in workshop creation; wizard UI, 17.B–17.E owed — `docs/phases/PHASE_17.md` |
 | **18 — Tenant Relationships** | 🟠 **18.A/D/E shipped** — `TenantStakeholder`, archive lifecycle (two clocks) + a real `TenantStatusLayer` READ_ONLY fix, summary-only `TenantGroup`; 18.F merge/split design decision written (no first-class support); 18.B/C deferred — `docs/phases/PHASE_18.md` |
-| 19 — Governance Depth | ⬜ **drafted**, not started — `docs/phases/PHASE_19.md` |
+| **19 — Governance Depth** | 🟠 **19.B/C/D shipped** — `WorkOrderDispute`, refund `reasonCategory`, `StaffRestrictionService` + a new `StaffRestrictionLayer` fully wired into the permission resolver; 19.A's enforcement built then reverted (broke 22 existing tests modeling a legitimate single-storekeeper shop — needs a per-workshop policy, not a global rule); 19.E/F/G deferred — `docs/phases/PHASE_19.md` |
 | 20 — Operational Resilience at Scale | ⬜ **drafted**, not started — `docs/phases/PHASE_20.md` |
 
 Platform Super Admin: 3 of 6 pages (Add Workshop Owner, Workshops,

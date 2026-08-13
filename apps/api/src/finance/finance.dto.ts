@@ -1,5 +1,5 @@
 import { IsEnum, IsInt, IsNumber, IsOptional, IsString, Length, Matches, Max, Min } from "class-validator";
-import { PaymentMethod } from "@mop/database";
+import { PaymentMethod, RefundReasonCategory } from "@mop/database";
 
 /**
  * Money arrives as a STRING and stays one all the way in.
@@ -75,6 +75,11 @@ export class RequestRefundDto {
   @IsString()
   @Length(1, 500)
   reason!: string;
+
+  // Phase 19.C. Optional, defaults to ROUTINE in FinanceService.
+  @IsOptional()
+  @IsEnum(RefundReasonCategory)
+  reasonCategory?: RefundReasonCategory;
 }
 
 export class RejectRefundDto {

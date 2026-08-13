@@ -460,6 +460,25 @@ describe("refunds: request, approve, and the credit note it produces", () => {
     expect(after.settled).toBe(false);
   });
 
+  it("Phase 19.C -- defaults the reason category to ROUTINE, and honours an explicit DISPUTE_REMEDIATION", async () => {
+    const invoiceId = await invoicedJobWithPayment("40.00", "40.00");
+    const routine = await finance.requestRefund(paid.tenantId, invoiceId, "10.00", "Standard reversal", ACTOR);
+    const storedRoutine = await prisma.refundRequest.findUniqueOrThrow({ where: { id: routine.id } });
+    expect(storedRoutine.reasonCategory).toBe("ROUTINE");
+
+    const invoiceId2 = await invoicedJobWithPayment("40.00", "40.00");
+    const disputed = await finance.requestRefund(
+      paid.tenantId,
+      invoiceId2,
+      "10.00",
+      "Charge under investigation",
+      ACTOR,
+      "DISPUTE_REMEDIATION",
+    );
+    const storedDisputed = await prisma.refundRequest.findUniqueOrThrow({ where: { id: disputed.id } });
+    expect(storedDisputed.reasonCategory).toBe("DISPUTE_REMEDIATION");
+  });
+
   it("writes a real CreditNote row, not just a status change", async () => {
     const invoiceId = await invoicedJobWithPayment("50.00", "50.00");
     const refund = await finance.requestRefund(paid.tenantId, invoiceId, "50.00", "Full refund, job cancelled", ACTOR);

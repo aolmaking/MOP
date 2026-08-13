@@ -59,7 +59,7 @@
 | 16 — Specialization Structure | ✅ minimum bar met (16.A/E/H); 16.I design spike written |
 | 17 — Specialization at Creation | 🟠 17.A backend seam shipped; wizard UI and 17.B–E owed |
 | **18 — Tenant Relationships** | 🟠 18.A/D/E shipped; 18.B/C deferred; 18.F design decision written |
-| **19 — Governance Depth** | ⬜ **new** — not started |
+| **19 — Governance Depth** | 🟠 19.B/C/D shipped; 19.A data-only (enforcement reverted); 19.E/F/G deferred |
 | **20 — Operational Resilience at Scale** | ⬜ **new** — not started |
 | Platform Super Admin (cross-cutting) | 🟠 3/6 pages — Governance Controls, Reports, Live View owed |
 
@@ -133,8 +133,8 @@ External stakeholder access, multi-tenant identity, time-bounded access grants, 
 **Edge cases owed:** H10 (`ControlSetting` hard-delete, restated here since delegation is this phase's natural home), E17 (schema migrations against a dormant/archived tenant's data need an explicit reconciliation policy).
 **Detail:** [`phases/PHASE_18.md`](./phases/PHASE_18.md)
 
-### Phase 19 — Governance Depth 🆕
-Separation of duties, a dispute state distinct from work-order lifecycle status, a forensic-reason refund taxonomy, a restricted-pending-investigation account state, historical permission reconstruction, properly-bounded support impersonation, point-in-time reporting snapshots. Everything the permission and audit systems need once the platform stops assuming every actor is acting in good faith.
+### Phase 19 — Governance Depth 🟠 (19.B/C/D shipped; 19.A enforcement reverted; 19.E/F/G deferred — see `phases/PHASE_19.md`)
+Separation of duties, a dispute state distinct from work-order lifecycle status, a forensic-reason refund taxonomy, a restricted-pending-investigation account state, historical permission reconstruction, properly-bounded support impersonation, point-in-time reporting snapshots. Everything the permission and audit systems need once the platform stops assuming every actor is acting in good faith. **Shipped:** `WorkOrderDispute` (19.B, non-destructive); `RefundRequest.reasonCategory` (19.C); `StaffRestrictionService` + a new `StaffRestrictionLayer` in the permission resolver (19.D, fully wired — a real, narrower lever than the tenant-wide freeze). **19.A shipped `PartRequest.approvedById` tracking but its enforcement was built, then reverted** after it broke 22 existing Inventory tests modeling a legitimate single-storekeeper shop — the real fix needs a per-workshop opt-in policy, not a global rule. 19.E (historical reconstruction, named "hardest item" by the phase doc itself), 19.F (impersonation, needs its own written threat-model review), and 19.G (point-in-time snapshots) deferred with reasons.
 **Edge case owed:** E14 — two opposite platform actions (freeze/reactivate) racing the same tenant needs an optimistic-concurrency guard, the same shape of fix as 24.1–24.3's missing single-account control lever.
 **Detail:** [`phases/PHASE_19.md`](./phases/PHASE_19.md)
 

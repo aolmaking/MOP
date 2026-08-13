@@ -23,6 +23,7 @@ import { TeamLeaderModule } from "./team-leader/team-leader.module";
 import { ReportingModule } from "./reporting/reporting.module";
 import { SpecializationModule } from "./specialization/specialization.module";
 import { TenantRelationshipsModule } from "./tenant-relationships/tenant-relationships.module";
+import { GovernanceModule } from "./governance/governance.module";
 import { HealthController } from "./health/health.controller";
 
 @Module({
@@ -60,6 +61,7 @@ import { HealthController } from "./health/health.controller";
     ReportingModule,
     SpecializationModule,
     TenantRelationshipsModule,
+    GovernanceModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

@@ -4,6 +4,7 @@ import { DEFAULT_DECISION, type LayerResult, type PermissionLayer } from "./type
 import { PlatformControlLayer } from "./layers/platform-control.layer";
 import { PlanEntitlementLayer } from "./layers/plan-entitlement.layer";
 import { TenantStatusLayer } from "./layers/tenant-status.layer";
+import { StaffRestrictionLayer } from "./layers/staff-restriction.layer";
 import { TenantCapabilityLayer } from "./layers/tenant-capability.layer";
 import { ModuleEnabledLayer } from "./layers/module-enabled.layer";
 import { FeatureEnabledLayer } from "./layers/feature-enabled.layer";
@@ -35,6 +36,7 @@ export class PermissionResolverService {
     platformControl: PlatformControlLayer,
     planEntitlement: PlanEntitlementLayer,
     tenantStatus: TenantStatusLayer,
+    staffRestriction: StaffRestrictionLayer,
     tenantCapability: TenantCapabilityLayer,
     moduleEnabled: ModuleEnabledLayer,
     featureEnabled: FeatureEnabledLayer,
@@ -56,10 +58,16 @@ export class PermissionResolverService {
     // Delegation (8) narrows for the same reason one step lower down:
     // team management is the owner's, and a role template that offers it
     // must not be able to hand it over on the owner's behalf.
+    //
+    // Staff restriction (Phase 19.D) sits right beside tenant status: a
+    // true ceiling like it, just scoped to one account instead of the
+    // whole tenant -- an owner or platform investigating one person must
+    // never need the tenant-wide freeze to curtail that one person.
     this.layers = [
       platformControl,
       planEntitlement,
       tenantStatus,
+      staffRestriction,
       tenantCapability,
       moduleEnabled,
       featureEnabled,

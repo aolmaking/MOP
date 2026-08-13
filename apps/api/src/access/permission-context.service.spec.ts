@@ -3,6 +3,7 @@ import { PermissionResolverService } from "./permission-resolver.service";
 import { PlatformControlLayer } from "./layers/platform-control.layer";
 import { PlanEntitlementLayer } from "./layers/plan-entitlement.layer";
 import { TenantStatusLayer } from "./layers/tenant-status.layer";
+import { StaffRestrictionLayer } from "./layers/staff-restriction.layer";
 import { TenantCapabilityLayer } from "./layers/tenant-capability.layer";
 import { ModuleEnabledLayer } from "./layers/module-enabled.layer";
 import { FeatureEnabledLayer } from "./layers/feature-enabled.layer";
@@ -71,6 +72,7 @@ function buildHarness() {
     new PlatformControlLayer(),
     new PlanEntitlementLayer(),
     new TenantStatusLayer(),
+    new StaffRestrictionLayer(),
     new TenantCapabilityLayer(),
     new ModuleEnabledLayer(),
     new FeatureEnabledLayer(),
