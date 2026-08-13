@@ -354,6 +354,15 @@ export class FinanceService {
    * people are taking money for the same job at once. Silently returning
    * the first payment there leaves a customer charged an amount nobody
    * recorded.
+   *
+   * The upfront `findUnique` below is a fast path only, not the guarantee
+   * -- two requests carrying the same key can both read "not found" before
+   * either has written (H5, `docs/scenarios3/EDGE_CASE_REGISTER.md`). What
+   * actually prevents a duplicate payment is `Payment.idempotencyKey`'s
+   * database-level unique constraint; the loser of that race catches the
+   * resulting P2002 here and re-runs the same same-invoice/same-amount
+   * comparison against the row that won, so a genuine concurrent retry
+   * still resolves to one settlement instead of an unhandled 500.
    */
   async recordPayment(
     tenantId: string,
@@ -369,47 +378,78 @@ export class FinanceService {
     });
 
     if (existing) {
-      const sameInvoice = existing.invoiceId === invoiceId;
-      const sameAmount = compare(existing.amount.toFixed(2), input.amount) === 0;
-
-      if (sameInvoice && sameAmount) {
-        // A genuine retry. Not a second payment.
-        return this.settlement(invoiceId);
-      }
-
-      throw new ConflictException({
-        code: "idempotency_conflict",
-        message:
-          "That payment reference has already been used for a different amount or job. " +
-          "Check whether the payment was already taken before recording it again.",
-      });
+      return this.resolveIdempotentReplay(existing, invoiceId, input.amount);
     }
 
     const before = await this.settlement(invoiceId);
     if (before.settled) {
+      // Could be a genuine second payment against an already-full
+      // invoice, or this exact key's own payment landing between the
+      // findUnique above and this read (the same H5 race, one check
+      // later) -- re-check for this specific key before refusing.
+      const raced = await this.prisma.payment.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+        select: { id: true, invoiceId: true, amount: true },
+      });
+      if (raced) return this.resolveIdempotentReplay(raced, invoiceId, input.amount);
       throw new ConflictException({ code: "already_settled", message: "This invoice is already paid in full." });
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.payment.create({
-        data: {
-          tenantId,
-          invoiceId,
-          amount: input.amount,
-          method: input.method as never,
-          idempotencyKey: input.idempotencyKey,
-          recordedById: actor.accountId,
-        },
-      });
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payment.create({
+          data: {
+            tenantId,
+            invoiceId,
+            amount: input.amount,
+            method: input.method as never,
+            idempotencyKey: input.idempotencyKey,
+            recordedById: actor.accountId,
+          },
+        });
 
-      await this.emit(tx, tenantId, "finance.payment_recorded", invoiceId, actor, {
-        amount: input.amount,
-        method: input.method,
+        await this.emit(tx, tenantId, "finance.payment_recorded", invoiceId, actor, {
+          amount: input.amount,
+          method: input.method,
+        });
       });
-    });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        // Lost the race to a concurrent call carrying the same key --
+        // resolve against whichever row actually landed, exactly as the
+        // upfront check above would have if it had run a moment later.
+        const winner = await this.prisma.payment.findUniqueOrThrow({
+          where: { idempotencyKey: input.idempotencyKey },
+          select: { id: true, invoiceId: true, amount: true },
+        });
+        return this.resolveIdempotentReplay(winner, invoiceId, input.amount);
+      }
+      throw error;
+    }
 
     await this.refreshCachedTotals(invoiceId);
     return this.settlement(invoiceId);
+  }
+
+  private resolveIdempotentReplay(
+    existing: { invoiceId: string; amount: Prisma.Decimal },
+    invoiceId: string,
+    amount: Money,
+  ): Promise<Settlement> {
+    const sameInvoice = existing.invoiceId === invoiceId;
+    const sameAmount = compare(existing.amount.toFixed(2), amount) === 0;
+
+    if (sameInvoice && sameAmount) {
+      // A genuine retry. Not a second payment.
+      return this.settlement(invoiceId);
+    }
+
+    throw new ConflictException({
+      code: "idempotency_conflict",
+      message:
+        "That payment reference has already been used for a different amount or job. " +
+        "Check whether the payment was already taken before recording it again.",
+    });
   }
 
   /**

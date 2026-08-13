@@ -19,7 +19,7 @@
 | H2 | Capability check-then-write gap around `PartRequestService.approve()` | 3 / 7 | ⬜ open |
 | H3 | Invoice numbering is `count()+1`, not the unused `invoice_sequences` table | 8 — Finance Core | ✅ **fixed** — rewritten to a single atomic `INSERT ... ON CONFLICT DO UPDATE` against `invoice_sequences`, proven by a 10-way concurrent-issuance integration test |
 | H4 | Customer decision can land against an already-closed work order | 4 — Operations Spine | ⬜ open |
-| H5 | Idempotency key check-then-insert race in `recordPayment()` | 8 — Finance Core | ⬜ open |
+| H5 | Idempotency key check-then-insert race in `recordPayment()` | 8 — Finance Core | ✅ **fixed** — the upfront `findUnique` was always a fast path, never the guarantee; the DB's unique constraint on `idempotencyKey` was already real, but its violation propagated as a raw 500 instead of resolving as a retry. Now caught (P2002) and re-resolved through the same same-invoice/same-amount comparison the upfront check uses. A second race found while testing this one: the "already settled" check could also misfire against a legitimate concurrent retry of the exact payment that had just settled the invoice — fixed the same way. Proven by two new concurrency tests firing simultaneous real requests at Postgres |
 | H6 | Stock decrement may be read-then-write rather than one atomic `UPDATE` | 7 — Inventory | ✅ **fixed** — confirmed broken (plain `findUnique`, no lock), rewritten to `SELECT ... FOR UPDATE`, proven by a concurrent-request integration test |
 | H7 | No described path for deactivating a warehouse with nonzero stock | 7 — Inventory | ⬜ open |
 | H8 | Double-click on team-membership move can race its own transaction | 5 — Branch Manager (Team Setup) | ⬜ open |

@@ -343,6 +343,54 @@ describe("payments: never twice", () => {
       ),
     ).rejects.toMatchObject({ status: 409, response: { code: "already_settled" } });
   });
+
+  it("survives the same key arriving genuinely simultaneously (H5) -- one payment row, no crash", async () => {
+    // The upfront findUnique() can't see a write that hasn't happened
+    // yet: fire the SAME key at the SAME invoice concurrently so both
+    // calls read "not found" before either has inserted, exactly the
+    // race docs/scenarios3/EDGE_CASE_REGISTER.md's H5 describes. Without
+    // the fix, the loser hits the DB's unique-constraint error and it
+    // propagates as an unhandled 500 instead of resolving as a retry.
+    const invoiceId = await invoicedJob("100.00");
+    const key = `pay-${SUFFIX}-race`;
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 5 }, () =>
+        finance.recordPayment(paid.tenantId, invoiceId, { amount: "100.00", method: "CASH", idempotencyKey: key }, ACTOR),
+      ),
+    );
+
+    expect(results.every((r) => r.status === "fulfilled")).toBe(true);
+    for (const r of results) {
+      if (r.status === "fulfilled") expect(r.value.paid).toBe("100.00");
+    }
+
+    expect(await prisma.payment.count({ where: { invoiceId } })).toBe(1);
+  });
+
+  it("still refuses a genuinely concurrent key reuse at a different amount (H5, conflict branch)", async () => {
+    const invoiceId = await invoicedJob("100.00");
+    const key = `pay-${SUFFIX}-race-conflict`;
+
+    const results = await Promise.allSettled([
+      finance.recordPayment(paid.tenantId, invoiceId, { amount: "40.00", method: "CASH", idempotencyKey: key }, ACTOR),
+      finance.recordPayment(paid.tenantId, invoiceId, { amount: "60.00", method: "CASH", idempotencyKey: key }, ACTOR),
+    ]);
+
+    // Exactly one side wins the write; the other resolves to a real
+    // 409 conflict, whichever call actually lost the DB-level race --
+    // never a raw, unhandled Prisma error and never two payment rows.
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(fulfilled.length).toBe(1);
+    expect(rejected.length).toBe(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({
+      status: 409,
+      response: { code: "idempotency_conflict" },
+    });
+
+    expect(await prisma.payment.count({ where: { invoiceId } })).toBe(1);
+  });
 });
 
 describe("a workshop that does not handle money through MOP", () => {
