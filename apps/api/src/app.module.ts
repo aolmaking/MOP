@@ -21,6 +21,7 @@ import { CustomerModule } from "./customer/customer.module";
 import { OwnerModule } from "./owner/owner.module";
 import { TeamLeaderModule } from "./team-leader/team-leader.module";
 import { ReportingModule } from "./reporting/reporting.module";
+import { SpecializationModule } from "./specialization/specialization.module";
 import { HealthController } from "./health/health.controller";
 
 @Module({
@@ -56,6 +57,7 @@ import { HealthController } from "./health/health.controller";
     OwnerModule,
     TeamLeaderModule,
     ReportingModule,
+    SpecializationModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

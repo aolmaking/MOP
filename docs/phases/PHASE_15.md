@@ -1,9 +1,7 @@
 # Phase 15 — Specialization Discovery
 
-> **Status:** ⬜ not started. Follows Phase 14 in sequence, but see
-> `docs/PHASE_MAP.md`'s dependency note — 15–17 are discovery-and-
-> foundation phases and may be pulled forward if a specific pilot
-> workshop needs them sooner than the numeric order implies.
+> **Status:** ✅ schema settled and three of five primitives proven end-to-end;
+> see "What actually shipped" below for the precise split.
 > **Source:** [`docs/scenarios/FINDINGS_SYNTHESIS.md`](../scenarios/FINDINGS_SYNTHESIS.md),
 > Shape 1 findings across all 20 scenarios.
 
@@ -89,14 +87,18 @@ data, filled in by a technician, stored, read back) against a seeded
 version of one of the four scenario workshops. No open "needs schema
 change" markers remain, matching Phase 2's own exit bar.
 
-## Open questions to settle during the phase, not before it
+## What actually shipped
 
-- Does a service card definition version — i.e., if a workshop edits
-  the "Oil Change" card's fields after 200 have already been filled in,
-  what happens to the old 200? (Likely: definitions are versioned,
-  filled cards keep the version they were filled against — the same
-  pattern capability profiles use for historical interpretation.)
-- Are position taxonomies global-per-category or workshop-overridable
-  per-category? (Scenario evidence leans toward category defaults with
-  workshop override, not fully free-form per workshop — otherwise two
-  workshops' data becomes incomparable for no reason.)
+Schema and services under `apps/api/src/specialization/`, migration `20260813010000_specialization_primitives`:
+
+- **Service card & measurement form** — one shared pair of tables, `SpecializationDefinition` (`kind: SERVICE_CARD | MEASUREMENT_FORM`, `fields: Json` field-spec array, `version`) and `SpecializationEntry` (`values: Json`, `definitionVersion` pinned at fill time — the versioning open question below, answered). `SpecializationService` validates a filled entry's values against its definition's field types/required/enum-options at write time. **Proven end-to-end** against a seeded Nafath/Delta-shaped tenant in `specialization.integration.spec.ts`: an oil-change service card and a six-point hydraulic diagnostic form are each defined, filled by a technician, and read back with real stored values; a definition revision is proven to leave already-filled entries pinned to their old version.
+- **Credential** — `CredentialDefinition` + `StaffCredential` (with `expiresAt`), `CredentialService`. **Proven end-to-end**: defined, granted to a technician, read back, and an expired grant correctly reports `isExpired`.
+- **Position taxonomy** — `PositionTaxonomyEntry`, `tenantId: null` rows as the platform default, a workshop row overriding the whole list for its tenant rather than merging with the default (the open question below, answered). `PositionTaxonomyService` proven by test for both the fallback and the override case, but not wired into any consuming page yet — schema-and-read-path only, per this phase's own explicit deferral of retrofitting existing pages.
+- **Blocker reason** — `BlockerReasonDefinition` (workshop-owned `code`/`label`, mapped to a fixed `BlockerBehavior` enum: `PAUSE_CLOCK | ESCALATE | NOTIFY | NONE`). **Schema only.** `TaskBlocker.reason` still uses the pre-existing fixed `BlockerReason` enum — retrofitting it to read from `BlockerReasonDefinition` touches a live, tested workflow path (`TaskBlocker`, the Team Leader blocker-visibility queries from Phase 10, the Attention Center) and was judged out of this phase's budget. Named here rather than silently done.
+
+No controller/HTTP surface was built. The exit criteria explicitly separates "created via API/seed" from "a super admin can build one by hand" (Phase 17) — a direct service-level integration test satisfies the former exactly, and adding an HTTP layer with no consuming page yet would be exposing an endpoint nothing calls.
+
+## Open questions — settled during the phase
+
+- **Does a service card definition version?** Settled as predicted: yes. `SpecializationDefinition.version` bumps on every `reviseFields()` call, and `SpecializationEntry.definitionVersion` pins the version at fill time. Editing "Oil Change" after 200 entries exist leaves all 200 reading as version 1; the 201st reads as version 2. Proven by test.
+- **Are position taxonomies global-per-category or workshop-overridable?** Settled as predicted: category defaults (`tenantId: null`) with a full-list workshop override, not a merge. Proven by test in both directions.
