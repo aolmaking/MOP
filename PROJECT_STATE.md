@@ -90,7 +90,7 @@ Three doors closed earlier this arc, from the original audit:
 | **11 — Customer Portal** | ✅ **API complete** — 5 authenticated surfaces + pre-existing decision link; web pages owed, permission-engine gap documented, see `docs/phases/PHASE_11.md` |
 | **12 — Reporting & Data Analyst** | ✅ **complete (live-only)** — company report (technician performance, throughput, finance); exports/saved views/point-in-time snapshots owed, see `docs/phases/PHASE_12.md` |
 | **13 — System Automation** | ✅ **complete (lock, not a separate worker)** — `SchedulerLockService` (Postgres advisory lock) stops double-firing across replicas; a real separate deployable owed once a real recurring job exists, see `docs/phases/PHASE_13.md` |
-| 14 | ⬜ not started |
+| **14 — Internationalization & Release Readiness** | 🟠 **partial** — permission-key assertion check (`tools/lint-permission-keys.mjs`, five custom lint rules now) + a real `WorkOrder.customerId` index fix + a clean security review of the diff; translation pass and summary tables owed, see `docs/phases/PHASE_14.md` |
 | 15 — Specialization Discovery | ⬜ **drafted**, not started — `docs/phases/PHASE_15.md` |
 | 16 — Specialization Structure | ⬜ **drafted**, not started — `docs/phases/PHASE_16.md` |
 | 17 — Specialization at Creation | ⬜ **drafted**, not started — `docs/phases/PHASE_17.md` |
@@ -102,7 +102,7 @@ Platform Super Admin: 3 of 6 pages (Add Workshop Owner, Workshops,
 Builder Control partial). Governance Controls, Platform Reports and
 Workshop Live View still owed.
 
-**Verified at last commit:** 519 API/shared tests + 163 web tests, typecheck clean, all **four** custom lint rules passing, full build green.
+**Verified at last commit:** 434 API tests + 163 web tests, typecheck clean, all **five** custom lint rules passing (audit boundary, directional CSS, touch targets, money, permission keys), full build green.
 
 **Phase 9 (this arc, in progress).** `docs/phases/PHASE_9.md` written first. Built and tested: `BillingModule` (`GenericBillingAdapter` + `BillingService`), `BillingDocument` as its own model distinct from `Invoice` (Finance keeps the settlement record; Billing gets its own row, lifecycle, immutable snapshot), wired into `FinanceService.issueInvoice()` as a typed-contract call in the same transaction, External Billing Mode made load-bearing (suppresses document creation, proven by test), the adapter seam proven swappable (a test-only adapter produces a differently-shaped document from the same snapshot without the amount changing), and `CreditNote` issuance with real sequential numbering (`credit_note_sequences`, same atomic-upsert pattern as invoices). Found and fixed a real gap in `docs/SYSTEMS.md`'s own quoted adapter interface while implementing it: `generateCreditNote`/`generateDebitNote` had no `amount` parameter (silently assumed a credit note always refunds the full invoice) and no numbering parameter — both docs corrected alongside the code.
 

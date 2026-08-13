@@ -43,7 +43,7 @@ This machine has quirks that will waste an hour if rediscovered.
 ```bash
 corepack pnpm run doctor       # environment health — run first when anything is odd
 corepack pnpm typecheck        # shared + api
-corepack pnpm lint             # eslint + audit-boundary + directional-CSS
+corepack pnpm lint             # eslint + audit-boundary + directional-CSS + touch-targets + money + permission-keys
 corepack pnpm test             # shared + api + web
 corepack pnpm build
 ```

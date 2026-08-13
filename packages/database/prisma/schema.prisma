@@ -735,6 +735,7 @@ model WorkOrder {
 
   @@index([tenantId, status])
   @@index([tenantId, branchId, status])
+  @@index([tenantId, customerId])
   @@index([assetId])
   @@map("work_orders")
 }
