@@ -20,10 +20,21 @@ describe('landingRouteFor', () => {
     ).toBe('/platform/workshops');
   });
 
+  it('sends a team leader to their own shell', () => {
+    expect(landingRouteFor({ role: 'TEAM_LEADER', landingPage: 'team-leader-home' } as SessionContext)).toBe(
+      '/team-leader',
+    );
+  });
+
+  it('sends an owner to their real home, not just the audit log', () => {
+    expect(landingRouteFor({ role: 'TENANT_OWNER', landingPage: 'owner-home' } as SessionContext)).toBe(
+      '/owner/home',
+    );
+  });
+
   it('falls back to the placeholder for roles whose home is not built', () => {
     // Deliberately '/' and not a guess: the placeholder names the phase
     // that builds their home, which is more honest than a wrong page.
-    expect(landingRouteFor({ role: 'TEAM_LEADER', landingPage: 'team-leader-home' } as SessionContext)).toBe('/');
     expect(landingRouteFor({ role: 'DATA_ANALYST', landingPage: 'analytics-home' } as SessionContext)).toBe('/');
   });
 

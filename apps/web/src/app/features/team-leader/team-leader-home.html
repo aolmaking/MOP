@@ -1,0 +1,60 @@
+<section class="home">
+  <header class="home-head">
+    <h1 class="home-title">Team Home</h1>
+    @if (data(); as d) {
+      <p class="home-scope">{{ d.managedCount }} managed technician{{ d.managedCount === 1 ? '' : 's' }}</p>
+    }
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to this page</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+    @case ('no-team') {
+      <div class="state">
+        <p class="state-title">No technicians are on your team yet</p>
+        <p class="state-body">Ask your workshop owner to assign technicians to you in Team Setup.</p>
+      </div>
+    }
+    @case ('ready') {
+      <div class="cards">
+        @for (card of cards(); track card.key) {
+          <article class="card" [attr.data-tone]="card.weight">
+            <a class="card-hit" [routerLink]="card.link">
+              <span class="card-count">{{ card.count }}</span>
+              <span class="card-label">{{ card.label }}</span>
+              <span class="card-meaning">{{ card.meaning }}</span>
+            </a>
+          </article>
+        }
+      </div>
+
+      @if (data(); as d) {
+        <h2 class="band-title">Recent technician activity</h2>
+        @if (d.recentActivity.length === 0) {
+          <p class="state-body">Nothing yet.</p>
+        } @else {
+          <ul class="activity">
+            @for (row of d.recentActivity; track row.id) {
+              <li class="activity-row">
+                <span class="activity-key">{{ label(row.eventKey) }}</span>
+                <span class="activity-when">{{ when(row.createdAt) }}</span>
+              </li>
+            }
+          </ul>
+        }
+      }
+    }
+  }
+</section>

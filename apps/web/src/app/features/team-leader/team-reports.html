@@ -1,0 +1,53 @@
+<section class="reports">
+  <header class="reports-head">
+    <h1 class="reports-title">Technician Performance</h1>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to this page</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+    @case ('empty') {
+      <div class="state">
+        <p class="state-title">No technicians are on your team yet</p>
+      </div>
+    }
+    @case ('ready') {
+      <div class="table-scroll">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Technician</th>
+              <th class="col-num">Tasks completed</th>
+              <th class="col-num">Active tasks</th>
+              <th class="col-num">Blockers</th>
+              <th class="col-num">Rework</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.staffUserId) {
+              <tr>
+                <td>{{ row.fullName }}</td>
+                <td class="col-num">{{ row.tasksCompleted }}</td>
+                <td class="col-num">{{ row.activeTasks }}</td>
+                <td class="col-num">{{ row.blockers }}</td>
+                <td class="col-num" [class.col-num--flag]="row.reworkCount > 0">{{ row.reworkCount }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</section>

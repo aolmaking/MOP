@@ -63,7 +63,7 @@
 | **20 — Operational Resilience at Scale** | ⬜ **new** — not started |
 | Platform Super Admin (cross-cutting) | 🟠 3/6 pages — Governance Controls, Reports, Live View owed |
 
-Total page inventory: **23 of 53** spec'd pages built. See `PAGE_INVENTORY.md` for the per-role table.
+Total page inventory: **28 of 53** spec'd pages built (Owner Home and all four Team Leader pages closed this pass; other phases' page counts may have moved further and not yet be reflected here). See `PAGE_INVENTORY.md` for the per-role table.
 
 ## The phases
 
@@ -100,8 +100,8 @@ Pricing catalog, discounts, tax policy, running balance, payments, deposits, fin
 ### Phase 9 — Billing / Invoicing ✅
 Separate bounded system. Legal invoice document, numbering, immutable snapshots, credit/debit notes, `GenericBillingAdapter` behind the country-adapter seam. **Sharpened by Workshop 2 (scenarios 6, 9, 10):** the country-adapter seam is not optional infrastructure for a hypothetical future market — it is the difference between a tenant being legally able to trade and not, the moment a second country's tenant exists. ZATCA (Saudi) and ETA (Egypt) are the two adapters named for this phase's first pass; a tenant onboarded into a country without a ready adapter must be flagged **compliant-blocked** (see Phase 20.D), never silently allowed to issue invoices the law doesn't recognize.
 
-### Phase 10 — Team Leader & People/Performance 🟠 (API complete, web partial — see `phases/PHASE_10.md`)
-Team Leader's API (all four pages' worth of endpoints — Home, Technicians, Vehicles/Work Orders, Technician Performance Reports — all `managedTechnicianIds`-scoped) is built and tested; **the four web pages are not yet built.** Owner Home has both a real API and a real, reachable web page. **Re-planned at this phase boundary, recorded rather than silently dropped:** the Owner's Money page (folded into the remaining six Owner pages, its own future pass) and exit-reason/rehire-eligibility on staff deactivation (pushed to Phase 19) were both named in this entry originally but did not land this pass. **Detail, including a correction to an earlier draft that wrongly claimed the Team Leader web pages had shipped:** [`phases/PHASE_10.md`](./phases/PHASE_10.md)
+### Phase 10 — Team Leader & People/Performance ✅ (narrowed — see `phases/PHASE_10.md`)
+Team Leader's four pages (Home, Technicians, Vehicles/Work Orders, Technician Performance Reports, all `managedTechnicianIds`-scoped) and Owner Home are all built with a real API and a real, reachable web page — closed across three separate passes on the same working tree, recorded rather than smoothed over in `phases/PHASE_10.md` §6–7. **Re-planned at this phase boundary, recorded rather than silently dropped:** the Owner's Money page (folded into the remaining six Owner pages, its own future pass) and exit-reason/rehire-eligibility on staff deactivation (pushed to Phase 19) were both named in this entry originally but did not land this pass. **Detail:** [`phases/PHASE_10.md`](./phases/PHASE_10.md)
 
 ### Phase 11 — Customer Portal ✅ (API surfaces; web pages owed) — see `phases/PHASE_11.md`
 Portal home, my assets, current service, invoice status, safe technical history (all new this phase); decision page and public decision links were already shipped in an earlier phase. Found and documented rather than silently patched: the ten-layer permission resolver has no real opinion about a `CUSTOMER` session, so portal access is checked directly on `session.accountType`/`enabledModules` instead, mirroring the existing public decision controller's own reasoning.

@@ -1,0 +1,53 @@
+<section class="roster">
+  <header class="roster-head">
+    <h1 class="roster-title">Technicians</h1>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to this page</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+    @case ('empty') {
+      <div class="state">
+        <p class="state-title">No technicians are on your team yet</p>
+        <p class="state-body">Ask your workshop owner to assign technicians to you in Team Setup.</p>
+      </div>
+    }
+    @case ('ready') {
+      <ul class="rows">
+        @for (row of rows(); track row.staffUserId) {
+          <li>
+            <button type="button" class="row" (click)="open(row.staffUserId)">
+              <span class="row-name">{{ row.fullName }}</span>
+              <span class="row-task">{{ row.currentTask?.title ?? 'No active task' }}</span>
+              @if (row.openBlockers > 0) {
+                <span class="row-badge row-badge--blocked">{{ row.openBlockers }} blocked</span>
+              }
+              <span class="row-stat">{{ row.tasksCompletedToday }} done today</span>
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  }
+
+  @if (selected(); as detail) {
+    <app-technician-drawer
+      [detail]="detail"
+      [submitting]="noteSubmitting()"
+      (closed)="close()"
+      (noteAdded)="addNote($event)"
+    />
+  }
+</section>

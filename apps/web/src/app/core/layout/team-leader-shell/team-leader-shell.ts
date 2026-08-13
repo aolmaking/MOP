@@ -5,30 +5,28 @@ import { ToastContainer } from '../../../shared/toast/toast-container';
 import { ButtonDirective } from '../../../shared/button/button.directive';
 
 /**
- * The Tenant Owner shell -- the first Owner surface, and the frame the
- * rest of Phase 10 hangs off.
- *
- * The rail lists only what exists. Audit was the first page built because
- * it was one of three finished systems with no way in; Home is the
- * role's actual landing page, added once OwnerHomeService had a page
- * calling it (see PHASE_10.md section 6). The other six Owner pages
- * remain owed.
+ * The Team Leader shell -- one shell per role, same rule as every other
+ * side of the product. All four pages ship together in this phase (see
+ * PHASE_10.md section 3), so unlike BranchShell's team-setup entry there
+ * is no conditional item here: the whole rail exists from the start.
  */
 @Component({
-  selector: 'app-owner-shell',
+  selector: 'app-team-leader-shell',
   imports: [RouterOutlet, RouterLink, RouterLinkActive, ToastContainer, ButtonDirective],
-  templateUrl: './owner-shell.html',
-  styleUrl: './owner-shell.css',
+  templateUrl: './team-leader-shell.html',
+  styleUrl: './team-leader-shell.css',
 })
-export class OwnerShell {
+export class TeamLeaderShell {
   private readonly authStore = inject(AuthStore);
   private readonly router = inject(Router);
 
   protected readonly session = this.authStore.session;
 
   protected readonly navigation = [
-    { label: 'Home', route: '/owner/home' },
-    { label: 'History', route: '/owner/audit' },
+    { label: 'Home', route: '/team-leader' },
+    { label: 'Technicians', route: '/team-leader/technicians' },
+    { label: 'Work orders', route: '/team-leader/work-orders' },
+    { label: 'Reports', route: '/team-leader/reports' },
   ];
 
   async logout(): Promise<void> {

@@ -1,0 +1,102 @@
+/*
+ * The Team Leader frame. Same red-rail device as every other shell --
+ * see branch-shell.css for the full reasoning. Team Leader is a staff
+ * role like Branch Manager or Inventory Manager, not owner-flavored, so
+ * it gets the same treatment rather than a variant.
+ */
+
+.rail-shell {
+  display: grid;
+  grid-template-columns: 224px 1fr;
+  min-height: 100vh;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-3);
+  background: var(--brand-deep);
+  border-inline-end: 1px solid var(--brand);
+}
+
+.rail-brand {
+  padding: var(--space-2) var(--space-3) var(--space-6);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: var(--text-md);
+  letter-spacing: var(--tracking-label);
+  color: var(--white);
+}
+
+.rail-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  color: rgb(255 255 255 / 0.72);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-decoration: none;
+  border-inline-start: 2px solid transparent;
+}
+
+.rail-link:hover {
+  color: var(--white);
+  background: rgb(0 0 0 / 0.18);
+}
+
+.rail-link--active {
+  border-inline-start-color: var(--white);
+  color: var(--white);
+  font-weight: 700;
+}
+
+.rail-footer {
+  margin-top: auto;
+  padding-top: var(--space-4);
+  border-top: 1px solid rgb(255 255 255 / 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.rail-account {
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--space-3);
+  gap: 0.125rem;
+}
+
+.rail-account-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--white);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-account-role {
+  font-size: var(--text-xs);
+  color: rgb(255 255 255 / 0.62);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+.rail-footer button {
+  background: transparent;
+  border: 1px solid rgb(255 255 255 / 0.42);
+  color: var(--white);
+}
+
+.rail-footer button:hover:not(:disabled) {
+  background: rgb(0 0 0 / 0.22);
+  border-color: var(--white);
+  color: var(--white);
+}
+
+.rail-content {
+  padding: var(--space-6) var(--space-7);
+  overflow-y: auto;
+}

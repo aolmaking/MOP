@@ -101,9 +101,10 @@ export const routes: Routes = [
     ],
   },
   {
-    // The Tenant Owner shell -- the first Owner surface. History is built
-    // first because AuditLog has been written since Phase 1 and read by
-    // nothing; the other seven Owner pages are Phase 10.
+    // The Tenant Owner shell. Audit was the first page built, because
+    // AuditLog had been written since Phase 1 and read by nothing; Home
+    // followed once OwnerHomeService had a page calling it. Six Owner
+    // pages remain owed -- see PAGE_INVENTORY.md.
     path: 'owner',
     canActivate: [authGuard],
     loadComponent: () => import('./core/layout/owner-shell/owner-shell').then((m) => m.OwnerShell),
@@ -116,6 +117,33 @@ export const routes: Routes = [
       {
         path: 'audit',
         loadComponent: () => import('./features/owner/audit-page').then((m) => m.AuditPage),
+      },
+    ],
+  },
+  {
+    // The Team Leader shell -- all four pages ship together (PHASE_10.md
+    // section 3), so unlike Branch Manager's delegated Teams entry there
+    // is nothing here that arrives later.
+    path: 'team-leader',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./core/layout/team-leader-shell/team-leader-shell').then((m) => m.TeamLeaderShell),
+    children: [
+      {
+        path: '',
+        loadComponent: () => import('./features/team-leader/team-leader-home').then((m) => m.TeamLeaderHome),
+      },
+      {
+        path: 'technicians',
+        loadComponent: () => import('./features/team-leader/technicians-page').then((m) => m.TechniciansPage),
+      },
+      {
+        path: 'work-orders',
+        loadComponent: () => import('./features/team-leader/team-work-orders').then((m) => m.TeamWorkOrders),
+      },
+      {
+        path: 'reports',
+        loadComponent: () => import('./features/team-leader/team-reports').then((m) => m.TeamReports),
       },
     ],
   },

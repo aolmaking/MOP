@@ -1,0 +1,56 @@
+<section class="wo">
+  <header class="wo-head">
+    <h1 class="wo-title">Work Orders</h1>
+    @if (state() === 'ready') {
+      <p class="wo-count">{{ rows().length }} in progress</p>
+    }
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to this page</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+    @case ('empty') {
+      <div class="state">
+        <p class="state-title">Nothing your team is touching right now</p>
+      </div>
+    }
+    @case ('ready') {
+      <div class="table-scroll">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Work order</th>
+              <th>Status</th>
+              <th>Technician</th>
+              <th class="col-num">Tasks</th>
+              <th class="col-num">Open blockers</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.workOrderId) {
+              <tr [class.row--blocked]="row.openBlockers > 0">
+                <td class="cell-mono">{{ row.workOrderId }}</td>
+                <td>{{ label(row.status) }}</td>
+                <td>{{ row.technicianName }}</td>
+                <td class="col-num">{{ row.taskCount }}</td>
+                <td class="col-num">{{ row.openBlockers }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</section>

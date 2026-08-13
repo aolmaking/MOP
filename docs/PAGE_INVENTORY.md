@@ -15,8 +15,8 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| Built | **24** |
-| Remaining | **29** |
+| Built | **28** |
+| Remaining | **25** |
 
 Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built
 
@@ -64,11 +64,11 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Returns / Movements | ✅ | `/inventory/returns` | Queue (accept/reject/clarify, with the clarify↔reply loop) + tenant-wide filterable ledger. Two real backend bugs found and fixed while building this: RETURN_REJECTED and RETURN_CLARIFICATION_REQUESTED existed in the enum with no workflow-graph edge reaching them, and PartReturnRequest was never written by requestReturn |
 | Reports & Stock Insights | ✅ | `/inventory/reports` | Stock risk is velocity-based, per warehouse. Comparison section absent (not empty) for a single-warehouse scope |
 
-## Tenant Owner — 1 / 8
+## Tenant Owner — 2 / 8
 
 | Page | State | Notes |
 |---|:--:|---|
-| Owner Home | ⬜ | Phase 10. `OwnerShell` now exists, with History as its only rail item |
+| Owner Home | ✅ | `/owner/home`. Six cards per `PHASE_10.md` §4: open work orders, waiting-customer, waiting-parts, waiting-payment, low stock (all links), recent changes. Built in a later pass than Phase 10's own commit — see `PHASE_10.md` §6 |
 | Organization & Access | ⬜ | Roles, permissions, staff. The permission engine is built; nothing drives it |
 | Forms & Fields | ⬜ | |
 | Messages & Templates | ⬜ | |
@@ -77,14 +77,14 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Audit & Change History | 🟡 | `/owner/audit` — filterable, with inline diffs. **Rollback not built**: it deep-links to Control Center and Owner pages that do not exist yet. Timestamps use the reader's locale, not the workshop's timezone (the session does not carry it) |
 | Workflow Health / Operations Integrity | ⬜ | |
 
-## Team Leader — 0 / 4
+## Team Leader — 4 / 4 ✅
 
-| Page | State |
-|---|:--:|
-| Team Leader Home | ⬜ |
-| Technicians View | ⬜ |
-| Vehicles / Work Orders View | ⬜ |
-| Technician Performance Reports | ⬜ |
+| Page | State | Route | Notes |
+|---|:--:|---|---|
+| Team Leader Home | ✅ | `/team-leader` | Five triage cards scoped to `managedTechnicianIds`; rework/QC is a link, never an action |
+| Technicians View | ✅ | `/team-leader/technicians` | Roster + details drawer with the internal supervision note, never shown to the technician it's about |
+| Vehicles / Work Orders View | ✅ | `/team-leader/work-orders` | No price/cost/payment field anywhere in the response shape |
+| Technician Performance Reports | ✅ | `/team-leader/reports` | Managed-scope only; company-wide version is Phase 12 |
 
 ## Data Analyst — 0 / 7
 
@@ -131,3 +131,5 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 3. ~~**Audit & Change History.**~~ ✅ **Fixed.** Read live as a seeded owner: 8 real rows including this session's own capability changes and customer decisions, every filter working, a manager without the permission refused with 403, and tenant isolation asserted in the query.
 
 These are the priority, ahead of any new role: they are finished systems with no door.
+
+**A fourth one, found the same way, one phase later.** Phase 10's own commit built `TeamLeaderController`/`TeamLeaderService` (all four endpoints, tested) and `OwnerHomeController`/`OwnerHomeService` (tested) — but no web page anywhere called either. `PROJECT_STATE.md` and `PHASE_MAP.md` still marked the phase "✅ complete." This file itself was not wrong — it had simply not been touched since Phase 7 closed, and still correctly read "Team Leader — 0/4" until this pass fixed both the pages and the progress tables that had drifted past it. See `docs/phases/PHASE_10.md` §6.

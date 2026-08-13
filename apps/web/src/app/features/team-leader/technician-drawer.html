@@ -1,0 +1,77 @@
+<div class="scrim" (click)="closed.emit()"></div>
+<aside class="drawer" role="dialog" aria-modal="true" [attr.aria-label]="detail().fullName">
+  <header class="drawer-head">
+    <div>
+      <h2 class="drawer-title">{{ detail().fullName }}</h2>
+      <p class="drawer-sub">{{ detail().openBlockers }} open blocker{{ detail().openBlockers === 1 ? '' : 's' }} · {{ detail().tasksCompletedToday }} done today</p>
+    </div>
+    <button type="button" class="drawer-close" (click)="closed.emit()" aria-label="Close">×</button>
+  </header>
+
+  <div class="drawer-body">
+    @if (detail().currentTask; as task) {
+      <section class="panel">
+        <h3 class="panel-title">Current task</h3>
+        <p class="current-task">{{ task.title }}</p>
+      </section>
+    }
+
+    <section class="panel">
+      <h3 class="panel-title">Recent tasks</h3>
+      @if (detail().recentTasks.length === 0) {
+        <p class="panel-empty">Nothing recorded yet.</p>
+      } @else {
+        <ul class="sub-list">
+          @for (task of detail().recentTasks; track task.id) {
+            <li class="sub-row">
+              <span>{{ task.title }}</span>
+              <span class="cell-faint">{{ label(task.status) }}</span>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <section class="panel">
+      <h3 class="panel-title">Supervision notes</h3>
+      <!-- The explicit reminder this is a one-way record. -->
+      <p class="panel-note">Not visible to this technician.</p>
+      @if (detail().supervisionNotes.length === 0) {
+        <p class="panel-empty">No notes yet.</p>
+      } @else {
+        <ul class="notes">
+          @for (note of detail().supervisionNotes; track note.id) {
+            <li class="note" [class.note--escalated]="note.escalated">
+              <p class="note-body">{{ note.body }}</p>
+              <div class="note-meta">
+                @if (note.escalated) {
+                  <span class="tag">escalated</span>
+                }
+                <span class="note-when">{{ when(note.createdAt) }}</span>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+
+      <form class="note-form" (submit)="submit($event)">
+        <textarea
+          class="note-input"
+          rows="3"
+          placeholder="Add a supervision note…"
+          [value]="body()"
+          (input)="setBody($any($event.target).value)"
+        ></textarea>
+        <div class="note-form-row">
+          <label class="escalate-check">
+            <input type="checkbox" [checked]="escalate()" (change)="setEscalate($any($event.target).checked)" />
+            Escalate to branch manager
+          </label>
+          <button type="submit" appButton variant="primary" size="small" [disabled]="submitting() || !body().trim()">
+            {{ submitting() ? 'Saving…' : 'Add note' }}
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+</aside>
