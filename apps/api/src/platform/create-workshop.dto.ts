@@ -17,8 +17,19 @@ export class CreateWorkshopDto {
   @Length(2, 120)
   name!: string;
 
+  // The spec's own pattern (docs/detailed-specs/platform-super-admin.md,
+  // Section 1): lowercase letters, digits and hyphens only. This is the
+  // actual enforcement of that pattern -- @Length alone accepted any
+  // string in range, including RTL-override and zero-width characters,
+  // which is exactly what H9 (docs/scenarios3/EDGE_CASE_REGISTER.md)
+  // named as unverified: this slug becomes a public URL segment
+  // (`/w/{slug}`) and this project is built for a primary Arabic market,
+  // so a slug is one of the few fields a malicious or careless client
+  // could use to smuggle a directionality override into a value that
+  // gets echoed back into UI chrome.
   @IsString()
   @Length(2, 60)
+  @Matches(/^[a-z0-9-]+$/, { message: "slug must contain only lowercase letters, digits and hyphens" })
   slug!: string;
 
   // customerRegistrationCode is NOT one of Section 1's fields per

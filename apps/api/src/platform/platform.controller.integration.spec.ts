@@ -150,6 +150,38 @@ describe("PlatformController (integration, real HTTP)", () => {
     expect(seededPermission?.allowed).toBe(true);
   });
 
+  it("H9 -- refuses a slug containing an RTL-override character before it ever reaches the database", async () => {
+    // The slug becomes a public URL segment (/w/{slug}); this project's
+    // primary market is Arabic, so a directionality-override character
+    // is exactly the kind of thing a slug field has to refuse rather
+    // than store. docs/scenarios3/EDGE_CASE_REGISTER.md, H9.
+    const platformAccount = await prisma.account.findFirstOrThrow({ where: { accountType: "PLATFORM" } });
+    const cookieHeader = await login(platformAccount.email!, "platform-password-123");
+    const suffix = `${Date.now()}-rtl`;
+
+    const payload = workshopPayload(suffix);
+    (payload as { slug: string }).slug = `evil‮gnp.exe`;
+
+    const res = await request(app.getHttpServer()).post("/api/v1/platform/workshops").set("Cookie", cookieHeader).send(payload);
+
+    expect(res.status).toBe(400);
+    const created = await prisma.tenant.findFirst({ where: { name: `HTTP Test Workshop ${suffix}` } });
+    expect(created).toBeNull();
+  });
+
+  it("H9 -- refuses a slug with uppercase, spaces, or other characters outside the documented pattern", async () => {
+    const platformAccount = await prisma.account.findFirstOrThrow({ where: { accountType: "PLATFORM" } });
+    const cookieHeader = await login(platformAccount.email!, "platform-password-123");
+    const suffix = `${Date.now()}-bad`;
+
+    const payload = workshopPayload(suffix);
+    (payload as { slug: string }).slug = "Not A Valid_Slug!";
+
+    const res = await request(app.getHttpServer()).post("/api/v1/platform/workshops").set("Cookie", cookieHeader).send(payload);
+
+    expect(res.status).toBe(400);
+  });
+
   it("seeds a real starter service card when a starter specialization profile is chosen (Phase 17.A)", async () => {
     const platformAccount = await prisma.account.findFirstOrThrow({ where: { accountType: "PLATFORM" } });
     const cookieHeader = await login(platformAccount.email!, "platform-password-123");
