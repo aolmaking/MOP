@@ -150,6 +150,45 @@ describe("PlatformController (integration, real HTTP)", () => {
     expect(seededPermission?.allowed).toBe(true);
   });
 
+  it("seeds a real starter service card when a starter specialization profile is chosen (Phase 17.A)", async () => {
+    const platformAccount = await prisma.account.findFirstOrThrow({ where: { accountType: "PLATFORM" } });
+    const cookieHeader = await login(platformAccount.email!, "platform-password-123");
+    const suffix = `${Date.now()}-quick`;
+
+    const res = await request(app.getHttpServer())
+      .post("/api/v1/platform/workshops")
+      .set("Cookie", cookieHeader)
+      .send({ ...workshopPayload(suffix), starterSpecializationProfile: "QUICK_SERVICE" });
+
+    expect(res.status).toBe(201);
+    tenantIdsToClean.push(res.body.tenant.id);
+
+    const definition = await prisma.specializationDefinition.findFirst({
+      where: { tenantId: res.body.tenant.id, kind: "SERVICE_CARD" },
+    });
+    expect(definition?.name).toBe("Oil Change");
+    expect((definition?.fields as unknown as { key: string }[]).map((f) => f.key)).toContain("viscosity");
+
+    await prisma.specializationDefinition.deleteMany({ where: { tenantId: res.body.tenant.id } });
+  });
+
+  it("seeds nothing when no starter specialization profile is chosen -- NONE is not a stub, it is a real empty result", async () => {
+    const platformAccount = await prisma.account.findFirstOrThrow({ where: { accountType: "PLATFORM" } });
+    const cookieHeader = await login(platformAccount.email!, "platform-password-123");
+    const suffix = `${Date.now()}-none`;
+
+    const res = await request(app.getHttpServer())
+      .post("/api/v1/platform/workshops")
+      .set("Cookie", cookieHeader)
+      .send(workshopPayload(suffix));
+
+    expect(res.status).toBe(201);
+    tenantIdsToClean.push(res.body.tenant.id);
+
+    const count = await prisma.specializationDefinition.count({ where: { tenantId: res.body.tenant.id } });
+    expect(count).toBe(0);
+  });
+
   it("a non-platform session is rejected with 403, not allowed through", async () => {
     const suffix = `${Date.now()}-2`;
     const seedTenant = await prisma.tenant.create({

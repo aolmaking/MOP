@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import type { Prisma } from "@mop/database";
 import { PrismaService } from "../database/prisma.service";
 
 export type SpecializationKind = "SERVICE_CARD" | "MEASUREMENT_FORM";
@@ -54,10 +55,12 @@ export class SpecializationService {
     kind: SpecializationKind,
     name: string,
     fields: readonly FieldSpec[],
+    tx?: Prisma.TransactionClient,
   ): Promise<DefinitionSummary> {
     this.validateFieldSpecs(fields);
 
-    const created = await this.prisma.specializationDefinition.create({
+    const client = tx ?? this.prisma;
+    const created = await client.specializationDefinition.create({
       data: {
         tenantId,
         category: category as never,

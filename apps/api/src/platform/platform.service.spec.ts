@@ -2,9 +2,14 @@ import { ConflictException } from "@nestjs/common";
 import { PlatformService } from "./platform.service";
 import { PrismaService } from "../database/prisma.service";
 import { AuditService } from "../audit/audit.service";
+import { SpecializationService } from "../specialization/specialization.service";
 import type { CreateWorkshopDto } from "./create-workshop.dto";
 
 describe("PlatformService", () => {
+  function createSpecializationServiceMock() {
+    return { defineCard: jest.fn().mockResolvedValue({}) } as unknown as SpecializationService;
+  }
+
   function createTxMock() {
     return {
       tenant: {
@@ -55,7 +60,7 @@ describe("PlatformService", () => {
     const tx = createTxMock();
     const prisma = createPrismaMock(tx);
     const auditService = { record: jest.fn().mockResolvedValue({}) } as unknown as AuditService;
-    const service = new PlatformService(prisma, auditService);
+    const service = new PlatformService(prisma, auditService, createSpecializationServiceMock());
 
     const result = await service.createWorkshop(createDto(), { accountId: "platform-1", displayName: "Platform Admin" });
 
@@ -88,7 +93,7 @@ describe("PlatformService", () => {
     const tx = createTxMock();
     const prisma = createPrismaMock(tx);
     const auditService = { record: jest.fn().mockResolvedValue({}) } as unknown as AuditService;
-    const service = new PlatformService(prisma, auditService);
+    const service = new PlatformService(prisma, auditService, createSpecializationServiceMock());
 
     const result = await service.createWorkshop(createDto(), { accountId: "platform-1", displayName: "Platform Admin" });
 
@@ -104,7 +109,7 @@ describe("PlatformService", () => {
     const tx = createTxMock();
     const prisma = createPrismaMock(tx);
     const auditService = { record: jest.fn().mockResolvedValue({}) } as unknown as AuditService;
-    const service = new PlatformService(prisma, auditService);
+    const service = new PlatformService(prisma, auditService, createSpecializationServiceMock());
 
     await service.createWorkshop(createDto(), { accountId: "platform-1", displayName: "Platform Admin" });
 
@@ -121,7 +126,7 @@ describe("PlatformService", () => {
     const tx = createTxMock();
     const prisma = createPrismaMock(tx, { existingAccount: { id: "existing-1" } });
     const auditService = { record: jest.fn().mockResolvedValue({}) } as unknown as AuditService;
-    const service = new PlatformService(prisma, auditService);
+    const service = new PlatformService(prisma, auditService, createSpecializationServiceMock());
 
     await expect(service.createWorkshop(createDto(), { accountId: "platform-1", displayName: "Platform Admin" })).rejects.toBeInstanceOf(
       ConflictException,
@@ -134,7 +139,7 @@ describe("PlatformService", () => {
     const prisma = createPrismaMock(tx);
     (prisma.plan.findUniqueOrThrow as jest.Mock).mockResolvedValue({ id: "plan-1", maxBranches: 1, maxUsers: 20, maxWarehouses: 5 });
     const auditService = { record: jest.fn().mockResolvedValue({}) } as unknown as AuditService;
-    const service = new PlatformService(prisma, auditService);
+    const service = new PlatformService(prisma, auditService, createSpecializationServiceMock());
 
     await expect(
       service.createWorkshop(createDto({ allowedBranchesStart: 3 }), { accountId: "platform-1", displayName: "Platform Admin" }),
@@ -146,7 +151,7 @@ describe("PlatformService", () => {
     const tx = createTxMock();
     const prisma = createPrismaMock(tx);
     const auditService = { record: jest.fn().mockResolvedValue({}) } as unknown as AuditService;
-    const service = new PlatformService(prisma, auditService);
+    const service = new PlatformService(prisma, auditService, createSpecializationServiceMock());
 
     await service.createWorkshop(createDto(), { accountId: "platform-1", displayName: "Platform Admin" });
 

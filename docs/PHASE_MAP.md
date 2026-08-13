@@ -54,10 +54,10 @@
 | 11 — Customer Portal | ⬜ not started |
 | 12 — Reporting & Data Analyst | ⬜ not started |
 | 13 — System Automation | ⬜ not started |
-| 14 — Internationalization & Release Readiness | ⬜ not started — 20.D narrows its original scope, see below |
-| 15 — Specialization Discovery | ⬜ not started |
-| 16 — Specialization Structure | ⬜ not started |
-| 17 — Specialization at Creation | ⬜ not started |
+| 14 — Internationalization & Release Readiness | 🟠 permission-key lint + a perf fix shipped; translation pass owed |
+| 15 — Specialization Discovery | ✅ schema settled, 3/5 primitives proven end-to-end |
+| 16 — Specialization Structure | ✅ minimum bar met (16.A/E/H); 16.I design spike written |
+| 17 — Specialization at Creation | 🟠 17.A backend seam shipped; wizard UI and 17.B–E owed |
 | **18 — Tenant Relationships** | ⬜ **new** — not started |
 | **19 — Governance Depth** | ⬜ **new** — not started |
 | **20 — Operational Resilience at Scale** | ⬜ **new** — not started |
@@ -124,8 +124,8 @@ Settled the schema for all five specialization primitives. Service card, measure
 Shipped: promised time and expected-duration on `WorkOrder` (16.A/16.E), a real SLA-overrun signal in the Attention Center proven by test, and a generic `Attachment` table (16.H) — the three findings the exit criteria names as mandatory. 16.I (network-scoped specialization override) got the design spike and written recommendation the exit criteria allows in place of implementation: reuse capability-engine override-and-lock machinery rather than invent a second one. Resources, work-order linkage, payer attribution, location entity, and append-only addenda (16.B/C/D/F/G) are each named with a specific reason and no blocking dependency, not silently dropped.
 **Detail:** [`phases/PHASE_16.md`](./phases/PHASE_16.md)
 
-### Phase 17 — Specialization at Creation
-The super admin declares a workshop's specializations at `Add Workshop Owner`, not as a settings page discovered later. **Sharpened by Workshop 1, scenario 1:** a fixed library of starter profiles will always under-cover reality — the very first specialized tenant tested against this phase's original draft (Apex Motorsport) fit none of the four profiles named. This phase must ship an explicit "start from nothing" authoring path as a first-class option alongside the profile library, not a fallback.
+### Phase 17 — Specialization at Creation 🟠 (17.A backend seam only — see `phases/PHASE_17.md`)
+The super admin declares a workshop's specializations at `Add Workshop Owner`, not as a settings page discovered later. **Sharpened by Workshop 1, scenario 1:** a fixed library of starter profiles will always under-cover reality — the very first specialized tenant tested against this phase's original draft (Apex Motorsport) fit none of the four profiles named. This phase must ship an explicit "start from nothing" authoring path as a first-class option alongside the profile library, not a fallback. **Shipped this pass:** `CreateWorkshopDto.starterSpecializationProfile` + `PlatformService.seedStarterSpecializations()`, seeding Nafath's oil-change card or Delta's hydraulic form atomically inside workshop creation's existing transaction, proven by two new HTTP integration tests — the backend seam, not the wizard UI (no starter-profile picker exists on the form yet, and the "start from nothing" path this note demands is still owed). Branch definition (17.B), bulk staff provisioning (17.C), bulk data import (17.D), and the regional-manager role (17.E) are each real, scoped work not started this pass.
 **Detail:** [`phases/PHASE_17.md`](./phases/PHASE_17.md)
 
 ### Phase 18 — Tenant Relationships 🆕

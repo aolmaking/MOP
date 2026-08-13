@@ -9,9 +9,10 @@ import { CapabilitiesController } from "./workshops/capabilities.controller";
 import { CapabilitiesModule } from "../capabilities/capabilities.module";
 import { WorkshopsService } from "./workshops/workshops.service";
 import { WorkshopHealthService } from "./workshops/workshop-health.service";
+import { SpecializationModule } from "../specialization/specialization.module";
 
 @Module({
-  imports: [AuditModule, AuthModule, CapabilitiesModule],
+  imports: [AuditModule, AuthModule, CapabilitiesModule, SpecializationModule],
   // PlatformController owns Add Workshop Owner + the availability-check
   // endpoints (Phase 2 step 2); WorkshopsController owns the Workshops
   // list/details/freeze/reactivate endpoints (step 3). Both sit under the

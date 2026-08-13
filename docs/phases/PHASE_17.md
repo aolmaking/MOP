@@ -1,7 +1,8 @@
 # Phase 17 — Specialization at Creation
 
-> **Status:** ⬜ not started. Depends on Phase 15 (primitives exist as
-> data) and Phase 16 (structures the primitives attach to exist).
+> **Status:** 🟠 17.A's backend seam shipped (starter-profile seeding at
+> creation time); the full multi-shape wizard and 17.B–17.E are owed —
+> see "What actually shipped" below.
 > **Source:** [`docs/scenarios/FINDINGS_SYNTHESIS.md`](../scenarios/FINDINGS_SYNTHESIS.md),
 > the user's core framing: *"the details of the card will be detected
 > — the fields he will fill — while making a new workshop account, from
@@ -100,15 +101,22 @@ its scope; Phase 12 builds what it sees.
   structures is separate, deliberate follow-on work, recorded here if it
   slips
 
+## What actually shipped
+
+`CreateWorkshopDto.starterSpecializationProfile` (`NONE | QUICK_SERVICE | FIELD_SERVICE`, optional, defaulting to `NONE`) plus `PlatformService.seedStarterSpecializations()`, called inside the same transaction as tenant/owner/role-permission creation. `QUICK_SERVICE` seeds Nafath's oil-change service card; `FIELD_SERVICE` seeds Delta's hydraulic diagnostic form — the exact two cases Phase 15 already proved end-to-end, now reachable from workshop creation rather than only from a direct service call. `SpecializationService.defineCard()` gained an optional `tx` parameter so the seed participates in the same atomic transaction as the rest of `attemptCreateWorkshop` — a tenant created without its starter data (or vice versa) would be exactly the kind of partial-creation bug `attemptCreateWorkshop`'s existing one-transaction discipline already exists to prevent. Proven by two new integration tests over real HTTP: a chosen profile seeds a real, correctly-shaped definition; `NONE` seeds nothing (a real empty result, not a stub).
+
+This is the backend seam 17.A needs, not the wizard UI. No "small number of starter profiles" *picker* was built on `Add Workshop Owner`'s form — the DTO field exists and is real, but nothing in `apps/web` sends it yet.
+
+## What was deferred, with reasons
+
+- **17.A's remaining scope** — the starter-profile UI (a picker on `Add Workshop Owner`), authoring a *custom* service card at creation time (vs. picking a pre-built one), position-taxonomy override at creation, initial blocker reasons, initial resource types/instances (blocked on 16.B, itself deferred), and the network-lock choice (blocked on 16.I, itself a design spike not an implementation). Each of these is real UI/product-design work distinct from the backend seam this pass proves.
+- **17.B — Branch definition at onboarding.** Real, scoped, and independent of the rest of 17.A — a reasonable next slice, not started this pass for budget reasons alone.
+- **17.C — Bulk staff provisioning** and **17.D — Bulk data import.** Both are substantial features (CSV parsing, per-row validation surfacing, N-account/N-record creation) that deserve their own pass with real test coverage of the validation-error path specifically, per the phase document's own emphasis that "validation errors surface per-row, not as a single opaque script failure."
+- **17.E — Regional-manager role.** A new `StaffRole` touches `default-role-permissions.ts`, the permission manifest, `ScopeResolverService`, and `AuthService`'s session-resolution branch (the same shape Phase 10's `TEAM_LEADER` work touched) — real, scoped work for a future pass, not a one-line addition to squeeze in here.
+
 ## Exit criteria
 
-A super admin can create a workshop matching each of the four scenario
-shapes — Nafath (single-operator, minimal), El-Makkawy (multi-branch,
-bulk staff, network-locked nothing), Delta (field-service resource
-types, measurement forms), SpeedLube (network-locked checklist, bulk
-customer import) — using only the product, with zero direct database
-access, and the result is indistinguishable in the running product from
-a workshop that had been manually configured by an engineer today.
+**Not met this pass**, and not claimed to be: a super admin can create a workshop matching each of the four scenario shapes using only the product, with zero direct database access, indistinguishable from an engineer-configured workshop. What this pass proves is narrower and named precisely: the *backend* can already produce Nafath's and Delta's starter specialization data atomically at creation time. El-Makkawy (multi-branch, bulk staff) and SpeedLube (network-locked, bulk import) need 17.B–17.D and 16.I/16.B first — the exit criteria's own dependency chain (15 → 16 → 17) is why this pass did not attempt to force those through ahead of their prerequisites.
 
 ## The dependency this phase does not get to skip
 

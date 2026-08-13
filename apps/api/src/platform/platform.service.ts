@@ -6,6 +6,7 @@ import type { StaffRole } from "@mop/shared";
 import { PrismaService } from "../database/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { sha256 } from "../auth/token.util";
+import { SpecializationService } from "../specialization/specialization.service";
 import type { CreateWorkshopDto } from "./create-workshop.dto";
 
 export interface WorkshopCreator {
@@ -72,6 +73,7 @@ export class PlatformService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly specialization: SpecializationService,
   ) {}
 
   /**
@@ -189,6 +191,7 @@ export class PlatformService {
         });
 
         await this.seedBaselineRolePermissionsAndPages(tx, tenant.id);
+        await this.seedStarterSpecializations(tx, tenant.id, dto);
 
         await this.auditService.record(
           {
@@ -271,6 +274,56 @@ export class PlatformService {
       for (const pageId of pages) {
         await tx.rolePage.create({ data: { tenantId, role, pageId, allowed: true } });
       }
+    }
+  }
+
+  /**
+   * Phase 17.A -- a small number of starter profiles, not one giant form.
+   * `starterSpecializationProfile` is optional and defaults to seeding
+   * nothing, matching a workshop (like El-Makkawy's dealership shape)
+   * that needs no starter specialization data at all. The two named
+   * profiles seed exactly the cases docs/phases/PHASE_15.md already
+   * proved end-to-end -- Nafath's oil-change service card, Delta's
+   * hydraulic diagnostic form -- so a super admin creating a workshop
+   * matching either shape gets real, usable data from the moment the
+   * owner first logs in, not an empty specialization library.
+   */
+  private async seedStarterSpecializations(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    dto: CreateWorkshopDto,
+  ): Promise<void> {
+    const profile = dto.starterSpecializationProfile ?? "NONE";
+    if (profile === "NONE") return;
+
+    if (profile === "QUICK_SERVICE") {
+      await this.specialization.defineCard(
+        tenantId,
+        dto.primaryCategory,
+        "SERVICE_CARD",
+        "Oil Change",
+        [
+          { key: "viscosity", label: "Viscosity", type: "ENUM", enumOptions: ["5W-30", "5W-40", "10W-40"], required: true },
+          { key: "litres", label: "Litres", type: "DECIMAL", unit: "L", required: true },
+          { key: "filterType", label: "Filter type", type: "TEXT" },
+        ],
+        tx,
+      );
+    }
+
+    if (profile === "FIELD_SERVICE") {
+      await this.specialization.defineCard(
+        tenantId,
+        dto.primaryCategory,
+        "MEASUREMENT_FORM",
+        "Hydraulic Pressure Diagnostic",
+        [
+          { key: "main_pump", label: "Main pump", type: "DECIMAL", unit: "bar", required: true },
+          { key: "return_line", label: "Return line", type: "DECIMAL", unit: "bar", required: true },
+          { key: "within_spec", label: "Within spec", type: "BOOLEAN", required: true },
+        ],
+        tx,
+      );
     }
   }
 

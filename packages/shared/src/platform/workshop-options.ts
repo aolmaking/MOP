@@ -23,6 +23,20 @@ export const STARTER_BUILDER_TEMPLATE_LABELS: Readonly<Record<StarterBuilderTemp
   HIGH_VOLUME_BRANCH_NETWORK: "High-Volume Branch Network",
 };
 
+// Phase 17.A -- the "small number of starter profiles" the phase document
+// asks for, rather than one giant form: Nafath and Delta need almost none
+// of the same declarations, so a profile picks sensible starter
+// specialization data at creation time, editable afterward. NONE seeds
+// nothing, matching a workshop needing no specialization at all.
+export const STARTER_SPECIALIZATION_PROFILES = ["NONE", "QUICK_SERVICE", "FIELD_SERVICE"] as const;
+export type StarterSpecializationProfile = (typeof STARTER_SPECIALIZATION_PROFILES)[number];
+
+export const STARTER_SPECIALIZATION_PROFILE_LABELS: Readonly<Record<StarterSpecializationProfile, string>> = {
+  NONE: "None",
+  QUICK_SERVICE: "Quick Service (e.g. oil change)",
+  FIELD_SERVICE: "Field Service / Heavy Equipment (diagnostic forms)",
+};
+
 export const INITIAL_STATUSES = ["ACTIVE", "TRIAL", "PENDING_SETUP"] as const;
 export type InitialStatus = (typeof INITIAL_STATUSES)[number];
 

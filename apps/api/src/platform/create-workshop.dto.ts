@@ -1,6 +1,6 @@
 import { IsBoolean, IsEmail, IsEnum, IsIn, IsInt, IsOptional, IsString, Length, Matches, Min, ValidateIf } from "class-validator";
 import { CategoryCode } from "@mop/database";
-import { BUSINESS_TYPES, INITIAL_STATUSES, STARTER_BUILDER_TEMPLATES } from "@mop/shared";
+import { BUSINESS_TYPES, INITIAL_STATUSES, STARTER_BUILDER_TEMPLATES, STARTER_SPECIALIZATION_PROFILES } from "@mop/shared";
 
 /**
  * "Add Workshop Owner," per docs/detailed-specs/platform-super-admin.md.
@@ -89,4 +89,9 @@ export class CreateWorkshopDto {
 
   @IsIn(INITIAL_STATUSES)
   initialStatus!: (typeof INITIAL_STATUSES)[number];
+
+  // Phase 17.A -- optional, defaults to no starter specialization data.
+  @IsOptional()
+  @IsIn(STARTER_SPECIALIZATION_PROFILES)
+  starterSpecializationProfile?: (typeof STARTER_SPECIALIZATION_PROFILES)[number];
 }
