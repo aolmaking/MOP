@@ -1469,6 +1469,7 @@ model PriceCatalogEntry {
   itemType      String
   unitPrice     Decimal   @db.Decimal(12, 2)
   laborPrice    Decimal?  @db.Decimal(12, 2)
+  isActive      Boolean   @default(true)
   effectiveFrom DateTime  @default(now())
   effectiveTo   DateTime?
 
@@ -1740,7 +1741,14 @@ model FinanceConfiguration {
   technicianPriceVisible    Boolean         @default(false)
   customerInvoiceVisible    Boolean         @default(true)
   discountApprovalThreshold Decimal         @default(0) @db.Decimal(12, 2)
+  maxDiscountPercent        Decimal         @default(0) @db.Decimal(5, 2)
   maxBranchDiscountPercent  Decimal         @default(0) @db.Decimal(5, 2)
+  depositRequired           Boolean         @default(false)
+  depositPercent            Decimal         @default(0) @db.Decimal(5, 2)
+  taxRatePercent            Decimal         @default(0) @db.Decimal(5, 2)
+  taxInclusive              Boolean         @default(true)
+  invoiceNumberPrefix       String          @default("INV")
+  defaultDueInDays          Int             @default(0)
   allowUnpaidDelivery       Boolean         @default(false)
   allowPartialPaidDelivery  Boolean         @default(false)
   paymentMethods            PaymentMethod[]

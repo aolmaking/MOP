@@ -4,9 +4,13 @@ import { AuthModule } from "../auth/auth.module";
 import { AccessModule } from "../access/access.module";
 import { CapabilitiesModule } from "../capabilities/capabilities.module";
 import { OperationEventsModule } from "../operations/operation-events.module";
+import { AuditModule } from "../audit/audit.module";
 import { BillingModule } from "../billing/billing.module";
 import { FinanceController } from "./finance.controller";
 import { FinanceService } from "./finance.service";
+import { FinanceConfigurationController } from "./finance-configuration.controller";
+import { FinanceConfigurationService } from "./finance-configuration.service";
+import { PriceCatalogService } from "./price-catalog.service";
 
 /**
  * Finance Core. `FinanceService` is the only writer of invoices and
@@ -20,9 +24,9 @@ import { FinanceService } from "./finance.service";
  * Finance's.
  */
 @Module({
-  imports: [DatabaseModule, AuthModule, AccessModule, CapabilitiesModule, OperationEventsModule, BillingModule],
-  controllers: [FinanceController],
-  providers: [FinanceService],
+  imports: [DatabaseModule, AuthModule, AccessModule, CapabilitiesModule, OperationEventsModule, BillingModule, AuditModule],
+  controllers: [FinanceController, FinanceConfigurationController],
+  providers: [FinanceService, FinanceConfigurationService, PriceCatalogService],
   exports: [FinanceService],
 })
 export class FinanceModule {}

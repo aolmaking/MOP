@@ -1,0 +1,211 @@
+<section class="pricing">
+  <header class="head">
+    <h1 class="title">Pricing &amp; Financial Configuration</h1>
+    <p class="sub">The workshop's own prices and money rules.</p>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to this page</p>
+        <p class="state-body">Pricing &amp; Financial Configuration is only visible to the workshop owner.</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('ready') {
+      @if (config(); as c) {
+        @if (saveError(); as err) {
+          <app-error-banner [error]="err" />
+        }
+
+        <section class="group">
+          <div class="group-head">
+            <h2 class="group-title">Service Catalog</h2>
+            <button appButton variant="secondary" size="small" (click)="openAddPrice()">+ Add / Update Price</button>
+          </div>
+          <p class="hint">Editing a price only affects quotes created after you save. Existing quotes and invoices keep their original price.</p>
+          @if (catalog().length === 0) {
+            <p class="state-body">No priced items yet.</p>
+          } @else {
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Type</th>
+                  <th>Unit price ({{ c.currency }})</th>
+                  <th>Labor price</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of catalog(); track item.id) {
+                  <tr>
+                    <td>{{ item.itemKey }}</td>
+                    <td>{{ item.itemType }}</td>
+                    <td>{{ item.unitPrice }}</td>
+                    <td>{{ item.laborPrice ?? '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </section>
+
+        <section class="group">
+          <h2 class="group-title">Tax / VAT</h2>
+          <label class="field">
+            <span class="field-label">Rate (%)</span>
+            <input type="number" min="0" max="100" [ngModel]="c.taxRatePercent" (ngModelChange)="patch('taxRatePercent', $event)" />
+          </label>
+          <label class="field field--checkbox">
+            <input type="checkbox" [ngModel]="c.taxInclusive" (ngModelChange)="patch('taxInclusive', $event)" />
+            <span>Prices already include tax</span>
+          </label>
+        </section>
+
+        <section class="group">
+          <h2 class="group-title">Discounts &amp; Deposits</h2>
+          <label class="field">
+            <span class="field-label">Max discount % (workshop-wide ceiling)</span>
+            <input type="number" min="0" max="100" [ngModel]="c.maxDiscountPercent" (ngModelChange)="patch('maxDiscountPercent', $event)" />
+          </label>
+          <label class="field">
+            <span class="field-label">Max branch-level discount %</span>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              [ngModel]="c.maxBranchDiscountPercent"
+              (ngModelChange)="patch('maxBranchDiscountPercent', $event)"
+            />
+          </label>
+          <label class="field">
+            <span class="field-label">Discount approval threshold ({{ c.currency }})</span>
+            <input
+              type="number"
+              min="0"
+              [ngModel]="c.discountApprovalThreshold"
+              (ngModelChange)="patch('discountApprovalThreshold', $event)"
+            />
+          </label>
+          <label class="field field--checkbox">
+            <input type="checkbox" [ngModel]="c.depositRequired" (ngModelChange)="patch('depositRequired', $event)" />
+            <span>Require a deposit before work starts</span>
+          </label>
+          @if (c.depositRequired) {
+            <label class="field">
+              <span class="field-label">Deposit %</span>
+              <input type="number" min="0" max="100" [ngModel]="c.depositPercent" (ngModelChange)="patch('depositPercent', $event)" />
+            </label>
+          }
+        </section>
+
+        <section class="group">
+          <h2 class="group-title">Payment Methods</h2>
+          <div class="checklist">
+            @for (method of allMethods; track method) {
+              <label class="check-item">
+                <input type="checkbox" [checked]="c.paymentMethods.includes(method)" (change)="togglePaymentMethod(method)" />
+                <span>{{ method }}</span>
+              </label>
+            }
+          </div>
+        </section>
+
+        <section class="group">
+          <h2 class="group-title">Invoice Settings</h2>
+          <label class="field">
+            <span class="field-label">Numbering prefix</span>
+            <input type="text" [ngModel]="c.invoiceNumberPrefix" (ngModelChange)="patch('invoiceNumberPrefix', $event)" />
+          </label>
+          <label class="field">
+            <span class="field-label">Default due-in days</span>
+            <input type="number" min="0" [ngModel]="c.defaultDueInDays" (ngModelChange)="patch('defaultDueInDays', $event)" />
+          </label>
+          <label class="field">
+            <span class="field-label">Invoice terms</span>
+            <textarea rows="3" [ngModel]="c.invoiceTerms" (ngModelChange)="patch('invoiceTerms', $event)"></textarea>
+          </label>
+        </section>
+
+        <section class="group">
+          <h2 class="group-title">Delivery Payment Gate</h2>
+          <label class="field field--checkbox">
+            <input type="checkbox" [ngModel]="c.allowUnpaidDelivery" (ngModelChange)="patch('allowUnpaidDelivery', $event)" />
+            <span>Allow delivery with an unpaid balance</span>
+          </label>
+          @if (c.allowUnpaidDelivery) {
+            <p class="warning">Branches will be able to release vehicles with an unpaid balance.</p>
+          }
+          <label class="field field--checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="c.allowPartialPaidDelivery"
+              (ngModelChange)="patch('allowPartialPaidDelivery', $event)"
+            />
+            <span>Allow delivery with a partial payment</span>
+          </label>
+        </section>
+      }
+    }
+  }
+
+  @if (showAddPrice()) {
+    <div class="modal-backdrop" (click)="showAddPrice.set(false)">
+      <div class="modal" (click)="$event.stopPropagation()">
+        <h2 class="modal-title">Add / Update Price</h2>
+        @if (priceError(); as err) {
+          <app-error-banner [error]="err" />
+        }
+        <label class="field">
+          <span class="field-label">Item name</span>
+          <input
+            type="text"
+            [ngModel]="priceDraft().itemKey"
+            (ngModelChange)="priceDraft.set({ ...priceDraft(), itemKey: $event })"
+          />
+        </label>
+        <label class="field">
+          <span class="field-label">Type</span>
+          <input
+            type="text"
+            [ngModel]="priceDraft().itemType"
+            (ngModelChange)="priceDraft.set({ ...priceDraft(), itemType: $event })"
+          />
+        </label>
+        <label class="field">
+          <span class="field-label">Unit price</span>
+          <input
+            type="number"
+            min="0"
+            [ngModel]="priceDraft().unitPrice"
+            (ngModelChange)="priceDraft.set({ ...priceDraft(), unitPrice: $event })"
+          />
+        </label>
+        <label class="field">
+          <span class="field-label">Labor price (optional)</span>
+          <input
+            type="number"
+            min="0"
+            [ngModel]="priceDraft().laborPrice"
+            (ngModelChange)="priceDraft.set({ ...priceDraft(), laborPrice: $event })"
+          />
+        </label>
+        <div class="modal-actions">
+          <button appButton variant="secondary" (click)="showAddPrice.set(false)">Cancel</button>
+          <button appButton variant="primary" [disabled]="!priceDraft().itemKey.trim()" (click)="submitPrice()">Save</button>
+        </div>
+      </div>
+    </div>
+  }
+</section>

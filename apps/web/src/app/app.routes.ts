@@ -176,6 +176,10 @@ export const routes: Routes = [
         path: 'forms',
         loadComponent: () => import('./features/owner/forms/forms-page').then((m) => m.FormsPage),
       },
+      {
+        path: 'pricing',
+        loadComponent: () => import('./features/owner/pricing/pricing-page').then((m) => m.PricingPage),
+      },
     ],
   },
   {

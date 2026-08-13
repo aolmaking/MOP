@@ -32,6 +32,7 @@ export class OwnerShell {
     { label: 'Teams', route: '/owner/organization/teams' },
     { label: 'Forms & Fields', route: '/owner/forms' },
     { label: 'Messages', route: '/owner/messages' },
+    { label: 'Pricing', route: '/owner/pricing' },
     { label: 'History', route: '/owner/audit' },
   ];
 
