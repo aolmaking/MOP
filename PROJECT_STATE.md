@@ -230,7 +230,7 @@ except this demo manager holds `workorders.branch.view` — without
 
 ## 8. Environment requirements
 
-- Node 20 (`.nvmrc`); this machine runs 24, which `doctor` warns about — CI runs 20, so a local pass is not proof of a CI pass
+- Node 24 (`.nvmrc`, matches `engines.node` in the root `package.json` and CI). Was pinned to 20 until this session found a real CI break: `@angular/cli` 22 requires Node ≥22.22.3/≥24.15.0/≥26.0.0, so `ng test`/`ng build` fail on Node 20 with a version error, not a real test failure — CI was silently broken on this point since whichever commit upgraded to Angular 22. Fixed by bumping `.nvmrc`, `engines.node`, and `.github/workflows/ci.yml`'s `setup-node` step together, since `doctor` only ever compares the running version against `.nvmrc`, not against what Angular actually needs
 - pnpm 9.15.0 via corepack
 - Docker Desktop running, `docker compose up -d` for Postgres on 5432
 - Databases: `mop_platform_dev` and `mop_platform_test`

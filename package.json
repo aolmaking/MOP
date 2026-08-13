@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "packageManager": "pnpm@9.15.0",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.22.3"
   },
   "scripts": {
     "doctor": "node tools/doctor.mjs",
