@@ -92,7 +92,7 @@ Three doors closed earlier this arc, from the original audit:
 | **13 — System Automation** | ✅ **complete (lock, not a separate worker)** — `SchedulerLockService` (Postgres advisory lock) stops double-firing across replicas; a real separate deployable owed once a real recurring job exists, see `docs/phases/PHASE_13.md` |
 | **14 — Internationalization & Release Readiness** | 🟠 **partial** — permission-key assertion check (`tools/lint-permission-keys.mjs`, five custom lint rules now) + a real `WorkOrder.customerId` index fix + a clean security review of the diff; translation pass and summary tables owed, see `docs/phases/PHASE_14.md` |
 | **15 — Specialization Discovery** | ✅ **schema settled, 3/5 primitives proven end-to-end** — service card, measurement form, credential proven; position taxonomy schema+read-path only; blocker reason schema only — `docs/phases/PHASE_15.md` |
-| 16 — Specialization Structure | ⬜ **drafted**, not started — `docs/phases/PHASE_16.md` |
+| **16 — Specialization Structure** | ✅ **minimum bar met** — promised time + SLA overrun (Attention Center, proven by test) + generic Attachment table; 16.I design spike written; 16.B/C/D/F/G deferred with reasons — `docs/phases/PHASE_16.md` |
 | 17 — Specialization at Creation | ⬜ **drafted**, not started — `docs/phases/PHASE_17.md` |
 | 18 — Tenant Relationships | ⬜ **drafted**, not started — `docs/phases/PHASE_18.md` |
 | 19 — Governance Depth | ⬜ **drafted**, not started — `docs/phases/PHASE_19.md` |

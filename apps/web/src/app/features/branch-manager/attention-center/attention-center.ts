@@ -19,6 +19,7 @@ const KIND_LABELS: Readonly<Record<AttentionKind, string>> = {
   CRITICAL_REJECTION_UNACKNOWLEDGED: 'Critical rejections',
   TECHNICIAN_BLOCKED: 'Blocked technicians',
   CUSTOMER_APPROVAL_WAITING: 'Waiting on customers',
+  SLA_OVERRUN: 'Past promised time',
   READY_UNPAID: 'Ready but unpaid',
   WAITING_PARTS: 'Waiting on parts',
   REWORK_REQUIRED: 'Needs rework',
@@ -35,6 +36,7 @@ const ACTION_LABELS: Readonly<Record<string, string>> = {
   CHECK_PARTS: 'Check parts',
   TAKE_PAYMENT: 'Take payment',
   REASSIGN: 'Reassign',
+  REVIEW_OVERRUN: 'Review job',
 };
 
 /**

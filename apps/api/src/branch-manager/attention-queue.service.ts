@@ -38,7 +38,8 @@ export type PrimaryAction =
   | "RESOLVE_BLOCKER"
   | "CHECK_PARTS"
   | "TAKE_PAYMENT"
-  | "REASSIGN";
+  | "REASSIGN"
+  | "REVIEW_OVERRUN";
 
 export interface AttentionQueueScope {
   readonly tenantId: string;
@@ -66,19 +67,22 @@ export class AttentionQueueService {
     const branchFilter = scope.branchScope.length > 0 ? { in: [...scope.branchScope] } : undefined;
     const workOrderWhere = { tenantId: scope.tenantId, ...(branchFilter ? { branchId: branchFilter } : {}) };
 
-    const [criticalRejections, blockers, awaitingCustomer, readyUnpaid, waitingParts, rework] = await Promise.all([
-      this.criticalRejections(workOrderWhere),
-      this.blockedTechnicians(workOrderWhere),
-      this.awaitingCustomer(workOrderWhere),
-      this.readyButUnpaid(workOrderWhere),
-      this.byStatus(workOrderWhere, "WAITING_PARTS"),
-      this.byStatus(workOrderWhere, "QC_FAILED"),
-    ]);
+    const [criticalRejections, blockers, awaitingCustomer, overruns, readyUnpaid, waitingParts, rework] =
+      await Promise.all([
+        this.criticalRejections(workOrderWhere),
+        this.blockedTechnicians(workOrderWhere),
+        this.awaitingCustomer(workOrderWhere),
+        this.slaOverruns(workOrderWhere, now),
+        this.readyButUnpaid(workOrderWhere),
+        this.byStatus(workOrderWhere, "WAITING_PARTS"),
+        this.byStatus(workOrderWhere, "QC_FAILED"),
+      ]);
 
     const items = [
       ...criticalRejections,
       ...blockers,
       ...awaitingCustomer,
+      ...overruns,
       ...readyUnpaid,
       ...waitingParts.map((row) => this.toItem(row, "WAITING_PARTS", row.waitingSince, "CHECK_PARTS", now)),
       ...rework.map((row) => this.toItem(row, "REWORK_REQUIRED", row.waitingSince, "REASSIGN", now)),
@@ -155,6 +159,37 @@ export class AttentionQueueService {
         "CHASE_CUSTOMER",
       );
     });
+  }
+
+  /**
+   * A job actively in progress, past its promised time (Phase 16.A/16.E).
+   * `updatedAt` stands in for "since work started" -- the same honest-not-
+   * precise proxy `byStatus` already uses below, until the lifecycle
+   * records a real state-entry timestamp. Read in application code rather
+   * than the query itself: the threshold is per-work-order
+   * (`expectedDurationMinutes`), so there is no single interval Postgres
+   * can filter by without a generated column.
+   */
+  private async slaOverruns(workOrderWhere: WorkOrderWhere, now: Date): Promise<AttentionItem[]> {
+    const candidates = await this.prisma.workOrder.findMany({
+      where: { ...workOrderWhere, status: "IN_PROGRESS", expectedDurationMinutes: { not: null } },
+      select: { ...WORK_ORDER_SUMMARY, updatedAt: true, expectedDurationMinutes: true },
+    });
+
+    return candidates
+      .filter((row) => {
+        const elapsedMinutes = (now.getTime() - row.updatedAt.getTime()) / 60_000;
+        return elapsedMinutes > (row.expectedDurationMinutes ?? Infinity);
+      })
+      .map((row) =>
+        this.toItem(
+          { id: row.id, workOrder: row, waitingSince: row.updatedAt },
+          "SLA_OVERRUN",
+          row.updatedAt,
+          "REVIEW_OVERRUN",
+          now,
+        ),
+      );
   }
 
   private async readyButUnpaid(workOrderWhere: WorkOrderWhere): Promise<AttentionItem[]> {

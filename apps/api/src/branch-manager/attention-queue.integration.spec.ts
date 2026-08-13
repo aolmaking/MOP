@@ -54,6 +54,7 @@ async function makeWorkOrder(options: {
   status?: "IN_PROGRESS" | "WAITING_PARTS" | "QC_FAILED" | "READY_FOR_DELIVERY";
   updatedAt?: Date;
   plate?: string;
+  expectedDurationMinutes?: number;
 }) {
   counter += 1;
   const tenant = options.tenant ?? tenantId;
@@ -72,6 +73,7 @@ async function makeWorkOrder(options: {
       assetId: asset.id,
       customerId: customer,
       status: options.status ?? "IN_PROGRESS",
+      expectedDurationMinutes: options.expectedDurationMinutes,
     },
   });
 
@@ -195,6 +197,39 @@ describe("what appears in the queue", () => {
 
     // "Nothing needs you" is a real and desirable state, not an error.
     expect(await service.build({ tenantId, branchScope: [] }, NOW)).toEqual([]);
+  }, 120_000);
+});
+
+describe("SLA overrun (Phase 16.A/16.E)", () => {
+  it("surfaces a job past its promised duration", async () => {
+    // 90 minutes elapsed against a 60-minute expectation.
+    await makeWorkOrder({ status: "IN_PROGRESS", expectedDurationMinutes: 60, updatedAt: hoursAgo(1.5) });
+
+    const queue = await service.build({ tenantId, branchScope: [] }, NOW);
+
+    expect(queue).toHaveLength(1);
+    expect(queue[0]?.kind).toBe("SLA_OVERRUN");
+    expect(queue[0]?.primaryAction).toBe("REVIEW_OVERRUN");
+  }, 120_000);
+
+  it("does not flag a job still within its promised duration", async () => {
+    // 10 minutes elapsed against a 60-minute expectation.
+    await makeWorkOrder({ status: "IN_PROGRESS", expectedDurationMinutes: 60, updatedAt: hoursAgo(1 / 6) });
+
+    expect(await service.build({ tenantId, branchScope: [] }, NOW)).toEqual([]);
+  }, 120_000);
+
+  it("never flags a job with no SLA declared, no matter how long it has run", async () => {
+    await makeWorkOrder({ status: "IN_PROGRESS", updatedAt: hoursAgo(72) });
+
+    expect(await service.build({ tenantId, branchScope: [] }, NOW)).toEqual([]);
+  }, 120_000);
+
+  it("does not flag an overrun on a job that is not actively in progress", async () => {
+    await makeWorkOrder({ status: "WAITING_PARTS", expectedDurationMinutes: 60, updatedAt: hoursAgo(3) });
+
+    const queue = await service.build({ tenantId, branchScope: [] }, NOW);
+    expect(queue.every((item) => item.kind !== "SLA_OVERRUN")).toBe(true);
   }, 120_000);
 });
 

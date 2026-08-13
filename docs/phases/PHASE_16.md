@@ -1,8 +1,7 @@
 # Phase 16 — Specialization Structure
 
-> **Status:** ⬜ not started. Depends on Phase 15's schema verdicts for
-> anything that attaches a primitive to a structural concept (e.g. an
-> SLA clock attached to a service card's expected duration).
+> **Status:** ✅ minimum bar met (16.A, 16.E, 16.H shipped; 16.I has a
+> written recommendation) — see "What actually shipped" below.
 > **Source:** [`docs/scenarios/FINDINGS_SYNTHESIS.md`](../scenarios/FINDINGS_SYNTHESIS.md),
 > Shape 2 and Shape 3 findings.
 
@@ -107,6 +106,21 @@ from scratch. Flagged for early design spike, not blind implementation.
   happens to also matter for scheduling — Account should be designed by
   whoever owns invoicing, informed by this phase's payer work, not
   built twice)
+
+## What actually shipped
+
+- **16.A — Scheduling (promise time).** `WorkOrder.promisedAt`, a nullable timestamp a queue can order by. Deliberately minimal: no appointment book, no resource occupancy yet (that's 16.B) — just the one field the exit criteria names as the minimum bar.
+- **16.E — SLA / expected duration with alerting.** `WorkOrder.expectedDurationMinutes`. The Attention Center gains a real signal: `AttentionQueueService.slaOverruns()` flags an `IN_PROGRESS` work order whose elapsed time (using `updatedAt` as the proxy for "since work started," the same honest-not-precise pattern the existing `WAITING_PARTS`/`QC_FAILED` items already use) exceeds its declared expectation. Wired into the shared, pure `attention-ranking.ts` as a new `SLA_OVERRUN` kind — tier 4, between a waiting customer and uncollected money, reasoned in that file's own tier comment. Proven by four new integration tests: flags an overrun, does not flag a job still within budget, never flags a job with no SLA declared, and never flags a job that isn't actively `IN_PROGRESS`.
+- **16.H — Attachments.** A single generic `Attachment` model (`targetType`/`targetId`, the same polymorphic-reference shape `AuditLog` already uses), built once rather than bolted onto each surface. No upload endpoint or storage integration this pass — the schema and the "one table, many kinds of target" decision is what this phase settles; wiring a real file-storage backend (S3-shaped or otherwise) is follow-on work once a specific page needs it.
+- **16.I — Network-scoped specialization override: design spike, not implementation.** Recommendation: this should reuse capability-engine machinery, not invent a second override system. Concretely — a `NetworkSpecializationLock` row (or a `locked: boolean` alongside a `network`-scoped variant of `SpecializationDefinition`) that behaves exactly like a capability profile's override-and-lock: a network-level definition can mark itself locked, and `SpecializationDefinition` reads at the branch level would need to check for a locked network ancestor before allowing a local override, the same shape `PermissionResolverService`'s layered locking already proves out (a `locked: true` decision short-circuits every layer below it). Implementation deferred; this recommendation is the deliverable for this pass, per the exit criteria's own allowance for "a design spike and a written recommendation even if implementation slips."
+
+## What was deferred, with reasons
+
+- **16.B — Resources (lifts, bays, crews).** Needs Phase 17's setup-time authoring (a workshop declares its resource types and instances) to be more than an empty table; building the occupancy/double-booking logic against nothing a workshop has actually declared would be speculative. Deferred to land alongside or after Phase 17.
+- **16.C — Work-order linkage (comeback/follow-up/parent-child).** A real, self-contained addition (`WorkOrder.relinkedFromWorkOrderId` already exists as a precedent for one such relationship) but distinct enough from this pass's scheduling/SLA/attachment trio to deserve its own pass rather than a fourth thing squeezed in. Deferred, no dependency blocking it.
+- **16.D — Payer attribution.** The phase document's own text says this directly: "should be designed jointly with whoever owns [the Phase 8/9 finance] revisit, not independently." Deferred until that revisit is scheduled.
+- **16.F — Location/site entity.** No field-service work order exists yet in this codebase to attach it to; building the entity ahead of its first real consumer risks guessing its shape wrong. Deferred until field-service work is scoped.
+- **16.G — Append-only addenda on closed work orders.** A real, scoped addition, but the immutability guarantee it protects (a closed work order's outcome never silently changes) deserves its own careful pass and test coverage rather than being appended here under this pass's remaining budget. Deferred, no dependency blocking it.
 
 ## Exit criteria
 

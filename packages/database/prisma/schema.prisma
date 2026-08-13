@@ -727,6 +727,28 @@ model BlockerReasonDefinition {
   @@map("blocker_reason_definitions")
 }
 
+// Phase 16.H -- a generic attachment, built once and reused everywhere a
+// work item, inspection, or addendum needs a photo or file, rather than
+// bolted onto each surface separately (the flat gap named in
+// docs/phases/PHASE_16.md, no workshop-specific angle). `targetType` +
+// `targetId` is a polymorphic reference by convention, the same shape
+// AuditLog already uses for the same reason: one table serving many kinds
+// of target without a foreign key per target type.
+model Attachment {
+  id           String   @id @default(cuid())
+  tenantId     String
+  targetType   String
+  targetId     String
+  fileName     String
+  contentType  String
+  storageKey   String
+  uploadedById String
+  uploadedAt   DateTime @default(now())
+
+  @@index([tenantId, targetType, targetId])
+  @@map("attachments")
+}
+
 model Customer {
   id           String               @id @default(cuid())
   tenantId     String
@@ -867,6 +889,18 @@ model WorkOrder {
   // not block a job for a step the customer refused.
   inspectionDeclined      Boolean         @default(false)
   relinkedFromWorkOrderId String?
+  // Phase 16.A -- the promised time a queue can order by. Nafath's
+  // walk-in queue and SpeedLube's SLA clock are the same underlying
+  // concept at different granularities; this one field serves both.
+  promisedAt              DateTime?
+  // Phase 16.E -- workshop-defined, in minutes. Null means no SLA is
+  // tracked for this job, not "zero minutes allowed". The Attention
+  // Center's over-run signal (AttentionQueueService.slaOverruns) reads
+  // this alongside `updatedAt` as the best available proxy for "since
+  // work started", the same honest-not-precise pattern already used for
+  // the WAITING_PARTS/QC_FAILED attention items until the lifecycle
+  // records a real state-entry timestamp.
+  expectedDurationMinutes Int?
   createdAt               DateTime        @default(now())
   updatedAt               DateTime        @updatedAt
   closedAt                DateTime?

@@ -120,8 +120,8 @@ Settled the schema for all five specialization primitives. Service card, measure
 **Edge case owed:** E11 — decide and document the leap-year warranty-date rule before the warranty field ships, not after.
 **Detail:** [`phases/PHASE_15.md`](./phases/PHASE_15.md)
 
-### Phase 16 — Specialization Structure
-The structural concepts specializations attach to: scheduling/promise time, resources, work-order linkage, payer attribution, SLA/expected-duration, a location entity, append-only addenda, generic attachments, network-scoped specialization override.
+### Phase 16 — Specialization Structure ✅ (minimum bar met — see `phases/PHASE_16.md`)
+Shipped: promised time and expected-duration on `WorkOrder` (16.A/16.E), a real SLA-overrun signal in the Attention Center proven by test, and a generic `Attachment` table (16.H) — the three findings the exit criteria names as mandatory. 16.I (network-scoped specialization override) got the design spike and written recommendation the exit criteria allows in place of implementation: reuse capability-engine override-and-lock machinery rather than invent a second one. Resources, work-order linkage, payer attribution, location entity, and append-only addenda (16.B/C/D/F/G) are each named with a specific reason and no blocking dependency, not silently dropped.
 **Detail:** [`phases/PHASE_16.md`](./phases/PHASE_16.md)
 
 ### Phase 17 — Specialization at Creation

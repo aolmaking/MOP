@@ -18,6 +18,7 @@ export const ATTENTION_KINDS = [
   "CRITICAL_REJECTION_UNACKNOWLEDGED",
   "TECHNICIAN_BLOCKED",
   "CUSTOMER_APPROVAL_WAITING",
+  "SLA_OVERRUN",
   "READY_UNPAID",
   "WAITING_PARTS",
   "REWORK_REQUIRED",
@@ -31,17 +32,21 @@ export type AttentionKind = (typeof ATTENTION_KINDS)[number];
  * 1 Safety liability is unbounded and does not decay with time.
  * 2 A blocked technician is a paid person idle right now -- immediate and certain.
  * 3 A waiting customer risks being lost, and holds a bay. Scales sharply with age.
- * 4 Uncollected money on a finished car, occupying space.
- * 5 Parts waits are real but usually outside this person's control.
- * 6 Rework needs attention, rarely within the hour.
+ * 4 A job already past its promised time is a promise about to be broken --
+ *   worse than a customer merely waiting to be asked, better than one
+ *   already ignored for a day (Phase 16.E).
+ * 5 Uncollected money on a finished car, occupying space.
+ * 6 Parts waits are real but usually outside this person's control.
+ * 7 Rework needs attention, rarely within the hour.
  */
 const BASE_TIER: Readonly<Record<AttentionKind, number>> = {
   CRITICAL_REJECTION_UNACKNOWLEDGED: 1,
   TECHNICIAN_BLOCKED: 2,
   CUSTOMER_APPROVAL_WAITING: 3,
-  READY_UNPAID: 4,
-  WAITING_PARTS: 5,
-  REWORK_REQUIRED: 6,
+  SLA_OVERRUN: 4,
+  READY_UNPAID: 5,
+  WAITING_PARTS: 6,
+  REWORK_REQUIRED: 7,
 };
 
 /**
@@ -110,6 +115,8 @@ export function attentionReason(kind: AttentionKind, waitingHours: number): stri
       return `Technician is blocked and cannot continue — ${age}`;
     case "CUSTOMER_APPROVAL_WAITING":
       return `Waiting for the customer to approve — ${age}`;
+    case "SLA_OVERRUN":
+      return `Past its promised time — ${age} over`;
     case "READY_UNPAID":
       return `Ready to collect but not paid — ${age}`;
     case "WAITING_PARTS":
