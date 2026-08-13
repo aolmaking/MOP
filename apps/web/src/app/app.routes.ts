@@ -144,6 +144,13 @@ export const routes: Routes = [
         path: 'audit',
         loadComponent: () => import('./features/owner/audit-page').then((m) => m.AuditPage),
       },
+      {
+        // Staff tab only -- Branches/Warehouses/Teams remain owed, see
+        // PAGE_INVENTORY.md.
+        path: 'organization',
+        loadComponent: () =>
+          import('./features/owner/organization/organization-page').then((m) => m.OrganizationPage),
+      },
     ],
   },
   {

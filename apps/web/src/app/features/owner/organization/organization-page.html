@@ -1,0 +1,131 @@
+<section class="organization">
+  <header class="head">
+    <div>
+      <h1 class="title">Organization &amp; Access</h1>
+      <p class="sub">Staff tab. Branches, Warehouses, and Teams are not built yet.</p>
+    </div>
+    @if (state() === 'ready') {
+      <button appButton variant="primary" (click)="openInvite()">+ Invite Staff</button>
+    }
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to this page</p>
+        <p class="state-body">Organization &amp; Access is only visible to the workshop owner.</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('ready') {
+      @if (staff().length === 0) {
+        <p class="state-body">No staff yet. Invite your first team member to get started.</p>
+      } @else {
+        <table class="staff-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Branch scope</th>
+              <th>Warehouse scope</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of staff(); track row.id) {
+              <tr>
+                <td>{{ row.fullName }}</td>
+                <td>{{ row.role }}</td>
+                <td>{{ row.branchScope.length ? row.branchScope.join(', ') : 'All branches' }}</td>
+                <td>{{ row.warehouseScope.length ? row.warehouseScope.join(', ') : '—' }}</td>
+                <td>
+                  <span class="badge" [class.badge--inactive]="!row.isActive">{{ row.isActive ? 'Active' : 'Inactive' }}</span>
+                  @if (row.lockedAt) {
+                    <span class="badge badge--locked">Locked</span>
+                  }
+                </td>
+                <td class="row-actions">
+                  <button appButton variant="ghost" size="small" (click)="toggleActive(row)">
+                    {{ row.isActive ? 'Deactivate' : 'Activate' }}
+                  </button>
+                  <button appButton variant="ghost" size="small" (click)="toggleLocked(row)">
+                    {{ row.lockedAt ? 'Unlock' : 'Lock' }}
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    }
+  }
+
+  @if (showInvite()) {
+    <div class="modal-backdrop" (click)="closeInvite()">
+      <div class="modal" (click)="$event.stopPropagation()">
+        <h2 class="modal-title">Invite Staff</h2>
+
+        @if (inviteError(); as err) {
+          <app-error-banner [error]="err" />
+        }
+
+        <label class="field">
+          <span class="field-label">Full name</span>
+          <input type="text" [ngModel]="inviteForm().fullName" (ngModelChange)="updateField('fullName', $event)" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Email</span>
+          <input type="email" [ngModel]="inviteForm().email" (ngModelChange)="updateField('email', $event)" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Phone</span>
+          <input type="tel" placeholder="+20100000000" [ngModel]="inviteForm().phone" (ngModelChange)="updateField('phone', $event)" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Role</span>
+          <select [ngModel]="inviteForm().role" (ngModelChange)="updateField('role', $event)">
+            @for (role of roles; track role) {
+              <option [value]="role">{{ role }}</option>
+            }
+          </select>
+        </label>
+
+        @if (needsBranch()) {
+          <label class="field">
+            <span class="field-label">Branch scope (comma-separated branch ids)</span>
+            <input type="text" [ngModel]="branchScopeText()" (ngModelChange)="branchScopeText.set($event)" />
+          </label>
+        }
+
+        @if (needsWarehouse()) {
+          <label class="field">
+            <span class="field-label">Warehouse scope (comma-separated warehouse ids)</span>
+            <input type="text" [ngModel]="warehouseScopeText()" (ngModelChange)="warehouseScopeText.set($event)" />
+          </label>
+        }
+
+        <div class="modal-actions">
+          <button appButton variant="secondary" (click)="closeInvite()">Cancel</button>
+          <button appButton variant="primary" [disabled]="submitting()" (click)="submitInvite()">
+            {{ submitting() ? 'Inviting…' : 'Send Invite' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</section>

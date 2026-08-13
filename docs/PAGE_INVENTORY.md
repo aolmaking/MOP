@@ -15,8 +15,8 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| Built | **34** |
-| Remaining | **19** |
+| Built | **35** |
+| Remaining | **18** |
 
 Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built
 
@@ -64,12 +64,12 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Returns / Movements | ✅ | `/inventory/returns` | Queue (accept/reject/clarify, with the clarify↔reply loop) + tenant-wide filterable ledger. Two real backend bugs found and fixed while building this: RETURN_REJECTED and RETURN_CLARIFICATION_REQUESTED existed in the enum with no workflow-graph edge reaching them, and PartReturnRequest was never written by requestReturn |
 | Reports & Stock Insights | ✅ | `/inventory/reports` | Stock risk is velocity-based, per warehouse. Comparison section absent (not empty) for a single-warehouse scope |
 
-## Tenant Owner — 2 / 8
+## Tenant Owner — 3 / 8
 
 | Page | State | Notes |
 |---|:--:|---|
 | Owner Home | ✅ | `/owner/home`. Six cards per `PHASE_10.md` §4: open work orders, waiting-customer, waiting-parts, waiting-payment, low stock (all links), recent changes. Built in a later pass than Phase 10's own commit — see `PHASE_10.md` §6 |
-| Organization & Access | ⬜ | Roles, permissions, staff. The permission engine is built; nothing drives it |
+| Organization & Access | 🟡 | `/owner/organization` — Staff tab only: invite (real Account+StaffUser, invite-token flow reused from Add Workshop Owner), scope edit, activate/deactivate and lock/unlock (writes both `Account.status`, what `AuthService.login` enforces, and the `StaffUser` mirror fields, in one transaction). Branches/Warehouses/Teams tabs not built |
 | Forms & Fields | ⬜ | |
 | Messages & Templates | ⬜ | |
 | Pricing & Financial Configuration | ⬜ | `FinanceConfiguration` exists in the schema, unreachable |

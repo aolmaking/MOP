@@ -28,6 +28,7 @@ export class OwnerShell {
 
   protected readonly navigation = [
     { label: 'Home', route: '/owner/home' },
+    { label: 'Organization', route: '/owner/organization' },
     { label: 'History', route: '/owner/audit' },
   ];
 
