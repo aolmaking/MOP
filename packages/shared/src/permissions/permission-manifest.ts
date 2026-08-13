@@ -107,6 +107,11 @@ const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: "inventory.transfer.create", module: "INVENTORY" },
   { key: "inventory.supplier_order.create", module: "INVENTORY" },
   { key: "inventory.catalog.manage", module: "INVENTORY" },
+  // H7, docs/POLICY_DECISION_INVENTORY.md (P-32): deactivating/reactivating
+  // a warehouse -- distinct from catalog.manage, since this affects
+  // whether a warehouse exists in the workshop's operating picture at
+  // all, not what is priced or stocked within one.
+  { key: "inventory.warehouse.manage", module: "INVENTORY" },
   // Cost is what the workshop PAID, which is margin. Hidden unless
   // explicitly granted -- the same discipline as the technician's price
   // gate, applied to the inventory side (inventory-manager.md, Catalog).

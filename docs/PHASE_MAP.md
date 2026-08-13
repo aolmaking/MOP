@@ -92,7 +92,7 @@ Now · My Work · Work Card, 10 tools, mobile/tablet-first, no sidebar.
 
 ### Phase 7 — Inventory ✅ complete — 6/6 pages
 Inventory Home · Technician Requests · Catalog Control · Quantity Control & Stock Status · Returns/Movements (accept/reject/clarify, closed in an earlier arc) · Reports & Stock Insights.
-**Edge cases owed:** H7 — no described path for deactivating a warehouse with nonzero stock. H6/E16 fixed — see `EDGE_CASE_REGISTER.md`.
+**Edge cases:** none open. H6/E16 and H7 (warehouse deactivation, `BLOCK_UNTIL_ZERO`) fixed — see `EDGE_CASE_REGISTER.md`.
 
 ### Phase 8 — Finance Core 🟠
 Pricing catalog, discounts, tax policy, running balance, payments, deposits, financial reports engine — all built. **Owed:** the Owner's own Money page (Phase 10), and refunds/credit notes (explicitly deferred to Phase 9, since shipped there).

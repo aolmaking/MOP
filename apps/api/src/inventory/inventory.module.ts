@@ -4,6 +4,7 @@ import { AuthModule } from "../auth/auth.module";
 import { AccessModule } from "../access/access.module";
 import { CapabilitiesModule } from "../capabilities/capabilities.module";
 import { OperationEventsModule } from "../operations/operation-events.module";
+import { AuditModule } from "../audit/audit.module";
 import { InventoryController } from "./inventory.controller";
 import { InventoryViewService } from "./inventory-view.service";
 import { StockService } from "./stock.service";
@@ -11,6 +12,7 @@ import { PartRequestService } from "./part-request.service";
 import { InventoryHomeService } from "./inventory-home.service";
 import { CatalogService } from "./catalog.service";
 import { InventoryReportsService } from "./inventory-reports.service";
+import { WarehouseService } from "./warehouse.service";
 
 /**
  * Inventory.
@@ -21,7 +23,7 @@ import { InventoryReportsService } from "./inventory-reports.service";
  * the sole writer of work-order status.
  */
 @Module({
-  imports: [DatabaseModule, AuthModule, AccessModule, CapabilitiesModule, OperationEventsModule],
+  imports: [DatabaseModule, AuthModule, AccessModule, CapabilitiesModule, OperationEventsModule, AuditModule],
   controllers: [InventoryController],
   providers: [
     StockService,
@@ -30,6 +32,7 @@ import { InventoryReportsService } from "./inventory-reports.service";
     InventoryHomeService,
     CatalogService,
     InventoryReportsService,
+    WarehouseService,
   ],
   exports: [StockService, PartRequestService],
 })

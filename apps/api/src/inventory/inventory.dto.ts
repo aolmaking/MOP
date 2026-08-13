@@ -43,3 +43,10 @@ export class RequestClarificationDto {
   @MinLength(1)
   question!: string;
 }
+
+/** H7/P-32: deactivating or reactivating a warehouse is structural enough to always require a stated reason, same as freeze/reactivate elsewhere in the product. */
+export class WarehouseStatusDto {
+  @IsString()
+  @MinLength(10)
+  reason!: string;
+}

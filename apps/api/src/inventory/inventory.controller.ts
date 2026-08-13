@@ -1,15 +1,16 @@
-import { Body, Controller, ForbiddenException, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, ForbiddenException, Get, HttpCode, Param, Post, Query, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
 import { SessionGuard } from "../auth/session.guard";
 import { CurrentSession } from "../auth/current-session.decorator";
 import { EffectiveAccessService } from "../access/effective-access.service";
 import { InventoryViewService } from "./inventory-view.service";
 import { PartRequestService } from "./part-request.service";
-import { IssueDto, RejectReturnDto, RequestClarificationDto, ReturnDto } from "./inventory.dto";
+import { IssueDto, RejectReturnDto, RequestClarificationDto, ReturnDto, WarehouseStatusDto } from "./inventory.dto";
 import { CatalogItemDto } from "./catalog.dto";
 import { InventoryHomeService } from "./inventory-home.service";
 import { CatalogService } from "./catalog.service";
 import { InventoryReportsService } from "./inventory-reports.service";
+import { WarehouseService } from "./warehouse.service";
 
 /**
  * The inventory manager's surfaces.
@@ -28,6 +29,7 @@ export class InventoryController {
     private readonly home: InventoryHomeService,
     private readonly catalog: CatalogService,
     private readonly reports: InventoryReportsService,
+    private readonly warehouses: WarehouseService,
   ) {}
 
   /** Daily triage. Counts are per warehouse, never blended. */
@@ -204,6 +206,35 @@ export class InventoryController {
   ) {
     await this.require(session, "inventory.stock.return.clarify");
     return this.parts.requestClarification(id, this.actor(session), dto.question);
+  }
+
+  /** H7/P-32: refuses while any item still holds stock in this warehouse. */
+  @Post("warehouses/:id/deactivate")
+  @HttpCode(200)
+  async deactivateWarehouse(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: WarehouseStatusDto,
+  ) {
+    const tenantId = await this.require(session, "inventory.warehouse.manage");
+    await this.warehouses.deactivate(tenantId, id, this.warehouseActor(session), dto.reason);
+    return { ok: true };
+  }
+
+  @Post("warehouses/:id/reactivate")
+  @HttpCode(200)
+  async reactivateWarehouse(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: WarehouseStatusDto,
+  ) {
+    const tenantId = await this.require(session, "inventory.warehouse.manage");
+    await this.warehouses.reactivate(tenantId, id, this.warehouseActor(session), dto.reason);
+    return { ok: true };
+  }
+
+  private warehouseActor(session: SessionContext) {
+    return { accountId: session.accountId, displayName: session.displayName };
   }
 
   private actor(session: SessionContext) {
