@@ -12,7 +12,7 @@ import { PrismaClient } from "@mop/database";
 import type { PrismaService } from "../database/prisma.service";
 import { AuthService, LOCKOUT_THRESHOLD, MultipleAccountsError, TenantUnavailableError } from "./auth.service";
 import { hashPassword } from "./password.util";
-import { parseToken } from "./token.util";
+import { issueToken, newSessionId, parseToken } from "./token.util";
 
 describe("AuthService (integration)", () => {
   const prisma = new PrismaClient();
@@ -198,6 +198,44 @@ describe("AuthService (integration)", () => {
 
     await expect(service.getSessionContext("not-a-real-session.deadbeef")).rejects.toThrow();
     await expect(service.getSessionContext(undefined)).rejects.toThrow();
+  });
+
+  // P-65 (E12): expiry had no direct test coverage at all before this --
+  // every other test either never expires a session or relies on
+  // logout's explicit revokedAt write. This seeds a session's expiresAt
+  // directly and proves both directions: a session that has genuinely
+  // passed is rejected, one that has not is accepted -- and per P-65,
+  // the verdict comes from Postgres's own NOW(), not this test process's
+  // clock, which is what actually makes the check immune to inter-
+  // replica clock skew.
+  it("P-65/E12 -- rejects an access token whose session has passed expiresAt, accepts one that has not", async () => {
+    const email = `bm-${Date.now()}-expiry@example.com`;
+    const account = await createStaffAccount(email, "correct-password-123");
+
+    const expired = issueToken(newSessionId());
+    await prisma.session.create({
+      data: {
+        id: expired.cookieValue.split(".")[0],
+        accountId: account.id,
+        tenantId,
+        accessSecretHash: expired.secretHash,
+        expiresAt: new Date(Date.now() - 60_000), // one minute in the past
+      },
+    });
+    await expect(service.getSessionContext(expired.cookieValue)).rejects.toThrow();
+
+    const stillValid = issueToken(newSessionId());
+    await prisma.session.create({
+      data: {
+        id: stillValid.cookieValue.split(".")[0],
+        accountId: account.id,
+        tenantId,
+        accessSecretHash: stillValid.secretHash,
+        expiresAt: new Date(Date.now() + 60_000), // one minute in the future
+      },
+    });
+    const resolved = await service.getSessionContext(stillValid.cookieValue);
+    expect(resolved.role).toBe("BRANCH_MANAGER");
   });
 
   it("refresh rotates both tokens -- the old access token stops working, the new one works", async () => {

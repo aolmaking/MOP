@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import type { EffectiveRole, SessionContext } from "@mop/shared";
+import { Prisma } from "@mop/database";
 import { PrismaService } from "../database/prisma.service";
 import { dummyVerifyForTimingSafety, hashPassword, needsRehash, verifyPassword } from "./password.util";
 import { issueToken, newSessionId, parseToken, secretMatchesHash } from "./token.util";
@@ -109,11 +110,11 @@ export class AuthService {
     const parsed = parseToken(refreshCookieValue);
     if (!parsed) throw new UnauthorizedException("No refresh session");
 
-    const session = await this.prisma.session.findUnique({ where: { id: parsed.sessionId } });
+    const session = await this.findSessionRow(parsed.sessionId);
     if (
       !session ||
       session.revokedAt ||
-      session.expiresAt < new Date() ||
+      session.expired ||
       !session.refreshTokenHash ||
       !secretMatchesHash(parsed.secret, session.refreshTokenHash)
     ) {
@@ -144,11 +145,11 @@ export class AuthService {
     const parsed = parseToken(accessCookieValue);
     if (!parsed) throw new UnauthorizedException("Not authenticated");
 
-    const session = await this.prisma.session.findUnique({ where: { id: parsed.sessionId } });
+    const session = await this.findSessionRow(parsed.sessionId);
     if (
       !session ||
       session.revokedAt ||
-      session.expiresAt < new Date() ||
+      session.expired ||
       !secretMatchesHash(parsed.secret, session.accessSecretHash)
     ) {
       throw new UnauthorizedException("Not authenticated");
@@ -158,6 +159,46 @@ export class AuthService {
   }
 
   // ---------------------------------------------------------------------
+
+  /**
+   * P-65 (E12, docs/scenarios3/EDGE_CASE_REGISTER.md): an INVARIANT --
+   * the database clock is authoritative for anything security- or
+   * SLA-relevant, never an application server's own `Date.now()`. API
+   * replicas can disagree by real, measurable seconds; Postgres is the
+   * one clock every replica already shares, since it is the single
+   * serialization point for the row being checked in the first place.
+   *
+   * `expired` is computed by Postgres itself (`"expiresAt" <= NOW()`)
+   * in the same query that reads the row, rather than a second query or
+   * a comparison against this process's own clock -- no extra round
+   * trip versus the plain `findUnique` this replaces, on what is the
+   * hottest path in the whole API (every authenticated request runs
+   * this once).
+   */
+  private async findSessionRow(sessionId: string): Promise<{
+    id: string;
+    accountId: string;
+    accessSecretHash: string;
+    refreshTokenHash: string | null;
+    revokedAt: Date | null;
+    expired: boolean;
+  } | null> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        accountId: string;
+        accessSecretHash: string;
+        refreshTokenHash: string | null;
+        revokedAt: Date | null;
+        expired: boolean;
+      }>
+    >(Prisma.sql`
+      SELECT id, "accountId", "accessSecretHash", "refreshTokenHash", "revokedAt", ("expiresAt" <= NOW()) AS expired
+      FROM "sessions"
+      WHERE id = ${sessionId}
+    `);
+    return rows[0] ?? null;
+  }
 
   private assertAccountUsable(account: { status: string }): void {
     if (account.status === "SUSPENDED" || account.status === "INACTIVE") {
