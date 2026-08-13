@@ -10,20 +10,23 @@ import { CapabilitiesModule } from "../capabilities/capabilities.module";
 import { WorkshopsService } from "./workshops/workshops.service";
 import { WorkshopHealthService } from "./workshops/workshop-health.service";
 import { SpecializationModule } from "../specialization/specialization.module";
+import { PlatformReportsController } from "./reports/platform-reports.controller";
+import { PlatformReportsService } from "./reports/platform-reports.service";
 
 @Module({
   imports: [AuditModule, AuthModule, CapabilitiesModule, SpecializationModule],
   // PlatformController owns Add Workshop Owner + the availability-check
   // endpoints (Phase 2 step 2); WorkshopsController owns the Workshops
-  // list/details/freeze/reactivate endpoints (step 3). Both sit under the
-  // same "platform/workshops" URL space -- see WorkshopsController's own
-  // comment for why its routes are all suffixed to stay collision-safe
-  // regardless of which controller Nest registers first.
-  controllers: [PlatformController, WorkshopsController, CapabilitiesController],
+  // list/details/freeze/reactivate endpoints (step 3); PlatformReportsController
+  // owns Platform Reports (Level 1 + Usage Overview, see PAGE_INVENTORY.md
+  // for what's deliberately not built yet). Each sits under its own
+  // literal prefix (platform/workshops, platform/reports), so registration
+  // order between them never matters.
+  controllers: [PlatformController, WorkshopsController, CapabilitiesController, PlatformReportsController],
   // PlatformGuard isn't exported by AuthModule (only AuthService and
   // SessionGuard are) -- it's small and stateless, so it's simplest to
   // just provide it directly here rather than widen AuthModule's exports
   // for one consumer.
-  providers: [PlatformService, PlatformGuard, WorkshopsService, WorkshopHealthService],
+  providers: [PlatformService, PlatformGuard, WorkshopsService, WorkshopHealthService, PlatformReportsService],
 })
 export class PlatformModule {}

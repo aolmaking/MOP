@@ -1,0 +1,278 @@
+/*
+ * Platform Reports -- Level 1.
+ *
+ * Cards, not a table, per DESIGN_LANGUAGE.md section 7.5: this page is
+ * comparison-oriented ("which of these needs attention"), the same job
+ * Inventory Home's triage cards answer, not the row-by-row operational
+ * scan the Workshops table is built for.
+ */
+
+.reports {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 84rem;
+}
+
+.reports-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--text);
+}
+
+.reports-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.reports-count {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+/* --- summary tiles --------------------------------------------------- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-3);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.tile-value {
+  color: var(--white);
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.tile-label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.tile--placeholder .tile-value {
+  color: var(--text-faint);
+}
+
+/* --- controls --------------------------------------------------------- */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-end;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.control-search {
+  flex: 1 1 18rem;
+}
+
+.control-label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+.control-input {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+/* --- card grid ---------------------------------------------------------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--space-3);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: inherit;
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.card:hover {
+  background: var(--surface-raised);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.card-name {
+  color: var(--white);
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.card-facts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.card-plan {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.card-score {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.score-bar {
+  flex: 1;
+  block-size: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.score-fill {
+  block-size: 100%;
+  background: var(--brand);
+}
+
+.score-value {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  min-inline-size: 1.75rem;
+  text-align: end;
+}
+
+.card-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.card-activity {
+  margin-inline-start: auto;
+}
+
+/* --- badges, matching the Workshops page's own vocabulary ------------ */
+
+.badge {
+  display: inline-block;
+  padding: 1px var(--space-2);
+  background: var(--neutral-badge-bg);
+  border-radius: var(--radius-sm);
+  color: var(--neutral-badge);
+  font-size: var(--text-xs);
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.badge[data-status='ACTIVE'],
+.badge[data-status='TRIAL'] {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.badge[data-status='FROZEN'],
+.badge[data-status='SUSPENDED'] {
+  background: var(--danger-bg);
+  color: var(--danger-strong);
+}
+
+.badge[data-status='ARCHIVED'],
+.badge[data-status='READ_ONLY'] {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.badge[data-health='CRITICAL'] {
+  background: var(--danger-bg);
+  color: var(--danger-strong);
+}
+
+.badge[data-health='AT_RISK'] {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+/* --- pager -------------------------------------------------------------- */
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.pager-position {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.state,
+.state-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.state-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.state-body {
+  color: var(--text-muted);
+  font-size: var(--text-base);
+}

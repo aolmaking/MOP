@@ -1,0 +1,133 @@
+<section class="reports">
+  <header class="reports-head">
+    <h1 class="reports-title">Platform Reports</h1>
+    @if (result(); as r) {
+      <p class="reports-count">{{ r.workshops.total }} workshops</p>
+    }
+  </header>
+
+  @if (result(); as r) {
+    <div class="tiles">
+      <div class="tile">
+        <span class="tile-value">{{ r.totals.totalWorkshops }}</span>
+        <span class="tile-label">Total workshops</span>
+      </div>
+      <div class="tile">
+        <span class="tile-value">{{ r.totals.activeWorkshops }}</span>
+        <span class="tile-label">Active</span>
+      </div>
+      <div class="tile">
+        <span class="tile-value">{{ r.totals.totalStaffUsers }}</span>
+        <span class="tile-label">Staff users</span>
+      </div>
+      <div class="tile">
+        <span class="tile-value">{{ r.totals.totalCustomers }}</span>
+        <span class="tile-label">Customers</span>
+      </div>
+      <div class="tile tile--placeholder">
+        <span class="tile-value">—</span>
+        <span class="tile-label">Aggregate MRR (not tracked yet)</span>
+      </div>
+    </div>
+  }
+
+  @if (state() !== 'empty' && state() !== 'forbidden') {
+    <div class="controls">
+      <label class="control control-search">
+        <span class="visually-hidden">Search by workshop name</span>
+        <input
+          type="search"
+          class="control-input"
+          placeholder="Workshop name"
+          autocomplete="off"
+          [value]="search()"
+          (input)="onSearch($any($event.target).value)"
+        />
+      </label>
+
+      <label class="control">
+        <span class="control-label">Sort</span>
+        <select class="control-input" [value]="sort()" (change)="onSort($any($event.target).value)">
+          @for (option of sorts; track option.value) {
+            <option [value]="option.value">{{ option.label }}</option>
+          }
+        </select>
+      </label>
+    </div>
+  }
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to Platform Reports</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="reload()">Try again</button>
+      </div>
+    }
+    @case ('empty') {
+      <div class="state">
+        <p class="state-title">No workshops yet</p>
+      </div>
+    }
+    @case ('no-results') {
+      <div class="state">
+        <p class="state-title">Nothing matches "{{ search() }}"</p>
+        <button appButton variant="secondary" size="small" (click)="clearFilters()">Clear search</button>
+      </div>
+    }
+    @case ('ready') {
+      @if (result(); as r) {
+        <div class="grid">
+          @for (card of r.workshops.items; track card.id) {
+            <button type="button" class="card" (click)="open(card)">
+              <div class="card-head">
+                <span class="card-name">{{ card.name }}</span>
+                <span class="badge" [attr.data-health]="card.health">{{ label(card.health) }}</span>
+              </div>
+              <div class="card-facts">
+                <span class="badge" [attr.data-status]="card.status">{{ label(card.status) }}</span>
+                <span class="card-plan">{{ card.planName }}</span>
+              </div>
+              <div class="card-score">
+                <div class="score-bar">
+                  <div class="score-fill" [style.inline-size.%]="card.usageScore"></div>
+                </div>
+                <span class="score-value">{{ card.usageScore }}</span>
+              </div>
+              <div class="card-counts">
+                <span>{{ card.staffUserCount }} staff</span>
+                <span>{{ card.customerCount }} customers</span>
+                <span class="card-activity">{{ ago(card.lastActivityAt) }}</span>
+              </div>
+            </button>
+          }
+        </div>
+
+        @if (totalPages() > 1) {
+          <div class="pager">
+            <button appButton variant="secondary" size="small" [disabled]="page() === 1" (click)="goToPage(page() - 1)">
+              Previous
+            </button>
+            <span class="pager-position">Page {{ page() }} of {{ totalPages() }} · {{ r.workshops.total }} workshops</span>
+            <button
+              appButton
+              variant="secondary"
+              size="small"
+              [disabled]="page() === totalPages()"
+              (click)="goToPage(page() + 1)"
+            >
+              Next
+            </button>
+          </div>
+        }
+      }
+    }
+  }
+</section>

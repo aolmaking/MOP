@@ -39,6 +39,18 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/platform/capabilities/capabilities-page').then((m) => m.CapabilitiesPage),
       },
+      {
+        // Level 1: the aggregated workshop-card view. Level 2 is
+        // 'reports/:id' below -- Usage Overview only, see PAGE_INVENTORY.md
+        // for the five sections deliberately not built this pass.
+        path: 'reports',
+        loadComponent: () => import('./features/platform/reports/reports-page').then((m) => m.ReportsPage),
+      },
+      {
+        path: 'reports/:id',
+        loadComponent: () =>
+          import('./features/platform/reports/workshop-usage-page').then((m) => m.WorkshopUsagePage),
+      },
     ],
   },
   {

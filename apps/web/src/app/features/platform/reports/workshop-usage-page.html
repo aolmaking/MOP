@@ -1,0 +1,107 @@
+<section class="usage">
+  <a class="back" routerLink="/platform/reports">← Platform Reports</a>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to this workshop's reports</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+    @case ('ready') {
+      @if (data(); as d) {
+        <header class="usage-head">
+          <h1 class="usage-title">Usage Overview</h1>
+          <div class="window-toggle">
+            <button type="button" class="window-option" [attr.aria-pressed]="windowDays() === 30" (click)="setWindow(30)">
+              30 days
+            </button>
+            <button type="button" class="window-option" [attr.aria-pressed]="windowDays() === 90" (click)="setWindow(90)">
+              90 days
+            </button>
+          </div>
+        </header>
+
+        <div class="row">
+          <div class="stat">
+            <span class="stat-value">{{ d.activeUsers.staff }}</span>
+            <span class="stat-label">Active staff</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value">{{ d.activeUsers.customer }}</span>
+            <span class="stat-label">Active customers</span>
+          </div>
+          <div class="stat" [class.stat--stale]="d.ownerLastLogin.isStale">
+            <span class="stat-value">{{ when(d.ownerLastLogin.at) }}</span>
+            <span class="stat-label">Owner last login</span>
+            @if (d.ownerLastLogin.isStale) {
+              <span class="stale-flag">Stale</span>
+            }
+          </div>
+        </div>
+
+        <h2 class="section-title">Logins per day</h2>
+        <div class="chart">
+          @for (day of d.loginsByDay; track day.date) {
+            <div class="bar-col" [title]="dayLabel(day.date) + ': ' + day.count">
+              <div class="bar" [style.block-size]="barHeight(day.count)"></div>
+            </div>
+          }
+        </div>
+
+        <h2 class="section-title">Staff activity</h2>
+        <div class="table-scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Staff</th>
+                <th>Role</th>
+                <th>Last action</th>
+                <th>When</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of d.staffActivity; track row.staffUserId) {
+                <tr>
+                  <td>{{ row.fullName }}</td>
+                  <td>{{ label(row.role) }}</td>
+                  <td>{{ row.lastAction ? label(row.lastAction) : 'No recent activity' }}</td>
+                  <td class="cell-mono">{{ when(row.lastActionAt) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <h2 class="section-title">Customer portal</h2>
+        <div class="row">
+          <div class="stat">
+            <span class="stat-value">{{ d.customerPortal.sessions }}</span>
+            <span class="stat-label">Sessions</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value">{{ d.customerPortal.distinctCustomers }}</span>
+            <span class="stat-label">Distinct customers</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value">{{ d.customerPortal.decisionResponseRate ?? '—' }}{{ d.customerPortal.decisionResponseRate !== null ? '%' : '' }}</span>
+            <span class="stat-label">Decision response rate</span>
+          </div>
+        </div>
+
+        <p class="owed-note">
+          Feature Usage, Builder Adoption, Operational Activity, Commercial Snapshot, and Health &amp; Risk are not built
+          yet.
+        </p>
+      }
+    }
+  }
+</section>
