@@ -2,7 +2,7 @@
 
 > **Purpose:** everything needed to continue MOP in a fresh session without the previous conversation.
 > **Companion:** [`CLAUDE.md`](./CLAUDE.md) holds permanent knowledge (architecture, rules, toolchain). This holds *where we are*.
-> **Last updated:** 2026-08-12, after closing the Inventory/Branch Manager/Platform page gap, drafting Phases 15–17, completing a second 40-scenario platform-layer discovery pass that drafted Phases 18–20, and a third 20-item edge-case hardening pass attributed against existing phases.
+> **Last updated:** 2026-08-13 (scheduled run), after closing Platform Reports and fixing two real concurrency bugs from the edge-case register (H5, H2). See §11 for the stop point and what's next.
 > **Keep this current.** Update it at the end of any phase task, and before ending a long session.
 
 ---
@@ -240,16 +240,31 @@ except this demo manager holds `workorders.branch.view` — without
 
 | File | Why |
 |---|---|
-| `packages/shared/src/operations/attention-ranking.ts` | Cost-of-delay ranking, pure and shared so two screens cannot disagree |
-| `apps/api/src/branch-manager/attention-queue.service.ts` | Builds the queue from six real data sources |
-| `docs/DESIGN_LANGUAGE.md` | Reason behind every visual value |
-| `docs/phases/PHASE_5.md` | Branch Manager pages derived from the user's day |
-| `apps/api/package.json` | Added `testTimeout` after the flakiness above |
+| `apps/api/src/platform/reports/*` | Platform Reports — Level 1 + Usage Overview, closed this run |
+| `apps/web/src/app/features/platform/reports/*` | Same, web side |
+| `apps/api/src/finance/finance.service.ts` | H5 fix — payment idempotency check-then-insert race |
+| `apps/api/src/inventory/part-request.service.ts` | H2 fix — part-request check-then-write gap |
+| `docs/scenarios3/EDGE_CASE_REGISTER.md` | Both fixes recorded there, with the concurrency tests that prove them |
 
-## 10. Immediate next steps
+## 10. Immediate next steps (superseded by §11 below — kept for the historical Phase 5 pointer only)
 
-1. Build **5.B Attention Center page** to the structure in `PHASE_5.md` §2, using only tokens from `styles.css` and logical CSS properties.
-2. Cover all six UI states from `UX_PRINCIPLES.md` §4 — empty and no-results are **different screens**.
-3. Verify under `dir="rtl"`, with plate numbers still reading correctly via `<mop-identifier>`.
-4. Run the full gate: `typecheck && lint && test && build`, then commit with a Conventional Commit and push.
+1. ~~Build 5.B Attention Center page~~ — done long ago; Branch Manager is 7/7.
+
+## 11. Stop point — 2026-08-13 scheduled run
+
+**This run's three chunks, in order:**
+
+1. **Platform Reports** (`/platform/reports`, `/platform/reports/:id`) — found already built and uncommitted on the working tree at session start (see §1/§2 above for what it covers). Verified against the full gate, committed, pushed. Platform Super Admin: 4/6 pages.
+2. **H5** — `FinanceService.recordPayment()`'s idempotency-key check-then-insert race, plus a second race the fix's own testing surfaced (the "already settled" check could misfire against a legitimate concurrent retry). Fixed, proven by two new concurrency tests against real Postgres, committed, pushed.
+3. **H2** — `PartRequestService.transition()`'s check-then-write gap: the single shared writer behind every part-request status change read `status` before its transaction opened and wrote with no guard against it having changed, so two concurrent decisions on the same request could silently clobber each other. Rewritten to a guarded `updateMany`, mirroring `WorkOrderLifecycleService`'s own pattern for the identical problem on `WorkOrder.status`. Proven by a new concurrency test, committed, pushed.
+
+**Full gate was green after every chunk** — typecheck, all five lint rules, the complete test suite (483 API + 121 shared + 225 web after chunk 3), build.
+
+**What's next, in priority order (per the register's own severity note and the four legitimate directions in §4 above):**
+
+- **Remaining edge-case register items worth doing next, same pattern as H5/H2:** H1 (concurrent blockers on one work order can overwrite each other — the same class of check-then-write gap, now fixed twice elsewhere in this codebase, almost certainly present in whatever writes `TaskBlocker`), H8 (double-click races the team-membership transaction), H4 (decision approval landing on an already-closed work order). All three are small, well-scoped, and match the two fixes just shipped closely enough that the pattern is now proven twice in this codebase.
+- **Platform Super Admin still has 2 of 6 pages owed**: Governance Controls and Workshop Live View. Read `docs/detailed-specs/platform-super-admin.md`'s "Super Admin Control Center — Governance Controls" and "Workshop Live View" sections before starting either — both are large specs (an 11-category governed-flow control plane; a read-only live-render of every role's real pages). Platform Reports' own precedent is the model to follow: ship a real, honestly-scoped first slice (Tenant Status control alone is a defensible first cut of Governance Controls, since Freeze/Reactivate already exists on the Workshops page as its starting point) and name the rest as owed in `PAGE_INVENTORY.md` rather than attempting the full spec in one pass.
+- **Phase 15/18 continuation** (directions B/C in §4) remain open and untouched this run.
+
+No uncommitted work was left behind at the end of this run — every chunk's diff was committed and pushed before moving to the next.
 5. Update this file.
