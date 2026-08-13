@@ -285,7 +285,11 @@ That refinement is what makes the layer tractable, and it is now the phase's loa
 
 **Governance Controls is now explicitly gated behind Phase 21**, since it is the page that would surface policies and building it first would hardcode the answers.
 
-**Still owed in Phase 21:** tranches 2–5 (54 decisions), the full relevance graph, and S-01 — whether MOP has scheduling at all, the only entry whose *type* is undecided and which gates five others. It needs its own scenario pass.
+**Update — inventory completed, and a build-posture test added.** The owner pushed the thinking further: not just a policy layer, but investigating whether MOP should become a platform that prebuilds most of its capability surface and makes a new workshop mostly configuration and activation. Accepted as sound but not unconditionally — added §3.7 to `PHASE_21.md`, a mechanical admission test: **a capability may be prebuilt-and-activatable only if it can declare a removal policy, its reachability effect is computable, and enabling/disabling it needs no schema fork or migration.** Otherwise it "is not an activatable capability — it is a fork wearing a toggle."
+
+Wrote all 54 remaining decisions (tranches 2–5) with a build-posture verdict on all 70. The rollup: philosophy holds for ~56% (27 policy-controlled + 12 cleanly activatable), fails outright for 4 that would need a real schema fork (multi-role staff, multi-session jobs, cross-tenant staff membership, broad B2B accounts), and is deliberately withheld from 9 with no second scenario demanding them yet. Also surfaced four things invisible before writing it: `CAPABILITY_MODEL.md` Rule 3's counter-approval path is unimplemented (a live gap, not a future one); P-01's recommended default creates a write-off need nothing currently serves; realtime (P-63) belongs to no phase in `PHASE_MAP.md` at all; and three edge cases (E12, E13, E18) turned out to be invariants with only one defensible answer, two of them small enough to implement immediately once agreed.
+
+**Still owed in Phase 21:** the consolidated relevance graph + acyclicity proof, and S-01 — whether MOP has scheduling at all, the only entry whose *answer* (not just type) is genuinely open, gating five other decisions. Needs its own scenario pass. Then: owner review of the whole inventory before any implementation phase opens.
 
 **What's next, in priority order:**
 

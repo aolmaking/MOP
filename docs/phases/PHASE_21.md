@@ -1,6 +1,6 @@
 # Phase 21 — Policy & Decision Architecture
 
-> **Status:** 🟠 in progress — model defined, inventory in tranches. **No implementation.**
+> **Status:** 🟠 inventory complete (70 decisions, all 18 fields + build posture), relevance graph and S-01 still owed. **No implementation.**
 > **Deliverable:** a complete, structured inventory of every decision that can define a workshop, plus the model that makes those decisions typed, contextual, and composable.
 > **Companion:** [`POLICY_DECISION_INVENTORY.md`](../POLICY_DECISION_INVENTORY.md) is the inventory itself. This document is the *model* the inventory is written against.
 > **Date:** 2026-08-13.
@@ -109,12 +109,66 @@ Three mutability classes are declared per policy, because they are genuinely dif
 - **GOVERNED** — changeable through the pipeline with an impact preview (most policies).
 - **IMMUTABLE_AFTER_FIRST_USE** — cannot change once real data exists (invoice numbering scheme, currency). Declared explicitly so the UI can refuse rather than fail at apply time.
 
+### 3.7 Design decision — build posture, and the test for what may be prebuilt
+
+The project owner's broader direction: push complexity **backwards into the platform at build time** rather than forwards into per-workshop customisation at deployment time. The destination is a platform that already contains its systems, where creating a workshop chooses which are activated, how they behave, and how they are named — not one where each new workshop shape means new architecture.
+
+**This is a known architectural strategy — a software product line — and it has a known failure mode.** It is worth naming both precisely, because the failure is not the one people usually guard against.
+
+The failure is *not* the cost of building features up front. It is that **the cost of a configurable platform lives in the interaction surface between its capabilities, not in the capabilities themselves.** Twelve independent capabilities are twelve units of build cost but up to 4,096 configurations to reason about. Products that attempt this and collapse do so because they end up testing configurations, and the number of configurations outruns them.
+
+**MOP has the property that decides which way this goes, and most platforms attempting this do not.**
+
+The capability engine does not test 2ⁿ configurations. It *proves a property over a declared graph*: after any capability change, every reachable non-terminal state must still have a path to a terminal state. That is a **compositional guarantee** — it holds for combinations nobody enumerated, including ones that do not exist yet. It is the difference between combinatorial testing (which does not scale) and a proof obligation (which does).
+
+That the interaction surface is real, and already bit this project once, is not hypothetical: `CAPABILITY_MODEL.md` Rule 2a exists because Inventory and Part Returns *interacted* — each removal policy was correct in isolation, and together they resurrected a gate nothing could satisfy, stranding every job. It was caught by the validator, not by a test of that specific pair. That is the model working exactly as intended, and it is the evidence that the strategy is viable here.
+
+**So the philosophy is sound exactly to the extent that each prebuilt thing arrives with a compositional proof obligation, and unsound the moment something is prebuilt that cannot carry one.** That gives a mechanical test, in the same spirit as §3.1's:
+
+> **A capability may be prebuilt-and-activatable only if (a) it can declare a complete removal policy, (b) its effect on reachability is computable by the existing validator, and (c) enabling or disabling it requires no schema fork and no data migration.**
+>
+> **If enabling it needs a divergent schema, a migration, or per-combination testing, it is not an activatable capability — it is a fork wearing a toggle**, and prebuilding it imports the combinatorial cost the strategy exists to avoid.
+
+Clause (c) is `CAPABILITY_MODEL.md` Rule 2 restated as an admission criterion. It is what makes activation reversible and history-safe, and it is the clause most likely to disqualify a candidate.
+
+#### The build-posture taxonomy
+
+Every entry in the inventory now carries a **posture** — the answer to "what kind of thing should this be?", which is a different question from "what is this decision?".
+
+| Posture | Meaning | Admission requirement |
+|---|---|---|
+| **CORE** | Always present, structurally not removable | Removing it means it isn't MOP |
+| **PREBUILT-ACTIVATABLE** | Built into the platform, inert until switched on | Must pass all three clauses of the test above |
+| **POLICY-CONTROLLED** | Exists always; only its rule varies | Must not change reachability (§3.1) |
+| **VOCABULARY** | Workshop-defined names/fields | Specialization engine |
+| **BOUNDED-SEPARATE** | Its own system behind a contract | Justified by an independent lifecycle — Billing is the shipped precedent |
+| **INTEGRATION-SEAM** | Deliberately *not* built; an adapter boundary instead | Owned by someone else's domain (accounting, telematics, payment rails) |
+| **DEFERRED-UNTIL-DEMANDED** | Real, buildable, but no evidence anyone needs it | Prebuilding is speculation, not investment |
+
+The last two are the honest counterweight to "prebuild it all", and this phase must apply them with the same rigour as the others — otherwise the inventory becomes a wish list, and `CLAUDE.md`'s own instruction against designing for hypothetical requirements is quietly abandoned.
+
+#### Where the philosophy breaks down — stated plainly
+
+Four places where prebuilding is the *wrong* call, to be applied as disqualifiers in the inventory:
+
+1. **Anything needing a divergent schema.** Fails clause (c). Multi-session jobs at multiple locations (P-41) and the B2B account model (P-42) are the live candidates — each is a genuine data-shape change, not a toggle.
+2. **Anything whose "off" state still costs.** A prebuilt capability must be genuinely inert when disabled. If it leaves dormant tables, background jobs, or permission keys that must still be reasoned about, it is not free, and twelve of those are not free twelve times over.
+3. **Anything owned by another domain.** Payment rails, accounting ledgers, telematics, e-invoicing clearance. `BILLING: EXTERNAL` is the existing precedent for getting this right: MOP models the *seam*, not the system behind it.
+4. **Anything with no second customer.** One workshop wanting something is a feature request. Two independently wanting it is a capability. The scenario passes are the evidence base; a candidate that appears in zero of the 60 scenarios has not earned prebuilding.
+
+#### The honest cost, stated
+
+Even done correctly, this strategy is not free. Each PREBUILT-ACTIVATABLE capability adds: a removal policy to maintain, validator surface, seed/profile coverage, and — the one most often missed — **a permanent obligation that every future lifecycle change be re-proven against it.** The proof cost is linear in capabilities, which is the whole argument for this approach; but linear is not zero, and a registry of forty capabilities means every lifecycle edit is checked against forty removal policies in CI.
+
+That is an acceptable price for the guarantee. It is not an acceptable price for capabilities nobody asked for.
+
 ## 4. What this phase produces
 
 1. **The model** — this document. ✅
-2. **The inventory** — [`POLICY_DECISION_INVENTORY.md`](../POLICY_DECISION_INVENTORY.md), every decision documented against the 18 fields the project owner specified, built in tranches by domain. 🟠 tranche 1 complete, register complete.
-3. **A classification verdict for every entry** — capability / policy / specialization / other, decided by §3.1's test, with disagreements against the canonical spec recorded rather than smoothed over.
-4. **The relevance map** — which decisions each workshop model actually faces.
+2. **The inventory** — [`POLICY_DECISION_INVENTORY.md`](../POLICY_DECISION_INVENTORY.md), every decision documented against the 18 fields the project owner specified, built in tranches by domain. ✅ all tranches written.
+3. **A classification verdict for every entry** — capability / policy / specialization / other, decided by §3.1's test, with disagreements against the canonical spec recorded rather than smoothed over. ✅
+4. **A build posture for every entry** — §3.7's taxonomy, answering what *kind of thing* each should be and whether prebuilding it is justified or speculative. ✅
+5. **The relevance map** — which decisions each workshop model actually faces. 🟠 predicates stated per decision; the consolidated map and its acyclicity proof are owed.
 
 ## 5. What this phase explicitly does NOT do
 
