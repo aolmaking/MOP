@@ -2,7 +2,7 @@
 
 > **Purpose:** everything needed to continue MOP in a fresh session without the previous conversation.
 > **Companion:** [`CLAUDE.md`](./CLAUDE.md) holds permanent knowledge (architecture, rules, toolchain). This holds *where we are*.
-> **Last updated:** 2026-08-13 (scheduled run), after closing Platform Reports and fixing two real concurrency bugs from the edge-case register (H5, H2). See §11 for the stop point and what's next.
+> **Last updated:** 2026-08-13, after closing Platform Reports, a live CI break (Node/Angular version mismatch), and eight edge-case register items (H1, H2, H4, H5, H8, H9 partial, H10, E14). See §11 for the full session log and what's next.
 > **Keep this current.** Update it at the end of any phase task, and before ending a long session.
 
 ---
@@ -252,19 +252,26 @@ except this demo manager holds `workorders.branch.view` — without
 
 ## 11. Stop point — 2026-08-13 scheduled run
 
-**This run's three chunks, in order:**
+**This session's chunks, in order (continued past the original 3-chunk scheduled-task boundary at the user's explicit request to keep going):**
 
-1. **Platform Reports** (`/platform/reports`, `/platform/reports/:id`) — found already built and uncommitted on the working tree at session start (see §1/§2 above for what it covers). Verified against the full gate, committed, pushed. Platform Super Admin: 4/6 pages.
-2. **H5** — `FinanceService.recordPayment()`'s idempotency-key check-then-insert race, plus a second race the fix's own testing surfaced (the "already settled" check could misfire against a legitimate concurrent retry). Fixed, proven by two new concurrency tests against real Postgres, committed, pushed.
-3. **H2** — `PartRequestService.transition()`'s check-then-write gap: the single shared writer behind every part-request status change read `status` before its transaction opened and wrote with no guard against it having changed, so two concurrent decisions on the same request could silently clobber each other. Rewritten to a guarded `updateMany`, mirroring `WorkOrderLifecycleService`'s own pattern for the identical problem on `WorkOrder.status`. Proven by a new concurrency test, committed, pushed.
+1. **Platform Reports** (`/platform/reports`, `/platform/reports/:id`) — found already built and uncommitted on the working tree at session start. Verified against the full gate, committed, pushed. Platform Super Admin: 4/6 pages.
+2. **H5** — `FinanceService.recordPayment()`'s idempotency-key check-then-insert race, plus a second race the fix's own testing surfaced. Fixed, proven by two concurrency tests against real Postgres.
+3. **H2** — `PartRequestService.transition()`'s check-then-write gap. Rewritten to a guarded `updateMany`, mirroring `WorkOrderLifecycleService`.
+4. **CI fix** (reported live by the project owner from a GitHub Actions failure) — `@angular/cli` 22 requires Node ≥22.22.3/≥24.15.0/≥26.0.0; CI, `.nvmrc`, and `engines.node` were all still pinned to 20. Bumped all three to 24.
+5. **H1** — the harder one: `resolveBlocker`'s unblock decision and a concurrent `reportBlocker`'s insert raced across two separate transactions. First fix attempt (row lock only) was caught incomplete by its own regression test failing 2 of 3 runs; closed properly by giving `WorkOrderLifecycleService.apply()` an optional `tx` so the actual status write folds into the same locked transaction as the decision that triggered it.
+6. **H8** — `TeamSetupService.moveTechnician()`'s check-then-write gap on `TeamMembership`; same guarded-transaction pattern.
+7. **H4** — `CustomerDecisionService.respond()` never checked whether the work order had already closed; a late answer would falsely read as informed consent given before the work, not after. Fixed with a terminal-status check.
+8. **H10** — preventive, not reactive: nothing writes `ControlSetting` yet, so a sixth custom lint rule (`tools/lint-no-hard-delete.mjs`) now fails the build if anything ever calls `.delete()`/`.deleteMany()` on it, closing the risk before Governance Controls (the page that will write it) exists.
+9. **E14** — `WorkshopsService.changeStatus()`'s freeze/reactivate race from a third starting status (e.g. `SUSPENDED`); same guarded-`updateMany` pattern. First integration test coverage this method has ever had.
+10. **H9 (partial)** — `CreateWorkshopDto.slug` had no pattern validation at all, only a length check; any RTL-override/zero-width/arbitrary string in range was accepted for what becomes a public URL segment. Added `@Matches`, proven with a real U+202E character over real HTTP. PDF generation (doesn't exist yet) and audit-log rendering (unaudited) remain named as open in the register.
 
-**Full gate was green after every chunk** — typecheck, all five lint rules, the complete test suite (483 API + 121 shared + 225 web after chunk 3), build.
+**Full gate was green after every chunk** — typecheck, all six lint rules (five plus the new one from H10), the complete test suite (490 API + 121 shared + 225 web as of the last chunk), build. Every chunk was committed and pushed individually before starting the next; nothing was left uncommitted.
 
-**What's next, in priority order (per the register's own severity note and the four legitimate directions in §4 above):**
+**Edge-case register state after this session:** H1, H2, H3, H4, H5, H6/E16, H8, H9 (partial), H10, E14, E15 fixed or closed. Still open: H7 (no path for deactivating a warehouse with nonzero stock — a real feature gap, not a bug), E11 (leap-year warranty-date policy — decide before the warranty field ships), E12 (clock skew between replicas), E13 (capability rollback racing a lifecycle transition — design spike required), E17 (migrations against a dormant tenant), E18 (no password-hash lazy-rehash path), E19 (stale decision token after asset reassignment), E20 (no documented database-failover runbook).
 
-- **Remaining edge-case register items worth doing next, same pattern as H5/H2:** H1 (concurrent blockers on one work order can overwrite each other — the same class of check-then-write gap, now fixed twice elsewhere in this codebase, almost certainly present in whatever writes `TaskBlocker`), H8 (double-click races the team-membership transaction), H4 (decision approval landing on an already-closed work order). All three are small, well-scoped, and match the two fixes just shipped closely enough that the pattern is now proven twice in this codebase.
-- **Platform Super Admin still has 2 of 6 pages owed**: Governance Controls and Workshop Live View. Read `docs/detailed-specs/platform-super-admin.md`'s "Super Admin Control Center — Governance Controls" and "Workshop Live View" sections before starting either — both are large specs (an 11-category governed-flow control plane; a read-only live-render of every role's real pages). Platform Reports' own precedent is the model to follow: ship a real, honestly-scoped first slice (Tenant Status control alone is a defensible first cut of Governance Controls, since Freeze/Reactivate already exists on the Workshops page as its starting point) and name the rest as owed in `PAGE_INVENTORY.md` rather than attempting the full spec in one pass.
-- **Phase 15/18 continuation** (directions B/C in §4) remain open and untouched this run.
+**What's next, in priority order:**
 
-No uncommitted work was left behind at the end of this run — every chunk's diff was committed and pushed before moving to the next.
-5. Update this file.
+- **Remaining edge cases, roughly by effort:** E19 and H7 are the next best-scoped candidates (both are "add one real check/feature," not "design a subsystem"). E11, E13, E17, E18, E20 are policy decisions or genuinely new features/runbooks, not bug fixes — each needs its own scoped design note before code, matching this project's own rule that re-planning is expected but must be written down.
+- **Platform Super Admin still has 2 of 6 pages owed**: Governance Controls and Workshop Live View. Read `docs/detailed-specs/platform-super-admin.md`'s sections for both before starting — both are large specs. Platform Reports' own precedent is the model: ship a real, honestly-scoped first slice (Tenant Status control alone is a defensible first cut of Governance Controls, since Freeze/Reactivate already exists) and name the rest as owed in `PAGE_INVENTORY.md`.
+- **Phase 15/18 continuation** (directions B/C in §4) remain open and untouched this session.
+- **Owner pages are still 2/8** — Organization & Access, Forms & Fields, Messages & Templates, Pricing & Financial Configuration, Reports & Analytics, Workflow Health are all unbuilt, and Organization & Access in particular is the page that would give Governance Controls' role-state work somewhere real to be exercised from the tenant side.
