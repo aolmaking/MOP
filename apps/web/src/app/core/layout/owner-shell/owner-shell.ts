@@ -24,7 +24,10 @@ export class OwnerShell {
 
   protected readonly session = this.authStore.session;
 
-  protected readonly navigation = [{ label: 'History', route: '/owner/audit' }];
+  protected readonly navigation = [
+    { label: 'Home', route: '/owner/home' },
+    { label: 'History', route: '/owner/audit' },
+  ];
 
   async logout(): Promise<void> {
     await this.authStore.logout();

@@ -1,0 +1,68 @@
+<section class="home">
+  <header class="home-head">
+    <h1 class="home-title">Owner Home</h1>
+    <p class="home-sub">What's true about your workshop right now, and where to act on it.</p>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to this page</p>
+        <p class="state-body">Owner Home is only visible to the workshop owner.</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('ready') {
+      @if (data(); as d) {
+        <p class="workshop-status">
+          <span class="workshop-status-count">{{ d.workshopStatus.activeBranches }}</span> of
+          {{ d.workshopStatus.totalBranches }} branches active ·
+          <span class="workshop-status-count">{{ d.workshopStatus.activeUsers }}</span> active staff
+        </p>
+
+        <ul class="cards">
+          @for (card of cards(); track card.key) {
+            <li class="card" [class]="'card--' + card.weight">
+              @if (card.link) {
+                <a class="card-link" [routerLink]="card.link">
+                  <span class="card-count">{{ card.count }}</span>
+                  <span class="card-label">{{ card.label }}</span>
+                  <span class="card-meaning">{{ card.meaning }}</span>
+                </a>
+              }
+            </li>
+          }
+        </ul>
+
+        <section class="recent">
+          <h2 class="recent-title">Recent changes</h2>
+          @if (d.recentChanges.length === 0) {
+            <p class="state-body">Nothing recorded yet.</p>
+          } @else {
+            <ul class="recent-list">
+              @for (row of d.recentChanges; track row.id) {
+                <li class="recent-row">
+                  <span class="recent-actor">{{ row.actorName }}</span>
+                  <span class="recent-action">{{ label(row.action) }}</span>
+                  <span class="recent-when">{{ when(row.createdAt) }}</span>
+                </li>
+              }
+            </ul>
+          }
+          <a class="recent-more" routerLink="/owner/audit">See full history</a>
+        </section>
+      }
+    }
+  }
+</section>

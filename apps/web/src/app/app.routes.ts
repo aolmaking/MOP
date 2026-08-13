@@ -108,7 +108,11 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('./core/layout/owner-shell/owner-shell').then((m) => m.OwnerShell),
     children: [
-      { path: '', pathMatch: 'full', redirectTo: 'audit' },
+      { path: '', pathMatch: 'full', redirectTo: 'home' },
+      {
+        path: 'home',
+        loadComponent: () => import('./features/owner/owner-home-page').then((m) => m.OwnerHomePage),
+      },
       {
         path: 'audit',
         loadComponent: () => import('./features/owner/audit-page').then((m) => m.AuditPage),

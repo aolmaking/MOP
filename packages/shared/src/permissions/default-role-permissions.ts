@@ -34,6 +34,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "finance.refund.request": true,
     "finance.refund.decide": true,
     "reports.owner.view": true,
+    "reports.company.view": true,
     "audit.own_tenant.view": true,
   },
   TENANT_ADMIN: {
@@ -44,6 +45,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "organization.workflow_health.view": true,
     "finance.invoice.view": true,
     "reports.owner.view": true,
+    "reports.company.view": true,
     "audit.own_tenant.view": true,
   },
   BRANCH_MANAGER: {
@@ -111,5 +113,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "team.issue.flag_to_branch_manager": true,
     "reports.team.view": true,
   },
-  DATA_ANALYST: {},
+  DATA_ANALYST: {
+    "reports.company.view": true,
+  },
 };

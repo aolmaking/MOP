@@ -15,8 +15,7 @@ const ROUTE_BY_LANDING_PAGE: Record<string, string> = {
   'branch-home': '/branch/attention',
   'technician-home': '/tech',
   'inventory-home': '/inventory/home',
-  // Only History exists so far; the real Owner Home is Phase 10.
-  'owner-home': '/owner/audit',
+  'owner-home': '/owner/home',
 };
 
 export function landingRouteFor(session: { role: EffectiveRole; landingPage: string } | null): string {
