@@ -52,8 +52,8 @@
 | 9 — Billing / Invoicing | ✅ complete — GenericBillingAdapter, BillingDocument, credit notes, refund workflow, compliantBlocked all built and tested |
 | 10 — Team Leader & People/Performance | ✅ complete (narrowed) — API and all 5 web pages (4 Team Leader + Owner Home) built and reachable; see `PHASE_10.md` §6 |
 | 11 — Customer Portal | 🟠 API complete; 4 web pages owed |
-| 12 — Reporting & Data Analyst | ⬜ not started |
-| 13 — System Automation | ⬜ not started |
+| 12 — Reporting & Data Analyst | ✅ complete (live-only) — company report; exports/saved views/snapshots owed |
+| 13 — System Automation | ✅ complete (lock, not a separate worker) — `SchedulerLockService` advisory lock |
 | 14 — Internationalization & Release Readiness | 🟠 permission-key lint + a perf fix shipped; translation pass owed |
 | 15 — Specialization Discovery | ✅ schema settled, 3/5 primitives proven end-to-end |
 | 16 — Specialization Structure | ✅ minimum bar met (16.A/E/H); 16.I design spike written |
