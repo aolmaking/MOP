@@ -61,7 +61,7 @@
 | **18 — Tenant Relationships** | 🟠 18.A/D/E shipped; 18.B/C deferred; 18.F design decision written |
 | **19 — Governance Depth** | 🟠 19.B/C/D shipped; 19.A data-only (enforcement reverted); 19.E/F/G deferred |
 | **20 — Operational Resilience at Scale** | 🟠 20.B shipped; 20.E design decision written; 20.A/C/D/F deferred |
-| **21 — Policy & Decision Architecture** | 🟠 **inventory complete** — all 70 decisions fully written with a build posture each; relevance graph + S-01 (scheduling) owed; no implementation, by design |
+| **21 — Policy & Decision Architecture** | 🟠 **architectural resolution pass complete** — relevance graph built and proven acyclic (4 cycles found+fixed), S-01 resolved into 3 sub-questions, QC decomposed (new P-71), owner/Super-Admin money authority recorded as an open conflict rather than assumed; awaiting owner review; no implementation, by design |
 | Platform Super Admin (cross-cutting) | 🟠 4/6 pages — Governance Controls, Live View owed (**Governance Controls now gated behind Phase 21** — it is the page that surfaces policies) |
 
 Total page inventory: **34 of 53** spec'd pages built (Platform Reports — Level 1 + Usage Overview — closed this pass; other phases' page counts may have moved further and not yet be reflected here). See `PAGE_INVENTORY.md` for the per-role table.

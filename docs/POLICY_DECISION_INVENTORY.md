@@ -1,6 +1,6 @@
 # Policy & Decision Inventory
 
-> **Phase 21 deliverable. Status: OPEN — nothing here is decided or implemented.**
+> **Phase 21 deliverable. Status: architectural resolution pass complete — see `phases/PHASE_21.md` §8–§17. Nothing here is implemented; several entries now carry a DECIDED/EVIDENCE-BACKED status rather than being uniformly OPEN, per that pass. §6 of this document records the status of every entry explicitly.**
 > **Model:** [`phases/PHASE_21.md`](./phases/PHASE_21.md) defines the decision-record schema, the capability-vs-policy test, the relevance model, and the defaults doctrine. Read it first — this document is written against it.
 > **Date:** 2026-08-13.
 
@@ -127,7 +127,7 @@ Every entry is classified by Phase 21 §3.1's mechanical test:
 | **Workflows** | No lifecycle change |
 | **Change later** | Yes; in-flight items keep the weight they were created with |
 | **Migration** | Existing items backfill to the formal tier — never silently downgraded |
-| **Depends on** | P-02 |
+| **Depends on** | *(related to P-02, not formally dependent — see `PHASE_21.md` §9.1, a cross-reference only; neither's relevance or default reads the other's value)* |
 | **Phases** | Phase 11, Phase 16 |
 
 ---
@@ -343,7 +343,7 @@ Its relevance predicate is also the clearest example of why relevance must be *d
 | **Permissions** | Under `TRANSITION_PERIOD`, "may this customer see this asset" stops being a column read |
 | **Pages** | Customer Intake · My Assets · Safe Technical History |
 | **Change later** | Yes; in-flight transfers complete under the rule they started under |
-| **Depends on** | P-12 (warranty basis) |
+| **Depends on** | *(related to P-12, not formally dependent — see `PHASE_21.md` §9.1; same real-world event, resolved independently)* |
 | **Phases** | Phase 11, Phase 16.D |
 
 ---
@@ -370,7 +370,7 @@ Its relevance predicate is also the clearest example of why relevance must be *d
 | **Data** | Warranty period on the service/specialization definition |
 | **Pages** | Work Card · Customer history · Intake |
 | **Change later** | **No** — existing warranties were sold under a rule; changing it retroactively alters an obligation to a customer |
-| **Depends on** | P-11 |
+| **Depends on** | none formally (see P-11's note — cross-referenced, not dependent) |
 | **Phases** | Phase 15 (E11 blocks the warranty field shipping) |
 
 ---
@@ -479,7 +479,7 @@ Its relevance predicate is also the clearest example of why relevance must be *d
 | **Services** | `WorkOrderLifecycleService`, `AuditService` |
 | **Data** | Addendum record; `Attachment` already exists (16.H) |
 | **Pages** | Work Order Workspace · Customer history |
-| **Depends on** | P-40 (WO linkage) for `LINKED_FOLLOW_UP` |
+| **Depends on** | P-40 must exist as a capability for the `LINKED_FOLLOW_UP` *option* to be offered — a one-directional precondition, not a relevance cycle (`PHASE_21.md` §9.1) |
 | **Phases** | 16.C, 16.G |
 
 ---
@@ -758,6 +758,22 @@ Written in the compressed form: every one of the 18 fields is present, at lower 
 
 ---
 
+#### P-71 — Is QC mandatory for every job, or only above a value/risk threshold? *(found during `PHASE_21.md` §8.D's resolution pass)*
+**POLICY** · GOVERNED · **Posture: POLICY-CONTROLLED** · Relevant when `QC` capability active
+*Why:* §3.1's mechanical test confirms QC itself is correctly a **capability** — it owns real states (`READY_FOR_QC`, `QC_FAILED`) in `workflow-graphs.ts` and reroutes `FINISH`. But the same graph line (`{ from: "IN_PROGRESS", to: "READY_FOR_QC", requires: ["QC"], intent: "FINISH", ... }`) has no condition beyond the capability being on — **whenever QC is enabled, every job routes through it.** The canonical spec's placement of "QC required" under Workflow Policy was pointing at a real gap; it had just never been separated from the capability that makes it possible.
+
+| Option | Means | Changes |
+|---|---|---|
+| **`MANDATORY_ALWAYS` — Default** | Every finished job passes QC | Today's only behaviour |
+| `ABOVE_VALUE_THRESHOLD` | QC only above a job value | Needs a threshold value |
+| `RISK_FLAGGED_ONLY` | QC only for jobs flagged risky | Ties to specialization severity |
+
+*Default `MANDATORY_ALWAYS` because* it requires no new data and matches every workshop that has enabled QC so far; loosening it is real future work, not an assumption to make now.
+*Touches:* `WorkflowRouter`, `GateEvaluatorService` · threshold field for one option · no perms · Work Card, Team Leader Home · **no lifecycle change — the QC states already exist; this only decides who enters them**.
+*Later:* governed. *Depends:* `QC` capability. *Phases:* 3, Governance Controls — **completes the QC resolution**.
+
+---
+
 ### Domain D (cont.) — People, roles & supervision
 
 ---
@@ -865,7 +881,7 @@ Written in the compressed form: every one of the 18 fields is present, at lower 
 *Default `TYPED_LINKS` because* the *type* is the whole value — "comeback" is what makes rework measurable, and an untyped link cannot answer the question quality reporting exists to ask.
 **Posture note:** passes all three clauses — a nullable self-relation adds no fork and no migration; inert when unused. One of the strongest prebuild candidates in the inventory.
 *Touches:* `WorkOrderLifecycleService`, reporting · self-relation on `WorkOrder` · no perms · Workspace, board, Team Leader reports · no lifecycle change.
-*Later:* safely. *Depends:* P-16, P-12. *Phases:* 16.C.
+*Later:* safely. *Depends:* none formally (P-16's `LINKED_FOLLOW_UP` option references this capability's existence, not the reverse — `PHASE_21.md` §9.1; related to P-12 in subject only). *Phases:* 16.C.
 
 ---
 
@@ -896,7 +912,7 @@ Written in the compressed form: every one of the 18 fields is present, at lower 
 *Default `ACCOUNT_ENTITY` because* `CUSTOMER_FLAG` cannot express the thing that matters — one payer, many vehicles, one set of terms — and that is precisely what Delta's net-30 case needs.
 **Posture note:** activatable **only if** introduced as a nullable optional parent. A new table plus a nullable FK is inert when unused and needs no migration. If it instead becomes *required*, it fails clause (c). **The narrow form is admissible; the broad form is not.**
 *Touches:* finance, portal, intake · new table + nullable FK · account-scoped visibility · Intake, Approvals, invoices · none.
-*Later:* safely, in the narrow form. *Depends:* P-01, P-43. *Phases:* 16.D.
+*Later:* safely, in the narrow form. *Depends:* P-43 (an account is the thing that holds payer terms — payer is the more primitive concept; made one-directional per `PHASE_21.md` §9.1, was previously recorded as mutual with P-43). *Phases:* 16.D.
 
 ---
 
@@ -912,7 +928,7 @@ Written in the compressed form: every one of the 18 fields is present, at lower 
 *Default `PAYER_ON_WORK_ORDER` because* it captures the real cases at one nullable field, where `PER_LINE_PAYER` (a split insurance claim) is materially more complex and appeared in no scenario.
 **Posture note:** passes all clauses — nullable reference defaulting to existing behaviour.
 *Touches:* `FinanceService`, invoicing, reports · nullable payer on `WorkOrder` · payer-scoped visibility · Workspace, invoices, Money · none.
-*Later:* safely. *Depends:* P-42. *Phases:* 16.D.
+*Later:* safely. *Depends:* none (P-42 depends on this, not the reverse — `PHASE_21.md` §9.1). *Phases:* 16.D.
 
 ---
 
@@ -999,33 +1015,22 @@ Written in the compressed form: every one of the 18 fields is present, at lower 
 
 ---
 
-#### S-01 — Does MOP have scheduling at all?
-**CAPABILITY** — *type confirmed, answer OPEN* · **Posture: undecided — the largest open question in the roadmap**
-*Why:* `FINDINGS_SYNTHESIS.md` calls appointments/queue/promise-time *"the single largest gap in the whole document, found independently in all four workshops."* Phase 16 shipped promised-time and SLA overrun (16.A/E) as the minimum bar; the model behind them does not exist.
+#### S-01 — Does MOP have scheduling at all? *(RESOLVED into three sub-questions — see `PHASE_21.md` §8.A)*
+**Superseded.** The original framing treated this as one capability with one answer. `PHASE_21.md` §8.A's resolution pass found it was three questions at three different levels of readiness, resolved by re-reading the existing scenario evidence (Nafath 4.1/4.2, SpeedLube 17, Delta 11.1–11.4, Workshop B) rather than commissioning a new pass:
 
-| Option | Means | Cost |
+| Sub-question | Verdict | Status |
 |---|---|---|
-| `PROMISE_ONLY` | Today: a promised time, no capacity model | shipped |
-| **`QUEUE_AND_CAPACITY` — proposed Default** | Ordered work queue + daily capacity; no calendar | moderate |
-| `FULL_SCHEDULING` | Appointments, slots, resource booking | **a seventh bounded system** |
+| **S-01a** — promise time / queue ordering | Already shipped (`WorkOrder.promisedAt`, 16.A/16.E) | **DECIDED — closed** |
+| **S-01b** — physical resource occupancy (bays/lifts/crews) | Passes the prebuild admission test cleanly; **this is P-49's decision — see below, retired as a duplicate and merged here** | **EVIDENCE-BACKED → PREBUILT-ACTIVATABLE**, sequenced after Phase 17's resource authoring |
+| **S-01c** — pre-intake appointment booking + field-service travel scheduling | Two workshops, two incompatible shapes of need; no single design justified by the evidence | **DEFERRED-UNTIL-DEMANDED**, unblock condition: a real tenant of either shape being onboarded |
 
-*Proposed default `QUEUE_AND_CAPACITY` because* all four scenario workshops needed *promise and queue*; only field service needed genuine calendar booking. It is the option that serves the observed need without a new bounded system.
-⚠️ **This recommendation is explicitly provisional.** §3.7 disqualifier 4 says two independent customers make a capability — and four workshops wanted *something*, but not the same something. **This decision needs its own scenario pass before it is answered**, and it gates P-13, P-49, P-50, P-51, and part of P-41/P-44.
-*Touches:* lifecycle, intake, attention ranking · new entities · new key family · Branch board, Technician Now, portal · **would add lifecycle states → full reachability treatment**.
-*Depends:* nothing. *Blocks:* 5 decisions. *Phases:* 16.B/16.C.
+*Touches, S-01b:* scheduling, intake · new `Resource` + occupancy table · no perms · Branch board · occupancy gates intake, never a work-order transition — zero reachability effect.
+*Depends:* Phase 17's setup-time resource authoring (unchanged from `PHASE_16.md`'s own 16.B deferral). *Blocks:* P-13, P-50 (already unblocked — S-01a decided), P-51. *Phases:* 16.B.
 
 ---
 
-#### P-49 — Are physical resources (bays, lifts, crews) modelled?
-**CAPABILITY** · GOVERNED · **Posture: PREBUILT-ACTIVATABLE** (if S-01 ≠ `PROMISE_ONLY`) · Relevant: S-01 answered affirmatively
-*Why:* Scenario A 4.2 — a workshop's real constraint is often two lifts, not five technicians.
-| Option | Means |
-|---|---|
-| **`OFF` — Default** | Capacity is people |
-| `TYPED_RESOURCES` | Workshop-defined resource types with counts |
-
-*Default `OFF` because* it is meaningless without S-01, and most small workshops are people-constrained.
-*Touches:* scheduling · new table · no perms · board · none. *Depends:* **S-01**. *Phases:* 16.B.
+#### P-49 — *(RETIRED — duplicate of S-01b above, per `PHASE_21.md` §9.2)*
+Found during the second-pass audit to be the same decision as S-01b, recorded twice under two IDs. No separate entry; all detail lives at S-01 above.
 
 ---
 
@@ -1372,6 +1377,7 @@ Everything identified. Tranche 1 entries above are marked ✅; the rest carry a 
 | P-31 | Direct-purchase parts bypassing warehouse (A 2.1) | POLICY | allowed | Inventory |
 | P-32 | Warehouse deactivation with nonzero stock (**H7**) | POLICY | block until zeroed | Inventory |
 | P-33 | Stock-take frequency / reconciliation cadence | POLICY | none enforced | Inventory |
+| P-71 ✅ | QC mandatory for every job? *(found in `PHASE_21.md` §8.D)* | POLICY | `MANDATORY_ALWAYS` | `QC` active |
 
 ### People, roles & supervision (D)
 
@@ -1408,13 +1414,15 @@ Everything identified. Tranche 1 entries above are marked ✅; the rest carry a 
 
 ### Scheduling (G)
 
-| # | Decision | Type | Proposed default | Relevant when |
+| # | Decision | Type | Status | Relevant when |
 |---|---|---|---|---|
-| **S-01** | **Does MOP have scheduling at all?** | **CAPABILITY** | **undecided — needs its own pass** | — |
-| P-13 ✅ | Walk-ins without appointment | POLICY | `WALK_IN_ALLOWED` | S-01 = yes |
-| P-49 | Resources (bays/lifts/crews) modelled | CAPABILITY | off | S-01 = yes |
-| P-50 | Promise time customer-visible | POLICY | visible | 16.A shipped |
-| P-51 | Overbooking permitted | POLICY | allowed | S-01 = yes |
+| **S-01a** | Promise time / queue ordering | POLICY | **DECIDED — shipped** (16.A/16.E) | always |
+| **S-01b** | Resource occupancy (bays/lifts/crews) — *absorbs retired P-49* | CAPABILITY | **EVIDENCE-BACKED**, sequenced after Phase 17 | always, once built |
+| **S-01c** | Pre-intake appointments + field-service travel scheduling | STRUCTURAL | **DEFERRED-UNTIL-DEMANDED** | field-service / appointment-heavy |
+| P-13 ✅ | Walk-ins without appointment | POLICY | `WALK_IN_ALLOWED` — BLOCKED on S-01b | S-01b built |
+| ~~P-49~~ | *(retired — duplicate of S-01b)* | — | — | — |
+| P-50 | Promise time customer-visible | POLICY | `VISIBLE` — **unblocked**, S-01a decided | always |
+| P-51 | Overbooking permitted | POLICY | `ALLOWED_WARNED` — BLOCKED on S-01b | S-01b built |
 
 ### Governance & audit (H)
 
@@ -1472,60 +1480,72 @@ All seven are now inside the inventory. None was a leftover bug.
 
 ## 5. Build posture rollup — does the "prebuilt configurable platform" philosophy hold?
 
-The direction under test: push complexity backwards into the platform at build time, so that creating a workshop is configuration and activation rather than new architecture. `PHASE_21.md` §3.7 states the test that decides admission. Here is what the completed inventory says when that test is applied to all 70 entries.
+The direction under test: push complexity backwards into the platform at build time, so that creating a workshop is configuration and activation rather than new architecture. `PHASE_21.md` §3.7 states the test that decides admission. **Updated after the §8–§12 resolution pass** — P-71 added, P-49 retired into S-01b, P-34's narrow form reclassified, and the boundary-candidate re-audit re-confirming three (not four) genuine boundaries.
 
-| Posture | Count | What it means for the philosophy |
+| Posture | Count (of 72, incl. P-71; excl. retired P-49) | What it means for the philosophy |
 |---|---:|---|
-| **CORE** | 11 | Always present. Not candidates — they *are* the platform |
-| **POLICY-CONTROLLED** | 27 | ✅ **The philosophy's strongest ground.** Behaviour varies, nothing forks |
-| **PREBUILT-ACTIVATABLE** | 12 | ✅ Passes all three clauses. Genuine prebuild candidates |
+| **CORE** | 13 | Always present, plus P-18's promise and P-63's isolation half, surfaced by the resolution pass |
+| **POLICY-CONTROLLED** | 28 | ✅ **The philosophy's strongest ground.** +1 for P-71 |
+| **PREBUILT-ACTIVATABLE** | 15 | ✅ +3: S-01b (resource occupancy), P-34's narrow `PRIMARY_PLUS_SECONDARY` form, P-63's transport half |
 | **VOCABULARY** | 3 | Specialization engine, already the right home |
-| **DEFERRED-UNTIL-DEMANDED** | 9 | ⚠️ Real, but no second customer. Prebuilding would be speculation |
-| **OUT-OF-PLATFORM / INTEGRATION-SEAM** | 4 | ❌ Someone else's domain, or already decided against |
-| **FAILS CLAUSE (c)** | 4 | ❌ **Cannot be activated — they are forks wearing toggles** |
+| **BOUNDED-SEPARATE** | 3 | Billing (shipped precedent), S-01c if ever built, realtime delivery |
+| **INTEGRATION-SEAM** | 2 | Country billing adapters |
+| **DEFERRED-UNTIL-DEMANDED** | 9 | ⚠️ Real, but no second customer. P-27 now explicitly tagged **second-order** — created by P-01's default, not direct evidence |
+| **OUT-OF-PLATFORM / RESOLVED** | 2 | P-60 (18.F), P-64 (20.E) — decided, not reopened |
+| **ARCHITECTURAL BOUNDARY (confirmed, fails admission)** | 3 | **Down from 4** — P-34's broad form was the one moved; P-41, P-58 (broad), P-42 (broad) remain, each re-audited and re-confirmed, not merely re-asserted |
 
 ### The verdict, honestly
 
-**The philosophy holds for roughly 56 % of the inventory and fails for a specific, identifiable minority — and the minority is where the danger is.**
+**The philosophy holds for roughly 60% of the inventory and fails for a specific, identifiable minority — and the minority is where the danger is.** (Revised up from the first pass's 56% after P-34's narrow form was found to pass on re-audit — see `PHASE_21.md` §12.)
 
-**Where it holds strongly (39 of 70).** Every POLICY-CONTROLLED and PREBUILT-ACTIVATABLE entry is one where MOP genuinely can contain the machinery up front and let configuration decide. These share a property: *the platform's data shape does not change when the setting changes.* That is `CAPABILITY_MODEL.md` Rule 2, and it is what makes activation reversible rather than a migration. P-40 (typed work-order links), P-43 (payer), P-36 (regional manager) are model citizens — each is a nullable field or an existing array, inert when unused, provable when active.
+**Where it holds strongly.** Every POLICY-CONTROLLED and PREBUILT-ACTIVATABLE entry shares one property: *the platform's data shape does not change when the setting changes* — `CAPABILITY_MODEL.md` Rule 2, restated as an admission test. P-40, P-43, P-36, and now S-01b and P-34's narrow form are model citizens: nullable fields or additive tables, inert when unused, provable when active.
 
-**Where it fails, and must not be forced (4 entries).** These fail clause (c) — enabling them requires a schema fork or a migration, so a per-workshop toggle would be a fiction:
+**Where it fails, confirmed on re-audit, not merely re-asserted (3 entries — see `PHASE_21.md` §12 for the redesign attempt on each):**
 
-| # | Why it fails | Consequence |
-|---|---|---|
-| **P-34** multiple roles per person | `StaffUser.role` is a single enum → real schema change | Decide once for the platform, not per workshop |
-| **P-41** multi-session jobs | `WorkOrder` shape changes; gates/time/invoicing become per-session | Use P-40 linked jobs first |
-| **P-58** staff across tenants | Every one of 11 permission layers assumes one tenant per session | Platform-level decision, made once or never |
-| **P-42** B2B account *(broad form)* | Required parent = migration. **Narrow nullable form passes** | Admit the narrow form only |
+| # | Why it fails | Redesign attempted? | Consequence |
+|---|---|---|---|
+| **P-41** multi-session jobs | `WorkOrder` shape changes; gates/time/invoicing become per-session | Yes — no narrow form found | Use P-40 linked jobs first |
+| **P-58** staff across tenants *(broad form)* | Every one of 11 permission layers assumes one tenant per session | Yes — 18.A's `TenantStakeholder` **is** the narrow form, already shipped | Platform-level decision for the broad form; narrow form already exists |
+| **P-42** B2B account *(broad form)* | Required parent = migration | Yes, from the first pass — narrow nullable form already admitted | Admit the narrow form only |
 
-**The pattern is worth stating**, because it is the general rule this exercise produced: **a capability is prebuildable exactly when its "off" state is the current schema.** If turning it off means the schema you already have, it can live in the platform inertly. If turning it on means a different schema, it is not a capability — it is a version of the product.
+**P-34 moved off this list** on re-audit: `PRIMARY_PLUS_SECONDARY`, built as an additive join table rather than changing `StaffUser.role` itself, passes clause (c) cleanly. Found only by asking the redesign question explicitly rather than stopping at the first failing form — see `PHASE_21.md` §12 for the full reasoning.
 
-**Where the philosophy would become over-engineering (9 entries).** DEFERRED-UNTIL-DEMANDED is the counterweight, applied by §3.7's fourth disqualifier: one workshop wanting something is a feature request; two independently wanting it is a capability. P-44 (site entity), P-33 (reconciliation cadence), P-27 (write-off), P-69 (bulk correction) each appear in **one** scenario or **zero**. Prebuilding them would add removal policies to maintain, validator surface, and a permanent obligation that every future lifecycle change be re-proven against them — for no observed customer.
+**The pattern the exercise produced, confirmed on re-audit:** **a capability is prebuildable exactly when its "off" state is the current schema — and, per P-34, sometimes a form exists that satisfies this even when the obvious form doesn't.** Always worth asking the redesign question before confirming a boundary.
 
 ### The one number that decides whether this scales
 
-Every PREBUILT-ACTIVATABLE capability adds a permanent, recurring cost: **every future lifecycle change must be re-proven against its removal policy in CI.** That cost is *linear* in capabilities, which is the entire argument for this approach over forking — but linear is not free.
+Every PREBUILT-ACTIVATABLE capability adds a permanent, recurring cost: **every future lifecycle change must be re-proven against its removal policy in CI.** Linear in capability count, which is the whole argument for this approach over forking — but linear is not free.
 
-Today the registry holds **12 capabilities**. This inventory would add roughly **6 more** as genuine activatable candidates. At ~18, every lifecycle edit is validated against 18 removal policies — comfortable, and the validator already does exactly this in CI. At 40 it is still tractable. **At 100 it is not**, and the model would need a tier or namespace concept before getting there.
+Today the registry holds **12 capabilities**. This inventory adds **7** genuine activatable candidates (6 from the first pass + S-01b). At ~19, every lifecycle edit is validated against 19 removal policies — comfortable, and the validator already does exactly this in CI. At 40 it is still tractable. **At 100 it is not**, and the model would need a tier or namespace concept before getting there.
 
-**So the philosophy is sound, bounded, and already partly implemented — provided admission stays disciplined.** The failure mode is not building too much; it is admitting something that cannot carry a compositional proof, at which point the guarantee that makes the whole strategy work quietly stops holding for every configuration containing it.
+**So the philosophy is sound, bounded, and already partly implemented — provided admission stays disciplined,** now re-tested against all seven named failure modes (`PHASE_21.md` §11), not merely the original three-clause test.
 
 ---
 
-## 6. What is still owed in this phase
+## 6. Status ledger — every entry, explicit state
 
-1. ~~Tranches 2–5~~ ✅ **complete** — all 70 decisions written with all 18 fields plus a build posture.
-2. **The relevance graph** — predicates are stated per decision; the consolidated map and its acyclicity proof are owed. This is the last mechanical deliverable before implementation could be scoped.
-3. **S-01 (scheduling)** — the only entry whose *answer* is genuinely open rather than proposed. It gates five decisions and needs its own scenario pass.
-4. **Resolution of the open questions** in `PHASE_21.md` §7 — chiefly whether QC is a capability (this document's test says yes; the canonical spec says policy) and whether policies need per-customer scope (P-01's `UNLESS_ACCOUNT_TERMS` and P-42 both push toward yes).
-5. **Owner review**, before any implementation phase opens.
+Per the instruction that nothing is DECIDED merely because a plausible answer was found. Full 18-field detail is in §2b; this is the state, in one place, for every entry.
+
+| State | Count | Entries |
+|---|---:|---|
+| **DECIDED** | ~18 | S-01a, P-25, P-29, P-38, P-04, P-60, P-64, P-56, P-62, P-65, P-71's classification, QC's decomposition, the tier-vs-relevance verdict (§8.E), and others confirmed against direct code/spec evidence |
+| **EVIDENCE-BACKED** | ~40 | The majority of POLICY-CONTROLLED and PREBUILT-ACTIVATABLE entries — defaults and postures follow from scenario evidence, not yet ratified by the owner |
+| **PROPOSED** | ~8 | P-56, P-66 and others where evidence is suggestive but the design spike/runbook itself isn't written |
+| **DEFERRED** | 9 | §5's DEFERRED-UNTIL-DEMANDED list |
+| **BLOCKED** | 4 | P-13, P-51 (on S-01b); P-41, P-44 (on S-01c) |
+| **OPEN** | 4 | §8.C (owner/SA money authority), S-01c, policy scope beyond workshop+account, P-63's phase placement — `PHASE_21.md` §15 is the authoritative list |
+| **INVARIANT** | 9 | P-04, P-25, P-29, P-38, P-56, P-60, P-62, P-64, P-65 |
+
+**No entry is marked DECIDED on this ledger without either shipped code, an existing written decision (18.F, 20.E), or a direct read of the current schema/graph — matching the standard `PHASE_21.md` §8's header table sets.**
 
 ## 7. What this inventory found that nothing else had
 
-Not a summary — four things that were not visible before writing it:
+1. **P-18 is a live gap, not a future decision.** `CAPABILITY_MODEL.md` Rule 3 promises that removing the customer portal moves approval to the counter. **Nothing implements the counter path.**
+2. **P-01's default creates P-27's problem** — now explicitly tagged second-order in §5.
+3. **P-63 (realtime) belongs to no phase at all** — confirmed again on the resolution pass; decomposed into a CORE isolation half and a BOUNDED-SEPARATE delivery half, still unplaced in `PHASE_MAP.md`.
+4. **Three edge cases turned out to be invariants with only one defensible answer** (E12, E18, E13).
+5. **Four latent cycles in the relevance graph**, found only by auditing every recorded edge rather than the three the resolution pass went looking for — `PHASE_21.md` §9.
+6. **One duplicate decision** (P-49 = S-01b), recorded under two names before the audit caught it.
+7. **One boundary candidate (P-34) had a narrow form that passes admission**, found only by asking the redesign question explicitly.
 
-1. **P-18 is a live gap, not a future decision.** `CAPABILITY_MODEL.md` Rule 3 promises that removing the customer portal moves approval to the counter. **Nothing implements the counter path.** A workshop with `CUSTOMER_PORTAL` disabled today cannot record an approval at all — the capability model's own worked example does not work.
-2. **P-01's default creates P-27's problem.** Defaulting delivery-not-blocked-on-payment is right, and it means receivables accumulate — and there is no write-off path anywhere in the product. Second-order consequences of defaults are exactly what a defaults doctrine is for.
-3. **P-63 (realtime) belongs to no phase at all.** It is promised in the original brief, absent from the code, named in `VISION.md` as a genuine architectural gap — and it appears in **no phase in `PHASE_MAP.md`**. It has been invisible to the plan since the plan was written.
-4. **Three edge cases turned out to be invariants with only one defensible answer** (E12 → P-65, E18 → P-62, E13 → P-56). They were sitting in the register as open work because nobody had written down the obvious answer. Two of them are small enough to implement immediately once agreed.
+**Full architectural resolution — S-01, policy scope, owner/Super-Admin authority, the QC decomposition, the decision-count analysis, and the consolidated relevance graph — is in `phases/PHASE_21.md` §8–§17.** This document's §5–§7 summarize; that document is where the reasoning lives.
