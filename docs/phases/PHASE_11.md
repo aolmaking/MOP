@@ -35,3 +35,17 @@ Rather than bend the ten-layer staff-oriented resolver to also understand custom
 4. The permission-engine gap in section 3 is written down, not silently patched over with a narrower fix that would look like a real solution.
 
 **Not in scope:** the four Customer Portal web pages (deferred alongside the rest of this arc's web work, same reasoning as Phase 10's API-first pass); a `CUSTOMER`-aware rework of the permission resolver.
+
+---
+
+## 5. The web pages, closed in a later pass
+
+A later session, following the same reconciliation this arc applied to Phase 10 (see `PHASE_10.md` §6), closed the web half of this gap: `customer-shell` and five pages under `apps/web/src/app/features/customer/` (`portal-home`, `my-assets`, `current-service`, `invoice-status`, `safe-history`), consuming the five endpoints named in section 2 exactly as documented there.
+
+One deliberate departure from the spec worth recording: `docs/detailed-specs/customer.md`'s Current Service page describes a full lifecycle strip mirroring the technician's own stages. `CustomerPortalService.currentService()` (section 2) exposes only `status`, not per-stage detail, so the page renders one plain-language phrase per job instead of a strip implying stage-by-stage precision the API does not carry. Building the fuller strip is real future work against this same page, once the service method is extended to support it — not something to fake client-side now.
+
+The shell itself is not the staff red rail used everywhere else: `DESIGN_LANGUAGE.md` §0 names this specific person as opening the portal maybe three times in their life, on a phone, worried about their car and their money — closer to the technician's own one-handed-on-a-tablet constraint than to a daily desk user's, even though the two personas share nothing else. It borrows the technician shell's bottom-nav shape for that reason.
+
+Not verified against a live browser this pass — the session's `preview_start` tool refused to launch a dev server, reporting the session unattended. Verified instead by the pre-existing `customer-portal.integration.spec.ts` (proves the real API response shapes against Postgres) and new web unit tests covering every state (loading/ready/empty/forbidden/error) across all five pages plus the shell.
+
+**Phase 11 is now complete**, both API and web.

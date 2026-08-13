@@ -51,7 +51,7 @@
 | 8 — Finance Core | 🟠 engine done; Owner Money page owed (Phase 10) |
 | 9 — Billing / Invoicing | ✅ complete — GenericBillingAdapter, BillingDocument, credit notes, refund workflow, compliantBlocked all built and tested |
 | 10 — Team Leader & People/Performance | ✅ complete (narrowed) — API and all 5 web pages (4 Team Leader + Owner Home) built and reachable; see `PHASE_10.md` §6 |
-| 11 — Customer Portal | 🟠 API complete; 4 web pages owed |
+| 11 — Customer Portal | ✅ complete — API + all 5 web pages, see `PHASE_11.md` §5 |
 | 12 — Reporting & Data Analyst | ✅ complete (live-only) — company report; exports/saved views/snapshots owed |
 | 13 — System Automation | ✅ complete (lock, not a separate worker) — `SchedulerLockService` advisory lock |
 | 14 — Internationalization & Release Readiness | 🟠 permission-key lint + a perf fix shipped; translation pass owed |
@@ -63,7 +63,7 @@
 | **20 — Operational Resilience at Scale** | 🟠 20.B shipped; 20.E design decision written; 20.A/C/D/F deferred |
 | Platform Super Admin (cross-cutting) | 🟠 3/6 pages — Governance Controls, Reports, Live View owed |
 
-Total page inventory: **28 of 53** spec'd pages built (Owner Home and all four Team Leader pages closed this pass; other phases' page counts may have moved further and not yet be reflected here). See `PAGE_INVENTORY.md` for the per-role table.
+Total page inventory: **33 of 53** spec'd pages built (Owner Home, all four Team Leader pages, and all five Customer Portal pages closed this pass; other phases' page counts may have moved further and not yet be reflected here). See `PAGE_INVENTORY.md` for the per-role table.
 
 ## The phases
 
@@ -103,8 +103,8 @@ Separate bounded system. Legal invoice document, numbering, immutable snapshots,
 ### Phase 10 — Team Leader & People/Performance ✅ (narrowed — see `phases/PHASE_10.md`)
 Team Leader's four pages (Home, Technicians, Vehicles/Work Orders, Technician Performance Reports, all `managedTechnicianIds`-scoped) and Owner Home are all built with a real API and a real, reachable web page — closed across three separate passes on the same working tree, recorded rather than smoothed over in `phases/PHASE_10.md` §6–7. **Re-planned at this phase boundary, recorded rather than silently dropped:** the Owner's Money page (folded into the remaining six Owner pages, its own future pass) and exit-reason/rehire-eligibility on staff deactivation (pushed to Phase 19) were both named in this entry originally but did not land this pass. **Detail:** [`phases/PHASE_10.md`](./phases/PHASE_10.md)
 
-### Phase 11 — Customer Portal ✅ (API surfaces; web pages owed) — see `phases/PHASE_11.md`
-Portal home, my assets, current service, invoice status, safe technical history (all new this phase); decision page and public decision links were already shipped in an earlier phase. Found and documented rather than silently patched: the ten-layer permission resolver has no real opinion about a `CUSTOMER` session, so portal access is checked directly on `session.accountType`/`enabledModules` instead, mirroring the existing public decision controller's own reasoning.
+### Phase 11 — Customer Portal ✅ — see `phases/PHASE_11.md`
+Portal home, my assets, current service, invoice status, safe technical history — API and now all five web pages; decision page and public decision links were already shipped in an earlier phase. Found and documented rather than silently patched: the ten-layer permission resolver has no real opinion about a `CUSTOMER` session, so portal access is checked directly on `session.accountType`/`enabledModules` instead, mirroring the existing public decision controller's own reasoning, still owed as a future permission-engine rework. Current Service renders one plain-language phrase per job rather than the spec's full lifecycle strip, since the API exposes status only — real future work against the same page, not faked client-side (§5).
 
 ### Phase 12 — Reporting & Data Analyst ✅ (live-only reporting; see `phases/PHASE_12.md`)
 `DATA_ANALYST`'s first real report: company-wide technician performance, work order throughput, finance summary, all gated by the new `reports.company.view` key. Took the phase's own named option: live-only reporting, no point-in-time snapshot (that is Phase 19.G's job). Exports and saved views did not ship — no export mechanism exists anywhere in the codebase yet, and building the first one as a side effect of this phase would be scope creep the waterfall method exists to prevent.

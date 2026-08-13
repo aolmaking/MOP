@@ -15,8 +15,8 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| Built | **28** |
-| Remaining | **25** |
+| Built | **33** |
+| Remaining | **20** |
 
 Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built
 
@@ -98,16 +98,16 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Feature Adoption Analytics | ⬜ |
 | Saved Views / Exports | ⬜ |
 
-## Customer Portal — 1 / 6
+## Customer Portal — 6 / 6 ✅
 
-| Page | State | Notes |
-|---|:--:|---|
-| Customer Portal Home | ⬜ | |
-| My Assets | ⬜ | |
-| Current Service | ⬜ | |
-| Decision Page / Approvals | ⬜ | **The public token path.** `CustomerDecisionRequest.secureToken` exists and nothing consumes it — the customer cannot actually approve anything today |
-| Invoice & Payment Status | ⬜ | |
-| Safe Technical History | ⬜ | `SafeTechnicalHistory` + `CustomerSafeProjectionService` are built and unreachable |
+| Page | State | Route | Notes |
+|---|:--:|---|---|
+| Customer Portal Home | ✅ | `/customer` | Pending decisions lead the screen when nonzero, per the spec's own note that this is usually why the portal was opened at all |
+| My Assets | ✅ | `/customer/assets` | Card grid, not a table — most customers own exactly one asset |
+| Current Service | ✅ | `/customer/service` | One plain-language phrase per open job in place of a full lifecycle strip — `CustomerPortalService.currentService()` exposes status only, not per-stage detail; see `PHASE_11.md` §5 |
+| Decision Page / Approvals | ✅ | `/decide/:token` | **The public token path**, closed earlier in this arc. `CustomerDecisionRequest.secureToken` is consumed, critical-rejection acknowledgement enforced server-side |
+| Invoice & Payment Status | ✅ | `/customer/invoices` | `total`/`paid`/`balance` rendered as the exact strings the server sends |
+| Safe Technical History | ✅ | `/customer/history` | Entries labelled by plate/VIN cross-referenced from the customer's own asset list, never a raw asset id |
 
 ## Shared System Pages — 2 / 6
 
