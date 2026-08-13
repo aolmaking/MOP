@@ -226,6 +226,23 @@ export class WorkshopsService {
     return { staffSessionsToRevoke, customerSessionsToRevoke };
   }
 
+  /**
+   * E14 (`docs/scenarios3/EDGE_CASE_REGISTER.md`): two opposite platform
+   * actions -- freeze and reactivate -- racing the same tenant. The
+   * equality check above looks like it prevents this, but it only
+   * catches the case where a caller's own target already matches what it
+   * read; it does nothing for a tenant starting from a THIRD status
+   * (e.g. SUSPENDED or TRIAL), where a concurrent freeze (targeting
+   * FROZEN) and a concurrent reactivate (targeting ACTIVE) can both read
+   * that same starting status, both pass their own check, and then race
+   * a plain `update` with no guard -- leaving the final status as
+   * whichever write happened to land last, with BOTH audit rows on
+   * record as if each had definitively succeeded. The write below is
+   * conditional on the exact status just read, same discipline as the
+   * WorkOrder/part-request/team-membership locks elsewhere in this
+   * project: whichever call's write lands first wins outright, and the
+   * loser gets a real conflict instead of a silently overwritten result.
+   */
   private async changeStatus(
     tenantId: string,
     newStatus: TenantStatus,
@@ -241,7 +258,17 @@ export class WorkshopsService {
 
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
-      await tx.tenant.update({ where: { id: tenantId }, data: { status: newStatus } });
+      const updated = await tx.tenant.updateMany({
+        where: { id: tenantId, status: tenant.status },
+        data: { status: newStatus },
+      });
+
+      if (updated.count === 0) {
+        throw new ConflictException({
+          code: "concurrent_status_change",
+          message: "This workshop's status changed while this action was being applied. Reload and try again.",
+        });
+      }
 
       // Revoking sessions is the actual login-block mechanism -- status
       // alone is inert without this (SessionGuard resolves a session
