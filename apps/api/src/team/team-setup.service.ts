@@ -196,6 +196,21 @@ export class TeamSetupService {
    * would rewrite that history, and a half-applied move would put one
    * person on two teams, which the rest of the product reads as an
    * assignment conflict.
+   *
+   * The schema has no partial unique index enforcing "at most one active
+   * membership per technician" (Prisma's `@@unique` cannot express a
+   * `WHERE endedAt IS NULL` condition), so that guarantee lived entirely
+   * in application logic -- and the `current` read used to happen before
+   * this method's own transaction opened (H8,
+   * `docs/scenarios3/EDGE_CASE_REGISTER.md`). A double-click, or two
+   * managers moving the same technician within the same instant, could
+   * both read the same "current" membership, both end it (harmless,
+   * idempotent), and both create a brand-new membership row -- leaving
+   * the technician on two teams at once despite this comment's own claim
+   * that one transaction prevents it. Locking the `StaffUser` row first
+   * and re-reading `current` inside that same locked transaction closes
+   * the window, same discipline as the stock-balance and work-order
+   * locks (H6/E16, H1).
    */
   async moveTechnician(
     tenantId: string,
@@ -214,27 +229,33 @@ export class TeamSetupService {
 
     if (teamId !== null) await this.requireTeamInScope(tenantId, branchScope, teamId);
 
-    const current = await this.prisma.teamMembership.findFirst({
-      where: { tenantId, technicianId, endedAt: null },
-      select: { id: true, teamId: true },
-    });
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "staff_users" WHERE id = ${technicianId} FOR UPDATE`;
 
-    if (current?.teamId === teamId) return this.page(tenantId, branchScope);
+      const current = await tx.teamMembership.findFirst({
+        where: { tenantId, technicianId, endedAt: null },
+        select: { id: true, teamId: true },
+      });
 
-    await this.prisma.$transaction(async (tx) => {
+      if (current?.teamId === teamId) return { moved: false as const, current };
+
       if (current) {
         await tx.teamMembership.update({ where: { id: current.id }, data: { endedAt: new Date() } });
       }
       if (teamId !== null) {
         await tx.teamMembership.create({ data: { tenantId, teamId, technicianId } });
       }
+
+      return { moved: true as const, current };
     });
+
+    if (!result.moved) return this.page(tenantId, branchScope);
 
     await this.record(tenantId, actor, {
       action: teamId === null ? "team.member_removed" : "team.member_assigned",
       targetType: "TeamMembership",
       targetId: technicianId,
-      before: current ? { teamId: current.teamId } : null,
+      before: result.current ? { teamId: result.current.teamId } : null,
       after: teamId === null ? null : { teamId },
     });
 

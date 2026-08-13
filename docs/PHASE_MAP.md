@@ -84,7 +84,7 @@ Scenario × capability matrix, typed cross-system contracts, gate registry, sche
 
 ### Phase 5 — Branch Manager ✅
 Attention Center · Customer Intake · Work Orders board · Work Order Workspace · Approvals · Delivery & Payments · **Team Setup**, delegation-gated.
-**Edge cases owed:** H8 (double-click races the team-membership transaction), H10 (`ControlSetting` must never be hard-deleted).
+**Edge cases owed:** H10 (`ControlSetting` must never be hard-deleted). H8 (double-click races the team-membership transaction) fixed — see `EDGE_CASE_REGISTER.md`.
 
 ### Phase 6 — Technician ✅
 Now · My Work · Work Card, 10 tools, mobile/tablet-first, no sidebar.

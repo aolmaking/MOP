@@ -304,3 +304,31 @@ describe("accountability", () => {
     expect(row?.after).toEqual({ teamLeaderId: otherLeaderId });
   });
 });
+
+describe("H8 -- a genuine double-click cannot land a technician on two teams at once", () => {
+  it("resolves two simultaneous moves to exactly one active membership", async () => {
+    // A fresh technician and two fresh teams, isolated from the
+    // sequential state the describes above depend on. Two callers
+    // moving the SAME technician at the same instant -- a double-click
+    // on a slow connection, or two managers acting together -- used to
+    // both read the same "current" membership before either wrote,
+    // since that read happened before this method's own transaction
+    // opened. docs/scenarios3/EDGE_CASE_REGISTER.md, H8.
+    const raceTechId = await staff("Laila Fouad", "TECHNICIAN", [mineId]);
+    const teamX = await prisma.team.create({ data: { tenantId, branchId: mineId, name: `Race X ${SUFFIX}`, teamLeaderId: leaderId } });
+    const teamY = await prisma.team.create({ data: { tenantId, branchId: mineId, name: `Race Y ${SUFFIX}`, teamLeaderId: leaderId } });
+
+    const results = await Promise.allSettled([
+      teams.moveTechnician(tenantId, SCOPE(), raceTechId, teamX.id, ACTOR),
+      teams.moveTechnician(tenantId, SCOPE(), raceTechId, teamY.id, ACTOR),
+    ]);
+
+    expect(results.every((r) => r.status === "fulfilled")).toBe(true);
+
+    const active = await prisma.teamMembership.findMany({ where: { tenantId, technicianId: raceTechId, endedAt: null } });
+    // Never two -- whichever call actually landed last, exactly one
+    // active membership survives, on exactly one of the two teams.
+    expect(active).toHaveLength(1);
+    expect([teamX.id, teamY.id]).toContain(active[0]?.teamId);
+  });
+});
