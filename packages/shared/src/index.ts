@@ -20,3 +20,6 @@ export * from "./operations/work-order-lanes";
 export * from "./operations/categories";
 export * from "./permissions/delegated-permissions";
 export * from "./money/money";
+export * from "./policies/types";
+export * from "./policies/registry";
+export * from "./policies/validator";

@@ -3,6 +3,7 @@ import { DatabaseModule } from "../database/database.module";
 import { AuthModule } from "../auth/auth.module";
 import { AccessModule } from "../access/access.module";
 import { OperationsModule } from "../operations/operations.module";
+import { CustomerModule } from "../customer/customer.module";
 import { BranchManagerController } from "./branch-manager.controller";
 import { AttentionQueueService } from "./attention-queue.service";
 import { IntakeLookupService } from "./intake-lookup.service";
@@ -11,7 +12,7 @@ import { ApprovalsService } from "./approvals.service";
 import { DeliveryService } from "./delivery.service";
 
 @Module({
-  imports: [DatabaseModule, AuthModule, AccessModule, OperationsModule],
+  imports: [DatabaseModule, AuthModule, AccessModule, OperationsModule, CustomerModule],
   controllers: [BranchManagerController],
   providers: [AttentionQueueService, IntakeLookupService, WorkOrderBoardService, ApprovalsService, DeliveryService],
   exports: [AttentionQueueService],

@@ -55,6 +55,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "workorders.branch.release_delivery": true,
     "customer.intake.create": true,
     "decisions.branch.view": true,
+    // P-18: the branch is where a customer answers verbally in person or
+    // by phone when they have no portal, or simply prefer to.
+    "customer_decision.record_on_behalf": true,
     "finance.invoice.view": true,
     // Issuing/recording money is Owner-only unless explicitly delegated --
     // see tenant-owner.md's Pricing page.

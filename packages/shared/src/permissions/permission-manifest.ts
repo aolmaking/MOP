@@ -67,6 +67,11 @@ const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: "decisions.branch.view", module: "OPERATIONS" },
   { key: "customer_decision.create", module: "OPERATIONS" },
   { key: "customer_decision.send", module: "OPERATIONS" },
+  // P-18, docs/POLICY_DECISION_INVENTORY.md: recording a decision the
+  // customer gave verbally, per PORTAL_COUNTER_APPROVAL. Deliberately a
+  // separate key from .create/.send -- this is staff acting AS the
+  // decision channel, not drafting or dispatching one.
+  { key: "customer_decision.record_on_behalf", module: "OPERATIONS" },
 
   // Technician work card
   { key: "task.view_assigned", module: "OPERATIONS" },

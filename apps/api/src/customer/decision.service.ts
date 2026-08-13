@@ -3,6 +3,7 @@ import type { Prisma } from "@mop/database";
 import { WORK_ORDER_GRAPH } from "@mop/shared";
 import { PrismaService } from "../database/prisma.service";
 import { OperationEventsService } from "../operations/operation-events.service";
+import { PolicyResolutionService } from "../policies/policy-resolution.service";
 
 /** What the public page is allowed to know. Nothing internal appears here. */
 export interface PublicDecisionItem {
@@ -74,11 +75,17 @@ const DEFAULT_CRITICAL_WARNING =
  * browser is a courtesy; this check is the actual gate, and it exists
  * because a replayed or hand-built request must not be able to skip it.
  */
+export interface StaffActor {
+  readonly accountId: string;
+  readonly displayName: string;
+}
+
 @Injectable()
 export class CustomerDecisionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: OperationEventsService,
+    private readonly policies: PolicyResolutionService,
   ) {}
 
   async read(token: string): Promise<PublicDecision> {
@@ -120,7 +127,73 @@ export class CustomerDecisionService {
    */
   async respond(token: string, answers: readonly SubmittedAnswer[]): Promise<PublicDecision> {
     const request = await this.resolve(token);
+    await this.applyAnswers(request, answers, {
+      actorId: request.customerId,
+      actorName: "Customer",
+      actorType: "CUSTOMER",
+    });
+    return this.read(token);
+  }
 
+  /**
+   * Record a decision the customer gave verbally or in person, per
+   * `PORTAL_COUNTER_APPROVAL` (P-18, docs/POLICY_DECISION_INVENTORY.md).
+   * `CAPABILITY_MODEL.md` Rule 3 promises removing the portal moves
+   * approval to the counter without deleting consent -- this is that
+   * promise, finally implemented.
+   *
+   * The actor is ALWAYS the recording staff member, never the customer.
+   * `respond()`'s own event/audit trail records `actorType: "CUSTOMER"`
+   * because the customer genuinely acted; here `actorType` is
+   * `"TENANT_STAFF"` for the same reason in reverse -- a branch manager
+   * reading the audit trail must never be told the customer clicked
+   * something they did not.
+   */
+  async recordOnBehalf(
+    tenantId: string,
+    branchScope: readonly string[],
+    requestId: string,
+    answers: readonly SubmittedAnswer[],
+    staff: StaffActor,
+    evidenceReference?: string,
+  ): Promise<void> {
+    const policyValue = await this.policies.resolveValue(tenantId, "PORTAL_COUNTER_APPROVAL");
+
+    if (policyValue === "PORTAL_ONLY") {
+      throw new ConflictException({
+        code: "counter_approval_not_allowed",
+        message: "This workshop requires the customer to answer through their own portal or decision link.",
+      });
+    }
+    if (policyValue === "ALLOWED_WITH_EVIDENCE" && !evidenceReference?.trim()) {
+      throw new BadRequestException({
+        code: "evidence_required",
+        message: "This workshop requires a reference (a call note, a signature) before recording an answer on the customer's behalf.",
+      });
+    }
+
+    const request = await this.resolveById(tenantId, branchScope, requestId);
+
+    await this.applyAnswers(request, answers, {
+      actorId: staff.accountId,
+      actorName: staff.displayName,
+      actorType: "TENANT_STAFF",
+      recordedOnBehalf: true,
+      evidenceReference: evidenceReference?.trim(),
+    });
+  }
+
+  private async applyAnswers(
+    request: Awaited<ReturnType<CustomerDecisionService["resolve"]>>,
+    answers: readonly SubmittedAnswer[],
+    actor: {
+      readonly actorId: string;
+      readonly actorName: string;
+      readonly actorType: "CUSTOMER" | "TENANT_STAFF";
+      readonly recordedOnBehalf?: boolean;
+      readonly evidenceReference?: string;
+    },
+  ): Promise<void> {
     // H4, docs/scenarios3/EDGE_CASE_REGISTER.md -- a decision request can
     // sit unanswered while the work order it belongs to reaches CLOSED or
     // CANCELLED through some other path (e.g. the branch manager resolves
@@ -230,16 +303,23 @@ export class CustomerDecisionService {
         {
           tenantId: request.tenantId,
           eventKey: "customer_decision.responded",
-          actorId: request.customerId,
-          actorName: "Customer",
-          actorType: "CUSTOMER",
+          actorId: actor.actorId,
+          actorName: actor.actorName,
+          actorType: actor.actorType,
           targetType: "CustomerDecisionRequest",
           targetId: request.id,
-          // Bumped to HIGH specifically for a stale-ownership answer --
-          // this is exactly the kind of thing that should stand out in
-          // the audit trail rather than blend into routine MEDIUM noise.
-          riskLevel: ownershipChangedSinceRequest ? "HIGH" : "MEDIUM",
-          after: ownershipChangedSinceRequest ? { ownershipChangedSinceRequest: true } : undefined,
+          // Bumped to HIGH for a stale-ownership answer OR a staff-
+          // recorded one -- both are exactly the kind of thing that
+          // should stand out in the audit trail rather than blend into
+          // routine MEDIUM noise. P-18, docs/POLICY_DECISION_INVENTORY.md:
+          // recordedOnBehalf is never merged into the actor fields above
+          // -- the actor IS the staff member, in full, and this flag is
+          // what tells a reader the customer never touched a keyboard.
+          riskLevel: ownershipChangedSinceRequest || actor.recordedOnBehalf ? "HIGH" : "MEDIUM",
+          after:
+            ownershipChangedSinceRequest || actor.recordedOnBehalf
+              ? { ownershipChangedSinceRequest, recordedOnBehalf: actor.recordedOnBehalf ?? false }
+              : undefined,
           payload: {
             workOrderId: request.workOrderId,
             answered: answers.length,
@@ -250,13 +330,13 @@ export class CustomerDecisionService {
             // scenario's own fix direction, that judgment call stays
             // human.
             ownershipChangedSinceRequest,
+            recordedOnBehalf: actor.recordedOnBehalf ?? false,
+            evidenceReference: actor.evidenceReference ?? null,
           },
         },
         tx,
       );
     });
-
-    return this.read(token);
   }
 
   // --- internals -----------------------------------------------------
@@ -305,6 +385,59 @@ export class CustomerDecisionService {
     });
 
     if (!request || request.status === "CANCELLED") throw this.notFound();
+    return request;
+  }
+
+  /**
+   * A staff member's counterpart to `resolve(token)`: looked up by id and
+   * tenant, scoped to the acting branch manager's branches exactly like
+   * `ApprovalsService.list()` scopes its own read of the same table --
+   * writes get no less scoping than the read that led staff here.
+   */
+  private async resolveById(tenantId: string, branchScope: readonly string[], requestId: string) {
+    const request = await this.prisma.customerDecisionRequest.findFirst({
+      where: {
+        id: requestId,
+        tenantId,
+        workOrder: branchScope.length > 0 ? { branchId: { in: [...branchScope] } } : {},
+      },
+      select: {
+        id: true,
+        tenantId: true,
+        customerId: true,
+        workOrderId: true,
+        status: true,
+        expiresAt: true,
+        respondedAt: true,
+        tenant: { select: { name: true } },
+        workOrder: {
+          select: {
+            status: true,
+            asset: { select: { plateNumber: true, serialNumber: true, currentOwnerCustomerId: true } },
+          },
+        },
+        items: {
+          select: {
+            id: true,
+            name: true,
+            explanation: true,
+            importance: true,
+            decision: true,
+            price: true,
+            laborPrice: true,
+            total: true,
+          },
+          orderBy: { importance: "desc" },
+        },
+      },
+    });
+
+    // Deliberately the same "not found" a wrong id or an out-of-scope one
+    // gets -- a manager probing another branch's request ids should not
+    // be able to tell a real id from a made-up one by the error shape.
+    if (!request || request.status === "CANCELLED") {
+      throw new NotFoundException({ code: "decision_not_found", message: "That decision request was not found." });
+    }
     return request;
   }
 

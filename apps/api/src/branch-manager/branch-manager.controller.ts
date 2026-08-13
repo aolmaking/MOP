@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, ForbiddenException, Get, HttpCode, Param, Post, Query, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
 import { SessionGuard } from "../auth/session.guard";
 import { CurrentSession } from "../auth/current-session.decorator";
@@ -11,6 +11,8 @@ import { PrismaService } from "../database/prisma.service";
 import { WorkOrderBoardService, type BoardResult } from "./work-order-board.service";
 import { ApprovalsService, type ApprovalsResult } from "./approvals.service";
 import { DeliveryService, type DeliveryBoard } from "./delivery.service";
+import { CustomerDecisionService } from "../customer/decision.service";
+import { RecordDecisionDto } from "./record-decision.dto";
 
 export interface AttentionCenterResponse {
   /** Ranked most urgent first. Empty is a valid and desirable state. */
@@ -32,6 +34,7 @@ export class BranchManagerController {
     private readonly boardService: WorkOrderBoardService,
     private readonly approvalsService: ApprovalsService,
     private readonly deliveryService: DeliveryService,
+    private readonly customerDecisions: CustomerDecisionService,
   ) {}
 
   /**
@@ -175,6 +178,39 @@ export class BranchManagerController {
       tenantId: session.tenantId as string,
       branchScope: session.branchScope,
     });
+  }
+
+  /**
+   * P-18 (docs/POLICY_DECISION_INVENTORY.md): record a decision the
+   * customer gave verbally rather than through their portal or link.
+   * `CustomerDecisionService.recordOnBehalf` -- not this controller --
+   * decides whether the workshop's PORTAL_COUNTER_APPROVAL policy even
+   * allows it, since that is a policy question, not an access one.
+   */
+  @Post("approvals/:requestId/record")
+  @HttpCode(200)
+  async recordApproval(
+    @CurrentSession() session: SessionContext,
+    @Param("requestId") requestId: string,
+    @Body() dto: RecordDecisionDto,
+  ): Promise<{ ok: true }> {
+    const allowed = await this.access.can(session, "customer_decision.record_on_behalf");
+    if (!allowed || !session.tenantId) {
+      throw new ForbiddenException({
+        code: "forbidden",
+        message: "You do not have access to record a customer decision.",
+      });
+    }
+
+    await this.customerDecisions.recordOnBehalf(
+      session.tenantId,
+      session.branchScope,
+      requestId,
+      dto.answers,
+      { accountId: session.accountId, displayName: session.displayName },
+      dto.evidenceReference,
+    );
+    return { ok: true };
   }
 
   /**

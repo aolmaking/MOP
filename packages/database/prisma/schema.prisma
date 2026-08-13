@@ -367,6 +367,7 @@ model Tenant {
   financeConfiguration    FinanceConfiguration?
   configuration           TenantConfiguration?
   capabilities            TenantCapability[]
+  policies                WorkshopPolicy[]
   configurationVersions   TenantConfigurationVersion[]
   controlSettings         ControlSetting[]
   rolePermissions         RolePermission[]
@@ -1889,6 +1890,18 @@ enum CapabilitySource {
   SYSTEM
 }
 
+// Deliberately narrower than CapabilitySource: no OWNER_CONFIGURATION
+// value yet, because whether an Owner may ever configure a policy is the
+// exact question PHASE_21.md S8.C leaves OPEN. Adding the value later is
+// a additive migration; adding it now would be the schema quietly taking
+// a side on a question this phase was explicit about not deciding.
+enum PolicySource {
+  PLATFORM
+  DEFAULT
+  MIGRATION
+  SYSTEM
+}
+
 // A workshop's shape, over time.
 //
 // Time-ranged rather than a single current value, because history has to
@@ -1926,6 +1939,53 @@ model TenantCapability {
   @@index([tenantId, effectiveTo])
   @@index([tenantId, capabilityKey, effectiveFrom])
   @@map("tenant_capabilities")
+}
+
+// A workshop's answer to a policy question, over time -- the third axis
+// alongside TenantCapability (does the step exist) and specialization
+// (what is it called). Phase 21 (docs/phases/PHASE_21.md) settled the
+// model before this table was written: `POLICY_REGISTRY` in
+// @mop/shared/policies owns the typed options and the default for each
+// key; this table only ever stores the CHOSEN option key as a string,
+// exactly like TenantCapability.capabilityKey -- the enum of legal
+// values lives in code, where it can be type-checked, not in a database
+// CHECK constraint that drifts from it.
+//
+// Time-ranged for the same reason TenantCapability is: a work order
+// invoiced in 2026 must be read against the payment policy in force in
+// 2026, not whatever the workshop has since changed it to.
+//
+// Absent row means "use POLICY_REGISTRY's declared default for this
+// key" -- deliberately the same convention as an absent TenantCapability
+// row meaning ENABLED, so a freshly-provisioned workshop with zero rows
+// here is a complete, correctly-configured workshop, not a broken one.
+//
+// Who may write this row (Owner vs Platform Super Admin) is an OPEN
+// product decision as of Phase 21's review (see PHASE_21.md S8.C) --
+// deliberately not encoded here. `source`/`configuredBy` record WHO
+// changed it, same as TenantCapability, without this schema taking a
+// position on who is allowed to.
+model WorkshopPolicy {
+  id            String       @id @default(cuid())
+  tenantId      String
+  policyKey     String
+  value         String
+  effectiveFrom DateTime     @default(now())
+  effectiveTo   DateTime?
+  source        PolicySource
+  configuredBy  String?
+  reason        String?
+  createdAt     DateTime     @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Same access pattern as TenantCapability: "this tenant's open rows".
+  // Single-open-row-per-(tenant,policyKey) is a service-layer invariant,
+  // asserted by tests, for the same reason noted on TenantCapability --
+  // Prisma cannot express a filtered unique index.
+  @@index([tenantId, effectiveTo])
+  @@index([tenantId, policyKey, effectiveFrom])
+  @@map("workshop_policies")
 }
 
 model TenantConfigurationVersion {

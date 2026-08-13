@@ -18,13 +18,17 @@ import { CustomerDecisionService } from "./decision.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../operations/customer-safe-projection.service";
 import { AuditService } from "../audit/audit.service";
+import { PolicyResolutionService } from "../policies/policy-resolution.service";
 import type { PrismaService } from "../database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
+const audit = new AuditService(asService);
+const policies = new PolicyResolutionService(asService, audit);
 const decisions = new CustomerDecisionService(
   asService,
-  new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService()),
+  new OperationEventsService(asService, audit, new CustomerSafeProjectionService()),
+  policies,
 );
 
 const SUFFIX = `dec-${Date.now()}`;
@@ -430,5 +434,100 @@ describe("the answer reaches the rest of the system", () => {
 
     const stored = await prisma.customerDecisionRequest.findUniqueOrThrow({ where: { id: made.requestId } });
     expect(stored.status).toBe("PARTIALLY_RESPONDED");
+  });
+});
+
+describe("P-18 -- recordOnBehalf, staff recording a verbal decision", () => {
+  const STAFF = { accountId: "staff-1", displayName: "Amira Hassan", actorType: "TENANT_STAFF" as const };
+
+  it("records the decision under ALLOWED_ATTRIBUTED (the default), attributed to staff, never the customer", async () => {
+    const made = await makeRequest();
+
+    await decisions.recordOnBehalf(tenantId, [branchId], made.requestId, [
+      { itemId: made.normalItemId, decision: "APPROVED" },
+    ], STAFF);
+
+    const item = await prisma.customerDecisionItem.findUniqueOrThrow({ where: { id: made.normalItemId } });
+    expect(item.decision).toBe("APPROVED");
+
+    const event = await prisma.operationEvent.findFirst({
+      where: { tenantId, eventKey: "customer_decision.responded" },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(event?.actorType).toBe("TENANT_STAFF");
+    expect(event?.actorId).toBe(STAFF.accountId);
+
+    const auditRow = await prisma.auditLog.findFirst({
+      where: { tenantId, action: "customer_decision.responded", targetId: made.requestId },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(auditRow?.riskLevel).toBe("HIGH");
+    expect(auditRow?.after).toMatchObject({ recordedOnBehalf: true });
+    expect(auditRow?.actorName).toBe(STAFF.displayName);
+  });
+
+  it("refuses out-of-scope requests the same way it refuses ones that don't exist", async () => {
+    const made = await makeRequest();
+
+    await expect(
+      decisions.recordOnBehalf(tenantId, ["some-other-branch"], made.requestId, [
+        { itemId: made.normalItemId, decision: "APPROVED" },
+      ], STAFF),
+    ).rejects.toMatchObject({ status: 404, response: { code: "decision_not_found" } });
+  });
+
+  it("respects PORTAL_ONLY -- refuses to let staff record anything", async () => {
+    await policies.set(tenantId, "PORTAL_COUNTER_APPROVAL", "PORTAL_ONLY", STAFF, "PLATFORM", "test: portal only");
+    const made = await makeRequest();
+
+    await expect(
+      decisions.recordOnBehalf(tenantId, [branchId], made.requestId, [
+        { itemId: made.normalItemId, decision: "APPROVED" },
+      ], STAFF),
+    ).rejects.toMatchObject({ status: 409, response: { code: "counter_approval_not_allowed" } });
+
+    await policies.set(tenantId, "PORTAL_COUNTER_APPROVAL", "ALLOWED_ATTRIBUTED", STAFF, "PLATFORM", "test: restore");
+  });
+
+  it("respects ALLOWED_WITH_EVIDENCE -- refuses without a reference, accepts with one", async () => {
+    await policies.set(
+      tenantId,
+      "PORTAL_COUNTER_APPROVAL",
+      "ALLOWED_WITH_EVIDENCE",
+      STAFF,
+      "PLATFORM",
+      "test: evidence required",
+    );
+    const made = await makeRequest();
+
+    await expect(
+      decisions.recordOnBehalf(tenantId, [branchId], made.requestId, [
+        { itemId: made.normalItemId, decision: "APPROVED" },
+      ], STAFF),
+    ).rejects.toMatchObject({ status: 400, response: { code: "evidence_required" } });
+
+    await decisions.recordOnBehalf(
+      tenantId,
+      [branchId],
+      made.requestId,
+      [{ itemId: made.normalItemId, decision: "APPROVED" }],
+      STAFF,
+      "Called customer, she confirmed by phone at 14:20.",
+    );
+
+    const item = await prisma.customerDecisionItem.findUniqueOrThrow({ where: { id: made.normalItemId } });
+    expect(item.decision).toBe("APPROVED");
+
+    await policies.set(tenantId, "PORTAL_COUNTER_APPROVAL", "ALLOWED_ATTRIBUTED", STAFF, "PLATFORM", "test: restore");
+  });
+
+  it("H4 still applies through this path -- refuses against an already-closed work order", async () => {
+    const made = await makeRequest({ workOrderStatus: "CLOSED" });
+
+    await expect(
+      decisions.recordOnBehalf(tenantId, [branchId], made.requestId, [
+        { itemId: made.normalItemId, decision: "APPROVED" },
+      ], STAFF),
+    ).rejects.toMatchObject({ status: 409, response: { code: "work_order_already_closed" } });
   });
 });
