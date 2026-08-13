@@ -89,7 +89,8 @@ Three doors closed earlier this arc, from the original audit:
 | **10 — Team Leader & People/Performance** | 🟠 **API complete; web partial** — Team Leader API (all 4 pages' worth of endpoints) built but **no web UI yet**; Owner Home now has both API and a real reachable page. Money page and staff exit-reason/rehire-eligibility re-planned out. See `docs/phases/PHASE_10.md` section 6 for the correction history. |
 | **11 — Customer Portal** | ✅ **API complete** — 5 authenticated surfaces + pre-existing decision link; web pages owed, permission-engine gap documented, see `docs/phases/PHASE_11.md` |
 | **12 — Reporting & Data Analyst** | ✅ **complete (live-only)** — company report (technician performance, throughput, finance); exports/saved views/point-in-time snapshots owed, see `docs/phases/PHASE_12.md` |
-| 13–14 | ⬜ not started |
+| **13 — System Automation** | ✅ **complete (lock, not a separate worker)** — `SchedulerLockService` (Postgres advisory lock) stops double-firing across replicas; a real separate deployable owed once a real recurring job exists, see `docs/phases/PHASE_13.md` |
+| 14 | ⬜ not started |
 | 15 — Specialization Discovery | ⬜ **drafted**, not started — `docs/phases/PHASE_15.md` |
 | 16 — Specialization Structure | ⬜ **drafted**, not started — `docs/phases/PHASE_16.md` |
 | 17 — Specialization at Creation | ⬜ **drafted**, not started — `docs/phases/PHASE_17.md` |

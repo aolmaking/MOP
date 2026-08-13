@@ -109,8 +109,8 @@ Portal home, my assets, current service, invoice status, safe technical history 
 ### Phase 12 — Reporting & Data Analyst ✅ (live-only reporting; see `phases/PHASE_12.md`)
 `DATA_ANALYST`'s first real report: company-wide technician performance, work order throughput, finance summary, all gated by the new `reports.company.view` key. Took the phase's own named option: live-only reporting, no point-in-time snapshot (that is Phase 19.G's job). Exports and saved views did not ship — no export mechanism exists anywhere in the codebase yet, and building the first one as a side effect of this phase would be scope creep the waterfall method exists to prevent.
 
-### Phase 13 — System Automation
-Real background jobs on a separate worker process — the in-process scheduler double-fires the moment there are two API replicas.
+### Phase 13 — System Automation ✅ (lock, not a separate deployable — see `phases/PHASE_13.md`)
+`SchedulerLockService` wraps every `@Cron` job in a Postgres advisory transaction lock (`pg_try_advisory_xact_lock`), proven by a concurrency test to stop the double-fire two API replicas would otherwise cause. A genuinely separate worker process was not built: the only scheduled job today is the liveness heartbeat, and there is no real recurring business job yet to justify a second deployable — revisit when one exists.
 
 ### Phase 14 — Internationalization & Release Readiness
 **Narrowed by Workshop 2's finding (scenario 9) that this phase originally bundled two separable problems.** Translation (dialect/register accuracy per market — Egyptian vs. Gulf Arabic) and legal country-adaptation (tax, invoicing, business-identity fields) are now two independently-paced tracks: the legal half is pulled forward into Phase 9/20.D because a tenant can need it years before it needs dialect-accurate UI. This phase's remaining scope: the translation pass proper, security review, performance, summary tables, permission-key assertion check.
