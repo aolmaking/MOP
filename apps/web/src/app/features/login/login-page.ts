@@ -48,7 +48,16 @@ export class LoginPage {
       const target = redirectTo && redirectTo !== '/login' ? redirectTo : landingRouteFor(session);
       await this.router.navigateByUrl(target);
     } catch (err) {
-      this.error.set(err as PresentedError);
+      const presented = err as PresentedError;
+      // Materially different from every other login failure -- the
+      // credentials were right, so this gets the dedicated dead-end page
+      // the spec calls for instead of an inline banner on a form that
+      // implies retrying will help.
+      if (presented.code === 'tenant_unavailable') {
+        await this.router.navigateByUrl('/tenant-frozen');
+        return;
+      }
+      this.error.set(presented);
     } finally {
       this.submitting.set(false);
     }

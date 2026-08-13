@@ -109,16 +109,16 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Invoice & Payment Status | ✅ | `/customer/invoices` | `total`/`paid`/`balance` rendered as the exact strings the server sends |
 | Safe Technical History | ✅ | `/customer/history` | Entries labelled by plate/VIN cross-referenced from the customer's own asset list, never a raw asset id |
 
-## Shared System Pages — 3 / 6
+## Shared System Pages — 4 / 6
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
-| Login / Identity Gateway | ✅ | `/login` | Links out to Register |
+| Login / Identity Gateway | ✅ | `/login` | Links out to Register; redirects to Tenant Frozen on `tenant_unavailable` |
 | Register as Customer | ✅ | `/register` | Resolves `Tenant.slug` or `customerRegistrationCode` (case-insensitive, excludes frozen/suspended/archived tenants) as its own step, then creates the linked Account + Customer. Does not auto-login, matching Invite Accept's precedent |
 | Invite Accept / Set Password | ✅ | `/invite/accept?token=` | Closed the four-phase hole: owners created by Add Workshop can now sign in. Verified end to end against the running stack |
-| Access Denied | ⬜ | — | Currently a per-page state rather than a page |
-| Tenant Frozen / Workspace Unavailable | ⬜ | — | Login already refuses frozen tenants; there is no page explaining it |
-| Password Reset | ⬜ | — | Spec marks it a placeholder |
+| Access Denied | ⬜ | — | Deliberately not centralized this pass -- every existing page already implements its own inline `forbidden` state for action-level denials (see e.g. `owner-home-page.ts`'s `State` type), and there is no route-level permission guard today for a dedicated page to be the fallback *of*. Centralizing would mean redesigning an established, working convention across ~30 pages, not filling a gap -- left for a deliberate call, not assumed here |
+| Tenant Frozen / Workspace Unavailable | ✅ | `/tenant-frozen` | Reached only from Login's `tenant_unavailable` response. Deliberate dead end, no nav, exact spec copy, no freeze reason surfaced |
+| Password Reset | ⬜ | — | Spec marks it a placeholder pending unbuilt email/SMS infra |
 
 ---
 

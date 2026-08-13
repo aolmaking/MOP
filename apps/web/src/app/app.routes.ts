@@ -18,6 +18,13 @@ export const routes: Routes = [
     loadComponent: () => import('./features/register/register-page').then((m) => m.RegisterPage),
   },
   {
+    // Reached only from Login's tenant_unavailable response -- valid
+    // credentials, frozen/suspended/archived tenant. A deliberate dead
+    // end, so it needs no guard and no shell of its own.
+    path: 'tenant-frozen',
+    loadComponent: () => import('./features/tenant-frozen/tenant-frozen-page').then((m) => m.TenantFrozenPage),
+  },
+  {
     // The public decision link -- what a WhatsApp message points at. No
     // guard, deliberately: requiring a login first would break the flow
     // the whole feature exists for. The token scopes it to one request.
