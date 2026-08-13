@@ -1,0 +1,120 @@
+/*
+ * Register as Customer.
+ *
+ * Centred and narrow, no shell -- the same visual language Login and
+ * Invite Accept already use for the same reason: a person arriving from
+ * outside with one thing to do and no navigation to offer them yet.
+ */
+
+.register {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 26rem;
+  margin: var(--space-8) auto;
+  padding: var(--space-6) var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-block-start: 4px solid var(--brand);
+  border-radius: var(--radius-sm);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.title {
+  color: var(--white);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+}
+
+.body {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.error {
+  padding: var(--space-3);
+  background: var(--danger-bg);
+  border-inline-start: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field-label {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.field input {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-base);
+}
+
+.field input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+  border-color: var(--focus-ring);
+}
+
+.hint {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.hint--met {
+  color: var(--success);
+}
+
+.primary {
+  padding: var(--space-3) var(--space-4);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--on-accent);
+  font-size: var(--text-base);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.link {
+  font-size: var(--text-sm);
+}
+
+/* An inline text-styled button ("Not your workshop?") -- a real button
+   for keyboard/screen-reader semantics, styled to read as a link since
+   it sits inside a sentence. */
+.link-button {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

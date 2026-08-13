@@ -1,6 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthStore } from '../../core/auth/auth.store';
 import { landingRouteFor } from '../../core/auth/landing';
 import { ErrorBanner } from '../../shared/error-banner/error-banner';
@@ -8,7 +8,7 @@ import type { PresentedError } from '../../core/api/error.interceptor';
 
 @Component({
   selector: 'app-login-page',
-  imports: [ReactiveFormsModule, ErrorBanner],
+  imports: [ReactiveFormsModule, ErrorBanner, RouterLink],
   templateUrl: './login-page.html',
   styleUrl: './login-page.css',
 })

@@ -109,12 +109,12 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Invoice & Payment Status | ✅ | `/customer/invoices` | `total`/`paid`/`balance` rendered as the exact strings the server sends |
 | Safe Technical History | ✅ | `/customer/history` | Entries labelled by plate/VIN cross-referenced from the customer's own asset list, never a raw asset id |
 
-## Shared System Pages — 2 / 6
+## Shared System Pages — 3 / 6
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
-| Login / Identity Gateway | ✅ | `/login` | |
-| Register as Customer | ⬜ | — | `Tenant.customerRegistrationCode` exists for this |
+| Login / Identity Gateway | ✅ | `/login` | Links out to Register |
+| Register as Customer | ✅ | `/register` | Resolves `Tenant.slug` or `customerRegistrationCode` (case-insensitive, excludes frozen/suspended/archived tenants) as its own step, then creates the linked Account + Customer. Does not auto-login, matching Invite Accept's precedent |
 | Invite Accept / Set Password | ✅ | `/invite/accept?token=` | Closed the four-phase hole: owners created by Add Workshop can now sign in. Verified end to end against the running stack |
 | Access Denied | ⬜ | — | Currently a per-page state rather than a page |
 | Tenant Frozen / Workspace Unavailable | ⬜ | — | Login already refuses frozen tenants; there is no page explaining it |

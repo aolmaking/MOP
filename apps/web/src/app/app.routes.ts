@@ -11,6 +11,13 @@ export const routes: Routes = [
     loadComponent: () => import('./features/invite/invite-accept').then((m) => m.InviteAccept),
   },
   {
+    // The only self-registration path in the whole product -- public,
+    // same reasoning as invite/accept above. Accepts ?workshop= or
+    // ?code= from a branch QR code / invite link.
+    path: 'register',
+    loadComponent: () => import('./features/register/register-page').then((m) => m.RegisterPage),
+  },
+  {
     // The public decision link -- what a WhatsApp message points at. No
     // guard, deliberately: requiring a login first would break the flow
     // the whole feature exists for. The token scopes it to one request.

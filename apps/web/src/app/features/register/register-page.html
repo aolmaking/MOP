@@ -1,0 +1,89 @@
+<section class="register">
+  @switch (step()) {
+    @case ('code') {
+      <header class="head">
+        <h1 class="title">Create your account</h1>
+        <p class="body">Enter the code your workshop gave you to get started.</p>
+      </header>
+
+      @if (codeError(); as message) {
+        <p class="error" role="alert">{{ message }}</p>
+      }
+
+      <label class="field">
+        <span class="field-label">Workshop code</span>
+        <input
+          type="text"
+          autocomplete="off"
+          [value]="workshopCode()"
+          (input)="workshopCode.set($any($event.target).value)"
+          (keydown.enter)="resolveWorkshop()"
+        />
+      </label>
+
+      <button class="primary" type="button" [disabled]="!workshopCode().trim() || resolving()" (click)="resolveWorkshop()">
+        {{ resolving() ? 'Checking…' : 'Continue' }}
+      </button>
+
+      <a class="link" routerLink="/login">Already have an account? Sign in</a>
+    }
+
+    @case ('form') {
+      @if (workshop(); as ws) {
+        <header class="head">
+          <h1 class="title">Create your account</h1>
+          <p class="body">
+            Registering with <strong>{{ ws.tenantName }}</strong>.
+            <button class="link-button" type="button" (click)="changeWorkshop()">Not your workshop?</button>
+          </p>
+        </header>
+
+        @if (formError(); as message) {
+          <p class="error" role="alert">{{ message }}</p>
+        }
+
+        <label class="field">
+          <span class="field-label">Full name</span>
+          <input type="text" autocomplete="name" [value]="fullName()" (input)="fullName.set($any($event.target).value)" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Phone</span>
+          <input
+            type="tel"
+            autocomplete="tel"
+            placeholder="+20100000000"
+            [value]="phone()"
+            (input)="phone.set($any($event.target).value)"
+          />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Email (optional)</span>
+          <input type="email" autocomplete="email" [value]="email()" (input)="email.set($any($event.target).value)" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Password</span>
+          <input
+            type="password"
+            autocomplete="new-password"
+            [value]="password()"
+            (input)="password.set($any($event.target).value)"
+          />
+          <span class="hint" [class.hint--met]="longEnough()">At least 12 characters</span>
+        </label>
+
+        <button class="primary" type="button" [disabled]="!canSubmit()" (click)="submit()">
+          {{ submitting() ? 'Creating…' : 'Create account' }}
+        </button>
+      }
+    }
+
+    @case ('done') {
+      <h1 class="title">Your account is ready</h1>
+      <p class="body">Sign in with your phone number and the password you just chose.</p>
+      <button class="primary" type="button" (click)="goToLogin()">Sign in</button>
+    }
+  }
+</section>

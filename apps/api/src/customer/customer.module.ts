@@ -7,6 +7,8 @@ import { CustomerDecisionController } from "./decision.controller";
 import { CustomerDecisionService } from "./decision.service";
 import { CustomerPortalController } from "./customer-portal.controller";
 import { CustomerPortalService } from "./customer-portal.service";
+import { RegisterController } from "./register.controller";
+import { RegisterCustomerService } from "./register.service";
 
 /**
  * The customer-facing surface.
@@ -20,8 +22,8 @@ import { CustomerPortalService } from "./customer-portal.service";
  */
 @Module({
   imports: [DatabaseModule, OperationEventsModule, AuthModule, PoliciesModule],
-  controllers: [CustomerDecisionController, CustomerPortalController],
-  providers: [CustomerDecisionService, CustomerPortalService],
+  controllers: [CustomerDecisionController, CustomerPortalController, RegisterController],
+  providers: [CustomerDecisionService, CustomerPortalService, RegisterCustomerService],
   // CustomerDecisionService is needed by BranchManagerModule's staff-facing
   // counter-approval endpoint (P-18) -- exported rather than duplicated.
   exports: [CustomerDecisionService],
