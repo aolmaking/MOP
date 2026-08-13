@@ -1,4 +1,5 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ErrorBanner } from '../../../shared/error-banner/error-banner';
 import { ButtonDirective } from '../../../shared/button/button.directive';
@@ -34,6 +35,12 @@ export class TeamSetupPage {
   private readonly api = inject(TeamApi);
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
+  /** Set via route `data` on the Owner's reuse of this page (see app.routes.ts). */
+  protected readonly forOwner = inject(ActivatedRoute).snapshot.data['teamsForOwner'] === true;
+
+  protected readonly notDelegatedTitle = this.forOwner
+    ? "You don't have access to this page"
+    : 'Team setup stays with the workshop owner';
 
   protected readonly data = signal<PageData | null>(null);
   protected readonly state = signal<State>('loading');

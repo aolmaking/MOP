@@ -31,6 +31,30 @@ export interface InviteStaffInput {
   readonly warehouseScope?: string[];
 }
 
+export interface BranchListItem {
+  readonly id: string;
+  readonly name: string;
+  readonly code: string;
+  readonly city: string | null;
+  readonly warehouseCount: number;
+  readonly staffCount: number;
+  readonly isActive: boolean;
+}
+
+export interface WarehouseListItem {
+  readonly id: string;
+  readonly name: string;
+  readonly code: string;
+  readonly linkedBranches: readonly { id: string; name: string }[];
+  readonly isActive: boolean;
+}
+
+export interface OrganizationInfrastructure {
+  readonly branches: readonly BranchListItem[];
+  readonly warehouses: readonly WarehouseListItem[];
+  readonly links: readonly { branchId: string; warehouseId: string }[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class OrganizationApi {
   private readonly http = inject(HttpClient);
@@ -49,5 +73,25 @@ export class OrganizationApi {
 
   setLocked(staffId: string, locked: boolean): Observable<{ ok: true }> {
     return this.http.patch<{ ok: true }>(`/api/v1/organization/staff/${staffId}/locked`, { locked });
+  }
+
+  infrastructure(): Observable<OrganizationInfrastructure> {
+    return this.http.get<OrganizationInfrastructure>('/api/v1/organization/infrastructure');
+  }
+
+  createBranch(input: { name: string; code?: string; address?: string; city?: string }): Observable<{ id: string }> {
+    return this.http.post<{ id: string }>('/api/v1/organization/branches', input);
+  }
+
+  setBranchActive(branchId: string, isActive: boolean): Observable<{ ok: true }> {
+    return this.http.patch<{ ok: true }>(`/api/v1/organization/branches/${branchId}/active`, { isActive });
+  }
+
+  createWarehouse(input: { name: string; code?: string }): Observable<{ id: string }> {
+    return this.http.post<{ id: string }>('/api/v1/organization/warehouses', input);
+  }
+
+  setLink(branchId: string, warehouseId: string, linked: boolean): Observable<{ ok: true }> {
+    return this.http.post<{ ok: true }>('/api/v1/organization/branch-warehouse-links', { branchId, warehouseId, linked });
   }
 }

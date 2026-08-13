@@ -11,5 +11,8 @@ import { TeamSetupController } from "./team-setup.controller";
   imports: [DatabaseModule, AuthModule, AccessModule, AuditModule],
   controllers: [TeamSetupController],
   providers: [TeamSetupService],
+  // Reused by OrganizationModule for the Owner's own (unscoped) Teams tab
+  // -- same service, branchScope: [] reads/means "every branch".
+  exports: [TeamSetupService],
 })
 export class TeamModule {}

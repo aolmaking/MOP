@@ -2,12 +2,30 @@
   <header class="head">
     <div>
       <h1 class="title">Organization &amp; Access</h1>
-      <p class="sub">Staff tab. Branches, Warehouses, and Teams are not built yet.</p>
+      <p class="sub">
+        Staff, Branches, and Warehouses. <a routerLink="/owner/organization/teams">Teams</a> is its own page.
+      </p>
     </div>
-    @if (state() === 'ready') {
+    @if (state() === 'ready' && tab() === 'staff') {
       <button appButton variant="primary" (click)="openInvite()">+ Invite Staff</button>
     }
+    @if (state() === 'ready' && tab() === 'branches') {
+      <button appButton variant="primary" (click)="openCreateBranch()">+ Create Branch</button>
+    }
+    @if (state() === 'ready' && tab() === 'warehouses') {
+      <button appButton variant="primary" (click)="openCreateWarehouse()">+ Create Warehouse</button>
+    }
   </header>
+
+  <nav class="tabs" aria-label="Organization tabs">
+    <button type="button" class="tab" [class.tab--active]="tab() === 'staff'" (click)="switchTab('staff')">Staff</button>
+    <button type="button" class="tab" [class.tab--active]="tab() === 'branches'" (click)="switchTab('branches')">
+      Branches
+    </button>
+    <button type="button" class="tab" [class.tab--active]="tab() === 'warehouses'" (click)="switchTab('warehouses')">
+      Warehouses
+    </button>
+  </nav>
 
   @switch (state()) {
     @case ('loading') {
@@ -29,45 +47,149 @@
     }
 
     @case ('ready') {
-      @if (staff().length === 0) {
-        <p class="state-body">No staff yet. Invite your first team member to get started.</p>
-      } @else {
-        <table class="staff-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Role</th>
-              <th>Branch scope</th>
-              <th>Warehouse scope</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (row of staff(); track row.id) {
+      @if (tab() === 'staff') {
+        @if (staff().length === 0) {
+          <p class="state-body">No staff yet. Invite your first team member to get started.</p>
+        } @else {
+          <table class="data-table">
+            <thead>
               <tr>
-                <td>{{ row.fullName }}</td>
-                <td>{{ row.role }}</td>
-                <td>{{ row.branchScope.length ? row.branchScope.join(', ') : 'All branches' }}</td>
-                <td>{{ row.warehouseScope.length ? row.warehouseScope.join(', ') : '—' }}</td>
-                <td>
-                  <span class="badge" [class.badge--inactive]="!row.isActive">{{ row.isActive ? 'Active' : 'Inactive' }}</span>
-                  @if (row.lockedAt) {
-                    <span class="badge badge--locked">Locked</span>
-                  }
-                </td>
-                <td class="row-actions">
-                  <button appButton variant="ghost" size="small" (click)="toggleActive(row)">
-                    {{ row.isActive ? 'Deactivate' : 'Activate' }}
-                  </button>
-                  <button appButton variant="ghost" size="small" (click)="toggleLocked(row)">
-                    {{ row.lockedAt ? 'Unlock' : 'Lock' }}
-                  </button>
-                </td>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Branch scope</th>
+                <th>Warehouse scope</th>
+                <th>Status</th>
+                <th></th>
               </tr>
-            }
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              @for (row of staff(); track row.id) {
+                <tr>
+                  <td>{{ row.fullName }}</td>
+                  <td>{{ row.role }}</td>
+                  <td>{{ row.branchScope.length ? row.branchScope.join(', ') : 'All branches' }}</td>
+                  <td>{{ row.warehouseScope.length ? row.warehouseScope.join(', ') : '—' }}</td>
+                  <td>
+                    <span class="badge" [class.badge--inactive]="!row.isActive">{{ row.isActive ? 'Active' : 'Inactive' }}</span>
+                    @if (row.lockedAt) {
+                      <span class="badge badge--locked">Locked</span>
+                    }
+                  </td>
+                  <td class="row-actions">
+                    <button appButton variant="ghost" size="small" (click)="toggleActive(row)">
+                      {{ row.isActive ? 'Deactivate' : 'Activate' }}
+                    </button>
+                    <button appButton variant="ghost" size="small" (click)="toggleLocked(row)">
+                      {{ row.lockedAt ? 'Unlock' : 'Lock' }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      }
+
+      @if (tab() === 'branches' && infra(); as data) {
+        @if (data.branches.length === 0) {
+          <p class="state-body">No branches yet. Create your first one to get started.</p>
+        } @else {
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Code</th>
+                <th>City</th>
+                <th>Warehouses</th>
+                <th>Staff</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of data.branches; track row.id) {
+                <tr>
+                  <td>{{ row.name }}</td>
+                  <td>{{ row.code }}</td>
+                  <td>{{ row.city || '—' }}</td>
+                  <td>{{ row.warehouseCount }}</td>
+                  <td>{{ row.staffCount }}</td>
+                  <td>
+                    <span class="badge" [class.badge--inactive]="!row.isActive">{{ row.isActive ? 'Active' : 'Inactive' }}</span>
+                  </td>
+                  <td class="row-actions">
+                    <button appButton variant="ghost" size="small" (click)="toggleBranchActive(row)">
+                      {{ row.isActive ? 'Deactivate' : 'Activate' }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      }
+
+      @if (tab() === 'warehouses' && infra(); as data) {
+        @if (data.warehouses.length === 0) {
+          <p class="state-body">
+            No warehouses yet. If your workshop tracks parts inventory, add one here — otherwise you can skip this.
+          </p>
+        } @else {
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Code</th>
+                <th>Linked branches</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of data.warehouses; track row.id) {
+                <tr>
+                  <td>{{ row.name }}</td>
+                  <td>{{ row.code }}</td>
+                  <td>{{ row.linkedBranches.length ? row.linkedBranches.map((b) => b.name).join(', ') : '—' }}</td>
+                  <td>
+                    <span class="badge" [class.badge--inactive]="!row.isActive">{{ row.isActive ? 'Active' : 'Inactive' }}</span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+
+        @if (data.branches.length > 0 && data.warehouses.length > 0) {
+          <section class="matrix">
+            <h2 class="matrix-title">Branch ↔ Warehouse access</h2>
+            <table class="data-table matrix-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  @for (w of data.warehouses; track w.id) {
+                    <th>{{ w.name }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (b of data.branches; track b.id) {
+                  <tr>
+                    <td>{{ b.name }}</td>
+                    @for (w of data.warehouses; track w.id) {
+                      <td class="matrix-cell">
+                        <input
+                          type="checkbox"
+                          [checked]="isLinked(b.id, w.id)"
+                          (change)="toggleLink(b.id, w.id)"
+                        />
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </section>
+        }
       }
     }
   }
@@ -123,6 +245,78 @@
           <button appButton variant="secondary" (click)="closeInvite()">Cancel</button>
           <button appButton variant="primary" [disabled]="submitting()" (click)="submitInvite()">
             {{ submitting() ? 'Inviting…' : 'Send Invite' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showCreateBranch()) {
+    <div class="modal-backdrop" (click)="showCreateBranch.set(false)">
+      <div class="modal" (click)="$event.stopPropagation()">
+        <h2 class="modal-title">Create Branch</h2>
+        @if (createError(); as err) {
+          <app-error-banner [error]="err" />
+        }
+        <label class="field">
+          <span class="field-label">Name</span>
+          <input
+            type="text"
+            [ngModel]="branchDraft().name"
+            (ngModelChange)="branchDraft.set({ ...branchDraft(), name: $event })"
+          />
+        </label>
+        <label class="field">
+          <span class="field-label">Code (auto-suggested if left blank)</span>
+          <input
+            type="text"
+            [ngModel]="branchDraft().code"
+            (ngModelChange)="branchDraft.set({ ...branchDraft(), code: $event })"
+          />
+        </label>
+        <label class="field">
+          <span class="field-label">City</span>
+          <input
+            type="text"
+            [ngModel]="branchDraft().city"
+            (ngModelChange)="branchDraft.set({ ...branchDraft(), city: $event })"
+          />
+        </label>
+        <div class="modal-actions">
+          <button appButton variant="secondary" (click)="showCreateBranch.set(false)">Cancel</button>
+          <button appButton variant="primary" [disabled]="!branchDraft().name.trim()" (click)="submitBranch()">Create</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showCreateWarehouse()) {
+    <div class="modal-backdrop" (click)="showCreateWarehouse.set(false)">
+      <div class="modal" (click)="$event.stopPropagation()">
+        <h2 class="modal-title">Create Warehouse</h2>
+        @if (createError(); as err) {
+          <app-error-banner [error]="err" />
+        }
+        <label class="field">
+          <span class="field-label">Name</span>
+          <input
+            type="text"
+            [ngModel]="warehouseDraft().name"
+            (ngModelChange)="warehouseDraft.set({ ...warehouseDraft(), name: $event })"
+          />
+        </label>
+        <label class="field">
+          <span class="field-label">Code (auto-suggested if left blank)</span>
+          <input
+            type="text"
+            [ngModel]="warehouseDraft().code"
+            (ngModelChange)="warehouseDraft.set({ ...warehouseDraft(), code: $event })"
+          />
+        </label>
+        <div class="modal-actions">
+          <button appButton variant="secondary" (click)="showCreateWarehouse.set(false)">Cancel</button>
+          <button appButton variant="primary" [disabled]="!warehouseDraft().name.trim()" (click)="submitWarehouse()">
+            Create
           </button>
         </div>
       </div>

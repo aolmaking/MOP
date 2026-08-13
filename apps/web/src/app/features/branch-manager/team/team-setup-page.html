@@ -17,11 +17,13 @@
       <!-- Not a failure. The owner keeps team structure by default, and
            saying "permission denied" would read as a bug. -->
       <div class="state">
-        <p class="state-title">Team setup stays with the workshop owner</p>
+        <p class="state-title">{{ notDelegatedTitle }}</p>
         <p class="state-body">{{ refusal() }}</p>
-        <p class="state-body">
-          If your workshop wants you to manage teams, the owner can hand it over from Organization &amp; Access.
-        </p>
+        @if (!forOwner) {
+          <p class="state-body">
+            If your workshop wants you to manage teams, the owner can hand it over from Organization &amp; Access.
+          </p>
+        }
       </div>
     }
     @case ('error') {

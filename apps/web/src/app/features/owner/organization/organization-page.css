@@ -33,6 +33,60 @@
   font-size: var(--text-sm);
 }
 
+.sub a {
+  color: var(--accent);
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-block-end: 1px solid var(--border);
+}
+
+.tab {
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-block-end: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab--active {
+  border-block-end-color: var(--accent);
+  color: var(--white);
+}
+
+.matrix {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.matrix-title {
+  color: var(--white);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.matrix-table th,
+.matrix-table td {
+  text-align: center;
+}
+
+.matrix-table th:first-child,
+.matrix-table td:first-child {
+  text-align: start;
+}
+
+.matrix-cell input {
+  inline-size: 1.1rem;
+  block-size: 1.1rem;
+  cursor: pointer;
+}
+
 .state-body {
   color: var(--text-muted);
   font-size: var(--text-sm);
@@ -51,13 +105,13 @@
   align-items: flex-start;
 }
 
-.staff-table {
+.data-table {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--text-sm);
 }
 
-.staff-table th {
+.data-table th {
   padding: var(--space-2) var(--space-3);
   color: var(--text-muted);
   font-weight: 600;
@@ -65,7 +119,7 @@
   border-block-end: 1px solid var(--border);
 }
 
-.staff-table td {
+.data-table td {
   padding: var(--space-2) var(--space-3);
   color: var(--text);
   border-block-end: 1px solid var(--border);

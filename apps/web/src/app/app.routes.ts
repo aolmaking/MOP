@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
+import { TEAM_API_BASE_PATH, TeamApi } from './features/branch-manager/team/team.api';
 
 export const routes: Routes = [
   { path: 'login', loadComponent: () => import('./features/login/login-page').then((m) => m.LoginPage) },
@@ -145,11 +146,27 @@ export const routes: Routes = [
         loadComponent: () => import('./features/owner/audit-page').then((m) => m.AuditPage),
       },
       {
-        // Staff tab only -- Branches/Warehouses/Teams remain owed, see
-        // PAGE_INVENTORY.md.
+        // Staff / Branches / Warehouses tabs.
         path: 'organization',
         loadComponent: () =>
           import('./features/owner/organization/organization-page').then((m) => m.OrganizationPage),
+      },
+      {
+        // The Teams tab reuses Branch Manager's TeamSetupPage verbatim,
+        // pointed at /organization/teams instead of /branch/teams via
+        // TEAM_API_BASE_PATH -- same TeamSetupService server-side, same
+        // component, no second implementation. See team.api.ts and
+        // team-setup-page.ts's `forOwner` branch for the two small
+        // copy differences (this route has no delegation to explain).
+        path: 'organization/teams',
+        loadComponent: () =>
+          import('./features/branch-manager/team/team-setup-page').then((m) => m.TeamSetupPage),
+        data: { teamsForOwner: true },
+        // Re-providing TeamApi itself (not just the token) forces a fresh
+        // instance scoped to this route, so it actually picks up the
+        // overridden token instead of reusing the root singleton that
+        // may already have resolved to the Branch Manager's path.
+        providers: [{ provide: TEAM_API_BASE_PATH, useValue: '/api/v1/organization/teams' }, TeamApi],
       },
     ],
   },

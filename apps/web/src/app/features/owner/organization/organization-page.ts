@@ -1,11 +1,20 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ErrorBanner } from '../../../shared/error-banner/error-banner';
 import { ButtonDirective } from '../../../shared/button/button.directive';
 import type { PresentedError } from '../../../core/api/error.interceptor';
-import { OrganizationApi, type InviteStaffInput, type StaffListItem, type StaffRole } from './organization.api';
+import {
+  OrganizationApi,
+  type BranchListItem,
+  type InviteStaffInput,
+  type OrganizationInfrastructure,
+  type StaffListItem,
+  type StaffRole,
+} from './organization.api';
 
+type Tab = 'staff' | 'branches' | 'warehouses';
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
 const INVITABLE_ROLES: readonly StaffRole[] = [
@@ -18,18 +27,18 @@ const INVITABLE_ROLES: readonly StaffRole[] = [
 ];
 
 /**
- * Organization & Access -- Staff tab, per docs/detailed-specs/tenant-owner.md:
+ * Organization & Access, per docs/detailed-specs/tenant-owner.md:
  * "This is the first page that has to work -- nothing else in the product
  * is usable for a given workshop until staff exist."
  *
- * Branches, Warehouses, and Teams are the same spec'd page's remaining
- * three tabs, not built this pass -- named as owed in PAGE_INVENTORY.md
- * rather than stubbed here, matching Owner Home's established precedent
- * for absent-vs-empty.
+ * Three of the spec's four tabs live here (Staff, Branches, Warehouses);
+ * Teams is a separate route (`/owner/organization/teams`) that reuses
+ * Branch Manager's TeamSetupPage verbatim rather than a fourth
+ * implementation of the same CRUD -- see app.routes.ts's comment there.
  */
 @Component({
   selector: 'app-organization-page',
-  imports: [FormsModule, ErrorBanner, ButtonDirective],
+  imports: [FormsModule, RouterLink, ErrorBanner, ButtonDirective],
   templateUrl: './organization-page.html',
   styleUrl: './organization-page.css',
 })
@@ -38,9 +47,12 @@ export class OrganizationPage {
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly roles = INVITABLE_ROLES;
+  protected readonly tab = signal<Tab>('staff');
   protected readonly state = signal<State>('loading');
-  protected readonly staff = signal<readonly StaffListItem[]>([]);
   protected readonly error = signal<PresentedError | null>(null);
+
+  protected readonly staff = signal<readonly StaffListItem[]>([]);
+  protected readonly infra = signal<OrganizationInfrastructure | null>(null);
 
   protected readonly showInvite = signal(false);
   protected readonly inviteForm = signal<InviteStaffInput>({ fullName: '', email: '', phone: '', role: 'DATA_ANALYST' });
@@ -52,26 +64,54 @@ export class OrganizationPage {
   protected readonly branchScopeText = signal('');
   protected readonly warehouseScopeText = signal('');
 
+  protected readonly showCreateBranch = signal(false);
+  protected readonly branchDraft = signal({ name: '', code: '', city: '' });
+  protected readonly showCreateWarehouse = signal(false);
+  protected readonly warehouseDraft = signal({ name: '', code: '' });
+  protected readonly createError = signal<PresentedError | null>(null);
+
   constructor() {
+    this.load();
+  }
+
+  protected switchTab(tab: Tab): void {
+    this.tab.set(tab);
     this.load();
   }
 
   protected load(): void {
     this.state.set('loading');
-    this.api
-      .listStaff()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (page) => {
-          this.staff.set(page.items);
-          this.state.set('ready');
-        },
-        error: (err: PresentedError) => {
-          this.state.set(err.httpStatus === 403 ? 'forbidden' : 'error');
-          this.error.set(err);
-        },
-      });
+    const onError = (err: PresentedError) => {
+      this.state.set(err.httpStatus === 403 ? 'forbidden' : 'error');
+      this.error.set(err);
+    };
+
+    if (this.tab() === 'staff') {
+      this.api
+        .listStaff()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (page) => {
+            this.staff.set(page.items);
+            this.state.set('ready');
+          },
+          error: onError,
+        });
+    } else {
+      this.api
+        .infrastructure()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (page) => {
+            this.infra.set(page);
+            this.state.set('ready');
+          },
+          error: onError,
+        });
+    }
   }
+
+  // -- Staff ------------------------------------------------------------
 
   protected openInvite(): void {
     this.inviteForm.set({ fullName: '', email: '', phone: '', role: 'DATA_ANALYST' });
@@ -127,6 +167,74 @@ export class OrganizationPage {
   protected toggleLocked(row: StaffListItem): void {
     this.api
       .setLocked(row.id, row.lockedAt === null)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: () => this.load() });
+  }
+
+  // -- Branches -----------------------------------------------------------
+
+  protected openCreateBranch(): void {
+    this.branchDraft.set({ name: '', code: '', city: '' });
+    this.createError.set(null);
+    this.showCreateBranch.set(true);
+  }
+
+  protected submitBranch(): void {
+    const draft = this.branchDraft();
+    this.createError.set(null);
+    this.api
+      .createBranch({ name: draft.name, code: draft.code || undefined, city: draft.city || undefined })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.showCreateBranch.set(false);
+          this.load();
+        },
+        error: (err: PresentedError) => this.createError.set(err),
+      });
+  }
+
+  protected toggleBranchActive(branch: BranchListItem): void {
+    this.api
+      .setBranchActive(branch.id, !branch.isActive)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => this.load(),
+        error: (err: PresentedError) => this.error.set(err),
+      });
+  }
+
+  // -- Warehouses + matrix --------------------------------------------------
+
+  protected openCreateWarehouse(): void {
+    this.warehouseDraft.set({ name: '', code: '' });
+    this.createError.set(null);
+    this.showCreateWarehouse.set(true);
+  }
+
+  protected submitWarehouse(): void {
+    const draft = this.warehouseDraft();
+    this.createError.set(null);
+    this.api
+      .createWarehouse({ name: draft.name, code: draft.code || undefined })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.showCreateWarehouse.set(false);
+          this.load();
+        },
+        error: (err: PresentedError) => this.createError.set(err),
+      });
+  }
+
+  protected isLinked(branchId: string, warehouseId: string): boolean {
+    return this.infra()?.links.some((l) => l.branchId === branchId && l.warehouseId === warehouseId) ?? false;
+  }
+
+  protected toggleLink(branchId: string, warehouseId: string): void {
+    const linked = this.isLinked(branchId, warehouseId);
+    this.api
+      .setLink(branchId, warehouseId, !linked)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({ next: () => this.load() });
   }
