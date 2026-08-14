@@ -41,7 +41,7 @@
           <tbody>
             @for (row of rows(); track row.workOrderId) {
               <tr [class.row--blocked]="row.openBlockers > 0">
-                <td class="cell-mono">{{ row.workOrderId }}</td>
+                <td class="cell-mono"><mop-identifier [value]="row.identifier ?? '—'" /></td>
                 <td>{{ label(row.status) }}</td>
                 <td>{{ row.technicianName }}</td>
                 <td class="col-num">{{ row.taskCount }}</td>

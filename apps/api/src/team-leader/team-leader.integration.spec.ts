@@ -112,7 +112,7 @@ beforeAll(async () => {
   ]);
 
   const customer = await prisma.customer.create({ data: { tenantId, fullName: "Some Customer", phone: "0100000000" } });
-  const asset = await prisma.asset.create({ data: { tenantId, category: "CARS" } });
+  const asset = await prisma.asset.create({ data: { tenantId, category: "CARS", plateNumber: "TL-TEST-1" } });
 
   const [woA, woB] = await Promise.all([
     prisma.workOrder.create({ data: { tenantId, branchId: branchA, assetId: asset.id, customerId: customer.id, status: "IN_PROGRESS" } }),
@@ -194,6 +194,11 @@ describe("work orders view carries no money field", () => {
       expect(row).not.toHaveProperty("payment");
     }
     expect(rows.length).toBeGreaterThan(0);
+  });
+
+  it("carries the asset's plate as a display identifier, not the raw work order id", async () => {
+    const rows = await service.workOrders(tenantId, [techA, techB]);
+    expect(rows.every((row) => row.identifier === "TL-TEST-1")).toBe(true);
   });
 });
 

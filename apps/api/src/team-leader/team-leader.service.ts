@@ -32,6 +32,7 @@ export interface TechnicianDetail extends TechnicianRow {
 
 export interface ManagedWorkOrder {
   readonly workOrderId: string;
+  readonly identifier: string | null;
   readonly status: string;
   readonly technicianId: string;
   readonly technicianName: string;
@@ -251,6 +252,7 @@ export class TeamLeaderService {
         select: {
           id: true,
           status: true,
+          asset: { select: { plateNumber: true, serialNumber: true } },
           tasks: { select: { id: true, blockers: { where: { status: { in: ["OPEN", "ESCALATED"] } } } } },
         },
       }),
@@ -260,6 +262,7 @@ export class TeamLeaderService {
 
     return orders.map((order) => ({
       workOrderId: order.id,
+      identifier: order.asset.plateNumber ?? order.asset.serialNumber,
       status: order.status,
       technicianId: byWorkOrder.get(order.id) ?? "",
       technicianName: nameById.get(byWorkOrder.get(order.id) ?? "") ?? "",

@@ -27,6 +27,7 @@ export interface TechnicianDetail extends TechnicianRow {
 
 export interface ManagedWorkOrder {
   readonly workOrderId: string;
+  readonly identifier: string | null;
   readonly status: string;
   readonly technicianId: string;
   readonly technicianName: string;

@@ -2,6 +2,7 @@ import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ErrorBanner } from '../../shared/error-banner/error-banner';
 import { ButtonDirective } from '../../shared/button/button.directive';
+import { Identifier } from '../../shared/identifier/identifier';
 import type { PresentedError } from '../../core/api/error.interceptor';
 import { TeamLeaderApi, type ManagedWorkOrder } from './team-leader.api';
 
@@ -17,7 +18,7 @@ type State = 'loading' | 'ready' | 'empty' | 'forbidden' | 'error';
  */
 @Component({
   selector: 'app-team-work-orders',
-  imports: [ErrorBanner, ButtonDirective],
+  imports: [ErrorBanner, ButtonDirective, Identifier],
   templateUrl: './team-work-orders.html',
   styleUrl: './team-work-orders.css',
 })
