@@ -67,7 +67,7 @@
                 <tr>
                   <td>{{ row.fullName }}</td>
                   <td>{{ row.role }}</td>
-                  <td>{{ row.branchScope.length ? row.branchScope.join(', ') : 'All branches' }}</td>
+                  <td>{{ branchNames(row.branchScope) }}</td>
                   <td>{{ row.warehouseScope.length ? row.warehouseScope.join(', ') : '—' }}</td>
                   <td>
                     <span class="badge" [class.badge--inactive]="!row.isActive">{{ row.isActive ? 'Active' : 'Inactive' }}</span>

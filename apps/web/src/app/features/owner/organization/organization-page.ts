@@ -54,6 +54,11 @@ export class OrganizationPage {
   protected readonly staff = signal<readonly StaffListItem[]>([]);
   protected readonly infra = signal<OrganizationInfrastructure | null>(null);
 
+  // Independent of the tab-scoped `infra` load below: the Staff tab needs
+  // branch names to resolve a row's branchScope ids, but only fetches
+  // staff itself, so this is loaded once, separately, on init.
+  private readonly branchNameById = signal<ReadonlyMap<string, string>>(new Map());
+
   protected readonly showInvite = signal(false);
   protected readonly inviteForm = signal<InviteStaffInput>({ fullName: '', email: '', phone: '', role: 'DATA_ANALYST' });
   protected readonly inviteError = signal<PresentedError | null>(null);
@@ -72,6 +77,16 @@ export class OrganizationPage {
 
   constructor() {
     this.load();
+    this.api
+      .infrastructure()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((infra) => this.branchNameById.set(new Map(infra.branches.map((b) => [b.id, b.name]))));
+  }
+
+  protected branchNames(ids: readonly string[]): string {
+    if (ids.length === 0) return 'All branches';
+    const names = this.branchNameById();
+    return ids.map((id) => names.get(id) ?? id).join(', ');
   }
 
   protected switchTab(tab: Tab): void {

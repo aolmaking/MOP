@@ -68,6 +68,7 @@ async function main() {
   const technician = await ensureTechnician(tenant.id);
   await ensureOwner(tenant.id);
   await ensureInventoryManager(tenant.id);
+  await ensureDataAnalyst(tenant.id);
   await ensureDelegatedTeams(tenant.id, branch.id);
   await clearDemoWork(tenant.id);
   await createStuckJobs(tenant.id, branch.id, technician.staffUserId);
@@ -84,6 +85,8 @@ async function main() {
   console.log(`              lands on http://localhost:4200/tech\n`);
   console.log(`  Inventory Manager  ${INVENTORY_EMAIL} / ${INVENTORY_PASSWORD}`);
   console.log(`              lands on http://localhost:4200/inventory\n`);
+  console.log(`  Data Analyst  ${ANALYST_EMAIL} / ${ANALYST_PASSWORD}`);
+  console.log(`              lands on http://localhost:4200/analyst\n`);
   console.log(`  Manager account ${manager.id}`);
 }
 
@@ -279,6 +282,53 @@ async function ensureOwner(tenantId: string): Promise<void> {
     await prisma.rolePermission.upsert({
       where: { tenantId_role_permissionKey: { tenantId, role: "TENANT_OWNER", permissionKey } },
       create: { tenantId, role: "TENANT_OWNER", permissionKey, allowed: allowed! },
+      update: { allowed: allowed! },
+    });
+  }
+}
+
+const ANALYST_EMAIL = "analyst@apex-motors.local";
+const ANALYST_PASSWORD = "ChangeMe-Analyst-123";
+
+/**
+ * Same gap as Inventory Manager: no demo account at all, no way to sign
+ * in and demonstrate the role.
+ */
+async function ensureDataAnalyst(tenantId: string): Promise<void> {
+  const existing = await prisma.account.findFirst({ where: { tenantId, email: ANALYST_EMAIL } });
+
+  const account =
+    existing ??
+    (await prisma.account.create({
+      data: {
+        accountType: "TENANT_STAFF",
+        tenantId,
+        email: ANALYST_EMAIL,
+        passwordHash: hashPassword(ANALYST_PASSWORD),
+        status: "ACTIVE",
+      },
+    }));
+
+  const staff = await prisma.staffUser.findUnique({ where: { accountId: account.id } });
+  if (!staff) {
+    await prisma.staffUser.create({
+      data: {
+        accountId: account.id,
+        tenantId,
+        fullName: "Layla Mostafa",
+        role: "DATA_ANALYST",
+        branchScope: [],
+        warehouseScope: [],
+        categoryScope: ["CARS"],
+      },
+    });
+  }
+
+  const analystPermissions = DEFAULT_ROLE_PERMISSIONS.DATA_ANALYST ?? {};
+  for (const [permissionKey, allowed] of Object.entries(analystPermissions)) {
+    await prisma.rolePermission.upsert({
+      where: { tenantId_role_permissionKey: { tenantId, role: "DATA_ANALYST", permissionKey } },
+      create: { tenantId, role: "DATA_ANALYST", permissionKey, allowed: allowed! },
       update: { allowed: allowed! },
     });
   }
