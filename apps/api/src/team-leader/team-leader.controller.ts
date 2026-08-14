@@ -61,6 +61,13 @@ export class TeamLeaderController {
     return this.service.workOrders(tenantId, session.managedTechnicianIds);
   }
 
+  /** "Previous history detected" -- P-81, docs/POLICY_DECISION_INVENTORY.md §8.B. */
+  @Get("work-orders/:id/vehicle-history")
+  async vehicleHistory(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const tenantId = await this.require(session, "team.workorders.view");
+    return this.service.vehicleHistory(tenantId, session.managedTechnicianIds, id);
+  }
+
   @Get("reports")
   async reports(@CurrentSession() session: SessionContext) {
     const tenantId = await this.require(session, "reports.team.view");

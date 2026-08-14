@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import type { GateEvaluation } from "@mop/shared";
 import { PrismaService } from "../database/prisma.service";
 import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
+import { AssetHistoryService } from "../vehicle-history/asset-history.service";
 
 export interface TechnicianJob {
   readonly workOrderId: string;
@@ -61,6 +62,7 @@ export class TechnicianWorkViewService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly lifecycle: WorkOrderLifecycleService,
+    private readonly assetHistory: AssetHistoryService,
   ) {}
 
   async myWork(staffUserId: string, tenantId: string): Promise<readonly TechnicianJob[]> {
@@ -94,6 +96,8 @@ export class TechnicianWorkViewService {
       orderBy: { updatedAt: "asc" },
     });
 
+    const complaints = await this.assetHistory.complaintText(tenantId, rows.map((r) => r.id));
+
     const now = Date.now();
     return rows.map((row) => {
       const open = row.tasks.filter((task) => !["DONE", "CANCELLED"].includes(task.status));
@@ -102,7 +106,7 @@ export class TechnicianWorkViewService {
         identifier: row.asset.plateNumber ?? row.asset.serialNumber,
         customerName: row.customer.fullName,
         status: row.status,
-        complaint: null,
+        complaint: complaints.get(row.id) ?? null,
         inspectionDeclined: row.inspectionDeclined,
         myTaskCount: row.tasks.length,
         myOpenTaskCount: open.length,
@@ -140,6 +144,7 @@ export class TechnicianWorkViewService {
         id: true,
         status: true,
         inspectionDeclined: true,
+        assetId: true,
         asset: { select: { plateNumber: true, serialNumber: true } },
         customer: { select: { fullName: true } },
         tasks: {
@@ -165,12 +170,14 @@ export class TechnicianWorkViewService {
       throw new NotFoundException({ code: "work_order_not_found", message: "That job is not assigned to you." });
     }
 
+    const complaints = await this.assetHistory.complaintText(tenantId, [workOrder.id]);
+
     return {
       workOrderId: workOrder.id,
       identifier: workOrder.asset.plateNumber ?? workOrder.asset.serialNumber,
       customerName: workOrder.customer.fullName,
       status: workOrder.status,
-      complaint: null,
+      complaint: complaints.get(workOrder.id) ?? null,
       inspectionDeclined: workOrder.inspectionDeclined,
       tasks: workOrder.tasks.map((task) => ({
         id: task.id,
@@ -180,6 +187,32 @@ export class TechnicianWorkViewService {
       })),
       finish: await this.finishCheck(workOrderId),
     };
+  }
+
+  /**
+   * "Previous history detected" (docs/POLICY_DECISION_INVENTORY.md
+   * §8.B, P-81) -- reuses the same ownership check `workCard` already
+   * does (a technician can only pull history for a job actually
+   * assigned to them), then hands off to the shared, role-agnostic
+   * history builder.
+   */
+  async vehicleHistory(staffUserId: string, tenantId: string, workOrderId: string) {
+    const workOrder = await this.prisma.workOrder.findFirst({
+      where: {
+        id: workOrderId,
+        tenantId,
+        OR: [
+          { assignments: { some: { staffUserId } } },
+          { tasks: { some: { assignments: { some: { staffUserId } } } } },
+        ],
+      },
+      select: { assetId: true },
+    });
+    if (!workOrder) {
+      throw new NotFoundException({ code: "work_order_not_found", message: "That job is not assigned to you." });
+    }
+
+    return this.assetHistory.build(tenantId, workOrder.assetId, workOrderId);
   }
 
   /**

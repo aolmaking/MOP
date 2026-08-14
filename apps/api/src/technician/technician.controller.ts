@@ -42,6 +42,13 @@ export class TechnicianController {
     return this.view.workCard(staffUserId, tenantId, id);
   }
 
+  /** "Previous history detected" -- P-81, docs/POLICY_DECISION_INVENTORY.md §8.B. */
+  @Get("work-orders/:id/vehicle-history")
+  async vehicleHistory(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    return this.view.vehicleHistory(staffUserId, tenantId, id);
+  }
+
   @Post("tasks/:id/start")
   async startTask(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     await this.requireTechnician(session, "task.view_assigned");

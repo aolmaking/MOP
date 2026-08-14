@@ -39,6 +39,51 @@
         }
       </header>
 
+      <section class="history">
+        <button type="button" class="history-toggle" (click)="toggleVehicleHistory()">
+          @if (vehicleHistoryOpen()) {
+            Hide vehicle history
+          } @else {
+            ⚠ Check vehicle history
+          }
+        </button>
+
+        @if (vehicleHistoryOpen()) {
+          @if (vehicleHistoryLoading()) {
+            <p class="history-loading" aria-busy="true">Loading history…</p>
+          } @else if (vehicleHistory(); as h) {
+            @if (h.totalPriorVisits === 0) {
+              <p class="history-empty">No previous visits recorded for this vehicle.</p>
+            } @else {
+              <p class="history-summary">
+                {{ h.totalPriorVisits }} previous visit{{ h.totalPriorVisits === 1 ? '' : 's' }}
+                @if (h.hasPriorOwnerHistory) {
+                  <span class="history-owner-note">(includes visits from before the current owner)</span>
+                }
+              </p>
+              <ul class="history-list">
+                @for (visit of h.visits; track visit.workOrderId) {
+                  <li class="history-visit">
+                    <p class="history-visit-head">{{ label(visit.status) }} · {{ visit.createdAt | date: 'mediumDate' }}</p>
+                    @if (visit.complaint) {
+                      <p class="history-line"><strong>Complaint:</strong> {{ visit.complaint }}</p>
+                    }
+                    @for (fault of visit.faults; track fault.description) {
+                      <p class="history-line"><strong>Found:</strong> {{ fault.description }}</p>
+                    }
+                    @if (visit.partsUsed.length > 0) {
+                      <p class="history-line">
+                        <strong>Parts:</strong> {{ visit.partsUsed.map((p) => p.name + ' x' + p.quantity).join(', ') }}
+                      </p>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          }
+        }
+      </section>
+
       @if (actionError(); as message) {
         <!-- On the page, never a toast: a technician who put the tablet
              down would miss a toast and believe the press had worked. -->

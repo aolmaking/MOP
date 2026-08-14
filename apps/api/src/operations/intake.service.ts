@@ -39,6 +39,17 @@ export interface IntakeInput {
    * hand one customer another's vehicle history.
    */
   readonly confirmOwnershipTransfer?: boolean;
+  /**
+   * Required when a NEW customer is being described (no
+   * `existingCustomerId`) and that phone number already belongs to
+   * another customer in this tenant. Same shape as
+   * `confirmOwnershipTransfer`: refuse first, act only once a human has
+   * been shown the ambiguity and confirmed which one they mean
+   * (P-80, docs/POLICY_DECISION_INVENTORY.md §8.B) -- a phone match is
+   * not proof of identity (a shared household phone is real), so this
+   * never silently reuses or silently duplicates.
+   */
+  readonly confirmNewCustomerDespitePhoneMatch?: boolean;
 }
 
 export interface IntakeResult {
@@ -160,6 +171,22 @@ export class IntakeService {
       throw new BadRequestException({
         code: "customer_details_required",
         message: "A new customer needs a name and a phone number.",
+      });
+    }
+
+    // A phone match is a strong signal, not proof -- refuse and name the
+    // existing customer rather than silently reusing them (could be the
+    // wrong person on a shared phone) or silently creating a duplicate
+    // identity for someone who already exists (P-80).
+    const phoneMatch = await tx.customer.findFirst({
+      where: { tenantId: input.tenantId, phone: input.customer.phone },
+      select: { id: true, fullName: true },
+    });
+    if (phoneMatch && !input.confirmNewCustomerDespitePhoneMatch) {
+      throw new ConflictException({
+        code: "phone_number_already_registered",
+        message: `A customer named "${phoneMatch.fullName}" already uses this phone number. Select them, or confirm this is a different person.`,
+        details: { existingCustomerId: phoneMatch.id, existingCustomerName: phoneMatch.fullName },
       });
     }
 

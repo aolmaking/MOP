@@ -90,6 +90,26 @@ export class RegisterCustomerService {
       });
     }
 
+    // A phone match against an existing walk-in Customer (created by
+    // Branch Manager's intake, no portal account yet) is the ordinary
+    // case, not an error -- this is that same person creating their
+    // portal login for the first time, and should CLAIM the existing
+    // record so their real service history is theirs from day one,
+    // rather than starting a second, empty Customer identity for the
+    // same person (P-80, docs/POLICY_DECISION_INVENTORY.md §8.B). A
+    // phone match against a Customer that already HAS an account is a
+    // genuine conflict -- that phone is already registered.
+    const phoneMatch = await this.prisma.customer.findFirst({
+      where: { tenantId: workshop.tenantId, phone: input.phone },
+      select: { id: true, accountId: true },
+    });
+    if (phoneMatch?.accountId) {
+      throw new ConflictException({
+        code: "phone_already_registered",
+        message: "This phone number is already registered at this workshop. Try signing in instead.",
+      });
+    }
+
     const created = await this.prisma.$transaction(async (tx) => {
       const account = await tx.account.create({
         data: {
@@ -101,6 +121,25 @@ export class RegisterCustomerService {
           status: "ACTIVE",
         },
       });
+
+      if (phoneMatch) {
+        // Guarded, not a plain update: two concurrent registrations
+        // racing to claim the same walk-in record must not both
+        // succeed (the second account would silently orphan itself with
+        // no linked Customer). Only the transaction that observes
+        // `accountId` still null wins.
+        const claimed = await tx.customer.updateMany({
+          where: { id: phoneMatch.id, accountId: null },
+          data: { accountId: account.id, fullName: input.fullName, email: input.email ?? undefined, portalStatus: "ENABLED" },
+        });
+        if (claimed.count === 0) {
+          throw new ConflictException({
+            code: "phone_already_registered",
+            message: "This phone number is already registered at this workshop. Try signing in instead.",
+          });
+        }
+        return { id: phoneMatch.id };
+      }
 
       const customer = await tx.customer.create({
         data: {

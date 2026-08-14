@@ -133,6 +133,7 @@ export class BranchManagerController {
         complaint: dto.complaint,
         inspectionDeclined: dto.inspectionDeclined ?? false,
         confirmOwnershipTransfer: dto.confirmOwnershipTransfer ?? false,
+        confirmNewCustomerDespitePhoneMatch: dto.confirmNewCustomerDespitePhoneMatch ?? false,
       },
       {
         accountId: session.accountId,

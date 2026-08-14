@@ -306,4 +306,41 @@ describe("refusals", () => {
       ),
     ).rejects.toThrow(/phone/i);
   }, 120_000);
+
+  it("refuses a new-customer phone that already belongs to someone else, and names them (P-80)", async () => {
+    const phone = `0155${SUFFIX}-a`;
+    const first = await intake.intake(
+      { tenantId, branchId, customer: { fullName: "Original Person", phone }, asset: { category: "CARS" } },
+      ACTOR,
+    );
+    expect(first.customerId).toBeDefined();
+
+    await expect(
+      intake.intake(
+        { tenantId, branchId, customer: { fullName: "Second Person", phone }, asset: { category: "CARS" } },
+        ACTOR,
+      ),
+    ).rejects.toMatchObject({ status: 409, response: { code: "phone_number_already_registered" } });
+  }, 120_000);
+
+  it("creates a genuinely new customer at a shared phone once explicitly confirmed", async () => {
+    const phone = `0155${SUFFIX}-b`;
+    const first = await intake.intake(
+      { tenantId, branchId, customer: { fullName: "Household Member A", phone }, asset: { category: "CARS" } },
+      ACTOR,
+    );
+
+    const second = await intake.intake(
+      {
+        tenantId,
+        branchId,
+        customer: { fullName: "Household Member B", phone },
+        asset: { category: "CARS" },
+        confirmNewCustomerDespitePhoneMatch: true,
+      },
+      ACTOR,
+    );
+
+    expect(second.customerId).not.toBe(first.customerId);
+  }, 120_000);
 });

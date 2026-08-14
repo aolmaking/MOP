@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
+import { AssetHistoryService } from "../vehicle-history/asset-history.service";
 
 export interface TeamLeaderHome {
   readonly managedCount: number;
@@ -63,7 +64,10 @@ export interface TechnicianPerformanceRow {
  */
 @Injectable()
 export class TeamLeaderService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly assetHistory: AssetHistoryService,
+  ) {}
 
   async home(tenantId: string, managedTechnicianIds: readonly string[]): Promise<TeamLeaderHome> {
     if (managedTechnicianIds.length === 0) {
@@ -262,6 +266,39 @@ export class TeamLeaderService {
       taskCount: order.tasks.length,
       openBlockers: order.tasks.reduce((sum, task) => sum + task.blockers.length, 0),
     }));
+  }
+
+  /**
+   * The Team Leader's broader view of vehicle history -- any work order
+   * touching one of their managed technicians, not just their own
+   * assignments (P-81, docs/POLICY_DECISION_INVENTORY.md §8.B).
+   */
+  async vehicleHistory(tenantId: string, managedTechnicianIds: readonly string[], workOrderId: string) {
+    if (managedTechnicianIds.length === 0) {
+      throw new NotFoundException({ code: "work_order_not_found", message: "That job is not in your team." });
+    }
+
+    const covered = await this.prisma.task.findFirst({
+      where: {
+        tenantId,
+        workOrderId,
+        assignments: { some: { staffUserId: { in: [...managedTechnicianIds] } } },
+      },
+      select: { workOrderId: true },
+    });
+    if (!covered) {
+      throw new NotFoundException({ code: "work_order_not_found", message: "That job is not in your team." });
+    }
+
+    const workOrder = await this.prisma.workOrder.findFirst({
+      where: { id: workOrderId, tenantId },
+      select: { assetId: true },
+    });
+    if (!workOrder) {
+      throw new NotFoundException({ code: "work_order_not_found", message: "That job is not in your team." });
+    }
+
+    return this.assetHistory.build(tenantId, workOrder.assetId, workOrderId);
   }
 
   /** Team Leader's own report, never the company-wide version (Phase 12). */

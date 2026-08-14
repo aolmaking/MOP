@@ -88,4 +88,13 @@ export class IntakeDto {
   @IsOptional()
   @IsBoolean()
   confirmOwnershipTransfer?: boolean;
+
+  /**
+   * Set only after the advisor has been shown the existing customer at
+   * this phone number and confirmed this is genuinely a different
+   * person (e.g. a shared household phone). Never defaulted true.
+   */
+  @IsOptional()
+  @IsBoolean()
+  confirmNewCustomerDespitePhoneMatch?: boolean;
 }

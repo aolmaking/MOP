@@ -27,6 +27,7 @@ import { CapabilityResolutionService } from "../capabilities/capability-resoluti
 import { AuditService } from "../audit/audit.service";
 import { AttentionQueueService } from "../branch-manager/attention-queue.service";
 import { TechnicianWorkViewService } from "./technician-work-view.service";
+import { AssetHistoryService } from "../vehicle-history/asset-history.service";
 import type { PrismaService } from "../database/prisma.service";
 
 const prisma = new PrismaClient();
@@ -41,7 +42,7 @@ const lifecycle = new WorkOrderLifecycleService(
 );
 const intake = new IntakeService(asService, events, lifecycle);
 const techWork = new TechnicianWorkService(asService, events, lifecycle);
-const techView = new TechnicianWorkViewService(asService, lifecycle);
+const techView = new TechnicianWorkViewService(asService, lifecycle, new AssetHistoryService(asService));
 const attention = new AttentionQueueService(asService);
 
 const ACTOR = { accountId: "tech-1", displayName: "Hassan Fathy", actorType: "TENANT_STAFF" as const };

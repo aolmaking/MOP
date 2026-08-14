@@ -191,3 +191,68 @@ describe("register -- the one outcome: a CUSTOMER account scoped to the resolved
     expect(orphan).toBeNull();
   });
 });
+
+describe("register -- claiming an existing walk-in customer by phone (P-80)", () => {
+  it("claims the existing Customer row instead of creating a duplicate identity", async () => {
+    const phone = "+201000000010";
+    const walkIn = await prisma.customer.create({
+      data: { tenantId, fullName: "Walk-in Person", phone },
+    });
+
+    const result = await register.register({
+      workshopCode: `register-ws-${SUFFIX}`,
+      fullName: "Walk-in Person (Portal)",
+      phone,
+      password: "a-real-password-123",
+    });
+
+    expect(result.customerId).toBe(walkIn.id);
+    const claimed = await prisma.customer.findUniqueOrThrow({ where: { id: walkIn.id } });
+    expect(claimed.accountId).not.toBeNull();
+    expect(claimed.portalStatus).toBe("ENABLED");
+  });
+
+  it("refuses a phone that is already registered to a portal account", async () => {
+    const phone = "+201000000011";
+    await register.register({
+      workshopCode: `register-ws-${SUFFIX}`,
+      fullName: "First Registrant",
+      phone,
+      password: "a-real-password-123",
+    });
+
+    await expect(
+      register.register({
+        workshopCode: `register-ws-${SUFFIX}`,
+        fullName: "Second Registrant",
+        phone,
+        password: "another-real-password",
+      }),
+    ).rejects.toMatchObject({ status: 409, response: { code: "phone_already_registered" } });
+  });
+
+  it("under a concurrent race to claim the same walk-in record, exactly one registration succeeds", async () => {
+    const phone = "+201000000012";
+    await prisma.customer.create({ data: { tenantId, fullName: "Racing Walk-in", phone } });
+
+    const attempt = (email: string) =>
+      register.register({
+        workshopCode: `register-ws-${SUFFIX}`,
+        fullName: "Racing Walk-in",
+        phone,
+        email,
+        password: "a-real-password-123",
+      });
+
+    const results = await Promise.allSettled([attempt(`race-a-${SUFFIX}@example.com`), attempt(`race-b-${SUFFIX}@example.com`)]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+
+    // Never two accounts left pointing at claims of the same customer row.
+    const accounts = await prisma.account.count({ where: { tenantId, phone, accountType: "CUSTOMER" } });
+    expect(accounts).toBe(1);
+  });
+});

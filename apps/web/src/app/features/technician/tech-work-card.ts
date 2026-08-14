@@ -1,8 +1,9 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Identifier } from '../../shared/identifier/identifier';
 import type { PresentedError } from '../../core/api/error.interceptor';
-import { TechnicianApi, type TechnicianTask, type WorkCard } from './technician.api';
+import { TechnicianApi, type AssetHistorySummary, type TechnicianTask, type WorkCard } from './technician.api';
 
 type State = 'loading' | 'ready' | 'not-mine' | 'forbidden' | 'error';
 
@@ -27,7 +28,7 @@ const BLOCKER_REASONS = [
  */
 @Component({
   selector: 'app-tech-work-card',
-  imports: [RouterLink, Identifier],
+  imports: [RouterLink, Identifier, DatePipe],
   templateUrl: './tech-work-card.html',
   styleUrl: './tech-work-card.css',
 })
@@ -47,6 +48,11 @@ export class TechWorkCard {
   protected readonly faultSeverity = signal('MEDIUM');
 
   protected readonly reasons = BLOCKER_REASONS;
+
+  /** Loaded lazily, on request -- not every job has history, and most visits are a single one. */
+  protected readonly vehicleHistory = signal<AssetHistorySummary | null>(null);
+  protected readonly vehicleHistoryOpen = signal(false);
+  protected readonly vehicleHistoryLoading = signal(false);
 
   constructor() {
     queueMicrotask(() => this.load());
@@ -126,5 +132,20 @@ export class TechWorkCard {
 
   protected label(value: string): string {
     return value.toLowerCase().replace(/_/g, ' ');
+  }
+
+  protected toggleVehicleHistory(): void {
+    const opening = !this.vehicleHistoryOpen();
+    this.vehicleHistoryOpen.set(opening);
+    if (opening && !this.vehicleHistory()) {
+      this.vehicleHistoryLoading.set(true);
+      this.api.vehicleHistory(this.id()).subscribe({
+        next: (summary) => {
+          this.vehicleHistoryLoading.set(false);
+          this.vehicleHistory.set(summary);
+        },
+        error: () => this.vehicleHistoryLoading.set(false),
+      });
+    }
   }
 }

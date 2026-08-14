@@ -40,6 +40,32 @@ export interface WorkCard {
   readonly finish: FinishCheck;
 }
 
+export interface AssetHistoryVisit {
+  readonly workOrderId: string;
+  readonly status: string;
+  readonly createdAt: string;
+  readonly closedAt: string | null;
+  readonly complaint: string | null;
+  readonly inspections: readonly { readonly type: string; readonly note: string | null; readonly createdAt: string }[];
+  readonly faults: readonly {
+    readonly code: string | null;
+    readonly description: string;
+    readonly severity: string;
+    readonly recommendedService: string | null;
+  }[];
+  readonly partsUsed: readonly { readonly name: string; readonly quantity: number }[];
+  readonly decisions: readonly { readonly name: string; readonly decision: string }[];
+  readonly sameOwnerAsCurrent: boolean;
+}
+
+export interface AssetHistorySummary {
+  readonly assetId: string;
+  readonly identifier: string | null;
+  readonly totalPriorVisits: number;
+  readonly hasPriorOwnerHistory: boolean;
+  readonly visits: readonly AssetHistoryVisit[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class TechnicianApi {
   private readonly http = inject(HttpClient);
@@ -54,6 +80,10 @@ export class TechnicianApi {
 
   workCard(id: string): Observable<WorkCard> {
     return this.http.get<WorkCard>(`/api/v1/technician/work-orders/${id}`);
+  }
+
+  vehicleHistory(workOrderId: string): Observable<AssetHistorySummary> {
+    return this.http.get<AssetHistorySummary>(`/api/v1/technician/work-orders/${workOrderId}/vehicle-history`);
   }
 
   startTask(taskId: string): Observable<unknown> {
