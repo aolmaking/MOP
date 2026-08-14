@@ -2,7 +2,11 @@
   <header class="team-head">
     <h1 class="team-title">Teams</h1>
     @if (data(); as d) {
-      <p class="team-count">{{ d.teams.length }} teams · {{ d.technicians.length }} technicians</p>
+      <p class="team-count">
+        {{ d.teams.length }} team{{ d.teams.length === 1 ? '' : 's' }} · {{ d.technicians.length }} technician{{
+          d.technicians.length === 1 ? '' : 's'
+        }}
+      </p>
       @if (canCreate()) {
         <button appButton variant="primary" size="small" class="team-new" (click)="startCreate()">New team</button>
       }
