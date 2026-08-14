@@ -271,7 +271,14 @@ export class OperationsAnalyticsService {
 }
 
 function categoryIdsJoinFragment(scope: AnalyticsScope) {
+  // Cast the COLUMN to text, not the parameters to the enum: `pg` sends
+  // each bound parameter as `text` with no type hint of its own, and
+  // `"CategoryCode" = text` has no operator either -- casting one enum
+  // column once here is simpler and always correct, regardless of how
+  // many values are in the list, than trying to cast N individual
+  // parameters (or the whole joined list, which is a different bug this
+  // used to have -- see git history) to the enum type.
   return scope.categoryIds.length > 0
-    ? Prisma.sql`JOIN "assets" a ON a.id = w."assetId" AND a.category IN (${Prisma.join(scope.categoryIds)}::"CategoryCode"[])`
+    ? Prisma.sql`JOIN "assets" a ON a.id = w."assetId" AND a.category::text IN (${Prisma.join(scope.categoryIds)})`
     : Prisma.empty;
 }

@@ -91,6 +91,18 @@ describe("OperationsAnalyticsService", () => {
     expect(multiReport.branchComparison!.length).toBeGreaterThanOrEqual(2);
   });
 
+  it("does not 500 when scoped to a single category -- the categoryIds IN(...) fragment used to cast an array against a scalar column", async () => {
+    const wo = await prisma.workOrder.create({ data: { tenantId, branchId: branchAId, assetId, customerId, status: "IN_PROGRESS" } });
+
+    const scoped = await operations.build(tenantId, { branchIds: [], categoryIds: ["CARS"] }, {});
+    expect(scoped).toBeDefined();
+
+    const noMatch = await operations.build(tenantId, { branchIds: [], categoryIds: ["MOTORCYCLES"] }, {});
+    expect(noMatch).toBeDefined();
+
+    await prisma.workOrder.delete({ where: { id: wo.id } });
+  });
+
   it("counts blockers by reason, scoped to work orders in the analyst's branch scope", async () => {
     const wo = await prisma.workOrder.create({ data: { tenantId, branchId: branchAId, assetId, customerId, status: "IN_PROGRESS" } });
     const task = await prisma.task.create({ data: { tenantId, workOrderId: wo.id, title: "Fix", status: "BLOCKED" } });
