@@ -29,6 +29,7 @@ import { MessagesModule } from "./messages/messages.module";
 import { FormsModule } from "./forms/forms.module";
 import { ReportsModule } from "./reports/reports.module";
 import { WorkflowHealthModule } from "./workflow-health/workflow-health.module";
+import { AnalyticsModule } from "./analytics/analytics.module";
 import { HealthController } from "./health/health.controller";
 
 @Module({
@@ -72,6 +73,7 @@ import { HealthController } from "./health/health.controller";
     FormsModule,
     ReportsModule,
     WorkflowHealthModule,
+    AnalyticsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

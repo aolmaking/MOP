@@ -142,6 +142,14 @@ const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: "reports.team.view", module: "REPORTS" },
   { key: "reports.company.view", module: "REPORTS" },
 
+  // Data Analyst
+  { key: "analytics.home.view", module: "REPORTS" },
+  { key: "analytics.operations.view", module: "REPORTS" },
+  { key: "analytics.people.view", module: "REPORTS" },
+  { key: "analytics.inventory.view", module: "REPORTS" },
+  { key: "analytics.decisions.view", module: "REPORTS" },
+  { key: "analytics.feature_adoption.view", module: "REPORTS" },
+
   // Audit
   { key: "audit.own_tenant.view", module: "AUDIT" },
 

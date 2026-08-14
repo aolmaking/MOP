@@ -1,0 +1,55 @@
+<section class="analytics-page">
+  <header class="head">
+    <h1 class="title">Operations Analytics</h1>
+    <p class="sub">Work order flow and throughput.</p>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') { <p class="state-body" aria-busy="true">Loading…</p> }
+    @case ('forbidden') { <div class="state"><p class="state-title">You don't have access to this page</p></div> }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+    @case ('ready') {
+      @if (data(); as d) {
+        <div class="grid-2">
+          <section class="panel">
+            <h2 class="panel-title">Status distribution</h2>
+            <app-bar-list [items]="statusItems()" />
+          </section>
+          <section class="panel">
+            <h2 class="panel-title">Average time per stage</h2>
+            <app-bar-list [items]="timeInStatusItems()" color="var(--danger)" />
+          </section>
+        </div>
+
+        @if (branchItems().length > 0) {
+          <section class="panel">
+            <h2 class="panel-title">Branch comparison</h2>
+            <app-bar-list [items]="branchItems()" />
+          </section>
+        }
+
+        <div class="grid-2">
+          <section class="panel">
+            <h2 class="panel-title">Blocker analysis</h2>
+            <app-bar-list [items]="blockerItems()" color="var(--danger)" />
+          </section>
+
+          <section class="panel">
+            <h2 class="panel-title">Delivery / payment funnel</h2>
+            <p class="funnel-row">Reached Ready for Delivery: <strong>{{ d.deliveryFunnel.reachedReadyForDelivery }}</strong></p>
+            <p class="funnel-row">Reached Closed: <strong>{{ d.deliveryFunnel.reachedClosed }}</strong></p>
+            <p class="funnel-row">
+              Average gap:
+              <strong>{{ d.deliveryFunnel.averageGapHours !== null ? d.deliveryFunnel.averageGapHours.toFixed(1) + ' h' : 'Not available yet' }}</strong>
+            </p>
+          </section>
+        </div>
+      }
+    }
+  }
+</section>

@@ -38,10 +38,18 @@ describe('landingRouteFor', () => {
     );
   });
 
+  it('sends a data analyst to their own shell', () => {
+    expect(landingRouteFor({ role: 'DATA_ANALYST', landingPage: 'analytics-home' } as SessionContext)).toBe(
+      '/analyst/home',
+    );
+  });
+
   it('falls back to the placeholder for roles whose home is not built', () => {
     // Deliberately '/' and not a guess: the placeholder names the phase
     // that builds their home, which is more honest than a wrong page.
-    expect(landingRouteFor({ role: 'DATA_ANALYST', landingPage: 'analytics-home' } as SessionContext)).toBe('/');
+    expect(
+      landingRouteFor({ role: 'DATA_ANALYST', landingPage: 'not-yet-built-home' } as unknown as SessionContext),
+    ).toBe('/');
   });
 
   it('handles no session without throwing', () => {

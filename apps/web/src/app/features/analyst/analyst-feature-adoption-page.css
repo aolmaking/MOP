@@ -1,0 +1,113 @@
+.analytics-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 72rem;
+}
+
+.head {
+  padding-block-end: var(--space-3);
+  border-block-end: 1px solid var(--text);
+}
+
+.title {
+  color: var(--white);
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.sub {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.state-body {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.state-title {
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.state-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: var(--space-4);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.panel-title {
+  color: var(--white);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.panel-hint {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.funnel-row {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.funnel-row strong {
+  color: var(--white);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.data-table th {
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-align: start;
+  border-block-end: 1px solid var(--border);
+}
+
+.data-table td {
+  padding: var(--space-2) var(--space-3);
+  color: var(--text);
+  border-block-end: 1px solid var(--border);
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--space-3);
+}
+
+.flag {
+  padding: 2px var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--text-faint);
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}

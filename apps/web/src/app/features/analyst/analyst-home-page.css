@@ -1,0 +1,90 @@
+.analyst-home {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 72rem;
+}
+
+.head {
+  padding-block-end: var(--space-3);
+  border-block-end: 1px solid var(--text);
+}
+
+.title {
+  color: var(--white);
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.sub {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.state-body {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.state-title {
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.state-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--space-3);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+
+.tile:hover {
+  border-color: var(--accent);
+}
+
+.tile-title {
+  color: var(--white);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.tile-metrics {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-value {
+  color: var(--white);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.metric-label {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}

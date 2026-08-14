@@ -1,0 +1,62 @@
+<section class="analytics-page">
+  <header class="head">
+    <h1 class="title">Technician &amp; Team Analytics</h1>
+    <p class="sub">People-and-throughput analysis, company-wide or scoped -- never a revenue figure.</p>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') { <p class="state-body" aria-busy="true">Loading…</p> }
+    @case ('forbidden') { <div class="state"><p class="state-title">You don't have access to this page</p></div> }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+    @case ('ready') {
+      @if (data(); as d) {
+        <section class="panel">
+          <h2 class="panel-title">Per-technician</h2>
+          @if (d.technicians.length === 0) {
+            <p class="state-body">No technicians in scope.</p>
+          } @else {
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Tasks completed</th>
+                  <th>Avg. task time</th>
+                  <th>Rework rate</th>
+                  <th>Blockers</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (t of d.technicians; track t.staffUserId) {
+                  <tr>
+                    <td>{{ t.fullName }}</td>
+                    <td>{{ t.tasksCompleted }}</td>
+                    <td>{{ t.averageTaskHours !== null ? t.averageTaskHours.toFixed(1) + ' h' : '—' }}</td>
+                    <td>{{ t.reworkRate.toFixed(0) }}%</td>
+                    <td>{{ t.blockerCount }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </section>
+
+        <div class="grid-2">
+          <section class="panel">
+            <h2 class="panel-title">Team throughput</h2>
+            <app-bar-list [items]="teamItems()" />
+          </section>
+
+          <section class="panel">
+            <h2 class="panel-title">Diagnostic code activity (top 10)</h2>
+            <app-bar-list [items]="diagnosticItems()" color="var(--danger)" />
+          </section>
+        </div>
+      }
+    }
+  }
+</section>

@@ -119,5 +119,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
   },
   DATA_ANALYST: {
     "reports.company.view": true,
+    "analytics.home.view": true,
+    "analytics.operations.view": true,
+    "analytics.people.view": true,
+    "analytics.inventory.view": true,
+    "analytics.decisions.view": true,
+    "analytics.feature_adoption.view": true,
   },
 };

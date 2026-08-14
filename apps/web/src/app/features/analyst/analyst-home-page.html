@@ -1,0 +1,40 @@
+<section class="analyst-home">
+  <header class="head">
+    <h1 class="title">Analytics Home</h1>
+    <p class="sub">Where to look first.</p>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to this page</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+    @case ('ready') {
+      <div class="tiles">
+        @for (tile of tiles(); track tile.page) {
+          <a class="tile" [routerLink]="tileRoute[tile.page] ?? '/analyst/home'">
+            <h2 class="tile-title">{{ tile.label }}</h2>
+            <div class="tile-metrics">
+              @for (metric of tile.metrics; track metric.label) {
+                <div class="metric">
+                  <span class="metric-value">{{ metric.value }}</span>
+                  <span class="metric-label">{{ metric.label }}</span>
+                </div>
+              }
+            </div>
+          </a>
+        }
+      </div>
+    }
+  }
+</section>

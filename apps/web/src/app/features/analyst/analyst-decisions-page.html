@@ -1,0 +1,42 @@
+<section class="analytics-page">
+  <header class="head">
+    <h1 class="title">Customer Decision Analytics</h1>
+    <p class="sub">How customer decisions actually play out -- no customer identity anywhere on this page.</p>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') { <p class="state-body" aria-busy="true">Loading…</p> }
+    @case ('forbidden') { <div class="state"><p class="state-title">You don't have access to this page</p></div> }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+    @case ('ready') {
+      @if (data(); as d) {
+        <div class="kpi-grid">
+          <app-kpi-card label="Approval Rate" [value]="d.approvalRate.toFixed(0) + '%'" />
+          <app-kpi-card label="Rejection Rate" [value]="d.rejectionRate.toFixed(0) + '%'" [invert]="true" />
+          <app-kpi-card
+            label="Avg. Response Time"
+            [value]="d.averageResponseHours !== null ? d.averageResponseHours.toFixed(1) + ' h' : 'Not available yet'"
+          />
+          <app-kpi-card label="Overdue Rate" [value]="d.overdueRate.toFixed(0) + '%'" [invert]="true" />
+          <app-kpi-card label="Link Open Rate" [value]="d.linkOpenRate.toFixed(0) + '%'" />
+          <app-kpi-card label="Critical Rejections" [value]="d.criticalRejections.toString()" [invert]="true" />
+        </div>
+
+        <section class="panel">
+          <h2 class="panel-title">Approval vs. rejection by importance</h2>
+          <app-bar-list [items]="importanceItems()" />
+        </section>
+
+        <section class="panel">
+          <h2 class="panel-title">Critical rejections that were later approved on the same job</h2>
+          <p class="funnel-row"><strong>{{ d.criticalRejectionsLaterApproved }}</strong> of {{ d.criticalRejections }}</p>
+        </section>
+      }
+    }
+  }
+</section>

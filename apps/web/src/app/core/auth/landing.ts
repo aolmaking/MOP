@@ -18,6 +18,7 @@ const ROUTE_BY_LANDING_PAGE: Record<string, string> = {
   'owner-home': '/owner/home',
   'team-leader-home': '/team-leader',
   'customer-portal-home': '/customer',
+  'analytics-home': '/analyst/home',
 };
 
 export function landingRouteFor(session: { role: EffectiveRole; landingPage: string } | null): string {

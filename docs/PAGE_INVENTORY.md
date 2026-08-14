@@ -15,8 +15,8 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| Built | **40** |
-| Remaining | **13** |
+| Built | **46** |
+| Remaining | **7** |
 
 Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built
 
@@ -86,17 +86,17 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Vehicles / Work Orders View | ✅ | `/team-leader/work-orders` | No price/cost/payment field anywhere in the response shape |
 | Technician Performance Reports | ✅ | `/team-leader/reports` | Managed-scope only; company-wide version is Phase 12 |
 
-## Data Analyst — 0 / 7
+## Data Analyst — 6 / 7
 
-| Page | State |
-|---|:--:|
-| Analytics Home | ⬜ |
-| Operations Analytics | ⬜ |
-| Technician & Team Analytics | ⬜ |
-| Inventory Analytics | ⬜ |
-| Customer Decision Analytics | ⬜ |
-| Feature Adoption Analytics | ⬜ |
-| Saved Views / Exports | ⬜ |
+| Page | State | Route | Notes |
+|---|:--:|---|---|
+| Analytics Home | ✅ | `/analyst/home` | Composes the other 4 services' own headline numbers rather than recomputing them, so the tile can never drift from what the full page shows |
+| Operations Analytics | ✅ | `/analyst/operations` | Volume over time (created vs. completed), status distribution, time-in-status (reuses `lifecycle-duration.util.ts`), branch comparison (absent, not empty, for single-branch scope), blocker analysis, delivery/payment funnel (counts and durations only, never a currency amount) |
+| Technician & Team Analytics | ✅ | `/analyst/people` | Per-technician stats, team throughput, diagnostic-code activity. No payment/invoice figure anywhere in the output shape — enforced by its own test |
+| Inventory Analytics | ✅ | `/analyst/inventory` | Reuses `InventoryReportsService` (Inventory Manager's own page) rather than a second velocity implementation; branch scope resolved to warehouse scope via `BranchWarehouseAccess`; inventory value gated on `inventory.cost.view`, same as the Inventory Manager's own catalog |
+| Customer Decision Analytics | ✅ | `/analyst/decisions` | Approval/rejection rates by importance, response time, overdue rate, critical-rejection follow-up outcome, link-open rate. No customer-identifying field anywhere — enforced by its own test |
+| Feature Adoption Analytics | ✅ | `/analyst/feature-adoption` | Real usage counts for Quick/Full Inspection and Customer Decision Request volume. Custom Fields and Message Templates explicitly reported as **not trackable yet** (no consuming form captures field values; no message-sending code exists anywhere in the product) rather than a fabricated count |
+| Saved Views / Exports | ⬜ | — | Deferred — a distinct persistence + CSV-export mechanism, not part of the analytical surface itself |
 
 ## Customer Portal — 6 / 6 ✅
 

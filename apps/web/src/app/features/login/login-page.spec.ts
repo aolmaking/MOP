@@ -44,10 +44,11 @@ describe('LoginPage', () => {
 
   it('falls back to the placeholder when that role has no page yet', async () => {
     const authStoreStub = configure();
-    // Data Analyst is Phase 12. Team Leader and Inventory used to be the
-    // example here and stopped being one the moment their own phase gave
-    // them a real home.
-    authStoreStub.login.mockResolvedValue({ landingPage: 'analytics-home' } as SessionContext);
+    // Every role that has since gained a real home (Team Leader,
+    // Inventory, Data Analyst) stopped being a valid example here the
+    // moment its own phase built one -- an unrecognized landing page key
+    // is the only thing this test can still assert against.
+    authStoreStub.login.mockResolvedValue({ landingPage: 'not-yet-built-home' } as unknown as SessionContext);
     const fixture = TestBed.createComponent(LoginPage);
     fixture.detectChanges();
     const navigateSpy = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);

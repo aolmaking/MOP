@@ -299,6 +299,44 @@ export const routes: Routes = [
     ],
   },
   {
+    // The Data Analyst's shell -- a rail, like Inventory/Owner. Six real
+    // pages per docs/detailed-specs/data-analyst.md, read-only throughout.
+    path: 'analyst',
+    canActivate: [authGuard],
+    loadComponent: () => import('./core/layout/analyst-shell/analyst-shell').then((m) => m.AnalystShell),
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'home' },
+      {
+        path: 'home',
+        loadComponent: () => import('./features/analyst/analyst-home-page').then((m) => m.AnalystHomePage),
+      },
+      {
+        path: 'operations',
+        loadComponent: () =>
+          import('./features/analyst/analyst-operations-page').then((m) => m.AnalystOperationsPage),
+      },
+      {
+        path: 'people',
+        loadComponent: () => import('./features/analyst/analyst-people-page').then((m) => m.AnalystPeoplePage),
+      },
+      {
+        path: 'inventory',
+        loadComponent: () =>
+          import('./features/analyst/analyst-inventory-page').then((m) => m.AnalystInventoryPage),
+      },
+      {
+        path: 'decisions',
+        loadComponent: () =>
+          import('./features/analyst/analyst-decisions-page').then((m) => m.AnalystDecisionsPage),
+      },
+      {
+        path: 'feature-adoption',
+        loadComponent: () =>
+          import('./features/analyst/analyst-feature-adoption-page').then((m) => m.AnalystFeatureAdoptionPage),
+      },
+    ],
+  },
+  {
     // The fallback frame, for roles whose own shell is not built yet.
     path: '',
     canActivate: [authGuard],
