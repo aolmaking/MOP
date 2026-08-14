@@ -67,6 +67,7 @@ async function main() {
   const manager = await ensureManager(tenant.id);
   const technician = await ensureTechnician(tenant.id);
   await ensureOwner(tenant.id);
+  await ensureInventoryManager(tenant.id);
   await ensureDelegatedTeams(tenant.id, branch.id);
   await clearDemoWork(tenant.id);
   await createStuckJobs(tenant.id, branch.id, technician.staffUserId);
@@ -81,6 +82,8 @@ async function main() {
 `);
   console.log(`  Technician  ${TECHNICIAN_EMAIL} / ${TECHNICIAN_PASSWORD}`);
   console.log(`              lands on http://localhost:4200/tech\n`);
+  console.log(`  Inventory Manager  ${INVENTORY_EMAIL} / ${INVENTORY_PASSWORD}`);
+  console.log(`              lands on http://localhost:4200/inventory\n`);
   console.log(`  Manager account ${manager.id}`);
 }
 
@@ -276,6 +279,53 @@ async function ensureOwner(tenantId: string): Promise<void> {
     await prisma.rolePermission.upsert({
       where: { tenantId_role_permissionKey: { tenantId, role: "TENANT_OWNER", permissionKey } },
       create: { tenantId, role: "TENANT_OWNER", permissionKey, allowed: allowed! },
+      update: { allowed: allowed! },
+    });
+  }
+}
+
+const INVENTORY_EMAIL = "inventory@apex-motors.local";
+const INVENTORY_PASSWORD = "ChangeMe-Inventory-123";
+
+/**
+ * The base seed never created an Inventory Manager at all -- there was no
+ * way to sign in and demo the role, real gap or not.
+ */
+async function ensureInventoryManager(tenantId: string): Promise<void> {
+  const existing = await prisma.account.findFirst({ where: { tenantId, email: INVENTORY_EMAIL } });
+
+  const account =
+    existing ??
+    (await prisma.account.create({
+      data: {
+        accountType: "TENANT_STAFF",
+        tenantId,
+        email: INVENTORY_EMAIL,
+        passwordHash: hashPassword(INVENTORY_PASSWORD),
+        status: "ACTIVE",
+      },
+    }));
+
+  const staff = await prisma.staffUser.findUnique({ where: { accountId: account.id } });
+  if (!staff) {
+    await prisma.staffUser.create({
+      data: {
+        accountId: account.id,
+        tenantId,
+        fullName: "Youssef Nabil",
+        role: "INVENTORY_MANAGER",
+        branchScope: [],
+        warehouseScope: [],
+        categoryScope: ["CARS"],
+      },
+    });
+  }
+
+  const inventoryPermissions = DEFAULT_ROLE_PERMISSIONS.INVENTORY_MANAGER ?? {};
+  for (const [permissionKey, allowed] of Object.entries(inventoryPermissions)) {
+    await prisma.rolePermission.upsert({
+      where: { tenantId_role_permissionKey: { tenantId, role: "INVENTORY_MANAGER", permissionKey } },
+      create: { tenantId, role: "INVENTORY_MANAGER", permissionKey, allowed: allowed! },
       update: { allowed: allowed! },
     });
   }
