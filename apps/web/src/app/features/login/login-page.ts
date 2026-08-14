@@ -19,7 +19,11 @@ export class LoginPage {
   private readonly fb = inject(NonNullableFormBuilder);
 
   protected readonly form = this.fb.group({
-    email: ['', [Validators.required, Validators.email]],
+    // Email or phone -- Register as Customer makes email optional, so a
+    // phone-only customer must be able to sign back in with it.
+    // Validators.email would reject that shape, so this is just
+    // required; the server matches either and is the real authority.
+    email: ['', Validators.required],
     password: ['', Validators.required],
   });
 

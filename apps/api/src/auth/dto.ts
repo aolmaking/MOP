@@ -1,7 +1,16 @@
-import { IsEmail, IsString, Length, MinLength } from "class-validator";
+import { IsString, Length, MinLength } from "class-validator";
 
 export class LoginDto {
-  @IsEmail()
+  /**
+   * Email OR phone (E.164) -- per docs/detailed-specs/shared-system-pages.md,
+   * the login page has one combined field, since Register as Customer
+   * makes email optional and a phone-only customer must still be able to
+   * sign back in. AuthService.login matches either; the exact shape
+   * isn't validated here because an unrecognized string just fails to
+   * match any account, same as a wrong password would.
+   */
+  @IsString()
+  @Length(3, 254)
   email!: string;
 
   @IsString()

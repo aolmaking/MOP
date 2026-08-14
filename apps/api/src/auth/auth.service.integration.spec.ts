@@ -179,13 +179,32 @@ describe("AuthService (integration)", () => {
     const email = `bm-${Date.now()}-2@example.com`;
     await createStaffAccount(email, "correct-password-123");
 
-    await expect(service.login(email, "totally-wrong")).rejects.toThrow("Incorrect email or password");
+    await expect(service.login(email, "totally-wrong")).rejects.toThrow("Incorrect email/phone or password");
   });
 
   it("rejects a login for an email that doesn't exist with the identical generic message", async () => {
     await expect(service.login("does-not-exist@example.com", "anything")).rejects.toThrow(
-      "Incorrect email or password",
+      "Incorrect email/phone or password",
     );
+  });
+
+  it("logs in a phone-only customer account by phone -- Register as Customer makes email optional, so this is the only way back in", async () => {
+    const phone = `+2010${Date.now()}`.slice(0, 15);
+    const account = await prisma.account.create({
+      data: {
+        accountType: "CUSTOMER",
+        tenantId,
+        phone,
+        passwordHash: hashPassword("phone-only-password-123"),
+        status: "ACTIVE",
+      },
+    });
+    await prisma.customer.create({
+      data: { tenantId, accountId: account.id, fullName: "Phone Only Customer", phone, portalStatus: "ENABLED" },
+    });
+
+    const result = await service.login(phone, "phone-only-password-123");
+    expect(result.context.role).toBe("CUSTOMER");
   });
 
   it("a resolved access token grants a protected request (getSessionContext) and an unrelated/garbage token does not", async () => {

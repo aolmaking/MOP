@@ -58,7 +58,7 @@ export class AuthController {
       if (error instanceof MultipleAccountsError) {
         throw new ConflictException({
           code: "multiple_accounts_found",
-          message: "This email is used at more than one workshop. Contact support to sign in.",
+          message: "This email or phone is used at more than one workshop. Contact support to sign in.",
         });
       }
       throw error;

@@ -51,12 +51,19 @@ export interface LoginResult {
 export class AuthService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async login(email: string, password: string): Promise<LoginResult> {
-    const accounts = await this.prisma.account.findMany({ where: { email } });
+  /**
+   * `identifier` is email OR phone (E.164) -- Register as Customer makes
+   * email optional, so a phone-only customer's account has no email to
+   * match at all. Checking both in one query, rather than two separate
+   * lookups, keeps the "which one matched" ambiguity the same shape the
+   * MultipleAccountsError handling below already assumes.
+   */
+  async login(identifier: string, password: string): Promise<LoginResult> {
+    const accounts = await this.prisma.account.findMany({ where: { OR: [{ email: identifier }, { phone: identifier }] } });
 
     if (accounts.length === 0) {
       dummyVerifyForTimingSafety();
-      throw new UnauthorizedException("Incorrect email or password");
+      throw new UnauthorizedException("Incorrect email/phone or password");
     }
 
     const matches = accounts.filter((account) => account.passwordHash && verifyPassword(password, account.passwordHash));
@@ -66,7 +73,7 @@ export class AuthService {
       // candidate account, so no separate dummy verify is needed here --
       // timing is already comparable to the single-account case.
       await this.recordFailedAttempt(accounts);
-      throw new UnauthorizedException("Incorrect email or password");
+      throw new UnauthorizedException("Incorrect email/phone or password");
     }
 
     if (matches.length > 1) {

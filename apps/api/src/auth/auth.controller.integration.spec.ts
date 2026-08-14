@@ -165,11 +165,11 @@ describe("AuthController (integration, real HTTP)", () => {
     const res = await request(app.getHttpServer()).post("/api/v1/auth/login").send({ email, password: "wrong" });
 
     expect(res.status).toBe(401);
-    expect(res.body).toEqual({ code: "unauthorized", message: "Incorrect email or password" });
+    expect(res.body).toEqual({ code: "unauthorized", message: "Incorrect email/phone or password" });
   });
 
   it("POST /auth/login returns 400 validation_error for a malformed body, never reaching AuthService", async () => {
-    const res = await request(app.getHttpServer()).post("/api/v1/auth/login").send({ email: "not-an-email", password: "" });
+    const res = await request(app.getHttpServer()).post("/api/v1/auth/login").send({ email: "ab", password: "" });
 
     expect(res.status).toBe(400);
     expect(res.body.code).toBe("validation_error");
