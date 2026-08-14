@@ -184,6 +184,11 @@ export const routes: Routes = [
         path: 'reports',
         loadComponent: () => import('./features/owner/reports/reports-page').then((m) => m.ReportsPage),
       },
+      {
+        path: 'workflow-health',
+        loadComponent: () =>
+          import('./features/owner/workflow-health/workflow-health-page').then((m) => m.WorkflowHealthPage),
+      },
     ],
   },
   {

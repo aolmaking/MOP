@@ -15,8 +15,8 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| Built | **39** |
-| Remaining | **14** |
+| Built | **40** |
+| Remaining | **13** |
 
 Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built
 
@@ -64,7 +64,7 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Returns / Movements | ✅ | `/inventory/returns` | Queue (accept/reject/clarify, with the clarify↔reply loop) + tenant-wide filterable ledger. Two real backend bugs found and fixed while building this: RETURN_REJECTED and RETURN_CLARIFICATION_REQUESTED existed in the enum with no workflow-graph edge reaching them, and PartReturnRequest was never written by requestReturn |
 | Reports & Stock Insights | ✅ | `/inventory/reports` | Stock risk is velocity-based, per warehouse. Comparison section absent (not empty) for a single-warehouse scope |
 
-## Tenant Owner — 7 / 8 (Organization & Access, Messages & Templates complete; Home and Audit also built; Forms & Fields, Pricing, and Reports & Analytics partial)
+## Tenant Owner — 8 / 8 (Organization & Access, Messages & Templates, Workflow Health complete; Home and Audit also built; Forms & Fields, Pricing, and Reports & Analytics partial — every Owner page now has at least a real, working surface)
 
 | Page | State | Notes |
 |---|:--:|---|
@@ -75,7 +75,7 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Pricing & Financial Configuration | 🟡 | `/owner/pricing` — Service Catalog (effective-dated, same discipline as `WorkshopPolicy`/`MessageTemplate`: a price edit closes the old row and opens a new one, never rewrites what an issued invoice already printed), Tax/VAT, Discounts & Deposits, Payment Methods, Invoice Settings, Delivery Payment Gate. `FinanceConfiguration` existed in the schema since Phase 8, genuinely read by `gate-evaluator.service.ts` and `decision.service.ts`, upserted only for `compliantBlocked` — this is the first real Owner-facing writer. **"Who Can Handle Money" deliberately not built this pass**: it needs to respect Super Admin's platform-lock `ControlSetting`s the same way Builder Control's Permission Matrix does, which is its own self-contained mechanism worth its own pass rather than bolted on here |
 | Reports & Analytics | 🟡 | `/owner/reports` — Full Workshop Intelligence subsystem: Overview, Operations, Financial, Inventory, Customers tabs, all sharing one date-range/branch query contract (`date-range.util.ts`). Real historical calculation where the data supports it (`averageTimeInStatus` reconstructs per-status duration from `work_order.status_changed` OperationEvent history, not a snapshot — `lifecycle-duration.util.ts`); honest about what isn't derivable (`profit: null` when a part line never recorded a cost, `topServicesByRevenue` explicitly grouped by invoice-line text since no stable serviceId exists). Reuses `InventoryReportsService` (Inventory Manager's own velocity-based stock risk) rather than a second implementation. **Not built this pass**: per-role report-visibility control (needs the same platform-lock mechanism as Pricing's "Who Can Handle Money" — see that page's note), Data Analyst's own surfaces (separate role, its own page inventory entry, would consume this same backend), Service/Staff as fully separate tabs (folded into Financial/Operations respectively — a full second axis wasn't justified by data depth beyond what's already there) |
 | Audit & Change History | 🟡 | `/owner/audit` — filterable, with inline diffs. **Rollback not built**: it deep-links to Control Center and Owner pages that do not exist yet. Timestamps use the reader's locale, not the workshop's timezone (the session does not carry it) |
-| Workflow Health / Operations Integrity | ⬜ | |
+| Workflow Health / Operations Integrity | ✅ | `/owner/workflow-health` | Two facets, both real: **Integrity checks** (5 of the spec's 6 rows, each a real computed query — part-arrival-unconfirmed, customer-responded-but-not-reflected, return-pending-review, team-leader-missing-report-access, work-order/task status conflict, orphaned status change with no `OperationEvent` history). The 6th (Customer-Portal-policy-vs-module contradiction) is explicitly listed as not-computable, not faked — `TenantConfiguration.workflowPolicy` is still an empty, unread JSON placeholder. **Bottleneck/SLA diagnostics**: dwell time attributed to a waiting-cause taxonomy (people/inventory/approval/payment/quality), rework-loop detection (a status re-entered after already being left, via a new pure `detectStatusLoops` util), and breached/at-risk/on-track/untracked SLA buckets. Reuses `lifecycle-duration.util.ts` from Reports & Analytics rather than a second status-duration implementation |
 
 ## Team Leader — 4 / 4 ✅
 

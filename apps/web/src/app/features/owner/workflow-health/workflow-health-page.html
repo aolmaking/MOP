@@ -1,0 +1,107 @@
+<section class="workflow-health">
+  <header class="head">
+    <h1 class="title">Workflow Health</h1>
+    <p class="sub">Diagnose operational inconsistencies before they cause a real problem.</p>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to this page</p>
+        <p class="state-body">Workflow Health is only visible to the workshop owner.</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('ready') {
+      <!-- 1. Is the workshop healthy? -->
+      <div class="kpi-grid">
+        <app-kpi-card label="Critical Issues" [value]="criticalCount().toString()" [invert]="true" />
+        <app-kpi-card label="Warnings" [value]="warningCount().toString()" [invert]="true" />
+        <app-kpi-card label="SLA Breached" [value]="(bottlenecks()?.slaRisk?.breached ?? 0).toString()" [invert]="true" />
+        <app-kpi-card
+          label="At Risk (24h)"
+          [value]="(bottlenecks()?.slaRisk?.atRiskWithin24h ?? 0).toString()"
+          [invert]="true"
+        />
+        <app-kpi-card label="Reopened Work Orders" [value]="(bottlenecks()?.reopenedWorkOrders ?? 0).toString()" [invert]="true" />
+      </div>
+
+      <!-- 2 & 3. Where's the biggest problem, and why -->
+      @if (biggestProblem(); as headline) {
+        <div class="headline">{{ headline }}</div>
+      }
+
+      <div class="grid-2">
+        <section class="panel">
+          <h2 class="panel-title">Where delay comes from</h2>
+          <p class="panel-hint">Total dwell time this period, attributed to what's actually causing the wait.</p>
+          <app-bar-list [items]="causeItems()" color="var(--danger)" />
+        </section>
+
+        <section class="panel">
+          <h2 class="panel-title">Average time per stage</h2>
+          <app-bar-list [items]="stageDwellItems()" />
+        </section>
+      </div>
+
+      @if (reworkItems().length > 0) {
+        <section class="panel">
+          <h2 class="panel-title">Rework loops</h2>
+          <p class="panel-hint">Statuses work orders entered more than once -- real rework, not a normal single pass.</p>
+          <app-bar-list [items]="reworkItems()" color="var(--danger)" />
+        </section>
+      }
+
+      <!-- 4 & 5. Which jobs are affected, what to investigate next -->
+      <section class="panel">
+        <h2 class="panel-title">Issues requiring attention</h2>
+        @if (sortedIssues().length === 0) {
+          <p class="state-body">No consistency issues detected right now.</p>
+        } @else {
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Severity</th>
+                <th>Description</th>
+                <th>Fixable by</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (issue of sortedIssues(); track issue.entityId + issue.type) {
+                <tr>
+                  <td><span class="badge" [class]="severityClass(issue.severity)">{{ issue.severity }}</span></td>
+                  <td>{{ issue.description }}</td>
+                  <td>{{ issue.ownerFixable ? 'You' : 'Platform Super Admin' }}</td>
+                  <td><a [routerLink]="issue.link">Investigate →</a></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+
+        @if (issues() && issues()!.notComputable.length > 0) {
+          <div class="not-computable">
+            <p class="panel-hint">Not checked yet -- the underlying data doesn't support it reliably:</p>
+            <ul>
+              @for (note of issues()!.notComputable; track note.issueType) {
+                <li class="panel-hint">{{ note.reason }}</li>
+              }
+            </ul>
+          </div>
+        }
+      </section>
+    }
+  }
+</section>

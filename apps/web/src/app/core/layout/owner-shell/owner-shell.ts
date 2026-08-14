@@ -34,6 +34,7 @@ export class OwnerShell {
     { label: 'Messages', route: '/owner/messages' },
     { label: 'Pricing', route: '/owner/pricing' },
     { label: 'Reports', route: '/owner/reports' },
+    { label: 'Workflow Health', route: '/owner/workflow-health' },
     { label: 'History', route: '/owner/audit' },
   ];
 
