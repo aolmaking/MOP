@@ -17,6 +17,7 @@
     "validate": "node ../../tools/with-env.mjs prisma validate"
   },
   "dependencies": {
+    "@mop/shared": "workspace:*",
     "@prisma/client": "^5.22.0"
   },
   "devDependencies": {

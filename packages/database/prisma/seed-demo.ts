@@ -19,6 +19,7 @@
  */
 import { PrismaClient } from "../generated/client";
 import { randomBytes, scryptSync } from "node:crypto";
+import { DEFAULT_ROLE_PERMISSIONS } from "@mop/shared";
 
 const prisma = new PrismaClient();
 
@@ -234,11 +235,17 @@ async function ensureOwner(tenantId: string): Promise<void> {
     });
   }
 
-  for (const permissionKey of ["audit.own_tenant.view", "organization.access.manage"]) {
+  // The real defaults, not a hand-picked list that drifts every time a
+  // phase adds a new TENANT_OWNER permission key -- this comment used to
+  // claim that and stopped being true the moment DEFAULT_ROLE_PERMISSIONS
+  // grew past what was hand-copied here, silently locking the demo owner
+  // out of its own Owner Home.
+  const ownerPermissions = DEFAULT_ROLE_PERMISSIONS.TENANT_OWNER ?? {};
+  for (const [permissionKey, allowed] of Object.entries(ownerPermissions)) {
     await prisma.rolePermission.upsert({
       where: { tenantId_role_permissionKey: { tenantId, role: "TENANT_OWNER", permissionKey } },
-      create: { tenantId, role: "TENANT_OWNER", permissionKey, allowed: true },
-      update: { allowed: true },
+      create: { tenantId, role: "TENANT_OWNER", permissionKey, allowed: allowed! },
+      update: { allowed: allowed! },
     });
   }
 }
