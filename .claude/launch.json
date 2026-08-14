@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "web-dev",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["tools/pnpm.mjs", "--parallel", "--filter", "@mop/api", "--filter", "@mop/web", "run", "start:dev"],
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["pnpm", "--parallel", "--filter", "@mop/api", "--filter", "@mop/web", "run", "start:dev"],
       "port": 4200
     }
   ]
