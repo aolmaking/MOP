@@ -148,9 +148,40 @@ async function ensureDelegatedTeams(tenantId: string, branchId: string): Promise
       },
     }));
 
-  const team = await prisma.team.findFirst({ where: { tenantId, name: "Bay One" } });
+  let team = await prisma.team.findFirst({ where: { tenantId, name: "Bay One" } });
   if (!team) {
-    await prisma.team.create({ data: { tenantId, branchId, name: "Bay One", teamLeaderId: leader.id } });
+    team = await prisma.team.create({ data: { tenantId, branchId, name: "Bay One", teamLeaderId: leader.id } });
+  }
+
+  // A team with a leader and no members is a real, valid, but empty demo
+  // -- the seed already has a technician account, so give the leader
+  // something real to manage rather than always showing the (correctly
+  // built, but less convincing) empty state.
+  const technicianAccount = await prisma.account.findFirst({ where: { email: TECHNICIAN_EMAIL } });
+  const technicianStaff = technicianAccount
+    ? await prisma.staffUser.findUnique({ where: { accountId: technicianAccount.id } })
+    : null;
+  if (technicianStaff) {
+    const membership = await prisma.teamMembership.findFirst({
+      where: { teamId: team.id, technicianId: technicianStaff.id, endedAt: null },
+    });
+    if (!membership) {
+      await prisma.teamMembership.create({ data: { tenantId, teamId: team.id, technicianId: technicianStaff.id } });
+    }
+  }
+
+  // Unlike MANAGER_PERMISSIONS/TECHNICIAN_PERMISSIONS below, TEAM_LEADER
+  // had no permission grant here at all -- the role could log in and see
+  // its own nav, but every page including its own Team Home denied
+  // access outright. The real defaults, not a curated subset: this role
+  // has no demo narrative reason to withhold any of its own permissions.
+  const leaderPermissions = DEFAULT_ROLE_PERMISSIONS.TEAM_LEADER ?? {};
+  for (const [permissionKey, allowed] of Object.entries(leaderPermissions)) {
+    await prisma.rolePermission.upsert({
+      where: { tenantId_role_permissionKey: { tenantId, role: "TEAM_LEADER", permissionKey } },
+      create: { tenantId, role: "TEAM_LEADER", permissionKey, allowed: allowed! },
+      update: { allowed: allowed! },
+    });
   }
 }
 
