@@ -126,3 +126,107 @@
   height: 18px;
   flex-shrink: 0;
 }
+
+/* =====================================================================
+   RESPONSIVE -- the rail below its own limit.
+
+   The side rail is 224px and the workspace beside it needs roughly 600px
+   to stay useful, so 860px is where the two stop fitting together. Below
+   it the rail stops being a column and becomes a wrapping top bar: the
+   same links, the same order, still all visible.
+
+   Deliberately NOT a hamburger. This is operational software -- a branch
+   manager checking approvals on a tablet should not pay a tap to find
+   out where they can go, and a menu that hides its own contents is worse
+   on a 5-item nav than a bar that simply wraps. It also keeps this a
+   pure-CSS change: no toggle state, no JS, no template edits, so nothing
+   about routing or the shell's behaviour moves.
+
+   Matches the technician and customer shells, which were already built
+   around a horizontal bar for the same reason.
+   ===================================================================== */
+
+@media (max-width: 860px) {
+  .rail-shell {
+    /* One column: rail on top, workspace under it. */
+    grid-template-columns: 1fr;
+  }
+
+  .rail {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    /* The rule that separated rail from content moves with the rail. */
+    border-inline-end: 0;
+    border-block-end: 1px solid var(--brand);
+    /* Nav stays reachable while a long work-order list scrolls under it. */
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 10;
+  }
+
+  .rail-brand {
+    /* The wordmark keeps its weight but stops reserving a whole header's
+       worth of vertical space. */
+    padding: 0 var(--space-2) 0 0;
+  }
+
+  .rail-link {
+    /* "You are here" was a bar on the inline edge, which in a horizontal
+       bar would sit between two links and read as a divider. It moves to
+       the block edge, where it underlines the active item instead. */
+    border-inline-start: 0;
+    border-block-end: 2px solid transparent;
+    padding: var(--space-2);
+  }
+
+  .rail-link--active {
+    border-inline-start-color: transparent;
+    border-block-end-color: var(--white);
+  }
+
+  .rail-footer {
+    /* Was pushed to the bottom of a column; now pushed to the end of a
+       row. The divider above it belonged to the vertical stack. */
+    margin-top: 0;
+    margin-inline-start: auto;
+    padding-top: 0;
+    border-top: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .rail-account {
+    padding: 0;
+  }
+
+  .rail-content {
+    padding: var(--space-5) var(--space-5);
+  }
+}
+
+@media (max-width: 560px) {
+  .rail {
+    gap: var(--space-1);
+    padding: var(--space-2);
+  }
+
+  .rail-link {
+    font-size: var(--text-xs);
+    padding: var(--space-2) var(--space-1);
+  }
+
+  .rail-account {
+    /* The name is the useful half -- the role is already implied by the
+       nav the person is looking at. Dropping it keeps the bar to two
+       lines on a phone instead of three. */
+    display: none;
+  }
+
+  .rail-content {
+    padding: var(--space-4) var(--space-3);
+  }
+}

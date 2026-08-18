@@ -91,3 +91,26 @@
 .portal-nav-link:active {
   background: rgb(0 0 0 / 0.25);
 }
+
+/* --- wide screens --------------------------------------------------- */
+
+/*
+ * Built for a phone, but customers open links from a desktop too. Capped
+ * narrower than the technician shell's 60rem: this content is closer to
+ * reading than to operating -- an invoice, a service status, a decision
+ * to make -- and a long line is harder to trust than a short one.
+ *
+ * The phone layout below 1024px is untouched.
+ */
+@media (min-width: 1024px) {
+  .portal-content {
+    inline-size: 100%;
+    max-inline-size: 48rem;
+    margin-inline: auto;
+  }
+
+  .portal-nav {
+    grid-auto-columns: minmax(0, 10rem);
+    justify-content: center;
+  }
+}

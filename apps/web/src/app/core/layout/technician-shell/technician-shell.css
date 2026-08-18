@@ -124,3 +124,32 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* --- wide screens --------------------------------------------------- */
+
+/*
+ * This shell is built for a tablet in a bay, and everything above is
+ * tuned for that. But it is also opened on a laptop -- by a technician at
+ * a desk, and by anyone being shown the product -- and a single job card
+ * stretched across 1600px reads as an unfinished page rather than a
+ * deliberate one.
+ *
+ * Nothing about the touch tuning changes here: the tap floor, the type
+ * scale and the bottom bar all stay exactly as they are. The content just
+ * stops growing past a readable measure, and the tab targets stop growing
+ * with it -- a 800px-wide tab is not more tappable than a 12rem one, only
+ * stranger to look at. The bar itself still spans the screen so it stays
+ * an edge, not a floating island.
+ */
+@media (min-width: 1024px) {
+  .tech-content {
+    inline-size: 100%;
+    max-inline-size: 60rem;
+    margin-inline: auto;
+  }
+
+  .tech-nav {
+    grid-auto-columns: minmax(0, 12rem);
+    justify-content: center;
+  }
+}

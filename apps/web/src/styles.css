@@ -145,6 +145,36 @@
   --duration-fast: 120ms;
   --duration-base: 180ms;
   --easing: cubic-bezier(0.2, 0, 0, 1);
+
+  /* --- tap target floor ---
+     44px is the gloved-hand floor (docs/phases/PHASE_6.md section 2). The
+     technician shell raises this to 56px on its own `.tech` scope, where
+     every control is enforced against it by tools/lint-touch-targets.mjs.
+     Declared here too so the other seven shells have one number to reach
+     for rather than each picking its own. */
+  --tap: 44px;
+}
+
+/*
+ * BREAKPOINTS -- three, derived from the layout rather than from a device
+ * list, because device widths change and the constraint does not.
+ *
+ *   --bp-mid   860px   the rail's own limit: a 224px rail plus a usable
+ *                      ~600px workspace. Below this the six rail shells
+ *                      turn their side rail into a top bar.
+ *   --bp-narrow 560px  one column, comfortably. Multi-column page layouts
+ *                      collapse and dense tables begin scrolling in place.
+ *   --bp-wide  1200px  where a workspace can afford a second column
+ *                      (drawer beside content instead of over it).
+ *
+ * These are declared as custom properties for documentation and for JS
+ * that needs them; media queries cannot read var(), so the literals below
+ * are repeated in @media rules. When one changes, grep the literal.
+ */
+:root {
+  --bp-narrow: 560px;
+  --bp-mid: 860px;
+  --bp-wide: 1200px;
 }
 
 /*
@@ -341,6 +371,25 @@ a {
   cursor: default;
 }
 
+/*
+ * Touch input only. A 26px `small` button is correct density for a mouse
+ * and unusable with a thumb, so the floor is raised where the pointer is
+ * actually coarse rather than at a width guess -- a tablet in a bay and a
+ * laptop at the same width need different answers. Desktop density is
+ * deliberately left alone.
+ */
+@media (pointer: coarse) {
+  .mop-button {
+    min-block-size: var(--tap);
+  }
+
+  .mop-button--small {
+    /* Still visually the smaller variant; the padding does the shrinking
+       while the hit area stays honest. */
+    padding-block: var(--space-2);
+  }
+}
+
 .mop-spinner {
   width: 1em;
   height: 1em;
@@ -398,7 +447,21 @@ a {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  max-width: 360px;
+  /* Was a flat 360px, which overflowed a 375px phone once the 24px inset
+     was added. Never wider than the viewport minus both insets. */
+  max-width: min(360px, calc(100vw - var(--space-5) * 2));
+}
+
+/* Under the rail's breakpoint the toast spans the width instead of
+   hugging one corner -- a 360px card on a 400px screen is neither a
+   corner toast nor a full-width one. Bottom inset clears the technician
+   and customer shells' tab bars. */
+@media (max-width: 560px) {
+  .mop-toast-stack {
+    inset-inline: var(--space-3);
+    bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    max-width: none;
+  }
 }
 
 .mop-toast {
@@ -503,6 +566,18 @@ a {
   border-color: var(--danger);
 }
 
+/* Same reasoning as the button floor above -- and iOS additionally zooms
+   the page on focus for any input under 16px, which is a layout jump, not
+   a font-size preference. */
+@media (pointer: coarse) {
+  .mop-field input,
+  .mop-field select,
+  .mop-field textarea {
+    min-block-size: var(--tap);
+    font-size: var(--text-md);
+  }
+}
+
 /* --- Page header pattern --- used directly in each page's own template
    (composition varies too much page to page -- search/filter rows on
    Workshops, nothing but a title on Add Workshop Owner -- to force
@@ -512,6 +587,10 @@ a {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  /* Wraps rather than crushing the title against its actions. Without
+     this the actions win the space fight and a page title truncates on
+     any narrow workspace. */
+  flex-wrap: wrap;
   gap: var(--space-4);
   margin-bottom: var(--space-6);
 }

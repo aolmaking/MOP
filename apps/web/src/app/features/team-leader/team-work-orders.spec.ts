@@ -6,6 +6,7 @@ import { TeamLeaderApi, type ManagedWorkOrder } from './team-leader.api';
 function row(overrides: Partial<ManagedWorkOrder> = {}): ManagedWorkOrder {
   return {
     workOrderId: 'wo-1',
+    identifier: 'ABC-1234',
     status: 'IN_PROGRESS',
     technicianId: 'tech-1',
     technicianName: 'Omar Khaled',
