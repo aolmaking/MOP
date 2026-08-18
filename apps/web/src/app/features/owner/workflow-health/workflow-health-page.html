@@ -69,6 +69,7 @@
         @if (sortedIssues().length === 0) {
           <p class="state-body">No consistency issues detected right now.</p>
         } @else {
+          <div class="mop-table-scroll">
           <table class="data-table">
             <thead>
               <tr>
@@ -89,6 +90,7 @@
               }
             </tbody>
           </table>
+          </div>
         }
 
         @if (issues() && issues()!.notComputable.length > 0) {

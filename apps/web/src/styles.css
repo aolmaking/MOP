@@ -578,6 +578,28 @@ a {
   }
 }
 
+/* --- Table scroll container ---
+ *
+ * A wide table scrolls inside its own box, never by taking the page with
+ * it: a sideways-scrolling page drags the rail and the header off screen,
+ * which is how you lose your place in a product whose nav is an edge.
+ *
+ * Nine pages had already each written their own `.table-scroll` for this
+ * (two of them with a border, seven without) while six others had no
+ * container at all -- their tables were reachable only by scrolling the
+ * whole workspace. This is the shared one. The nine local copies still
+ * win on specificity where they exist, so nothing about those pages
+ * moves; this is what the six adopt.
+ */
+.mop-table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  /* Momentum scrolling on touch, and a scrollbar that does not steal a
+     row's worth of height on desktop. */
+  -webkit-overflow-scrolling: touch;
+}
+
 /* --- Page header pattern --- used directly in each page's own template
    (composition varies too much page to page -- search/filter rows on
    Workshops, nothing but a title on Add Workshop Owner -- to force

@@ -47,6 +47,20 @@
   gap: var(--space-5);
 }
 
+/*
+ * The 16rem template picker is a column only while there is room for one
+ * beside the editor. Below that it kept its full 256px and left the
+ * editor about 69px, which pushed the toolbar's variable chips out of the
+ * workspace. Stacked, the picker becomes a short list above the message
+ * being edited -- the same reading order, just vertical.
+ */
+@media (max-width: 860px) {
+  .layout {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+}
+
 .picker {
   display: flex;
   flex-direction: column;

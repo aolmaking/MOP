@@ -34,7 +34,10 @@
 
 .category-cards {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* Was a hard three-up, which forced ~110px cards on a phone and broke
+     the longer category names across three lines. Fits as many as the
+     row can hold and reflows instead. */
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
   gap: var(--space-3);
 }
 

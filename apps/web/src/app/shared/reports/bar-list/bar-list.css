@@ -16,6 +16,17 @@
   gap: var(--space-2);
 }
 
+/*
+ * 9rem + 5rem of fixed track leaves the bar itself about 100px on a
+ * phone, which is too little for a length to be a comparison. The label
+ * gives up its fixed column first -- it can wrap, a bar cannot.
+ */
+@media (max-width: 560px) {
+  .bar-row {
+    grid-template-columns: minmax(5rem, 7rem) 1fr 4rem;
+  }
+}
+
 .bar-label {
   overflow: hidden;
   color: var(--text);

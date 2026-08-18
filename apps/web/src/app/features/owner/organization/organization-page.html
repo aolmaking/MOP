@@ -51,6 +51,7 @@
         @if (staff().length === 0) {
           <p class="state-body">No staff yet. Invite your first team member to get started.</p>
         } @else {
+          <div class="mop-table-scroll">
           <table class="data-table">
             <thead>
               <tr>
@@ -87,6 +88,7 @@
               }
             </tbody>
           </table>
+          </div>
         }
       }
 
@@ -94,6 +96,7 @@
         @if (data.branches.length === 0) {
           <p class="state-body">No branches yet. Create your first one to get started.</p>
         } @else {
+          <div class="mop-table-scroll">
           <table class="data-table">
             <thead>
               <tr>
@@ -126,6 +129,7 @@
               }
             </tbody>
           </table>
+          </div>
         }
       }
 
@@ -135,6 +139,7 @@
             No warehouses yet. If your workshop tracks parts inventory, add one here — otherwise you can skip this.
           </p>
         } @else {
+          <div class="mop-table-scroll">
           <table class="data-table">
             <thead>
               <tr>
@@ -157,11 +162,13 @@
               }
             </tbody>
           </table>
+          </div>
         }
 
         @if (data.branches.length > 0 && data.warehouses.length > 0) {
           <section class="matrix">
             <h2 class="matrix-title">Branch ↔ Warehouse access</h2>
+            <div class="mop-table-scroll">
             <table class="data-table matrix-table">
               <thead>
                 <tr>
@@ -188,6 +195,7 @@
                 }
               </tbody>
             </table>
+            </div>
           </section>
         }
       }

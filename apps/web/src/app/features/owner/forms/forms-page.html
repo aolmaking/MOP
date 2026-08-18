@@ -55,6 +55,7 @@
           @if (liveFields().length === 0) {
             <p class="state-body">No custom fields yet on this form.</p>
           } @else {
+            <div class="mop-table-scroll">
             <table class="data-table">
               <thead>
                 <tr>
@@ -85,12 +86,14 @@
                 }
               </tbody>
             </table>
+            </div>
           }
         </section>
 
         @if (archivedFields().length > 0) {
           <section class="field-group">
             <h2 class="group-title">Archived fields</h2>
+            <div class="mop-table-scroll">
             <table class="data-table">
               <thead>
                 <tr>
@@ -111,6 +114,7 @@
                 }
               </tbody>
             </table>
+            </div>
           </section>
         }
       }
