@@ -566,15 +566,34 @@ a {
   border-color: var(--danger);
 }
 
-/* Same reasoning as the button floor above -- and iOS additionally zooms
-   the page on focus for any input under 16px, which is a layout jump, not
-   a font-size preference. */
+/*
+ * Same reasoning as the button floor above -- and iOS additionally zooms
+ * the page on focus for any input under 16px, which is a layout jump, not
+ * a font-size preference.
+ *
+ * Deliberately targets the elements rather than `.mop-field`: only some
+ * pages use that wrapper, and Login, Register and Invite Accept -- the
+ * three screens most likely to be opened on a phone -- all style bare
+ * inputs under their own local `.field` class instead. A tap floor that
+ * only applies where a particular class was remembered is not a floor.
+ *
+ * Checkboxes and radios are excluded: stretching the control itself
+ * distorts it, and their tap area belongs to the surrounding label.
+ */
+/*
+ * Led with `html` on purpose. Angular compiles a component's
+ * `.field input` into `.field[_ngcontent-x] input[_ngcontent-x]`, which
+ * ties this rule on specificity and then wins on source order because
+ * component styles are injected after this file. The extra element
+ * breaks the tie; without it the tap floor applied but the 16px did not,
+ * and Login still zoomed on focus.
+ */
 @media (pointer: coarse) {
-  .mop-field input,
-  .mop-field select,
-  .mop-field textarea {
+  html input:not([type='checkbox']):not([type='radio']):not([type='hidden']),
+  html select,
+  html textarea {
     min-block-size: var(--tap);
-    font-size: var(--text-md);
+    font-size: max(var(--text-md), 1rem);
   }
 }
 
