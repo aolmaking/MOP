@@ -1,5 +1,6 @@
 import { Component, input, output } from '@angular/core';
 import type { WorkshopDetails } from '../../../core/api/platform-workshops.api';
+import { DismissOnEscapeDirective } from '../../../shared/dismiss-on-escape/dismiss-on-escape.directive';
 
 /**
  * Everything the platform knows about one workshop.
@@ -15,6 +16,7 @@ import type { WorkshopDetails } from '../../../core/api/platform-workshops.api';
  * fetches nothing, so it cannot be open with stale data of its own.
  */
 @Component({
+  imports: [DismissOnEscapeDirective],
   selector: 'app-workshop-drawer',
   templateUrl: './workshop-drawer.html',
   styleUrl: './workshop-drawer.css',

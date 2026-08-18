@@ -123,8 +123,8 @@
 
   @if (showAdd()) {
     <div class="modal-backdrop" (click)="showAdd.set(false)">
-      <div class="modal" (click)="$event.stopPropagation()">
-        <h2 class="modal-title">Add Field</h2>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="addfield-title" appDismissOnEscape (dismissed)="showAdd.set(false)" (click)="$event.stopPropagation()">
+        <h2 class="modal-title" id="addfield-title">Add Field</h2>
         @if (addError(); as err) {
           <app-error-banner [error]="err" />
         }

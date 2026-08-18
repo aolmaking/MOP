@@ -204,8 +204,8 @@
 
   @if (showInvite()) {
     <div class="modal-backdrop" (click)="closeInvite()">
-      <div class="modal" (click)="$event.stopPropagation()">
-        <h2 class="modal-title">Invite Staff</h2>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="invite-title" appDismissOnEscape (dismissed)="closeInvite()" (click)="$event.stopPropagation()">
+        <h2 class="modal-title" id="invite-title">Invite Staff</h2>
 
         @if (inviteError(); as err) {
           <app-error-banner [error]="err" />
@@ -261,8 +261,8 @@
 
   @if (showCreateBranch()) {
     <div class="modal-backdrop" (click)="showCreateBranch.set(false)">
-      <div class="modal" (click)="$event.stopPropagation()">
-        <h2 class="modal-title">Create Branch</h2>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="branch-title" appDismissOnEscape (dismissed)="showCreateBranch.set(false)" (click)="$event.stopPropagation()">
+        <h2 class="modal-title" id="branch-title">Create Branch</h2>
         @if (createError(); as err) {
           <app-error-banner [error]="err" />
         }
@@ -300,8 +300,8 @@
 
   @if (showCreateWarehouse()) {
     <div class="modal-backdrop" (click)="showCreateWarehouse.set(false)">
-      <div class="modal" (click)="$event.stopPropagation()">
-        <h2 class="modal-title">Create Warehouse</h2>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="warehouse-title" appDismissOnEscape (dismissed)="showCreateWarehouse.set(false)" (click)="$event.stopPropagation()">
+        <h2 class="modal-title" id="warehouse-title">Create Warehouse</h2>
         @if (createError(); as err) {
           <app-error-banner [error]="err" />
         }

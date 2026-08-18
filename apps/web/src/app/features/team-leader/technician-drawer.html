@@ -1,5 +1,5 @@
 <div class="scrim" (click)="closed.emit()"></div>
-<aside class="drawer" role="dialog" aria-modal="true" [attr.aria-label]="detail().fullName">
+<aside class="drawer" role="dialog" aria-modal="true" [attr.aria-label]="detail().fullName" appDismissOnEscape (dismissed)="closed.emit()">
   <header class="drawer-head">
     <div>
       <h2 class="drawer-title">{{ detail().fullName }}</h2>

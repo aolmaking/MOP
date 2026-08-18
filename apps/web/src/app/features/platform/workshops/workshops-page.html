@@ -219,7 +219,14 @@
        --------------------------------------------------------------- -->
   @if (confirming(); as row) {
     <div class="scrim" (click)="cancelConfirm()"></div>
-    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <div
+      class="dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-title"
+      appDismissOnEscape
+      (dismissed)="cancelConfirm()"
+    >
       <h2 class="dialog-title" id="confirm-title">
         {{ freezing() ? 'Freeze' : 'Reactivate' }} {{ row.name }}?
       </h2>

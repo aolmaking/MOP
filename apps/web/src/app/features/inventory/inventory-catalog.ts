@@ -8,6 +8,7 @@ import { ToastService } from '../../shared/toast/toast.service';
 import { OPERATING_CATEGORIES } from '@mop/shared';
 import type { PresentedError } from '../../core/api/error.interceptor';
 import { InventoryApi, type CatalogDraft, type CatalogItem, type CatalogPage } from './inventory.api';
+import { DismissOnEscapeDirective } from '../../shared/dismiss-on-escape/dismiss-on-escape.directive';
 
 type State = 'loading' | 'ready' | 'empty' | 'no-results' | 'forbidden' | 'error';
 
@@ -46,7 +47,7 @@ function emptyDraft(): CatalogDraft {
  */
 @Component({
   selector: 'app-inventory-catalog',
-  imports: [ErrorBanner, ButtonDirective, FormField],
+  imports: [ErrorBanner, ButtonDirective, FormField, DismissOnEscapeDirective],
   templateUrl: './inventory-catalog.html',
   styleUrl: './inventory-catalog.css',
 })

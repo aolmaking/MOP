@@ -1,6 +1,7 @@
 import { Component, input, output, signal } from '@angular/core';
 import { ButtonDirective } from '../../shared/button/button.directive';
 import type { TechnicianDetail } from './team-leader.api';
+import { DismissOnEscapeDirective } from '../../shared/dismiss-on-escape/dismiss-on-escape.directive';
 
 /**
  * The technician detail drawer -- roster, recent tasks, and the
@@ -18,7 +19,7 @@ import type { TechnicianDetail } from './team-leader.api';
  */
 @Component({
   selector: 'app-technician-drawer',
-  imports: [ButtonDirective],
+  imports: [ButtonDirective, DismissOnEscapeDirective],
   templateUrl: './technician-drawer.html',
   styleUrl: './technician-drawer.css',
 })

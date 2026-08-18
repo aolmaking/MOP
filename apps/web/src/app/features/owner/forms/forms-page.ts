@@ -5,6 +5,7 @@ import { ErrorBanner } from '../../../shared/error-banner/error-banner';
 import { ButtonDirective } from '../../../shared/button/button.directive';
 import type { PresentedError } from '../../../core/api/error.interceptor';
 import { FIELD_TYPES, FORM_KEYS, FormsApi, type AddFieldInput, type FormFieldsView } from './forms.api';
+import { DismissOnEscapeDirective } from '../../../shared/dismiss-on-escape/dismiss-on-escape.directive';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
@@ -16,7 +17,7 @@ type State = 'loading' | 'ready' | 'forbidden' | 'error';
  */
 @Component({
   selector: 'app-forms-page',
-  imports: [FormsModule, ErrorBanner, ButtonDirective],
+  imports: [FormsModule, ErrorBanner, ButtonDirective, DismissOnEscapeDirective],
   templateUrl: './forms-page.html',
   styleUrl: './forms-page.css',
 })

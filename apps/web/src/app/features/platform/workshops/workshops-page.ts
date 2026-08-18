@@ -5,6 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ErrorBanner } from '../../../shared/error-banner/error-banner';
 import { WorkshopDrawer } from './workshop-drawer';
 import { ButtonDirective } from '../../../shared/button/button.directive';
+import { DismissOnEscapeDirective } from '../../../shared/dismiss-on-escape/dismiss-on-escape.directive';
 import { ToastService } from '../../../shared/toast/toast.service';
 import type { PresentedError } from '../../../core/api/error.interceptor';
 import {
@@ -51,7 +52,7 @@ const FREEZABLE = new Set(['ACTIVE', 'TRIAL', 'PENDING_SETUP', 'READ_ONLY']);
  */
 @Component({
   selector: 'app-workshops-page',
-  imports: [ErrorBanner, ButtonDirective, WorkshopDrawer],
+  imports: [ErrorBanner, ButtonDirective, WorkshopDrawer, DismissOnEscapeDirective],
   templateUrl: './workshops-page.html',
   styleUrl: './workshops-page.css',
 })

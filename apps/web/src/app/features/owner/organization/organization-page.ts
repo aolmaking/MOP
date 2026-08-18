@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { ErrorBanner } from '../../../shared/error-banner/error-banner';
 import { ButtonDirective } from '../../../shared/button/button.directive';
 import type { PresentedError } from '../../../core/api/error.interceptor';
+import { DismissOnEscapeDirective } from '../../../shared/dismiss-on-escape/dismiss-on-escape.directive';
 import {
   OrganizationApi,
   type BranchListItem,
@@ -38,7 +39,7 @@ const INVITABLE_ROLES: readonly StaffRole[] = [
  */
 @Component({
   selector: 'app-organization-page',
-  imports: [FormsModule, RouterLink, ErrorBanner, ButtonDirective],
+  imports: [FormsModule, RouterLink, ErrorBanner, ButtonDirective, DismissOnEscapeDirective],
   templateUrl: './organization-page.html',
   styleUrl: './organization-page.css',
 })
