@@ -145,7 +145,7 @@
 }
 
 .queue-open:hover {
-  color: var(--brand);
+  color: var(--brand-text);
   text-decoration: underline;
 }
 

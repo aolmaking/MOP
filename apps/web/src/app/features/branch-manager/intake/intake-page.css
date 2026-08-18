@@ -210,7 +210,7 @@
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--brand);
+  color: var(--brand-text);
   font-size: var(--text-sm);
   cursor: pointer;
   text-decoration: underline;

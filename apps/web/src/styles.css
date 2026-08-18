@@ -75,12 +75,29 @@
   --white: #ffffff;          /* highest emphasis only */
   --text: #f2eeec;           /* body copy: warm off-white, NOT pure */
   --text-muted: #a89f9c;
-  --text-faint: #6f6664;
+  /* Was #6f6664, which measured 3.50:1 on --bg and 3.28:1 on --surface.
+     This tier carries slugs, emails, timestamps and hints -- all of it
+     12-13px, none of it "large text" -- so it was the quietest tier by
+     failing WCAG AA rather than by design. #8f8683 holds 5.49 / 5.15 /
+     4.69 across bg, surface and surface-raised, and still sits a clear
+     step below --text-muted's 7.07. */
+  --text-faint: #8f8683;
 
   /* --- 30%: red, split by weight so one hue can do two jobs --- */
   --brand: #d41717;          /* the mark, primary action, active state */
   --brand-deep: #8e1010;     /* large structural areas: rail, headers */
   --brand-muted: #2b1414;    /* a red-context surface, still readable */
+
+  /* The identity red as TEXT, and only as text.
+     --brand is 3.66:1 on --bg. That is fine for what it mostly is -- a
+     fill behind white, a rail, a 2px active edge, all of which are
+     graphics under WCAG 1.4.11's 3:1 bar -- but a link is normal-size
+     body text and needs 4.5. Rather than lighten --brand and change
+     every rail and button in the product, the text case gets its own
+     token: same hue, lifted to 5.19:1, structure untouched.
+     Deliberately kept below --danger (#ff4b3e) so the alarm red is
+     still the brighter of the two. */
+  --brand-text: #ef4444;
 
   /* Interactive is red now. On a black ground the heaviest thing on the
      page should be the thing you press, and that is part of the 30%. */
@@ -198,11 +215,16 @@
   --white: #14100f;          /* the emphasis colour, inverted */
   --text: #1c1615;
   --text-muted: #58504d;
-  --text-faint: #8b817d;
+  /* Was #8b817d -- 3.31:1 on this ground, the same AA failure the dark
+     theme had, in the other direction. */
+  --text-faint: #736965;
 
   --brand: #c11414;          /* a shade deeper, to hold on white */
   --brand-deep: #8e1010;
   --brand-muted: #fbe9e8;
+  /* No lift needed here: #c11414 already measures 5.43:1 on this ground,
+     so the light theme's link colour IS the identity red. */
+  --brand-text: #c11414;
 
   --accent: #c11414;
   --accent-hover: #a01010;
@@ -271,7 +293,7 @@ textarea {
 /* A link is red because red means "your attention goes here", and that is
    what a link is asking for. --accent is ink and belongs to buttons. */
 a {
-  color: var(--brand);
+  color: var(--brand-text);
   text-underline-offset: 0.15em;
 }
 
@@ -294,7 +316,42 @@ a {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+    /* Without this the spinner keeps looping, just 60x faster -- a
+       0.01ms duration on an `infinite` animation is not a stopped
+       animation, it is a strobe. This is the half of the standard reset
+       that actually stops repeating motion. */
+    animation-iteration-count: 1 !important;
   }
+}
+
+/*
+ * Removes the ~300ms delay some touch browsers hold every tap for while
+ * they wait to see whether it was a double-tap-to-zoom. Nothing in this
+ * product zooms on double tap, so the wait buys nothing and makes every
+ * control feel like it is thinking. Only on controls -- the page itself
+ * keeps normal touch behaviour.
+ */
+button,
+a,
+select,
+summary,
+[role='button'],
+[role='tab'] {
+  touch-action: manipulation;
+}
+
+/*
+ * Scroll chaining: without this, reaching the end of a drawer's or
+ * dialog's own scroll hands the remaining momentum to the page behind
+ * it, which then scrolls away underneath the overlay. Contained here for
+ * every overlay in the product, by the class names they already use.
+ */
+.drawer,
+.dialog,
+.modal,
+.editor,
+.mop-table-scroll {
+  overscroll-behavior: contain;
 }
 
 /* =====================================================================

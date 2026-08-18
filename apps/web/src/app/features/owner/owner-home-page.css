@@ -152,7 +152,7 @@
 
 .recent-more {
   align-self: flex-start;
-  color: var(--brand);
+  color: var(--brand-text);
   font-size: var(--text-sm);
   text-decoration: underline;
   text-underline-offset: 0.15em;

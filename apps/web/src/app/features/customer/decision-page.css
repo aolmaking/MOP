@@ -30,7 +30,7 @@
 /* The workshop's name, not ours. To this person MOP is invisible -- they
    are dealing with the garage that has their car. */
 .workshop {
-  color: var(--brand);
+  color: var(--brand-text);
   font-size: var(--text-sm);
   font-weight: 700;
   text-transform: uppercase;

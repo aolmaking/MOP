@@ -36,7 +36,7 @@
 }
 
 .job-back:hover {
-  color: var(--brand);
+  color: var(--brand-text);
 }
 
 .job-plate {

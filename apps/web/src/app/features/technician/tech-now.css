@@ -90,7 +90,7 @@
 
 .now-go {
   margin-block-start: var(--space-2);
-  color: var(--brand);
+  color: var(--brand-text);
   font-size: var(--tech-text);
   font-weight: 700;
 }

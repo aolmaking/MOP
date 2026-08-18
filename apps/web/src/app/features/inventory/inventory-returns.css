@@ -290,7 +290,7 @@
 
 .badge[data-type='ISSUE'] {
   background: var(--accent-muted);
-  color: var(--brand);
+  color: var(--brand-text);
 }
 
 .badge[data-type='DAMAGED'] {

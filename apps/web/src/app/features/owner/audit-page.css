@@ -144,7 +144,7 @@
 
 .chip--platform {
   border-color: var(--brand);
-  color: var(--brand);
+  color: var(--brand-text);
 }
 
 .entry-when {
@@ -202,7 +202,7 @@
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--brand);
+  color: var(--brand-text);
   font-size: var(--text-sm);
   cursor: pointer;
   text-decoration: underline;
@@ -237,7 +237,7 @@
 }
 
 .diff-label--after {
-  color: var(--brand);
+  color: var(--brand-text);
 }
 
 /*

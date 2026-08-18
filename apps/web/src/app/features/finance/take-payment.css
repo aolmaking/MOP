@@ -30,7 +30,7 @@
 }
 
 .pay-back:hover {
-  color: var(--brand);
+  color: var(--brand-text);
 }
 
 .pay-title {
