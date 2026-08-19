@@ -131,7 +131,7 @@ describe("the writer", () => {
 
   it("unlock deactivates rather than deletes", async () => {
     await locks.lock(tenantId, "TEAM_LEADER", "team.home.view", false, "temp", "platform-1", "Admin");
-    await locks.unlock(tenantId, "TEAM_LEADER", "team.home.view", "platform-1", "Admin");
+    await locks.unlock(tenantId, "TEAM_LEADER", "team.home.view", "platform-1", "Admin", "Review finished.");
 
     const active = await locks.listActive(tenantId);
     expect(active.some((l) => l.role === "TEAM_LEADER" && l.permissionKey === "team.home.view")).toBe(false);
@@ -177,8 +177,56 @@ describe("the full loop -- the writer actually reaches PlatformControlLayer", ()
     expect(afterLock.locked).toBe(true);
     expect(afterLock.reason).toContain("Locked by Platform Super Admin");
 
-    await locks.unlock(tenantId, "BRANCH_MANAGER", KEY, "platform-1", "Admin");
+    await locks.unlock(tenantId, "BRANCH_MANAGER", KEY, "platform-1", "Admin", "Override no longer needed.");
     const afterUnlock = await resolver.resolve(session, KEY);
     expect(afterUnlock.reason).not.toContain("Platform Super Admin");
+  });
+});
+
+/**
+ * A lock has to be reversible, and the reversal has to be explicable.
+ *
+ * Setting a lock always demanded a reason; removing one -- audited at the
+ * same HIGH risk, and the act that hands a permission back to a workshop
+ * the platform took it from -- recorded none. A trail that says access
+ * was restored but never why is the half that gets questioned later.
+ */
+describe("removing a lock", () => {
+  const KEY2 = "finance.invoice.view";
+
+  it("records why the permission was handed back", async () => {
+    await locks.lock(tenantId, "BRANCH_MANAGER", KEY2, false, "Compliance hold", "platform-1", "Admin");
+    await locks.unlock(tenantId, "BRANCH_MANAGER", KEY2, "platform-1", "Admin", "Compliance review closed.");
+
+    const entry = await prisma.auditLog.findFirst({
+      where: { tenantId, action: "governance.role_permission_lock.removed" },
+      orderBy: { createdAt: "desc" },
+      select: { reason: true, riskLevel: true },
+    });
+
+    expect(entry!.reason).toBe("Compliance review closed.");
+    expect(entry!.riskLevel).toBe("HIGH");
+  });
+
+  it("restores the permission the workshop had before the lock", async () => {
+    await locks.lock(tenantId, "BRANCH_MANAGER", KEY2, false, "Hold", "platform-1", "Admin");
+    const locked = await locks.listActive(tenantId);
+    expect(locked.some((l) => l.permissionKey === KEY2)).toBe(true);
+
+    await locks.unlock(tenantId, "BRANCH_MANAGER", KEY2, "platform-1", "Admin", "Released.");
+    const after = await locks.listActive(tenantId);
+
+    // Gone from what is in force, still present in the history.
+    expect(after.some((l) => l.permissionKey === KEY2)).toBe(false);
+    const history = await locks.history(tenantId);
+    expect(history.some((l) => l.permissionKey === KEY2)).toBe(true);
+  });
+
+  it("refuses to remove a lock that is not in force", async () => {
+    await expect(
+      // A key this spec never locks, so "not in force" is genuinely true
+      // rather than an artefact of another test in the file.
+      locks.unlock(tenantId, "DATA_ANALYST", "reports.company.view", "platform-1", "Admin", "Nothing to remove."),
+    ).rejects.toThrow(/No active lock/);
   });
 });

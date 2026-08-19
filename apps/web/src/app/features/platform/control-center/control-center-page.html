@@ -1,0 +1,191 @@
+<section class="control-center">
+  <header class="head">
+    <h1 class="title">Control Center</h1>
+    <p class="sub">
+      Governance overrides. A lock takes a permission out of a workshop's own hands — in either direction — until the
+      platform removes it.
+    </p>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('ready') {
+      @if (workshops().length === 0) {
+        <div class="state">
+          <p class="state-title">No workshops on the platform yet</p>
+          <p class="state-body">Governance controls apply to a workshop, so there is nothing to govern until one exists.</p>
+        </div>
+      } @else {
+        <div class="layout">
+          <!-- Which workshop is being governed. Always visible: every
+               control on the right acts on this one, and a governance
+               action against the wrong tenant is not a small mistake. -->
+          <nav class="picker" aria-label="Workshops">
+            @for (w of workshops(); track w.id) {
+              <button
+                type="button"
+                class="picker-item"
+                [class.picker-item--active]="selectedId() === w.id"
+                [attr.aria-pressed]="selectedId() === w.id"
+                (click)="select(w.id)"
+              >
+                <span class="picker-name">{{ w.name }}</span>
+                <span class="picker-meta">{{ w.slug }} · {{ label(w.status) }}</span>
+              </button>
+            }
+          </nav>
+
+          <div class="panels">
+            @if (selected(); as shop) {
+              @if (actionError(); as message) {
+                <p class="action-error" role="alert">{{ message }}</p>
+              }
+
+              <!-- Active locks -->
+              <section class="panel">
+                <h2 class="panel-title">Permission locks on {{ shop.name }}</h2>
+                <p class="panel-hint">
+                  While a lock is in place the Owner cannot change that permission for that role, whichever way it is
+                  pinned.
+                </p>
+
+                @if (locks().length === 0) {
+                  <p class="state-body">No permissions are locked. This workshop governs its own matrix entirely.</p>
+                } @else {
+                  <ul class="lock-list">
+                    @for (lock of locks(); track lock.id) {
+                      <li class="lock">
+                        <div class="lock-head">
+                          <span class="badge" [class.badge--on]="lock.allowed">
+                            {{ lock.allowed ? 'forced on' : 'forced off' }}
+                          </span>
+                          <span class="lock-role">{{ label(lock.role) }}</span>
+                          <code class="lock-key">{{ lock.permissionKey }}</code>
+                        </div>
+                        <p class="lock-reason">“{{ lock.reason }}”</p>
+                        <p class="lock-meta">
+                          {{ lock.lockedBy }} · {{ when(lock.createdAt) }}
+                          <button type="button" class="lock-remove" [disabled]="busy()" (click)="removeLock(lock)">
+                            Remove this lock
+                          </button>
+                        </p>
+                      </li>
+                    }
+                  </ul>
+                }
+              </section>
+
+              <!-- Add a lock -->
+              <section class="panel">
+                <h2 class="panel-title">Lock a permission</h2>
+
+                <div class="form-row">
+                  <label class="field">
+                    <span class="field-label">Role</span>
+                    <select [value]="formRole()" (change)="formRole.set($any($event.target).value)">
+                      @for (role of roles; track role) {
+                        <option [value]="role">{{ label(role) }}</option>
+                      }
+                    </select>
+                  </label>
+
+                  <label class="field field--wide">
+                    <span class="field-label">Permission</span>
+                    <!-- Every key the product declares, read from the
+                         manifest rather than a list kept by hand here. -->
+                    <select [value]="formKey()" (change)="formKey.set($any($event.target).value)">
+                      <option value="">Choose a permission…</option>
+                      @for (key of permissionKeys; track key) {
+                        <option [value]="key">{{ key }}</option>
+                      }
+                    </select>
+                  </label>
+
+                  <label class="field">
+                    <span class="field-label">Pin it</span>
+                    <select [value]="formAllowed() ? 'on' : 'off'" (change)="formAllowed.set($any($event.target).value === 'on')">
+                      <option value="off">Forced off</option>
+                      <option value="on">Forced on</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label class="field">
+                  <span class="field-label">Reason <span class="required">required</span></span>
+                  <textarea
+                    rows="2"
+                    placeholder="Why is the platform overriding this workshop?"
+                    [value]="formReason()"
+                    (input)="formReason.set($any($event.target).value)"
+                  ></textarea>
+                  <span class="field-hint">
+                    The reason is what makes this reviewable later — it is stored with the lock and shown above.
+                  </span>
+                </label>
+
+                <button appButton variant="danger" [disabled]="busy()" (click)="addLock()">
+                  {{ busy() ? 'Working…' : 'Lock this permission' }}
+                </button>
+              </section>
+
+              <!-- Lifecycle -->
+              <section class="panel">
+                <h2 class="panel-title">Workshop lifecycle</h2>
+                <p class="panel-hint">
+                  Archiving stops a workshop being used without deleting anything it has recorded. It can be restored.
+                </p>
+
+                <label class="field">
+                  <span class="field-label">Reason <span class="required">required</span></span>
+                  <textarea
+                    rows="2"
+                    [value]="lifecycleReason()"
+                    (input)="lifecycleReason.set($any($event.target).value)"
+                  ></textarea>
+                </label>
+
+                <div class="lifecycle-actions">
+                  <button appButton variant="danger" [disabled]="busy()" (click)="archive()">Archive workshop</button>
+                  <button appButton variant="secondary" [disabled]="busy()" (click)="reactivate()">Restore workshop</button>
+                </div>
+              </section>
+
+              <!-- History -->
+              @if (history().length > 0) {
+                <section class="panel">
+                  <h2 class="panel-title">Every lock ever set here</h2>
+                  <p class="panel-hint">Including removed ones — a governance record that only shows the present is not a record.</p>
+                  <ul class="history">
+                    @for (entry of history(); track entry.id) {
+                      <li class="history-row" [class.history-row--removed]="entry.removedAt">
+                        <span class="history-what">
+                          {{ label(entry.role) }} · <code>{{ entry.permissionKey }}</code>
+                        </span>
+                        <span class="history-when">
+                          {{ when(entry.createdAt) }}
+                          @if (entry.removedAt) {
+                            → removed {{ when(entry.removedAt) }}
+                          }
+                        </span>
+                      </li>
+                    }
+                  </ul>
+                </section>
+              }
+            }
+          </div>
+        </div>
+      }
+    }
+  }
+</section>

@@ -1,0 +1,337 @@
+/*
+ * Control Center -- Governance Controls.
+ *
+ * Every control here overrides a workshop's own decisions, so the page is
+ * built to slow the hand down: the tenant being governed is always on
+ * screen, each action states its consequence, and nothing fires without a
+ * written reason.
+ */
+
+.control-center {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.head {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--text);
+}
+
+.title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.sub {
+  margin-top: var(--space-1);
+  max-inline-size: 60ch;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 16rem 1fr;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  position: sticky;
+  inset-block-start: var(--space-4);
+}
+
+.picker-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--easing), color var(--duration-fast) var(--easing);
+}
+
+.picker-item:hover {
+  color: var(--text);
+}
+
+/* Which workshop is being governed must never be ambiguous. */
+.picker-item--active {
+  border-inline-start-color: var(--brand);
+  color: var(--text);
+}
+
+.picker-item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.picker-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.picker-meta {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: capitalize;
+}
+
+.panels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-inline-size: 0;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+}
+
+.panel-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.panel-hint {
+  max-inline-size: 70ch;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.lock-list,
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--brand);
+  border-radius: var(--radius-md);
+}
+
+.lock-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.badge {
+  padding: 1px var(--space-2);
+  background: var(--danger-bg);
+  border-radius: var(--radius-sm);
+  color: var(--danger-strong);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+/* A permission forced ON is still an override, but it is not a denial --
+   colouring both the same would make every lock read as a restriction. */
+.badge--on {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.lock-role {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.lock-key {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.lock-reason {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-style: italic;
+}
+
+.lock-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.lock-remove {
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--brand-text);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.lock-remove:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.field--wide {
+  flex: 1 1 20rem;
+}
+
+.field-label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.required {
+  color: var(--brand-text);
+}
+
+.field-hint {
+  max-inline-size: 60ch;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.field select,
+.field textarea {
+  padding: var(--space-2);
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  resize: vertical;
+}
+
+.field select:focus-visible,
+.field textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.lifecycle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.action-error {
+  padding: var(--space-2) var(--space-3);
+  background: var(--danger-bg);
+  border-inline-start: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.history-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border-block-end: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+/* A removed lock still belongs in the record, but it is not in force. */
+.history-row--removed {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.history-when {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.state,
+.state-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.state-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.state-body {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 860px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  /* Stacked, the picker is a short list above the controls rather than a
+     sticky column beside them. */
+  .picker {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .picker-item {
+    flex: 1 1 12rem;
+  }
+}

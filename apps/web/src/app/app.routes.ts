@@ -46,6 +46,16 @@ export const routes: Routes = [
           import('./features/platform/workshops/workshops-page').then((m) => m.WorkshopsPage),
       },
       {
+        // Governance Controls. The rail has pointed here since Phase 2
+        // with no route behind it, so the link landed on the fallback
+        // placeholder -- while the platform-only backend it needs
+        // (permission locks, tenant archive/reactivate) already existed
+        // and was reachable only by calling the API directly.
+        path: 'control-center',
+        loadComponent: () =>
+          import('./features/platform/control-center/control-center-page').then((m) => m.ControlCenterPage),
+      },
+      {
         path: 'workshops/new',
         loadComponent: () => import('./features/platform/add-workshop/add-workshop-page').then((m) => m.AddWorkshopPage),
       },

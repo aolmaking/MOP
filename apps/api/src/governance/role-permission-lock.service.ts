@@ -102,7 +102,14 @@ export class RolePermissionLockService {
    * lock had ever been set. Deactivates rather than deletes, same
    * discipline as `lock()`.
    */
-  async unlock(tenantId: string, role: string, permissionKey: string, actorId: string, actorName: string): Promise<void> {
+  async unlock(
+    tenantId: string,
+    role: string,
+    permissionKey: string,
+    actorId: string,
+    actorName: string,
+    reason: string,
+  ): Promise<void> {
     const key = `${role}:${permissionKey}`;
 
     await this.prisma.$transaction(async (tx) => {
@@ -126,6 +133,7 @@ export class RolePermissionLockService {
           action: "governance.role_permission_lock.removed",
           before: { allowed: (previous.value as { allowed?: boolean }).allowed },
           after: null,
+          reason,
           riskLevel: "HIGH",
         },
         tx,

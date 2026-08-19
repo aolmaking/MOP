@@ -36,6 +36,6 @@ export class RolePermissionLockController {
 
   @Post("remove")
   remove(@Param("tenantId") tenantId: string, @Body() dto: RemoveRoleLockDto, @CurrentSession() session: SessionContext) {
-    return this.locks.unlock(tenantId, dto.role, dto.permissionKey, session.accountId, session.displayName);
+    return this.locks.unlock(tenantId, dto.role, dto.permissionKey, session.accountId, session.displayName, dto.reason);
   }
 }
