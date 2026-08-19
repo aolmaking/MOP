@@ -23,6 +23,18 @@ import type { PermissionKey } from "./permission-manifest";
 export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partial<Record<PermissionKey, boolean>>>>> = {
   TENANT_OWNER: {
     "dashboard.owner.view": true,
+    // Read-only operational visibility. docs/detailed-specs/tenant-owner.md
+    // gives Owner "a company-wide Work Orders view -- read-only summary;
+    // actually working a Work Order is Branch Manager/Technician
+    // territory". This key guards only GET routes (attention, board, work
+    // order detail, approvals, delivery); every mutation on those pages is
+    // gated separately -- recording a decision needs
+    // customer_decision.record_on_behalf, booking in needs
+    // customer.intake.create, reassigning needs
+    // workorders.branch.reassign_technician -- none of which Owner has.
+    // Without this the Owner Home shortcuts into operations were dead
+    // links for the one person who owns the workshop.
+    "workorders.branch.view": true,
     "organization.access.manage": true,
     "organization.forms.manage": true,
     "organization.messages.manage": true,
