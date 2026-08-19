@@ -470,6 +470,48 @@ async function clearDemoWork(tenantId: string) {
   }
 }
 
+/**
+ * The transitions a job really passes through on its way to a status,
+ * replayed as `work_order.status_changed` events so seeded work carries
+ * the same history the lifecycle service would have written.
+ *
+ * Kept deliberately close to the real graph rather than emitting a single
+ * synthetic DRAFT -> final hop: Workflow Health and the stage-duration
+ * reports both read this history, and a one-hop shortcut would make every
+ * seeded job look like it spent zero time in every stage.
+ */
+const LIFECYCLE_PATHS: Record<string, readonly string[]> = {
+  IN_PROGRESS: ["AWAITING_APPROVAL", "APPROVED", "IN_PROGRESS"],
+  WAITING_PARTS: ["AWAITING_APPROVAL", "APPROVED", "IN_PROGRESS", "WAITING_PARTS"],
+  QC_FAILED: ["AWAITING_APPROVAL", "APPROVED", "IN_PROGRESS", "QC_FAILED"],
+  READY_FOR_DELIVERY: ["AWAITING_APPROVAL", "APPROVED", "IN_PROGRESS", "PAYMENT_PENDING", "READY_FOR_DELIVERY"],
+  PAYMENT_PENDING: ["AWAITING_APPROVAL", "APPROVED", "IN_PROGRESS", "PAYMENT_PENDING"],
+};
+
+async function recordLifecycleHistory(tenantId: string, workOrderId: string, finalStatus: string): Promise<void> {
+  const path = LIFECYCLE_PATHS[finalStatus] ?? [finalStatus];
+  let from = "DRAFT";
+  // Spread the hops backwards from now so each stage has a plausible
+  // dwell time rather than every transition sharing one timestamp.
+  const stepMinutes = 45;
+  let offset = path.length * stepMinutes;
+
+  for (const to of path) {
+    await prisma.operationEvent.create({
+      data: {
+        tenantId,
+        eventKey: "work_order.status_changed",
+        actorId: "seed-demo",
+        actorType: "TENANT_STAFF",
+        createdAt: new Date(Date.now() - offset * 60_000),
+        payload: { workOrderId, from, to, intent: "SEED_REPLAY", reason: null },
+      },
+    });
+    from = to;
+    offset -= stepMinutes;
+  }
+}
+
 async function createStuckJobs(tenantId: string, branchId: string, technicianStaffUserId: string) {
   const jobs = [
     { plate: "DEMO-4471", customer: "Mona Adel", kind: "critical" as const },
@@ -515,6 +557,23 @@ async function createStuckJobs(tenantId: string, branchId: string, technicianSta
     const workOrder = await prisma.workOrder.create({
       data: { tenantId, branchId, assetId: asset.id, customerId: customer.id, status, inspectionDeclined: false },
     });
+
+    // Write the lifecycle history this job would really have.
+    //
+    // Creating a work order straight into IN_PROGRESS is not a state the
+    // product can reach: WorkOrderLifecycleService is the only writer of
+    // WorkOrder.status and it emits `work_order.status_changed` in the
+    // same transaction, so a seeded job with a status and no events looks
+    // -- correctly -- like something bypassed the lifecycle entirely.
+    // Workflow Health detects exactly that, and every demo workshop was
+    // opening with seven CRITICAL integrity violations that were fixture
+    // artefacts rather than anything wrong with the product.
+    //
+    // The detector is right, so the seed is what changes. This replays the
+    // real path to each job's status and records it in the same shape the
+    // service uses, which makes the seeded workshop indistinguishable
+    // from one that got there by being worked.
+    await recordLifecycleHistory(tenantId, workOrder.id, status);
 
     if (job.kind === "critical") {
       // Tier 1: liability, and it never decays. Should sit at the top even
