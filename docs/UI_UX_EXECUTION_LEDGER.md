@@ -230,3 +230,59 @@ In production this under-reported the most recent activity. Fixed to end
 at end-of-day, with six regression tests.
 
 Full API suite: 658/658 across 88 suites. Web: 229/229. Linters: 6/6.
+
+---
+
+# CHECKPOINT — session 3
+
+Baseline at this point: **API 664/664 across 89 suites · web 229/229 ·
+6/6 linters · typecheck + build clean.** Preserve this.
+
+## Completed and VERIFIED this session
+
+| Item | Evidence |
+|---|---|
+| Analytics red suites | Root cause was a real product bug, not flakiness: `resolveDateRange` ended at `new Date()`, excluding rows written in the same instant (assignedAt .809 vs range.to .804). Fixed to end-of-day. 6 regression tests. |
+| Service pricing authority | `PriceCatalogService.resolve()/resolveMany()`; `addLine` consults the catalogue; uncatalogued lines refused. 5 tests. |
+| `AddLineDto.unitPrice` optional | HTTP layer could not use the capability; found by browser, not tests. |
+| `Task.serviceKey` | Migration `20260819142532_task_service_key`. `createTask` rejects uncatalogued keys. Completion event carries it. `performedServices()` added. |
+| End-to-end chain | 14/14 in `technician-work.integration.spec.ts`: catalogued service -> task -> technician -> real stock (availableQty 5->4, issuedQty 0->1, StockMovement row) -> part line with Decimal cost/price -> billing at 500.00 from catalogue -> reprice moves next job to 580.00, leaves billed job at 500.00. |
+| Browser proof of chain | Owner priced 450+90; Branch Manager billed with NO price -> 540.00; uncatalogued -> 400 naming the Service Catalog. |
+| Seed lifecycle history | `recordLifecycleHistory()` in seed-demo replays real transitions. Workflow Health 7 CRITICAL -> 0, and the two empty analytics panels now carry real data (Payment 7h, Inventory 6h, Quality 6h; 7 stages). |
+| Work-order dossier (API) | `WorkOrderDossierService` + `GET /branch-manager/work-orders/:id/dossier`. 6 integration tests incl. tenant isolation, branch-scope refusal, cost gating. |
+| Dossier drawer (UI) | `shared/dossier/`. Verified on DEMO-4471: 4 bands, timeline, Escape closes, 375px full-width single-column, scroll contained. |
+
+## Important findings to carry forward
+
+- **`finance.running_invoice.add_line` is ungranted to every role by
+  default** — tenant-owner.md's "Who Can Handle Money" requires the Owner
+  to delegate it. A 403 there is the product working. It was delegated to
+  BRANCH_MANAGER in the **dev database only** to verify billing; a fresh
+  seed will not have it. Consider whether the demo seed should delegate
+  it so billing is demonstrable out of the box.
+- **The parts chain was already correct** (`PartRequest -> IssuedItem ->
+  StockMovement -> WorkOrderPartLine`). Do not rebuild it.
+- **`Task.serviceKey` is not yet populated by the demo seed**, so the
+  dossier shows seeded tasks as "ad-hoc". Wiring the seed's tasks to
+  catalogued services would make the demo show the full chain.
+- Migration must be applied to BOTH databases: `prisma migrate dev` hits
+  dev only; run `corepack pnpm db:test:prepare` for the test DB.
+- `prisma migrate reset` fails while the dev server holds
+  `query_engine-windows.dll.node`. Stop the preview server first.
+
+## NEXT ACTIONS, in order
+
+1. **Reports/charts.** Owner asked specifically for cars-per-day and
+   per-month, plus charts with hover detail. `operations-analytics.service.ts`
+   already buckets by day/week/month via `volume()`; check what
+   `apps/api/src/reports/` exposes to the Owner before adding endpoints.
+   `shared/reports/bar-list/` is the existing chart primitive to build on.
+2. **Wire the dossier into Owner History** (`/owner/audit`) as the "More"
+   button — the drawer component is already shared and takes only a
+   `workOrderId`.
+3. **Seed `serviceKey` on demo tasks** so the demo shows a catalogued
+   service end to end, and consider seeding one priced catalogue entry.
+4. **Workflow Health depth**: issue lifecycle (acknowledge/escalate),
+   grouping by root cause, filters, branch/time scope, drill-down. The
+   detector itself is correct and its data source is now clean.
+5. **Page-by-page capability pass** across all 8 shells.
