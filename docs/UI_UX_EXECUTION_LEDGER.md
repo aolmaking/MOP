@@ -320,3 +320,43 @@ blocker.
 4. Workflow Health depth: issue lifecycle, grouping, filters, scope,
    drill-down.
 5. Page-by-page capability pass across all 8 shells.
+
+## Session 3 (cont. 2) — volume chart, date-only bound, demo chain
+
+Baseline: **API 672/672 across 89 suites · web 229/229 across 47 files ·
+6/6 linters · typecheck clean.**
+
+- `shared/reports/volume-chart/` — CSS column chart, two series per
+  bucket (booked in vs completed). Each column is a real `<button>` with
+  its figures in the accessible name, so the detail is keyboard-reachable
+  and readable without the tooltip; the readout area is reserved so
+  hovering never shifts the chart. Wired into the Owner's Operations tab.
+- **Second date bug, found by the chart rendering empty against real
+  data:** the Reports page sends `to=2026-08-19`, which parses to
+  midnight at the START of the day, so every Owner report silently
+  excluded everything from today. `resolveDateRange` now treats a
+  date-only bound as the whole of that day; a full timestamp is still
+  exact. 3 more regression tests.
+- Demo seed now creates a Service Catalog (3 priced services), links
+  seeded tasks to it via `serviceKey`, and grants the branch manager the
+  money permissions an Owner would delegate on day one.
+
+**Whole chain verified from a fresh seed:** catalogue "Replace front
+brake pads" = 1800 + 400 -> task carries that serviceKey -> dossier reads
+it off the job -> billing it while stating NO price returns 2200.00 ->
+the dossier's money band shows 2200.00.
+
+### Next actions
+
+1. Workflow Health depth: issue lifecycle (acknowledge / investigate /
+   escalate / resolve), grouping by root cause, severity + type + branch
+   + time filters, drill-down to the affected entity, freshness. The
+   detector is correct and its data source is now clean, so this is
+   purely additive. `apps/api/src/workflow-health/workflow-integrity.service.ts`
+   returns `IntegrityIssue[]` -- start by giving an issue an identity and
+   a status so it can be acknowledged.
+2. Hover detail on the remaining report figures (bar-list has no
+   tooltip yet).
+3. Page-by-page capability pass across all 8 shells.
+4. Consider a `WorkOrderPartLine` -> dossier link for parts added
+   outside a part request.
