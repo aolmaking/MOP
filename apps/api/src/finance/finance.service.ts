@@ -20,6 +20,7 @@ import { CapabilityResolutionService } from "../capabilities/capability-resoluti
 import { OperationEventsService } from "../operations/operation-events.service";
 import { BillingService } from "../billing/billing.service";
 import type { LifecycleActor } from "../operations/work-order-lifecycle.service";
+import { PriceCatalogService } from "./price-catalog.service";
 
 export interface AddLineInput {
   readonly tenantId: string;
@@ -27,7 +28,14 @@ export interface AddLineInput {
   readonly name: string;
   readonly itemType: string;
   readonly quantity: number;
-  readonly unitPrice: Money;
+  /**
+   * Optional on purpose. Omit it and the workshop's own Service Catalog
+   * decides the price, looked up by `name`; pass it and the caller's
+   * number wins. Before this was optional the catalogue governed nothing
+   * -- every price in the product was whatever the caller typed, so the
+   * Owner's Pricing page was write-only.
+   */
+  readonly unitPrice?: Money;
   readonly labour?: Money;
 }
 
@@ -83,6 +91,7 @@ export class FinanceService {
     private readonly capabilities: CapabilityResolutionService,
     private readonly events: OperationEventsService,
     private readonly billing: BillingService,
+    private readonly priceCatalog: PriceCatalogService,
   ) {}
 
   /**
@@ -109,6 +118,26 @@ export class FinanceService {
       });
     }
 
+    // The catalogue is consulted only when the caller did not state a
+    // price. A stated price still wins -- a workshop must be able to
+    // charge something one-off without first cataloguing it -- but the
+    // common path now goes through the Owner's own Pricing page, so
+    // changing a price there changes what a job actually bills.
+    const resolved =
+      input.unitPrice === undefined ? await this.priceCatalog.resolve(input.tenantId, input.name) : null;
+
+    if (input.unitPrice === undefined && !resolved) {
+      throw new BadRequestException({
+        code: "price_not_in_catalog",
+        message: `"${input.name}" has no price in this workshop's Service Catalog. Add it under Pricing, or pass a price for this line.`,
+      });
+    }
+
+    const unitPrice = input.unitPrice ?? (resolved as { unitPrice: Money }).unitPrice;
+    // A catalogued labour price applies only when the caller left labour
+    // unstated too; an explicit zero is a decision, not an omission.
+    const labour = input.labour ?? resolved?.laborPrice ?? ZERO;
+
     await this.prisma.$transaction(async (tx) => {
       const running = await tx.runningInvoice.upsert({
         where: { workOrderId: input.workOrderId },
@@ -119,9 +148,7 @@ export class FinanceService {
 
       // The line total is computed by the shared module, not here, so one
       // rounding rule governs quotes, running totals and invoices alike.
-      const computed = invoiceTotal([
-        { unitPrice: input.unitPrice, quantity: input.quantity, labour: input.labour ?? ZERO },
-      ]);
+      const computed = invoiceTotal([{ unitPrice, quantity: input.quantity, labour }]);
 
       await tx.runningInvoiceLine.create({
         data: {
@@ -130,8 +157,8 @@ export class FinanceService {
           name: input.name,
           itemType: input.itemType,
           quantity: input.quantity,
-          unitPrice: input.unitPrice,
-          laborPrice: input.labour ?? ZERO,
+          unitPrice,
+          laborPrice: labour,
           total: computed.total,
           addedById: actor.accountId,
         },

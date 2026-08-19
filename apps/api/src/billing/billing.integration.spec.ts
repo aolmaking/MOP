@@ -38,15 +38,17 @@ import { CustomerSafeProjectionService } from "../operations/customer-safe-proje
 import { AuditService } from "../audit/audit.service";
 import { BillingService } from "./billing.service";
 import { GenericBillingAdapter } from "./generic-billing-adapter.service";
+import { PriceCatalogService } from "../finance/price-catalog.service";
 import type { PrismaService } from "../database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
+const priceCatalog = new PriceCatalogService(asService, new AuditService(asService));
 
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
 const capabilities = new CapabilityResolutionService(asService);
 const genericBilling = new BillingService(asService, new GenericBillingAdapter());
-const financeWithGeneric = new FinanceService(asService, capabilities, events, genericBilling);
+const financeWithGeneric = new FinanceService(asService, capabilities, events, genericBilling, priceCatalog);
 
 const ACTOR = { accountId: "cashier-1", displayName: "Cashier", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `bill-${Date.now()}`;
@@ -270,7 +272,7 @@ class TestOnlyAdapter implements BillingCountryAdapter {
 describe("the adapter seam is provably swappable", () => {
   it("produces a differently-shaped document from a different adapter, without the amount changing", async () => {
     const testBilling = new BillingService(asService, new GenericBillingAdapter(), new TestOnlyAdapter());
-    const financeWithTestAdapter = new FinanceService(asService, capabilities, events, testBilling);
+    const financeWithTestAdapter = new FinanceService(asService, capabilities, events, testBilling, priceCatalog);
 
     const job = await makeJob(shop);
     await financeWithTestAdapter.addLine(

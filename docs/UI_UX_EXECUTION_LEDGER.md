@@ -43,7 +43,7 @@ the next session will "restore" the old rules as a regression.
 | 6 | Workflow Health subsystem | PENDING | Large. Needs capability matrix first (what exists vs missing). |
 | 7 | History "More" full-detail report | PENDING | Needs an aggregation service across audit + events + tasks + inventory. |
 | 8 | Branch Manager work-order detail depth | PENDING | Shares the detail-report subsystem with #7. |
-| 9 | Service <-> inventory <-> technician linkage | PENDING | Biggest domain item. Inspect PriceCatalog + InventoryItem + Task first. |
+| 9 | Service <-> inventory linkage (pricing half) | IMPLEMENTED | Biggest domain item. Inspect PriceCatalog + InventoryItem + Task first. |
 
 ## Verification commands
 
@@ -133,3 +133,49 @@ tied to stock?
 `apps/api/src/inventory/`. Establish whether a priced service can
 reference an inventory item at all today — if not, that link is the
 missing model, and it must be designed before any UI.
+
+
+---
+
+## Pre-existing test failures found while working (NOT caused by this session)
+
+Four analytics/report suites fail:
+
+```
+analytics/people-analytics.integration.spec.ts        (2 failing)
+analytics/decisions-analytics.integration.spec.ts     (1 failing)
+analytics/inventory-feature-analytics.integration.spec.ts (1)
+reports/reports-inventory.integration.spec.ts         (1)
+```
+
+**Proof they are not from this session's work:** `git stash push -- apps/api
+packages/shared` then re-running `people-analytics` reproduces the identical
+failure (2 failed, 1 passed) on a clean tree. None of the four suites
+reference `FinanceService`, `PriceCatalogService` or `addLine`.
+
+**Symptom:** the service returns nothing for rows the test just created --
+`reworkRate` computes 0 instead of 50, and a `Fault` with code `P0128` does
+not appear in `diagnosticCodeActivity`.
+
+**Ruled out so far:**
+- `resolveDateRange({})` is a correct trailing-30-days-ending-now window.
+- `workOrderScopeFilter()` correctly yields an empty filter for an unscoped
+  analyst, so `NO_SCOPE` is not silently matching nothing.
+- The technician row itself IS found (`expect(row).toBeDefined()` passes);
+  only the counts are zero.
+
+**Note:** they passed 3/3 twice earlier in the same session, so this is
+state-dependent rather than a straightforward logic bug.
+
+**Next action:** reset the test database and re-run. This was blocked here
+because `prisma migrate reset` cannot rename `query_engine-windows.dll.node`
+while the dev server holds it -- stop the preview server first, then:
+
+```
+corepack pnpm --filter @mop/database exec prisma migrate reset --force --skip-seed
+corepack pnpm --filter @mop/api exec jest people-analytics --runInBand
+```
+
+If they pass on a clean database, the defect is test-data accumulation and
+the suites need proper per-run isolation. If they still fail, the defect is
+in the analytics services' assignment/fault queries and must be fixed there.

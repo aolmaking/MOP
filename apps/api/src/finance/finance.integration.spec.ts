@@ -20,14 +20,16 @@ import { CustomerSafeProjectionService } from "../operations/customer-safe-proje
 import { AuditService } from "../audit/audit.service";
 import { BillingService } from "../billing/billing.service";
 import { GenericBillingAdapter } from "../billing/generic-billing-adapter.service";
+import { PriceCatalogService } from "./price-catalog.service";
 import type { PrismaService } from "../database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
+const priceCatalog = new PriceCatalogService(asService, new AuditService(asService));
 
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
 const billing = new BillingService(asService, new GenericBillingAdapter());
-const finance = new FinanceService(asService, new CapabilityResolutionService(asService), events, billing);
+const finance = new FinanceService(asService, new CapabilityResolutionService(asService), events, billing, priceCatalog);
 
 const ACTOR = { accountId: "cashier-1", displayName: "Cashier", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `fin-${Date.now()}`;
@@ -616,4 +618,99 @@ describe("compliantBlocked", () => {
     const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR);
     return settlement.invoiceId;
   }
+});
+
+/**
+ * The Service Catalog governs money.
+ *
+ * Before PriceCatalogService.resolve() existed, PriceCatalogEntry was
+ * written by the Owner's Pricing page and read by nothing: addLine took
+ * whatever unitPrice the caller passed, so pricing "Replace battery" at
+ * 450 changed no number anywhere and the figure was retyped by hand at
+ * the point of sale. These tests are what keep the catalogue connected.
+ */
+describe("the Service Catalog is the source of truth for a line's price", () => {
+  const CATALOG_ACTOR = { accountId: "owner-1", displayName: "Owner" };
+
+  it("prices a line from the catalogue when the caller states no price", async () => {
+    await priceCatalog.setPrice(
+      paid.tenantId,
+      { itemKey: "Replace battery", itemType: "SERVICE", unitPrice: 450, laborPrice: 50 },
+      CATALOG_ACTOR,
+    );
+
+    const job = await makeJob(paid);
+    const total = await finance.addLine(
+      { tenantId: paid.tenantId, workOrderId: job, name: "Replace battery", itemType: "SERVICE", quantity: 1 },
+      ACTOR,
+    );
+
+    // 450 unit + 50 labour, straight off the Owner's Pricing page.
+    expect(total.lines[0].total).toBe("500.00");
+  });
+
+  it("follows a price change, so editing Pricing changes what the next job bills", async () => {
+    await priceCatalog.setPrice(
+      paid.tenantId,
+      { itemKey: "Oil change", itemType: "SERVICE", unitPrice: 200 },
+      CATALOG_ACTOR,
+    );
+    await priceCatalog.setPrice(
+      paid.tenantId,
+      { itemKey: "Oil change", itemType: "SERVICE", unitPrice: 260 },
+      CATALOG_ACTOR,
+    );
+
+    const job = await makeJob(paid);
+    const total = await finance.addLine(
+      { tenantId: paid.tenantId, workOrderId: job, name: "Oil change", itemType: "SERVICE", quantity: 1 },
+      ACTOR,
+    );
+
+    // The superseded 200 row is still on the table, closed. Only the open
+    // row may price a new line.
+    expect(total.lines[0].total).toBe("260.00");
+  });
+
+  it("lets an explicit price win, so a one-off charge does not need cataloguing first", async () => {
+    await priceCatalog.setPrice(
+      paid.tenantId,
+      { itemKey: "Diagnostics", itemType: "SERVICE", unitPrice: 300 },
+      CATALOG_ACTOR,
+    );
+
+    const job = await makeJob(paid);
+    const total = await finance.addLine(
+      { tenantId: paid.tenantId, workOrderId: job, name: "Diagnostics", itemType: "SERVICE", quantity: 1, unitPrice: "120.00" },
+      ACTOR,
+    );
+
+    expect(total.lines[0].total).toBe("120.00");
+  });
+
+  it("refuses an uncatalogued line rather than silently billing zero", async () => {
+    const job = await makeJob(paid);
+    await expect(
+      finance.addLine(
+        { tenantId: paid.tenantId, workOrderId: job, name: "Never priced", itemType: "SERVICE", quantity: 1 },
+        ACTOR,
+      ),
+    ).rejects.toThrow(/Service Catalog/);
+  });
+
+  it("will not price one workshop's line from another workshop's catalogue", async () => {
+    await priceCatalog.setPrice(
+      paid.tenantId,
+      { itemKey: "Wheel alignment", itemType: "SERVICE", unitPrice: 180 },
+      CATALOG_ACTOR,
+    );
+
+    const job = await makeJob(free);
+    await expect(
+      finance.addLine(
+        { tenantId: free.tenantId, workOrderId: job, name: "Wheel alignment", itemType: "SERVICE", quantity: 1 },
+        ACTOR,
+      ),
+    ).rejects.toThrow();
+  });
 });
