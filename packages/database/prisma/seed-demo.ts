@@ -84,7 +84,9 @@ async function main() {
   await ensureServiceCatalog(tenant.id);
   await clearDemoWork(tenant.id);
   await createStuckJobs(tenant.id, branch.id, technician.staffUserId);
+  await ensurePartsCatalog(tenant.id);
   await createFinancialHistory(tenant.id, branch.id);
+  await issuePartsToFinishedJobs(tenant.id);
 
   console.log("\nDemo data ready.\n");
   console.log(`  Sign in at http://localhost:4200/login`);
@@ -481,6 +483,14 @@ async function clearDemoWork(tenantId: string) {
     await prisma.invoiceLine.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
     await prisma.invoice.deleteMany({ where: { id: { in: invoiceIds } } });
   }
+
+  // StockMovement points at a work order through a plain referenceId
+  // string, not a foreign key, so nothing cascades these away. Left
+  // behind they accumulate on every re-seed and the issue history stops
+  // matching the part lines it is supposed to explain.
+  await prisma.stockMovement.deleteMany({
+    where: { tenantId, referenceType: "WorkOrder", referenceId: { in: workOrderIds } },
+  });
 
   await prisma.workOrder.deleteMany({ where: { id: { in: workOrderIds } } });
   await prisma.assetOwnershipHistory.deleteMany({ where: { assetId: { in: assetIds } } });
@@ -926,6 +936,225 @@ async function createFinancialHistory(tenantId: string, branchId: string): Promi
       });
     }
   }
+}
+
+/**
+ * The workshop's parts catalogue, its stock, and the parts those finished
+ * jobs actually consumed.
+ *
+ * Without this the demo workshop owns two warehouses and nothing to put
+ * in them, so Reports -> Inventory has no profitability, no dead stock
+ * and no stock risk to show, and the Inventory Manager's whole shell is
+ * empty. Every part therefore carries a real cost as well as a selling
+ * price, because margin is the question that section exists to answer and
+ * a catalogue without cost can only report revenue.
+ *
+ * The three shapes here are deliberate, and each one makes a different
+ * panel say something:
+ *
+ *   - fast movers, issued often, so stock risk has a real velocity to
+ *     divide by rather than dividing by zero
+ *   - a slow, expensive item held in stock and never sold, so dead stock
+ *     is not an empty list
+ *   - one item stocked below its own critical threshold, so the low-stock
+ *     signal fires on a real balance instead of being asserted in a test
+ *     and never seen
+ */
+const DEMO_PARTS: readonly {
+  sku: string;
+  name: string;
+  sellingPrice: number;
+  cost: number;
+  stock: number;
+  lowStockThreshold: number;
+  criticalStockThreshold: number;
+  /** How many of these each finished job that uses parts consumes. */
+  perJob: number;
+}[] = [
+  { sku: "BRK-PAD-F", name: "Front brake pad set", sellingPrice: 1800, cost: 1150, stock: 24, lowStockThreshold: 10, criticalStockThreshold: 4, perJob: 1 },
+  { sku: "ALT-12V", name: "Alternator 12V", sellingPrice: 2200, cost: 1600, stock: 6, lowStockThreshold: 4, criticalStockThreshold: 2, perJob: 1 },
+  { sku: "OIL-5W30", name: "Engine oil 5W-30 (litre)", sellingPrice: 120, cost: 78, stock: 60, lowStockThreshold: 20, criticalStockThreshold: 8, perJob: 4 },
+  // Stocked below its own critical threshold, on purpose.
+  { sku: "FLT-AIR", name: "Air filter", sellingPrice: 260, cost: 150, stock: 1, lowStockThreshold: 12, criticalStockThreshold: 5, perJob: 1 },
+  // Never issued: this is the dead stock the report should surface.
+  { sku: "TRB-KIT", name: "Turbocharger rebuild kit", sellingPrice: 9800, cost: 7400, stock: 2, lowStockThreshold: 1, criticalStockThreshold: 1, perJob: 0 },
+];
+
+/**
+ * The one part every job uses, and the only one actually running out.
+ *
+ * Stock risk divides remaining stock by recent consumption, so nothing
+ * appears there unless something is genuinely consumed often and held
+ * thinly -- with only the rotated parts above, every item had months of
+ * runway and the panel was correctly, but uselessly, empty.
+ *
+ * A brake fluid top-up on every service is both the realistic shape and
+ * the one that gives that panel something true to show.
+ */
+const DEMO_CONSUMABLE = {
+  sku: "FLD-DOT4",
+  name: "Brake fluid DOT 4 (500ml)",
+  sellingPrice: 180,
+  cost: 95,
+  stock: 15,
+  lowStockThreshold: 6,
+  criticalStockThreshold: 3,
+  perJob: 1,
+};
+
+async function ensurePartsCatalog(tenantId: string): Promise<void> {
+  const warehouse = await prisma.warehouse.findFirst({ where: { tenantId }, orderBy: { code: "asc" } });
+  if (!warehouse) return;
+
+  for (const part of [...DEMO_PARTS, DEMO_CONSUMABLE]) {
+    const existing = await prisma.inventoryItem.findFirst({ where: { tenantId, sku: part.sku } });
+    if (existing) {
+      // Put the shelf back how it started. Without this the balance only
+      // ever falls -- each re-seed issues more parts against stock the
+      // previous run already spent, and after a few runs the warehouse
+      // is empty and the reports go quiet again.
+      await prisma.warehouseStockBalance.updateMany({
+        where: { tenantId, inventoryItemId: existing.id, warehouseId: warehouse.id },
+        data: { availableQty: part.stock, issuedQty: 0 },
+      });
+      continue;
+    }
+
+    const item = await prisma.inventoryItem.create({
+      data: {
+        tenantId,
+        sku: part.sku,
+        name: part.name,
+        itemType: "PART",
+        compatibleCategories: ["CARS"],
+        lowStockThreshold: part.lowStockThreshold,
+        criticalStockThreshold: part.criticalStockThreshold,
+        sellingPrice: part.sellingPrice.toFixed(2),
+        cost: part.cost.toFixed(2),
+        stockTracked: true,
+      },
+    });
+
+    await prisma.warehouseStockBalance.create({
+      data: { tenantId, inventoryItemId: item.id, warehouseId: warehouse.id, availableQty: part.stock },
+    });
+
+    // The receipt that put it there. A balance with no movement behind it
+    // is stock that appeared from nowhere, which is exactly the shape
+    // Workflow Health is built to notice.
+    await prisma.stockMovement.create({
+      data: {
+        tenantId,
+        inventoryItemId: item.id,
+        warehouseId: warehouse.id,
+        type: "SUPPLIER_RECEIPT",
+        quantity: part.stock,
+        beforeQty: 0,
+        afterQty: part.stock,
+        actorId: "seed-demo",
+        createdAt: hoursAgo(90 * 24),
+      },
+    });
+  }
+}
+
+/**
+ * Puts real parts on the finished jobs, and takes them out of stock.
+ *
+ * Both halves matter. A part line with no stock movement bills a customer
+ * for something the warehouse never gave up, and that mismatch is a
+ * genuine integrity fault rather than a cosmetic one.
+ */
+async function issuePartsToFinishedJobs(tenantId: string): Promise<void> {
+  const warehouse = await prisma.warehouse.findFirst({ where: { tenantId }, orderBy: { code: "asc" } });
+  if (!warehouse) return;
+
+  const jobs = await prisma.workOrder.findMany({
+    where: { tenantId, status: "CLOSED", asset: { plateNumber: { startsWith: "DEMO-" } } },
+    select: { id: true, closedAt: true },
+    orderBy: { closedAt: "asc" },
+  });
+
+  const consumable = DEMO_PARTS.filter((part) => part.perJob > 0);
+
+  for (const [index, job] of jobs.entries()) {
+    // Rotated rather than random so a re-seed produces the same picture
+    // and a demo does not change shape between two runs of the script.
+    // Every job gets the consumable; the rotated part is on top of it.
+    await issuePart(tenantId, warehouse.id, job, DEMO_CONSUMABLE);
+
+    const part = consumable[index % consumable.length]!;
+    await issuePart(tenantId, warehouse.id, job, part);
+  }
+}
+
+interface DemoPart {
+  sku: string;
+  name: string;
+  sellingPrice: number;
+  cost: number;
+  perJob: number;
+}
+
+/**
+ * One part onto one job, and out of stock in the same breath.
+ *
+ * Refuses rather than goes negative: a seed that issues stock the
+ * warehouse does not hold produces exactly the balance/movement mismatch
+ * Workflow Health exists to catch, and a demo that opens with a fabricated
+ * integrity fault teaches the wrong thing about the product.
+ */
+async function issuePart(
+  tenantId: string,
+  warehouseId: string,
+  job: { id: string; closedAt: Date | null },
+  part: DemoPart,
+): Promise<void> {
+  const item = await prisma.inventoryItem.findFirst({ where: { tenantId, sku: part.sku } });
+  if (!item) return;
+
+  const balance = await prisma.warehouseStockBalance.findFirst({
+    where: { tenantId, inventoryItemId: item.id, warehouseId },
+  });
+  if (!balance || balance.availableQty < part.perJob) return;
+
+  const at = job.closedAt ?? new Date();
+
+  await prisma.workOrderPartLine.create({
+    data: {
+      tenantId,
+      workOrderId: job.id,
+      provenance: "INVENTORY",
+      inventoryItemId: item.id,
+      name: part.name,
+      quantity: part.perJob,
+      sellingPrice: part.sellingPrice.toFixed(2),
+      cost: part.cost.toFixed(2),
+      addedById: "seed-demo",
+      createdAt: at,
+    },
+  });
+
+  const after = balance.availableQty - part.perJob;
+  await prisma.warehouseStockBalance.update({
+    where: { id: balance.id },
+    data: { availableQty: after, issuedQty: { increment: part.perJob } },
+  });
+  await prisma.stockMovement.create({
+    data: {
+      tenantId,
+      inventoryItemId: item.id,
+      warehouseId,
+      type: "ISSUE",
+      quantity: part.perJob,
+      beforeQty: balance.availableQty,
+      afterQty: after,
+      referenceType: "WorkOrder",
+      referenceId: job.id,
+      actorId: "seed-demo",
+      createdAt: at,
+    },
+  });
 }
 
 main()

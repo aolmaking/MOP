@@ -21,6 +21,12 @@ export class InventorySection {
   protected readonly profitableItems = computed<BarListItem[]>(() =>
     this.data()
       .partProfitability.filter((r) => r.profit !== null)
+      // The endpoint orders by revenue, which is right for a general read
+      // but wrong under a heading that says "most profitable": it took the
+      // top ten by revenue and then drew them by profit, so a part earning
+      // 1,950 could sit below one earning 1,800, and a genuinely
+      // high-margin part could be cut before it was ever ranked.
+      .sort((a, b) => b.profit! - a.profit!)
       .slice(0, 10)
       .map((row) => ({
         label: row.name,
