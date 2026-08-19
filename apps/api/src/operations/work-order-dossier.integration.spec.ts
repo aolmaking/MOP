@@ -238,6 +238,53 @@ describe("WorkOrderDossierService", () => {
     await prisma.tenant.delete({ where: { id: other.id } });
   });
 
+  it("links a part line back to the PartRequest it was issued against, in both the parts list and the timeline", async () => {
+    const request = await prisma.partRequest.create({
+      data: {
+        tenantId,
+        workOrderId,
+        inventoryItemId: itemId,
+        requestedById: technicianId,
+        quantity: 1,
+        status: "ISSUED",
+      },
+    });
+
+    const requestedLine = await prisma.workOrderPartLine.create({
+      data: {
+        tenantId,
+        workOrderId,
+        provenance: "INVENTORY",
+        inventoryItemId: itemId,
+        name: "Brake pad set (requested)",
+        quantity: 1,
+        sellingPrice: 900,
+        cost: 540,
+        addedById: "staff-1",
+        partRequestId: request.id,
+      },
+    });
+
+    const d = await dossier.build(tenantId, workOrderId, { canViewCost: true });
+
+    const requested = d.parts.find((p) => p.name === "Brake pad set (requested)");
+    expect(requested?.partRequestId).toBe(request.id);
+    // The line seeded in beforeAll has no PartRequest -- absent, not a
+    // fabricated placeholder id, so the UI can tell "no request" from
+    // "request not loaded".
+    const direct = d.parts.find((p) => p.name === "Brake pad set");
+    expect(direct?.partRequestId).toBeNull();
+
+    const timelineEntry = d.timeline.find(
+      (t) => t.kind === "PART" && t.summary.includes("Brake pad set (requested)"),
+    );
+    expect(timelineEntry?.summary).toContain("from parts request");
+    expect(timelineEntry?.detail.partRequestId).toBe(request.id);
+
+    await prisma.workOrderPartLine.delete({ where: { id: requestedLine.id } });
+    await prisma.partRequest.delete({ where: { id: request.id } });
+  });
+
   it("counts prior visits for the vehicle, excluding the job being read", async () => {
     const earlier = await prisma.workOrder.create({
       data: { tenantId, branchId: branchA, assetId, customerId, status: "CLOSED", closedAt: new Date() },

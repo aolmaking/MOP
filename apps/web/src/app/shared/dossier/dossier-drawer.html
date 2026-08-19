@@ -108,6 +108,9 @@
                   <span class="row-main">{{ p.name }} <span class="qty">×{{ p.quantity }}</span></span>
                   <span class="row-meta">
                     <span class="chip">{{ label(p.provenance) }}</span>
+                    @if (p.partRequestId) {
+                      <span class="chip" [title]="'From parts request ' + p.partRequestId">from parts request</span>
+                    }
                     @if (!p.workshopWarranted) {
                       <span class="chip chip--warn">not warranted</span>
                     }

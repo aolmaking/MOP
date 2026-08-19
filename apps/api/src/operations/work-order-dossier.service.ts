@@ -19,6 +19,8 @@ export interface DossierPartLine {
   readonly cost: string | null;
   readonly workshopWarranted: boolean;
   readonly taskId: string | null;
+  /** Null for a part with no PartRequest -- e.g. customer-supplied. */
+  readonly partRequestId: string | null;
 }
 
 export interface DossierMoney {
@@ -131,6 +133,7 @@ export class WorkOrderDossierService {
           cost: true,
           workshopWarranted: true,
           taskId: true,
+          partRequestId: true,
           createdAt: true,
         },
         orderBy: { createdAt: "asc" },
@@ -206,6 +209,7 @@ export class WorkOrderDossierService {
         cost: options.canViewCost ? (p.cost === null ? null : p.cost.toString()) : null,
         workshopWarranted: p.workshopWarranted,
         taskId: p.taskId,
+        partRequestId: p.partRequestId,
       })),
       stockMovements: stockMovements.map((m) => ({
         itemId: m.inventoryItemId,
@@ -275,7 +279,7 @@ export class WorkOrderDossierService {
     events: readonly { eventKey: string; actorId: string; createdAt: Date; payload: unknown }[],
     inspections: readonly { id: string; type: string; createdAt: Date; technicianId: string }[],
     faults: readonly { code: string | null; description: string; severity: string; createdAt: Date }[],
-    parts: readonly { name: string; quantity: number; createdAt: Date }[],
+    parts: readonly { name: string; quantity: number; partRequestId: string | null; createdAt: Date }[],
     movements: readonly { type: string; quantity: number; createdAt: Date }[],
   ): DossierTimelineEntry[] {
     const entries: DossierTimelineEntry[] = [];
@@ -335,9 +339,11 @@ export class WorkOrderDossierService {
       entries.push({
         at: p.createdAt.toISOString(),
         kind: "PART",
-        summary: `Part added: ${p.name} x${p.quantity}`,
+        summary: p.partRequestId
+          ? `Part added: ${p.name} x${p.quantity} (from parts request)`
+          : `Part added: ${p.name} x${p.quantity}`,
         actorId: null,
-        detail: {},
+        detail: { partRequestId: p.partRequestId },
       });
     }
 

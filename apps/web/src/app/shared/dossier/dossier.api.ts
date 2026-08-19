@@ -21,6 +21,8 @@ export interface DossierPartLine {
   readonly cost: string | null;
   readonly workshopWarranted: boolean;
   readonly taskId: string | null;
+  /** Null for a part with no PartRequest -- e.g. customer-supplied. */
+  readonly partRequestId: string | null;
 }
 
 export interface DossierMoney {
