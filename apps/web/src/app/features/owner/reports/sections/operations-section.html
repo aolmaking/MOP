@@ -10,6 +10,14 @@
     />
   </div>
 
+  <!-- Throughput leads: "how many cars did we do" is the question asked
+       before any breakdown of them. -->
+  <section class="panel">
+    <h2 class="panel-title">Vehicles in and out</h2>
+    <p class="panel-hint">Booked in against completed, over the selected period.</p>
+    <app-volume-chart [points]="data().volume" [granularity]="data().granularity" />
+  </section>
+
   <div class="grid-2">
     <section class="panel">
       <h2 class="panel-title">Status distribution</h2>

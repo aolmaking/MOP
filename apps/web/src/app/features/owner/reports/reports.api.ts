@@ -64,8 +64,17 @@ export interface TechnicianWorkloadRow {
   readonly reworkRate: number | null;
 }
 
+export interface VolumePoint {
+  readonly bucket: string;
+  readonly created: number;
+  readonly closed: number;
+}
+
 export interface OperationsReport {
   readonly range: { from: string; to: string };
+  readonly volume: readonly VolumePoint[];
+  readonly volumeTotals: { created: number; closed: number };
+  readonly granularity: 'day' | 'week' | 'month';
   readonly statusDistribution: readonly StatusDistributionRow[];
   readonly averageTimeInStatus: readonly AverageTimeInStatusRow[];
   readonly branchComparison: readonly BranchOperationsRow[];

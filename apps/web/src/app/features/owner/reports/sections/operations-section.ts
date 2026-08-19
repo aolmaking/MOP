@@ -1,6 +1,7 @@
 import { Component, computed, input } from '@angular/core';
 import { KpiCard } from '../../../../shared/reports/kpi-card/kpi-card';
 import { BarList, type BarListItem } from '../../../../shared/reports/bar-list/bar-list';
+import { VolumeChart } from '../../../../shared/reports/volume-chart/volume-chart';
 import type { OperationsReport } from '../reports.api';
 
 /**
@@ -12,7 +13,7 @@ import type { OperationsReport } from '../reports.api';
  */
 @Component({
   selector: 'app-operations-section',
-  imports: [KpiCard, BarList],
+  imports: [KpiCard, BarList, VolumeChart],
   templateUrl: './operations-section.html',
   styleUrl: './operations-section.css',
 })

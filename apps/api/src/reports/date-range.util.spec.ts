@@ -49,3 +49,31 @@ describe("resolveDateRange", () => {
     expect(prev.from.toISOString()).toBe("2026-03-22T00:00:00.000Z");
   });
 });
+
+describe("resolveDateRange -- a date-only bound covers the whole day", () => {
+  it("treats `to=YYYY-MM-DD` as the end of that day, not its first instant", () => {
+    // The Owner's Reports page sends exactly this shape. Parsed naively it
+    // is midnight at the START of the day, so everything that happened
+    // during the day fell outside the report that claimed to include it.
+    const { to } = resolveDateRange({ to: "2026-08-19" });
+
+    expect(to.getFullYear()).toBe(2026);
+    expect(to.getMonth()).toBe(7);
+    expect(to.getDate()).toBe(19);
+    expect(to.getHours()).toBe(23);
+    expect(to.getMinutes()).toBe(59);
+  });
+
+  it("includes an event from the middle of the closing day", () => {
+    const { from, to } = resolveDateRange({ from: "2026-08-01", to: "2026-08-19" });
+    const duringClosingDay = new Date("2026-08-19T14:30:00");
+
+    expect(duringClosingDay >= from).toBe(true);
+    expect(duringClosingDay <= to).toBe(true);
+  });
+
+  it("still honours a full timestamp exactly", () => {
+    const exact = "2026-08-19T10:00:00.000Z";
+    expect(resolveDateRange({ to: exact }).to.toISOString()).toBe(exact);
+  });
+});

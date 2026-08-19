@@ -1,0 +1,184 @@
+/*
+ * Volume over time.
+ *
+ * Two bars per bucket -- booked in and completed -- because a workshop
+ * taking in more than it finishes is the pattern worth catching early,
+ * and neither series shows it alone.
+ *
+ * Colour is spent carefully: arrivals use the identity red, completions
+ * the desaturated success green, and nothing else in the chart carries
+ * colour at all, so the two series are the only thing being compared.
+ */
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.key strong {
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+
+/* The swatch is what ties a legend entry to its bars. */
+.key::before {
+  content: '';
+  inline-size: 0.75rem;
+  block-size: 0.75rem;
+  border-radius: var(--radius-sm);
+}
+
+.key--created::before {
+  background: var(--brand);
+}
+
+.key--closed::before {
+  background: var(--success);
+}
+
+.plot {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-1);
+  block-size: 11rem;
+  padding: var(--space-2) 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.col {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 2.25rem;
+  block-size: 100%;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--easing);
+}
+
+.col:hover,
+.col--active {
+  background: var(--surface);
+}
+
+.col:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  inline-size: 100%;
+  flex: 1;
+}
+
+.bar {
+  inline-size: 45%;
+  min-block-size: 2px;
+  border-start-start-radius: var(--radius-sm);
+  border-start-end-radius: var(--radius-sm);
+  /* Grows from the baseline on entry. Height is animated once, on load,
+     rather than on every hover -- hover changes background only, which
+     costs a paint and never a layout. */
+  transform-origin: bottom;
+  animation: bar-grow var(--duration-slow) var(--ease-out);
+}
+
+.bar--created {
+  background: var(--brand);
+}
+
+.bar--closed {
+  background: var(--success);
+}
+
+@keyframes bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.tick {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.readout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-block-size: 2.25rem;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+/* Reserved even when idle, so hovering a column never shifts the chart
+   above it -- a readout that pushes the plot is unusable with a mouse. */
+.readout--idle {
+  color: var(--text-faint);
+}
+
+.readout-when {
+  font-weight: 600;
+}
+
+.readout-figure {
+  font-family: var(--font-mono);
+}
+
+.readout-figure--created {
+  color: var(--brand-text);
+}
+
+.readout-figure--closed {
+  color: var(--success);
+}
+
+.empty {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 560px) {
+  .plot {
+    block-size: 8rem;
+  }
+
+  /* Below this the ticks collide; the readout still names the period. */
+  .tick {
+    display: none;
+  }
+}

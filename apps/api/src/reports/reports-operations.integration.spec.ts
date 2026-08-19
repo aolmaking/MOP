@@ -205,6 +205,26 @@ describe("ReportsOperationsService -- volume over time", () => {
     expect(monthly.volumeTotals.created).toBe(daily.volumeTotals.created);
   });
 
+  it("states the granularity it actually bucketed by, and truncates to it", async () => {
+    const monthly = await operations.build(tenantId, { groupBy: "month" });
+
+    expect(monthly.granularity).toBe("month");
+    // Every month bucket must land on the first of a month at midnight --
+    // proof the series really is monthly and not day buckets relabelled.
+    for (const point of monthly.volume) {
+      const d = new Date(point.bucket);
+      expect(d.getUTCDate()).toBe(1);
+    }
+  });
+
+  it("reports day when the caller asks for something it does not support", async () => {
+    // resolveGranularity falls back to day. The response must say so,
+    // otherwise a chart would label day buckets with the caller's word.
+    const report = await operations.build(tenantId, { groupBy: "fortnight" });
+
+    expect(report.granularity).toBe("day");
+  });
+
   it("never counts another workshop's vehicles", async () => {
     const otherPlan = await prisma.plan.create({
       data: {

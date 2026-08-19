@@ -1,7 +1,13 @@
 import { Injectable } from "@nestjs/common";
 import { Prisma } from "@mop/database";
 import { PrismaService } from "../database/prisma.service";
-import { resolveDateRange, resolveGranularity, safeDivide, type ReportQueryParams } from "./date-range.util";
+import {
+  resolveDateRange,
+  resolveGranularity,
+  safeDivide,
+  type ReportGranularity,
+  type ReportQueryParams,
+} from "./date-range.util";
 import { averageMsByStatus, computeStatusDurations } from "./lifecycle-duration.util";
 
 export interface StatusDistributionRow {
@@ -54,6 +60,13 @@ export interface OperationsReport {
   readonly volume: readonly VolumePoint[];
   /** Totals for the whole selected range, so the headline needs no client-side summing. */
   readonly volumeTotals: { created: number; closed: number };
+  /**
+   * The bucketing actually used. Stated by the server rather than assumed
+   * by the client, because an unrecognised `groupBy` falls back to day --
+   * a chart that labelled those buckets as months would be reporting a
+   * granularity the figures do not have.
+   */
+  readonly granularity: ReportGranularity;
   readonly statusDistribution: readonly StatusDistributionRow[];
   readonly averageTimeInStatus: readonly AverageTimeInStatusRow[];
   readonly branchComparison: readonly BranchOperationsRow[];
@@ -78,6 +91,7 @@ export class ReportsOperationsService {
 
   async build(tenantId: string, params: ReportQueryParams): Promise<OperationsReport> {
     const range = resolveDateRange(params);
+    const granularity = resolveGranularity(params.groupBy);
     const branchFilter = params.branchId ? { branchId: params.branchId } : {};
 
     const [
@@ -101,7 +115,7 @@ export class ReportsOperationsService {
         where: { tenantId, ...branchFilter, status: "CANCELLED", updatedAt: { gte: range.from, lte: range.to } },
       }),
       this.prisma.workOrder.count({ where: { tenantId, ...branchFilter, createdAt: { gte: range.from, lte: range.to } } }),
-      this.volume(tenantId, range, resolveGranularity(params.groupBy), params.branchId),
+      this.volume(tenantId, range, granularity, params.branchId),
     ]);
 
     return {
@@ -115,6 +129,7 @@ export class ReportsOperationsService {
       cancelledJobs,
       cancellationRate: safeDivide(cancelledJobs, totalInRange) * 100,
       volume,
+      granularity,
       volumeTotals: volume.reduce(
         (acc, p) => ({ created: acc.created + p.created, closed: acc.closed + p.closed }),
         { created: 0, closed: 0 },

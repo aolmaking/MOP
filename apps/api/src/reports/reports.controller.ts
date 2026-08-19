@@ -46,9 +46,13 @@ export class ReportsController {
     @Query("from") from?: string,
     @Query("to") to?: string,
     @Query("branchId") branchId?: string,
+    // Operations buckets its volume series by this exactly as Financial
+    // buckets its trend. Omitting it here silently pinned the Owner's
+    // day/week/month control to day on this tab only.
+    @Query("groupBy") groupBy?: string,
   ) {
     const tenantId = await this.require(session);
-    return this.wrap(() => this.operations.build(tenantId, { from, to, branchId }));
+    return this.wrap(() => this.operations.build(tenantId, { from, to, branchId, groupBy }));
   }
 
   @Get("financial")

@@ -21,6 +21,11 @@ export interface ReportQueryParams {
 
 const DEFAULT_WINDOW_DAYS = 30;
 
+/** `2026-08-19` rather than `2026-08-19T14:00:00Z`. */
+function isDateOnly(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value.trim());
+}
+
 /** Last representable instant of the given local day. */
 function endOfDay(d: Date): Date {
   const end = new Date(d);
@@ -51,7 +56,15 @@ export function resolveDateRange(params: Pick<ReportQueryParams, "from" | "to">)
   // "The last 30 days" also plainly means all of today, not up to the
   // instant someone pressed refresh, so ending on the day boundary is the
   // more honest reading of the window as well as the safe one.
-  const to = params.to ? new Date(params.to) : endOfDay(new Date());
+  // A date-only bound means the whole of that day.
+  //
+  // The Owner's Reports page sends `to=2026-08-19` meaning "through
+  // today", but `new Date("2026-08-19")` is midnight at the *start* of
+  // the 19th, so every report silently excluded everything that happened
+  // today -- the same failure the default `to` had, arriving through the
+  // front door instead. Anyone passing a full timestamp still gets
+  // exactly the instant they asked for.
+  const to = params.to ? (isDateOnly(params.to) ? endOfDay(new Date(params.to)) : new Date(params.to)) : endOfDay(new Date());
   const from = params.from ? new Date(params.from) : new Date(to.getTime() - DEFAULT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {

@@ -1,0 +1,49 @@
+@if (points().length === 0) {
+  <p class="empty">No vehicles were booked in or completed in this period.</p>
+} @else {
+  <figure class="chart">
+    <figcaption class="legend">
+      <span class="key key--created">Booked in <strong>{{ totals().created }}</strong></span>
+      <span class="key key--closed">Completed <strong>{{ totals().closed }}</strong></span>
+    </figcaption>
+
+    <div class="plot" role="group" aria-label="Vehicles booked in and completed over time">
+      @for (c of columns(); track c.key) {
+        <!--
+          A button, not a div: the detail is reachable by keyboard, and
+          focus gives the same readout hover does. Each carries its own
+          full figures in the accessible name, so the chart is usable
+          without seeing the tooltip at all.
+        -->
+        <button
+          type="button"
+          class="col"
+          [class.col--active]="active() === c.key"
+          [attr.aria-label]="c.fullLabel + ': ' + c.created + ' booked in, ' + c.closed + ' completed'"
+          (mouseenter)="active.set(c.key)"
+          (mouseleave)="active.set(null)"
+          (focus)="active.set(c.key)"
+          (blur)="active.set(null)"
+        >
+          <span class="bars">
+            <span class="bar bar--created" [style.block-size.%]="c.createdPercent"></span>
+            <span class="bar bar--closed" [style.block-size.%]="c.closedPercent"></span>
+          </span>
+          <span class="tick">{{ c.label }}</span>
+        </button>
+      }
+    </div>
+
+    @if (activeColumn(); as c) {
+      <div class="readout" role="status">
+        <span class="readout-when">{{ c.fullLabel }}</span>
+        <span class="readout-figure readout-figure--created">{{ c.created }} booked in</span>
+        <span class="readout-figure readout-figure--closed">{{ c.closed }} completed</span>
+      </div>
+    } @else {
+      <!-- Reserved rather than conditional, so hovering does not shift
+           the chart above it. -->
+      <div class="readout readout--idle">Hover or focus a column for that period's figures</div>
+    }
+  </figure>
+}
