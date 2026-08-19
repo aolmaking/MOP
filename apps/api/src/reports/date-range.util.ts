@@ -21,6 +21,13 @@ export interface ReportQueryParams {
 
 const DEFAULT_WINDOW_DAYS = 30;
 
+/** Last representable instant of the given local day. */
+function endOfDay(d: Date): Date {
+  const end = new Date(d);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
+
 /**
  * Defaults to the trailing 30 days when the caller supplies nothing --
  * every KPI needs *some* window, and 30 days is the same default
@@ -29,7 +36,22 @@ const DEFAULT_WINDOW_DAYS = 30;
  * hardcoding a duplicate constant.
  */
 export function resolveDateRange(params: Pick<ReportQueryParams, "from" | "to">): ReportDateRange {
-  const to = params.to ? new Date(params.to) : new Date();
+  // Ends at the end of TODAY, not at this millisecond.
+  //
+  // `new Date()` looked equivalent and was not. Every analytics query
+  // filters `createdAt/assignedAt <= range.to`, so an exact-instant bound
+  // silently excludes anything written in the same moment the report was
+  // built -- the row is a few milliseconds younger than the bound and
+  // falls outside a window that claims to run "up to now". It was found
+  // by a report returning 0% rework for a technician who demonstrably had
+  // a rework task: assignedAt .809 against a range.to of .804.
+  //
+  // In production the same race under-reports the most recent activity,
+  // which is exactly the activity an operational report is consulted for.
+  // "The last 30 days" also plainly means all of today, not up to the
+  // instant someone pressed refresh, so ending on the day boundary is the
+  // more honest reading of the window as well as the safe one.
+  const to = params.to ? new Date(params.to) : endOfDay(new Date());
   const from = params.from ? new Date(params.from) : new Date(to.getTime() - DEFAULT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
