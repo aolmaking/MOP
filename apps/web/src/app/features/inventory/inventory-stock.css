@@ -137,14 +137,53 @@
  * thing the eye lands on. Marked with an inset edge rather than a tinted
  * row: tinting a table row drags every number in it along with the tint.
  */
+/*
+ * The stock-level marker.
+ *
+ * `border-inline-start`, not an inset box-shadow: a shadow offset is a
+ * physical x-value that does not flip, so in Arabic the stripe landed on
+ * the inner edge of a column that had moved to the right -- pointing at
+ * nothing. The directional-CSS linter reads properties, not shadow
+ * offsets, so it never caught this.
+ *
+ * Every row carries the border transparent so the two flagged states do
+ * not shift the column three pixels relative to the healthy ones.
+ */
+.row th:first-child,
+.row td:first-child {
+  border-inline-start: 3px solid transparent;
+}
+
 .row--low th:first-child,
 .row--low td:first-child {
-  box-shadow: inset 3px 0 0 0 var(--warning);
+  border-inline-start-color: var(--warning);
 }
 
 .row--critical th:first-child,
 .row--critical td:first-child {
-  box-shadow: inset 3px 0 0 0 var(--danger);
+  border-inline-start-color: var(--danger);
+}
+
+/*
+ * The word next to the number, for anyone who cannot rely on the colour.
+ * Quiet by design: it labels an exception, and an exception label that
+ * shouts is worse than the colour it is backing up.
+ */
+.total-flag {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.row--critical .total-flag {
+  color: var(--danger);
+}
+
+.row--low .total-flag {
+  color: var(--warning);
 }
 
 .row--critical .col-total {

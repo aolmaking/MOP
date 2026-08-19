@@ -43,6 +43,39 @@ const BANNED = new Map([
 
 const TEXT_ALIGN = /text-align\s*:\s*(left|right)\b/;
 
+/*
+ * A horizontally-offset inset shadow is a physical direction wearing a
+ * different property name. `box-shadow: inset 3px 0 0 0 red` draws a bar
+ * down the left edge and stays on the left under dir="rtl", so a marker
+ * meant to hug the outer edge of the first column ends up pointing at
+ * nothing once the table mirrors. This rule reads property names, so it
+ * went unnoticed until an RTL pass over the stock table found it.
+ *
+ * Only inset shadows with a non-zero x-offset are flagged. An outer
+ * drop-shadow is a light source rather than a direction, and elevation is
+ * not supposed to mirror -- flagging those would turn the rule into noise.
+ */
+const INSET_SHADOW = /box-shadow\s*:[^;]*\binset\b[^;]*/;
+// Anchored to the start of the value: in box-shadow the x-offset is the
+// FIRST length, and a bare `0` is a perfectly legal one. Searching for
+// the first token carrying a unit instead would skip an unitless zero and
+// read the y-offset, flagging `inset 0 -2px` as horizontal.
+const LEADING_LENGTH = /^(-?(?:\d*\.)?\d+)(?:px|rem|em)?(?=\s|$)/;
+
+function insetShadowHasHorizontalOffset(code) {
+  const match = INSET_SHADOW.exec(code);
+  if (!match) return false;
+  // Drop the property name and the `inset` keyword -- which is legal at
+  // either end -- then read the leading length.
+  const value = match[0].replace(/^[^:]*:/, "").replace(/\binset\b/g, " ").trim();
+  const first = LEADING_LENGTH.exec(value);
+  // A shadow written colour-first has no leading length. Left alone
+  // rather than guessed at: this rule should never fail a build over a
+  // form it cannot actually read.
+  if (!first) return false;
+  return parseFloat(first[1]) !== 0;
+}
+
 function collectStylesheets(dir, out = []) {
   for (const entry of readdirSync(dir)) {
     if (SKIP_DIRS.has(entry)) continue;
@@ -73,6 +106,16 @@ for (const searchRoot of SEARCH_ROOTS) {
         if (replacement) {
           violations.push({ file, line: index + 1, found: property, use: replacement, text: line.trim() });
         }
+      }
+
+      if (insetShadowHasHorizontalOffset(code)) {
+        violations.push({
+          file,
+          line: index + 1,
+          found: "box-shadow: inset with a horizontal offset",
+          use: "border-inline-start/end, or an inset shadow offset only vertically",
+          text: line.trim(),
+        });
       }
 
       if (TEXT_ALIGN.test(code)) {

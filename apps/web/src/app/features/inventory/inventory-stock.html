@@ -78,7 +78,19 @@
                       }
                     </td>
                   }
-                  <td class="col-num col-total">{{ row.totalAvailable }}</td>
+                  <td class="col-num col-total">
+                    {{ row.totalAvailable }}
+                    <!-- The stripe and the red total are both colour. A
+                         screen reader gets nothing from either, and "low"
+                         carried no colour on the number at all -- so the
+                         state is also said in words. -->
+                    @if (level(row) !== 'ok') {
+                      <span class="visually-hidden">
+                        {{ level(row) === 'critical' ? 'critically low stock' : 'low stock' }}
+                      </span>
+                      <span class="total-flag" aria-hidden="true">{{ level(row) === 'critical' ? 'critical' : 'low' }}</span>
+                    }
+                  </td>
                 </tr>
               }
             </tbody>
