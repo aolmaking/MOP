@@ -325,3 +325,78 @@ When adding a component, the sequence is:
 6. **Can it be grouped by spacing before reaching for a border?** (§5)
 
 If a decision cannot be justified from this list, it is decoration, and decoration is a cost paid by every user on every load.
+
+---
+
+## Revision — navigation axis, shape, and depth (product owner direction)
+
+Three of this document's original positions were reversed by the product
+owner. They are recorded here rather than silently contradicted by the
+code, because the earlier reasoning is still written above and a future
+reader would otherwise treat the new implementation as drift.
+
+### 1. Navigation is a top bar, not a side rail
+
+The rail argued for a permanent vertical band of `--brand-deep`. The
+replacement keeps that band and its identity, and changes its axis.
+
+The practical argument for the change is width: a workshop screen is much
+wider than it is tall, every operational surface in this product is a wide
+table or a board, and 224px of permanent furniture was the most expensive
+strip on the page. A top bar returns that width to the work — measured at
+1440px, the workspace went from 1216px to the full 1440px.
+
+Identity is unaffected: same colour, same weight, same "red-and-black from
+across the room" reading. The active marker moved from an inline edge to
+an underline, because in a horizontal bar an inline-edge marker sits
+between two links and reads as a divider.
+
+### 2. Shape is curved, not rectangular
+
+The original argument — "a job card is a rectangle", and uniform rounding
+as a generated-UI tell — is overridden. Nothing in the interface should
+read as a hard corner.
+
+The scale still steps, so shape still carries meaning:
+
+| Token | Value | Used for |
+|---|---|---|
+| `--radius-sm` | 6px | chips, badges, inputs, table wrappers |
+| `--radius-md` | 8px | buttons, cards, list rows |
+| `--radius-lg` | 12px | dialogs, drawers, panels |
+| `--radius-pill` | 999px | only where a shape genuinely is a pill |
+
+Kept moderate deliberately: a 16px radius on a table row costs horizontal
+space and starts reading as a consumer app rather than an operational one.
+
+### 3. The palette admits supporting hues and real elevation
+
+The strict 60/30/10 black/red/white reading is relaxed. Red remains the
+identity and still owns structure and primary action, but it cannot carry
+every meaning without becoming an alarm, so a small supporting set exists
+for cases red would misrepresent:
+
+- `--info` / `--info-bg` — informational, never actionable
+- `--accent-cool` — a neutral chart series that must not read as danger
+- `--neutral-track` — the unfilled half of a progress or bar chart
+
+Elevation is now explicit rather than implied by borders alone. A dark
+interface cannot lift a surface with a grey shadow, so the levels are
+semantic and paired with the surface tokens:
+
+- `--shadow-1` rests on the page
+- `--shadow-2` floats above it (nav bar, hovered control, table)
+- `--shadow-3` is modal
+- `--shadow-focus` is the focus ring's glow
+
+### 4. Motion is expected, within limits
+
+Buttons lift on hover and travel 1px on press; the nav's active underline
+grows from its centre; toasts enter on transform and opacity. Constraints
+that still hold, and that any new animation must respect:
+
+- `transform` and `opacity` only — never layout properties
+- properties listed explicitly, never `transition: all`
+- everything inside `prefers-reduced-motion` still stops, including
+  `animation-iteration-count: 1` so infinite animations do not merely run
+  faster

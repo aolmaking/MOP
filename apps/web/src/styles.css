@@ -123,6 +123,7 @@
   --neutral-badge-bg: #26211f;
 
   --focus-ring: #ff4b3e;
+  --focus-ring-h: 6;
   --shadow-color: 0 0% 0%;
 
   /* --- type --- */
@@ -151,17 +152,48 @@
   --space-7: 2.5rem;
   --space-8: 3rem;
 
-  /* --- radius: a job card is a rectangle. Softened just enough not to
-         look unfinished; uniformly rounded cards are a generated-UI
-         tell and read as decoration on operational software. --- */
-  --radius-sm: 2px;
-  --radius-md: 3px;
-  --radius-lg: 4px;
+  /* --- radius ---
+     Revised on the product owner's direction: nothing in the interface
+     should read as a hard corner. The scale still steps, so shape stays
+     meaningful -- a chip is not a dialog -- but every step is a curve
+     now rather than a hairline bevel. Kept moderate on purpose: these
+     are operational screens, and a 16px radius on a table row starts
+     costing horizontal space and looking like a consumer app. */
+  --radius-sm: 6px;   /* chips, badges, inputs, table wrappers */
+  --radius-md: 8px;   /* buttons, cards, list rows */
+  --radius-lg: 12px;  /* dialogs, drawers, panels */
+  --radius-pill: 999px; /* only where a shape genuinely is a pill */
 
-  /* --- motion: quick and quiet, this is operational software --- */
+  /* --- motion ---
+     Quick and quiet: this is operational software, and motion here is
+     feedback, not decoration. `--easing` is the standard move; `--ease-out`
+     is for things entering, which should decelerate; `--ease-spring`
+     gives a control a little life on press without becoming bouncy. */
   --duration-fast: 120ms;
   --duration-base: 180ms;
+  --duration-slow: 260ms;
   --easing: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
+  /* --- elevation ---
+     A dark interface cannot lift a surface with a grey shadow alone, so
+     each level pairs a real shadow with a hairline top highlight. Levels
+     are semantic: 1 rests on the page, 2 floats above it, 3 is modal. */
+  --shadow-1: 0 1px 2px hsl(var(--shadow-color) / 0.28);
+  --shadow-2: 0 4px 12px -2px hsl(var(--shadow-color) / 0.42);
+  --shadow-3: 0 18px 42px -8px hsl(var(--shadow-color) / 0.6);
+  --shadow-focus: 0 0 0 3px hsl(var(--focus-ring-h) 92% 62% / 0.28);
+
+  /* --- supporting hues ---
+     The identity stays black/red/white; these are for meaning the red
+     cannot carry without becoming an alarm -- an informational note, a
+     neutral chart series, a "healthy" state that must not read as an
+     action. Deliberately desaturated so they sit under the red. */
+  --info: #5b9dd9;
+  --info-bg: #14212b;
+  --accent-cool: #6d8fa8;
+  --neutral-track: #2a2524;
 
   /* --- tap target floor ---
      44px is the gloved-hand floor (docs/phases/PHASE_6.md section 2). The
@@ -242,7 +274,13 @@
   --neutral-badge: #58504d;
   --neutral-badge-bg: #eceae7;
 
+  --info: #1f6497;
+  --info-bg: #e8f1f8;
+  --accent-cool: #4a6b80;
+  --neutral-track: #e2dedb;
+
   --focus-ring: #d41717;
+  --focus-ring-h: 0;
   --shadow-color: 20 15% 45%;
 }
 
@@ -364,6 +402,7 @@ summary,
 /* --- Button (apps/web/src/app/shared/button) --- */
 
 .mop-button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -374,8 +413,44 @@ summary,
   font-size: var(--text-base);
   font-weight: 600;
   cursor: pointer;
-  transition: background-color var(--duration-fast) var(--easing), border-color var(--duration-fast) var(--easing);
   white-space: nowrap;
+  /* Properties listed explicitly, never `all`: `all` animates layout
+     properties too and turns a hover into a reflow. Everything here is
+     compositor-friendly (transform) or paint-only (colour, shadow). */
+  transition:
+    background-color var(--duration-fast) var(--easing),
+    border-color var(--duration-fast) var(--easing),
+    box-shadow var(--duration-fast) var(--easing),
+    transform var(--duration-fast) var(--ease-spring);
+}
+
+/*
+ * The press. A button that only changes colour on click feels like a
+ * picture of a button; 1px of travel is what makes it feel connected to
+ * the finger. Paired with a lift on hover so the direction of travel is
+ * consistent: up when you approach, down when you commit.
+ */
+.mop-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-2);
+}
+
+.mop-button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: var(--shadow-1);
+  /* Snap down, ease back up -- a spring on the way down reads as mushy. */
+  transition-duration: 60ms;
+}
+
+/*
+ * Keyboard focus gets the same ring the rest of the product uses, plus
+ * the hover lift, so tabbing to a control looks like arriving at it
+ * rather than like a different state machine.
+ */
+.mop-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: var(--shadow-focus);
 }
 
 .mop-button--default {
@@ -522,6 +597,7 @@ summary,
 }
 
 .mop-toast {
+  animation: mop-toast-in var(--duration-base) var(--ease-out);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -538,6 +614,19 @@ summary,
 
 .mop-toast--success {
   border-inline-start-color: var(--success);
+}
+
+/* Enters from the side it lives on, and only ever with transform and
+   opacity so it cannot cause a reflow while the user is reading. */
+@keyframes mop-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 .mop-toast--danger {
   border-inline-start-color: var(--danger);
@@ -600,6 +689,10 @@ summary,
 .mop-field input,
 .mop-field select,
 .mop-field textarea {
+  transition:
+    border-color var(--duration-fast) var(--easing),
+    box-shadow var(--duration-fast) var(--easing),
+    background-color var(--duration-fast) var(--easing);
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
@@ -615,6 +708,13 @@ summary,
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
   border-color: var(--focus-ring);
+  box-shadow: var(--shadow-focus);
+}
+
+.mop-field input:hover:not(:focus),
+.mop-field select:hover:not(:focus),
+.mop-field textarea:hover:not(:focus) {
+  border-color: var(--text-faint);
 }
 
 .mop-field--invalid input,
@@ -669,8 +769,10 @@ summary,
  */
 .mop-table-scroll {
   overflow-x: auto;
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
   /* Momentum scrolling on touch, and a scrollbar that does not steal a
      row's worth of height on desktop. */
   -webkit-overflow-scrolling: touch;

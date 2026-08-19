@@ -11,25 +11,50 @@
  * for black and would sink into the red.
  */
 
+/* =====================================================================
+   TOP NAV BAR
+
+   The side rail became a top bar on the product owner's direction. The
+   practical gain is real: a workshop screen is far wider than it is tall,
+   so 224px of permanent horizontal furniture was the most expensive strip
+   on the page, and every operational surface here is a wide table or a
+   board. Moving navigation to the top returns that width to the work.
+
+   The identity survives the move -- the bar is still a solid band of
+   --brand-deep, still the first thing you see, still red-and-black from
+   across the room. What changes is its axis.
+
+   The previous responsive block (rail -> top bar under 860px) is now the
+   default at every width, so this file no longer needs two layouts. What
+   remains below is only the narrow-width tightening.
+   ===================================================================== */
+
 .rail-shell {
-  display: grid;
-  grid-template-columns: 224px 1fr;
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
 }
 
 .rail {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-4) var(--space-3);
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-2) var(--space-5);
   background: var(--brand-deep);
-  border-inline-end: 1px solid var(--brand);
+  /* The rule that separated rail from content moves with the rail. */
+  border-inline-end: 0;
+  border-block-end: 1px solid var(--brand);
+  box-shadow: var(--shadow-2);
+  /* Nav stays reachable while a long board scrolls under it. */
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 20;
 }
 
-/* White, not --brand: the mark sits ON the red, so the red cannot be its
-   colour. This is part of the palette's 10%. */
 .rail-brand {
-  padding: var(--space-2) var(--space-3) var(--space-6);
+  padding: 0 var(--space-4) 0 0;
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: var(--text-md);
@@ -38,50 +63,79 @@
 }
 
 .rail-link {
-  display: flex;
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  /* Legible but subordinate. Pure white is saved for the active item, so
-     "where am I" is answered by brightness rather than by a filled block. */
-  color: rgb(255 255 255 / 0.72);
+  border-radius: var(--radius-md);
+  color: rgb(255 255 255 / 0.76);
   font-size: var(--text-sm);
   font-weight: 500;
   text-decoration: none;
-  border-inline-start: 2px solid transparent;
+  /* Was a border on the inline edge, which in a horizontal bar would sit
+     between two links and read as a divider rather than a marker. */
+  border-inline-start: 0;
+  transition:
+    background-color var(--duration-fast) var(--easing),
+    color var(--duration-fast) var(--easing);
+}
+
+/* The active marker is an underline that grows from the centre, so
+   moving between tabs reads as the marker travelling rather than
+   blinking out and back. */
+.rail-link::after {
+  content: '';
+  position: absolute;
+  inset-block-end: 2px;
+  inset-inline: var(--space-3);
+  block-size: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--white);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform var(--duration-base) var(--ease-out);
 }
 
 .rail-link:hover {
   color: var(--white);
-  background: rgb(0 0 0 / 0.18);
+  background: rgb(0 0 0 / 0.2);
 }
 
-/*
- * Marked with an edge and full white rather than a filled pill. On a red
- * rail a filled block would have to be white, and a white block is the
- * loudest thing the palette can produce -- far too loud for "you are
- * here".
- */
 .rail-link--active {
-  border-inline-start-color: var(--white);
   color: var(--white);
   font-weight: 700;
+  background: rgb(0 0 0 / 0.24);
+}
+
+.rail-link--active::after {
+  transform: scaleX(1);
+}
+
+.rail-link:focus-visible {
+  outline: 2px solid var(--white);
+  outline-offset: -2px;
 }
 
 .rail-footer {
-  margin-top: auto;
-  padding-top: var(--space-4);
-  border-top: 1px solid rgb(255 255 255 / 0.22);
+  /* Pushed to the end of the row rather than the bottom of a column. */
+  margin-top: 0;
+  margin-inline-start: auto;
+  padding-top: 0;
+  border-top: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
   gap: var(--space-3);
 }
 
 .rail-account {
   display: flex;
   flex-direction: column;
-  padding: 0 var(--space-3);
-  gap: 0.125rem;
+  align-items: flex-end;
+  padding: 0;
+  gap: 0;
+  line-height: var(--leading-tight);
 }
 
 .rail-account-name {
@@ -91,114 +145,58 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-inline-size: 18rem;
 }
 
 .rail-account-role {
   font-size: var(--text-xs);
-  color: rgb(255 255 255 / 0.62);
+  color: rgb(255 255 255 / 0.66);
   text-transform: uppercase;
   letter-spacing: var(--tracking-label);
 }
 
-/*
- * The rail's own logout button cannot use the shared ghost variant --
- * that one is tuned for a dark surface and disappears on red.
- */
+/* The bar's own logout cannot use the shared ghost variant -- that one is
+   tuned for a dark surface and disappears on red. */
 .rail-footer button {
   background: transparent;
   border: 1px solid rgb(255 255 255 / 0.42);
+  border-radius: var(--radius-md);
   color: var(--white);
+  transition:
+    background-color var(--duration-fast) var(--easing),
+    border-color var(--duration-fast) var(--easing),
+    transform var(--duration-fast) var(--ease-spring);
 }
 
 .rail-footer button:hover:not(:disabled) {
-  background: rgb(0 0 0 / 0.22);
+  background: rgb(0 0 0 / 0.24);
   border-color: var(--white);
   color: var(--white);
 }
 
-.rail-content {
-  padding: var(--space-6) var(--space-7);
-  overflow-y: auto;
+.rail-footer button:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
-/* =====================================================================
-   RESPONSIVE -- the rail below its own limit.
+.rail-content {
+  flex: 1;
+  padding: var(--space-6) var(--space-7);
+  overflow-x: auto;
+}
 
-   The side rail is 224px and the workspace beside it needs roughly 600px
-   to stay useful, so 860px is where the two stop fitting together. Below
-   it the rail stops being a column and becomes a wrapping top bar: the
-   same links, the same order, still all visible.
-
-   Deliberately NOT a hamburger. This is operational software -- a branch
-   manager checking approvals on a tablet should not pay a tap to find
-   out where they can go, and a menu that hides its own contents is worse
-   on a 5-item nav than a bar that simply wraps. It also keeps this a
-   pure-CSS change: no toggle state, no JS, no template edits, so nothing
-   about routing or the shell's behaviour moves.
-
-   Matches the technician and customer shells, which were already built
-   around a horizontal bar for the same reason.
-   ===================================================================== */
+.rail-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
 
 @media (max-width: 860px) {
-  .rail-shell {
-    /* One column: rail on top, workspace under it. */
-    grid-template-columns: 1fr;
-  }
-
   .rail {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-1) var(--space-2);
     padding: var(--space-2) var(--space-3);
-    /* The rule that separated rail from content moves with the rail. */
-    border-inline-end: 0;
-    border-block-end: 1px solid var(--brand);
-    /* Nav stays reachable while a long work-order list scrolls under it. */
-    position: sticky;
-    inset-block-start: 0;
-    z-index: 10;
-  }
-
-  .rail-brand {
-    /* The wordmark keeps its weight but stops reserving a whole header's
-       worth of vertical space. */
-    padding: 0 var(--space-2) 0 0;
-  }
-
-  .rail-link {
-    /* "You are here" was a bar on the inline edge, which in a horizontal
-       bar would sit between two links and read as a divider. It moves to
-       the block edge, where it underlines the active item instead. */
-    border-inline-start: 0;
-    border-block-end: 2px solid transparent;
-    padding: var(--space-2);
-  }
-
-  .rail-link--active {
-    border-inline-start-color: transparent;
-    border-block-end-color: var(--white);
-  }
-
-  .rail-footer {
-    /* Was pushed to the bottom of a column; now pushed to the end of a
-       row. The divider above it belonged to the vertical stack. */
-    margin-top: 0;
-    margin-inline-start: auto;
-    padding-top: 0;
-    border-top: 0;
-    flex-direction: row;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .rail-account {
-    padding: 0;
   }
 
   .rail-content {
-    padding: var(--space-5) var(--space-5);
+    padding: var(--space-5);
   }
 }
 
@@ -210,13 +208,12 @@
 
   .rail-link {
     font-size: var(--text-xs);
-    padding: var(--space-2) var(--space-1);
+    padding: var(--space-2);
   }
 
   .rail-account {
-    /* The name is the useful half -- the role is already implied by the
-       nav the person is looking at. Dropping it keeps the bar to two
-       lines on a phone instead of three. */
+    /* The name is the useful half; the role is implied by the nav the
+       person is looking at. Keeps the bar to two lines on a phone. */
     display: none;
   }
 

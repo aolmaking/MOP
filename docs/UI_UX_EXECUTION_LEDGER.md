@@ -34,11 +34,11 @@ the next session will "restore" the old rules as a regression.
 
 | # | Item | State | Notes |
 |---|------|-------|-------|
-| 0 | Owner blocked from branch operations | IMPLEMENTED | Root cause: TENANT_OWNER had no `workorders.branch.view`. Spec (tenant-owner.md:248) wants a read-only company-wide work order view. That key guards GET-only routes; all mutations use other keys. Granted in default-role-permissions.ts. Needs re-seed + browser verify. |
-| 1 | Rail -> top nav bar (6 shells) | PENDING | Shells are byte-identical apart from comments; one pattern applies to all 6. Technician + customer already use bottom bars. |
-| 2 | Radius pass | PENDING | Tokens are --radius-sm/md/lg = 2/3/4px. Raise + sweep hardcoded values. |
-| 3 | Palette softening + elevation | PENDING | Add shadow tokens; soften surfaces. Keep red identity recognisable. |
-| 4 | Button/interaction animation | PENDING | Must respect prefers-reduced-motion; transform/opacity only. |
+| 0 | Owner blocked from branch operations | VERIFIED | Root cause: TENANT_OWNER had no `workorders.branch.view`. Spec (tenant-owner.md:248) wants a read-only company-wide work order view. That key guards GET-only routes; all mutations use other keys. Granted in default-role-permissions.ts. Needs re-seed + browser verify. |
+| 1 | Rail -> top nav bar (6 shells) | VERIFIED | Done: all 6 rewritten to a sticky top bar. Measured at 1440px, workspace 1216->1440. DESIGN_LANGUAGE.md updated in the same commit. |
+| 2 | Radius pass (tokens) | IMPLEMENTED | Tokens now 6/8/12px + --radius-pill. STILL TO DO: sweep component CSS for hardcoded px radii that bypass the tokens. |
+| 3 | Palette softening + elevation | IMPLEMENTED | Added --shadow-1/2/3/focus, --info, --accent-cool, --neutral-track (both themes). STILL TO DO: apply elevation to page-level cards. |
+| 4 | Button/interaction animation | IMPLEMENTED | Buttons lift/press, nav underline grows from centre, toast enters, inputs glow on focus. STILL TO DO: page/list entrance transitions. |
 | 5 | Reports: volume/day+month, charts, hover detail | PENDING | Check what OwnerReports API already returns before adding endpoints. |
 | 6 | Workflow Health subsystem | PENDING | Large. Needs capability matrix first (what exists vs missing). |
 | 7 | History "More" full-detail report | PENDING | Needs an aggregation service across audit + events + tasks + inventory. |
