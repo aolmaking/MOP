@@ -3,7 +3,12 @@
 } @else {
   <ul class="bar-list">
     @for (item of items(); track item.label) {
-      <li class="bar-row">
+      <!--
+        The row carries its own readout in `title` and in the accessible
+        name, so the meaning is available on hover, on keyboard focus, and
+        to a screen reader alike -- rather than only to a mouse.
+      -->
+      <li class="bar-row" [attr.title]="readout(item)" [attr.aria-label]="readout(item)" tabindex="0">
         <span class="bar-label">{{ item.label }}</span>
         <span class="bar-track">
           <span class="bar-fill" [style.inline-size.%]="widthPercent(item.value)" [style.background]="color()"></span>

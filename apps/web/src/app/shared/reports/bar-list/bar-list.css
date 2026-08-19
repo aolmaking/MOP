@@ -56,3 +56,21 @@
   font-variant-numeric: tabular-nums;
   text-align: end;
 }
+
+/* The row is focusable so its readout is reachable by keyboard, not only
+   by hovering -- which means it needs a visible focus state like any
+   other interactive target. */
+.bar-row {
+  border-radius: var(--radius-sm);
+  transition: background-color var(--duration-fast) var(--easing);
+}
+
+.bar-row:hover,
+.bar-row:focus-visible {
+  background: var(--surface);
+}
+
+.bar-row:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
