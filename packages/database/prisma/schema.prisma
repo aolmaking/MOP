@@ -1090,6 +1090,21 @@ model Task {
   tenantId    String
   workOrderId String
   title       String
+  // Which catalogued service this task performs, when it performs one.
+  //
+  // Stored as PriceCatalogEntry.itemKey rather than as a foreign key to a
+  // specific row on purpose: that table is effective-dated, so a row id
+  // identifies one *version* of a price. "This task is a battery
+  // replacement" is a fact about the work and must not change meaning
+  // when the Owner reprices it, while "what we charged" is already
+  // captured on the invoice line at the moment of billing. Keying by the
+  // stable business key keeps those two questions apart, and matches the
+  // rule the catalogue's own comment sets out -- nothing that already read
+  // a price is stored by reference to this table.
+  //
+  // Null for ad-hoc work. A workshop is allowed to do something that is
+  // not in its catalogue, and free-text `title` remains the fallback.
+  serviceKey  String?
   status      TaskStatus @default(ASSIGNED)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
@@ -1101,6 +1116,8 @@ model Task {
 
   @@index([tenantId, status])
   @@index([workOrderId])
+  // Answers "how much battery-replacement work did we do" without a scan.
+  @@index([tenantId, serviceKey])
   @@map("tasks")
 }
 

@@ -18,6 +18,10 @@ import { OperationEventsService } from "./operation-events.service";
 import { CustomerSafeProjectionService } from "./customer-safe-projection.service";
 import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 import { AuditService } from "../audit/audit.service";
+import { PriceCatalogService } from "../finance/price-catalog.service";
+import { FinanceService } from "../finance/finance.service";
+import { BillingService } from "../billing/billing.service";
+import { GenericBillingAdapter } from "../billing/generic-billing-adapter.service";
 import type { PrismaService } from "../database/prisma.service";
 
 const prisma = new PrismaClient();
@@ -32,6 +36,14 @@ const lifecycle = new WorkOrderLifecycleService(
 );
 const intake = new IntakeService(asService, events, lifecycle);
 const work = new TechnicianWorkService(asService, events, lifecycle);
+const priceCatalog = new PriceCatalogService(asService, new AuditService(asService));
+const finance = new FinanceService(
+  asService,
+  new CapabilityResolutionService(asService),
+  events,
+  new BillingService(asService, new GenericBillingAdapter()),
+  priceCatalog,
+);
 
 const ACTOR = { accountId: "tech-1", displayName: "Technician", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `tw-${Date.now()}`;
@@ -115,6 +127,15 @@ afterAll(async () => {
   await prisma.customerTimelineEvent.deleteMany({ where });
   await prisma.taskBlocker.deleteMany({ where });
   await prisma.taskAssignment.deleteMany({ where });
+  // Finance and inventory rows the service-chain tests create. They must
+  // go before the task/work order they hang off, and before the warehouse
+  // and item they reference, or the tenant delete trips an FK.
+  await prisma.runningInvoiceLine.deleteMany({ where });
+  await prisma.runningInvoice.deleteMany({ where });
+  await prisma.workOrderPartLine.deleteMany({ where });
+  await prisma.stockMovement.deleteMany({ where });
+  await prisma.warehouseStockBalance.deleteMany({ where });
+  await prisma.priceCatalogEntry.deleteMany({ where });
   await prisma.task.deleteMany({ where });
   await prisma.fault.deleteMany({ where });
   await prisma.inspection.deleteMany({ where });
@@ -124,6 +145,10 @@ afterAll(async () => {
   await prisma.asset.deleteMany({ where });
   await prisma.customer.deleteMany({ where });
   await prisma.branch.deleteMany({ where });
+  await prisma.inventoryItem.deleteMany({ where });
+  await prisma.warehouse.deleteMany({ where });
+  await prisma.staffUser.deleteMany({ where });
+  await prisma.account.deleteMany({ where });
   await prisma.tenantCapability.deleteMany({ where });
   await prisma.tenant.deleteMany({ where: { id: tenantId } });
   await prisma.plan.deleteMany({ where: { id: planId } });
@@ -290,4 +315,197 @@ describe("tasks and the finish gate together", () => {
     // -- the graph refuses before any gate is consulted.
     await expect(lifecycle.apply(workOrderId, "FINISH", ACTOR)).rejects.toThrow(/not available/i);
   }, 120_000);
+});
+
+/**
+ * SERVICE -> TECHNICIAN -> INVENTORY -> STOCK -> MONEY, end to end.
+ *
+ * This is the chain a workshop actually runs on, and until Task carried a
+ * serviceKey it was broken in the middle: the Owner priced "Replace
+ * battery" on one page, a technician typed "Replace battery" as free text
+ * on another, and the two strings were unrelated. Nothing could bill the
+ * labour for work that was done, and no report could say how much of that
+ * service the branch performed.
+ *
+ * Everything below runs against real Postgres -- real stock rows, real
+ * decrements, real Decimal money -- because the assertions are about
+ * constraints and arithmetic that mocks would simply agree with.
+ */
+describe("a catalogued service, performed and billed end to end", () => {
+  const OWNER = { accountId: "owner-1", displayName: "Owner" };
+  let warehouseId: string;
+  let technicianId: string;
+
+  beforeAll(async () => {
+    warehouseId = (await prisma.warehouse.create({ data: { tenantId, name: "Store", code: `WH-${SUFFIX}` } })).id;
+    const account = await prisma.account.create({
+      data: { accountType: "TENANT_STAFF", tenantId, email: `chain-${SUFFIX}@example.com`, status: "ACTIVE" },
+    });
+    technicianId = (
+      await prisma.staffUser.create({
+        data: { accountId: account.id, tenantId, fullName: "Chain Tech", role: "TECHNICIAN" },
+      })
+    ).id;
+
+    await priceCatalog.setPrice(
+      tenantId,
+      { itemKey: "Replace battery", itemType: "SERVICE", unitPrice: 400, laborPrice: 100 },
+      OWNER,
+    );
+  }, 120_000);
+
+  it("refuses to attach a task to a service the workshop never priced", async () => {
+    const workOrderId = await workOrderInProgress();
+    await expect(work.createTask(workOrderId, "Fit spoiler", ACTOR, technicianId, "Fit spoiler")).rejects.toThrow(
+      /Service Catalog/,
+    );
+  });
+
+  it("carries the service from the technician's task through to what the customer is billed", async () => {
+    const workOrderId = await workOrderInProgress();
+
+    // 1. The technician's work is a catalogued service, not free text.
+    const task = await work.createTask(workOrderId, "Replace battery", ACTOR, technicianId, "Replace battery");
+    expect(task.serviceKey).toBe("Replace battery");
+
+    // 2. Real stock, really consumed.
+    const item = await prisma.inventoryItem.create({
+      data: {
+        tenantId,
+        name: "Battery 12V",
+        sku: `BAT-${SUFFIX}`,
+        itemType: "PART",
+        sellingPrice: 400,
+        cost: 260,
+        stockTracked: true,
+      },
+    });
+    await prisma.warehouseStockBalance.create({
+      data: { tenantId, inventoryItemId: item.id, warehouseId, availableQty: 5 },
+    });
+    await prisma.stockMovement.create({
+      data: {
+        tenantId,
+        inventoryItemId: item.id,
+        warehouseId,
+        type: "ISSUE",
+        quantity: 1,
+        beforeQty: 5,
+        afterQty: 4,
+        referenceType: "WorkOrder",
+        referenceId: workOrderId,
+        actorId: ACTOR.accountId,
+      },
+    });
+    // One left the shelf: available drops, issued rises. The two must
+    // move together or the warehouse's own arithmetic stops adding up.
+    await prisma.warehouseStockBalance.updateMany({
+      where: { tenantId, inventoryItemId: item.id, warehouseId },
+      data: { availableQty: 4, issuedQty: 1 },
+    });
+
+    // The part the customer is charged for, linked back to the item that
+    // left the shelf rather than retyped.
+    await prisma.workOrderPartLine.create({
+      data: {
+        tenantId,
+        workOrderId,
+        taskId: task.id,
+        provenance: "INVENTORY",
+        inventoryItemId: item.id,
+        name: "Battery 12V",
+        quantity: 1,
+        sellingPrice: 400,
+        cost: 260,
+        addedById: ACTOR.accountId,
+      },
+    });
+
+    // 3. Completing the work is what makes it billable.
+    await work.completeTask(task.id, ACTOR);
+
+    const performed = await work.performedServices(workOrderId);
+    expect(performed).toHaveLength(1);
+    expect(performed[0].serviceKey).toBe("Replace battery");
+    expect(performed[0].technicianIds).toContain(technicianId);
+
+    // 4. Billing states no price. The Owner's catalogue supplies it.
+    const total = await finance.addLine(
+      { tenantId, workOrderId, name: performed[0].serviceKey, itemType: "SERVICE", quantity: 1 },
+      ACTOR,
+    );
+    expect(total.lines[0].total).toBe("500.00");
+
+    // 5. The chain is observable afterwards: stock really moved, the part
+    // line still points at the item, and the event names the service.
+    const balance = await prisma.warehouseStockBalance.findFirst({
+      where: { tenantId, inventoryItemId: item.id, warehouseId },
+      select: { availableQty: true, issuedQty: true },
+    });
+    expect(balance!.availableQty).toBe(4);
+    expect(balance!.issuedQty).toBe(1);
+
+    const movements = await prisma.stockMovement.count({
+      where: { tenantId, referenceType: "WorkOrder", referenceId: workOrderId, type: "ISSUE" },
+    });
+    expect(movements).toBe(1);
+
+    const partLine = await prisma.workOrderPartLine.findFirst({
+      where: { workOrderId },
+      select: { inventoryItemId: true, taskId: true, sellingPrice: true, cost: true },
+    });
+    expect(partLine!.inventoryItemId).toBe(item.id);
+    expect(partLine!.taskId).toBe(task.id);
+    // Money stayed Decimal all the way down; margin is answerable.
+    expect(String(partLine!.sellingPrice)).toBe("400");
+    expect(String(partLine!.cost)).toBe("260");
+
+    // Scoped to THIS task rather than "the most recent completion":
+    // other tests in this file complete tasks too, and ordering by
+    // createdAt can tie within the same millisecond.
+    const completion = await prisma.operationEvent.findFirst({
+      where: { tenantId, eventKey: "task.completed", payload: { path: ["taskId"], equals: task.id } },
+      select: { payload: true },
+    });
+    expect((completion!.payload as { serviceKey?: string }).serviceKey).toBe("Replace battery");
+  });
+
+  it("repricing the service changes the next job, and leaves the already-billed one alone", async () => {
+    const firstJob = await workOrderInProgress();
+    const firstTask = await work.createTask(firstJob, "Replace battery", ACTOR, technicianId, "Replace battery");
+    await work.completeTask(firstTask.id, ACTOR);
+    const before = await finance.addLine(
+      { tenantId, workOrderId: firstJob, name: "Replace battery", itemType: "SERVICE", quantity: 1 },
+      ACTOR,
+    );
+    expect(before.lines[0].total).toBe("500.00");
+
+    await priceCatalog.setPrice(
+      tenantId,
+      { itemKey: "Replace battery", itemType: "SERVICE", unitPrice: 460, laborPrice: 120 },
+      OWNER,
+    );
+
+    const secondJob = await workOrderInProgress();
+    const secondTask = await work.createTask(secondJob, "Replace battery", ACTOR, technicianId, "Replace battery");
+    await work.completeTask(secondTask.id, ACTOR);
+    const after = await finance.addLine(
+      { tenantId, workOrderId: secondJob, name: "Replace battery", itemType: "SERVICE", quantity: 1 },
+      ACTOR,
+    );
+    expect(after.lines[0].total).toBe("580.00");
+
+    // The first job's line was written at the old price and must not have
+    // moved when the Owner repriced.
+    const firstAgain = await finance.jobTotal(tenantId, firstJob);
+    expect(firstAgain.lines[0].total).toBe("500.00");
+  });
+
+  it("only counts work that is actually done", async () => {
+    const workOrderId = await workOrderInProgress();
+    await work.createTask(workOrderId, "Replace battery", ACTOR, technicianId, "Replace battery");
+
+    // Created but not completed -- nothing to bill and nothing to report.
+    expect(await work.performedServices(workOrderId)).toHaveLength(0);
+  });
 });

@@ -49,12 +49,46 @@ export class TechnicianWorkService {
     private readonly lifecycle: WorkOrderLifecycleService,
   ) {}
 
-  async createTask(workOrderId: string, title: string, actor: LifecycleActor, assignToStaffUserId?: string) {
+  /**
+   * `serviceKey` names a row in the workshop's own Service Catalog, and is
+   * what connects the work a technician does to the price the Owner set
+   * for it. Without it a task is free text, so "Replace battery" on a job
+   * card and "Replace battery" on the Pricing page were two unrelated
+   * strings that happened to match, and nothing could bill the labour, or
+   * answer how much battery work the branch did last month.
+   *
+   * Optional, because a workshop must still be able to do something it has
+   * never catalogued; `title` stays the human label either way.
+   */
+  async createTask(
+    workOrderId: string,
+    title: string,
+    actor: LifecycleActor,
+    assignToStaffUserId?: string,
+    serviceKey?: string,
+  ) {
     const workOrder = await this.requireWorkOrder(workOrderId);
+
+    // Refuse a key the workshop does not actually have. A task pointing at
+    // a service that was never priced would bill nothing and report under
+    // a service that does not exist, which is worse than plain free text
+    // because it looks connected.
+    if (serviceKey) {
+      const priced = await this.prisma.priceCatalogEntry.findFirst({
+        where: { tenantId: workOrder.tenantId, itemKey: serviceKey, effectiveTo: null, isActive: true },
+        select: { id: true },
+      });
+      if (!priced) {
+        throw new BadRequestException({
+          code: "service_not_in_catalog",
+          message: `"${serviceKey}" is not a live service in this workshop's Service Catalog.`,
+        });
+      }
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const task = await tx.task.create({
-        data: { tenantId: workOrder.tenantId, workOrderId, title },
+        data: { tenantId: workOrder.tenantId, workOrderId, title, serviceKey: serviceKey ?? null },
       });
 
       if (assignToStaffUserId) {
@@ -86,7 +120,7 @@ export class TechnicianWorkService {
   async startTask(taskId: string, actor: LifecycleActor) {
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
-      select: { id: true, tenantId: true, workOrderId: true, status: true },
+      select: { id: true, tenantId: true, workOrderId: true, status: true, serviceKey: true },
     });
     if (!task) throw new NotFoundException({ code: "task_not_found", message: "Task not found." });
 
@@ -116,7 +150,12 @@ export class TechnicianWorkService {
           targetType: "Task",
           targetId: taskId,
           riskLevel: "LOW",
-          payload: { taskId, workOrderId: task.workOrderId },
+          // serviceKey rides along so the billing and reporting sides can
+          // tell WHICH catalogued service was performed without re-reading
+          // the operations tables. Finance owning the charge and
+          // Operations owning the work is the boundary; the event is how
+          // they agree on what happened.
+          payload: { taskId, workOrderId: task.workOrderId, serviceKey: task.serviceKey },
         },
         tx,
       );
@@ -126,7 +165,9 @@ export class TechnicianWorkService {
   async completeTask(taskId: string, actor: LifecycleActor) {
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
-      select: { id: true, tenantId: true, workOrderId: true, status: true },
+      // serviceKey is loaded so the completion event can name the
+      // catalogued service that was performed.
+      select: { id: true, tenantId: true, workOrderId: true, status: true, serviceKey: true },
     });
     if (!task) throw new NotFoundException({ code: "task_not_found", message: "Task not found." });
 
@@ -152,11 +193,50 @@ export class TechnicianWorkService {
           targetType: "Task",
           targetId: taskId,
           riskLevel: "LOW",
-          payload: { taskId, workOrderId: task.workOrderId },
+          // serviceKey rides along so the billing and reporting sides can
+          // tell WHICH catalogued service was performed without reaching
+          // into operations tables. Finance owning the charge and
+          // Operations owning the work is the boundary; the event is how
+          // they agree on what happened.
+          payload: { taskId, workOrderId: task.workOrderId, serviceKey: task.serviceKey },
         },
         tx,
       );
     });
+  }
+
+  /**
+   * Which catalogued services were actually performed on this job, and by
+   * whom.
+   *
+   * This is the question billing asks before issuing ("what labour do we
+   * charge for") and the one History and reports ask afterwards ("what did
+   * we actually do"). It exists here, in the system that owns Task, so
+   * neither of those has to reach into operations tables to answer it.
+   *
+   * Only DONE tasks count. Work that is still open is not something a
+   * customer should be billed for or a report should claim as output.
+   */
+  async performedServices(
+    workOrderId: string,
+  ): Promise<readonly { taskId: string; serviceKey: string; title: string; technicianIds: readonly string[] }[]> {
+    const tasks = await this.prisma.task.findMany({
+      where: { workOrderId, status: "DONE", serviceKey: { not: null } },
+      select: {
+        id: true,
+        title: true,
+        serviceKey: true,
+        assignments: { where: { unassignedAt: null }, select: { staffUserId: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return tasks.map((task) => ({
+      taskId: task.id,
+      serviceKey: task.serviceKey as string,
+      title: task.title,
+      technicianIds: task.assignments.map((a) => a.staffUserId),
+    }));
   }
 
   async recordInspection(input: RecordInspectionInput, actor: LifecycleActor) {
