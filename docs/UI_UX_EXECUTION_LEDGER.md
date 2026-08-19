@@ -360,3 +360,37 @@ the dossier's money band shows 2200.00.
 3. Page-by-page capability pass across all 8 shells.
 4. Consider a `WorkOrderPartLine` -> dossier link for parts added
    outside a part request.
+
+## Session 4 — Workflow Health completed as a subsystem
+
+Baseline: **API 681/681 across 89 suites · web 235/235 across 47 files ·
+6/6 linters · typecheck + build clean.**
+
+Design decision worth preserving: **issues are never stored.** They are
+derived facts, recomputed each scan; persisting them would create a
+second copy that drifts from the records it came from -- the exact
+failure this page exists to detect. Only the human decision is stored, in
+`WorkflowIssueAcknowledgement`, keyed by a deterministic fingerprint
+(`type:entityType:entityId`). An issue that stops being detected resolves
+itself. There is deliberately no "resolve" action.
+
+Delivered: stable issue ids; OPEN/ACKNOWLEDGED/INVESTIGATING/ESCALATED
+with note + actor + timestamp; grouping by fault class with plain-language
+meaning, recommended action and who can fix it; severity/type/status
+filters that never distort `totals`; `scannedAt`; required note on
+acknowledge; `DetectedIssue` split from `IntegrityIssue`.
+
+Browser-verified against two deliberately corrupted jobs -- see commit
+message for the full trace. Probes removed, seed verified intact.
+
+### Remaining queue
+
+1. ~~Workflow Health~~ DONE.
+2. Reports & Charts: `bar-list` still has no hover detail (the volume
+   chart does). Consider whether Financial/Inventory/Customers sections
+   need the same treatment as Operations got.
+3. Work Order / History dossier depth: the dossier exists and is wired
+   into both surfaces. Remaining idea: link `WorkOrderPartLine` rows that
+   came from a PartRequest back to that request in the timeline.
+4. Page-by-page capability audit across all 8 shells.
+5. Phase 16 -> 22 remaining work.
