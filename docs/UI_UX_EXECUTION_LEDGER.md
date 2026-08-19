@@ -661,3 +661,81 @@ real piece of work: every report contract plus the frontend charts.**
 2. Phase 16 -> 22 remaining work.
 3. Open question for the product owner, not a bug: should
    `apps/api/src/reports` stop representing money as JS numbers?
+
+---
+
+## Session 5 (cont. 3) — wording that leaked the database
+
+Two surfaces were rendering identifiers at people. Same class of bug, same
+remedy: put the words where the thing they describe is defined, and pin
+them per item so the next addition fails a test instead of a user.
+
+- **Technician finish checklist.** The gate registry only carried
+  `blockedMessage`, so a *satisfied* gate was drawn by stripping the
+  separators out of its key. A technician read "Complete the inspection
+  before finishing." directly above "parts received used or returned".
+  Every gate now carries `satisfiedMessage` **in the registry** — not in a
+  map beside the view, because a gate's text has to die with the gate.
+- **Customer portal.** The status map covered 14 of 16 statuses; the two
+  terminal ones fell through to the lowercased enum, so a customer was
+  told their car was "closed". Now "Completed".
+
+Both are checked per item. The gate test also refuses a message that is
+the key in disguise, matches the blocked text, or is not a sentence.
+
+One note worth keeping: the customer test's first version asserted "a
+label must never be the enum with underscores swapped for spaces", and
+failed CANCELLED → "Cancelled", which is simply the right word. The rule
+now applies only to multi-word statuses. **The test was wrong, not the
+label** — worth remembering before contorting a product to satisfy an
+assertion.
+
+**Gate: API 694/694 across 90 suites · shared 153/153 · web 255/255 across
+47 files · 7/7 linters.**
+
+---
+
+## RESUMPTION POINT (end of session 5)
+
+Everything below is unstarted, in priority order.
+
+### 1. Shells not yet re-walked with real data
+
+The Inventory pass found four real bugs and the technician pass one, all
+because those pages had never been opened with data in them. Still to do:
+
+- **team-leader** (all pages)
+- **branch** — work-order detail/workspace, delivery, approvals, payments
+- **analyst** — all six pages
+- **owner** — organization, teams, forms, messages, pricing, audit
+- **customer portal** — assets, invoices, history (only the status map on
+  `current-service` was touched)
+
+For each: open it as that role against the seeded workshop, check tap
+targets ≥44px, no horizontal overflow, no raw enum/key text, RTL under
+`dir="rtl"`, and that every number shown can be traced to a real row.
+
+### 2. Phase 16 -> 22 remaining work
+
+Untouched this session. See `docs/PHASE_MAP.md`.
+
+### 3. Open question for the product owner — not a bug
+
+`apps/api/src/reports` represents money as JavaScript numbers via its own
+`toDecimalNumber`, because its contracts return numbers for charting. That
+is why it is excluded from `tools/lint-money.mjs`. Changing it is real
+work: every report contract plus the frontend charts. **Needs a decision
+before anyone starts.**
+
+### Demo credentials (all against the `apex-motors` tenant)
+
+    Platform    platform-admin@mop.local        / ChangeMe-Platform-123
+    Owner       owner-demo@apex-motors.local    / ChangeMe-Owner-123
+    Manager     manager@apex-motors.local       / ChangeMe-Manager-123
+    Technician  tech@apex-motors.local          / ChangeMe-Tech-123
+    Inventory   inventory@apex-motors.local     / ChangeMe-Inventory-123
+    Analyst     analyst@apex-motors.local       / ChangeMe-Analyst-123
+    Team leader leader-demo@apex-motors.local   / ChangeMe-Leader-123
+
+Reports default to a narrow date range; widen it to 2025-01-01 → 2026-12-31
+to see the ten weeks of seeded financial history.
