@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
+import { Prisma } from "@mop/database";
 import { PrismaService } from "../database/prisma.service";
-import { resolveDateRange, safeDivide, type ReportQueryParams } from "./date-range.util";
+import { resolveDateRange, resolveGranularity, safeDivide, type ReportQueryParams } from "./date-range.util";
 import { averageMsByStatus, computeStatusDurations } from "./lifecycle-duration.util";
 
 export interface StatusDistributionRow {
@@ -31,8 +32,28 @@ export interface TechnicianWorkloadRow {
   readonly reworkRate: number | null;
 }
 
+/** One bucket of the volume series -- how many vehicles came in and went out. */
+export interface VolumePoint {
+  readonly bucket: string;
+  readonly created: number;
+  readonly closed: number;
+}
+
 export interface OperationsReport {
   readonly range: { from: string; to: string };
+  /**
+   * Vehicles in and out over time, bucketed by the caller's granularity
+   * (day by default, week or month via `groupBy`).
+   *
+   * The Owner's most basic operational question -- "how many cars did we
+   * do today, and this month" -- had no answer anywhere in Reports: the
+   * page could show a status snapshot and a financial trend, but nothing
+   * counted throughput over time, so a workshop could not tell a busy
+   * week from a quiet one.
+   */
+  readonly volume: readonly VolumePoint[];
+  /** Totals for the whole selected range, so the headline needs no client-side summing. */
+  readonly volumeTotals: { created: number; closed: number };
   readonly statusDistribution: readonly StatusDistributionRow[];
   readonly averageTimeInStatus: readonly AverageTimeInStatusRow[];
   readonly branchComparison: readonly BranchOperationsRow[];
@@ -68,6 +89,7 @@ export class ReportsOperationsService {
       reopenedJobs,
       cancelledJobs,
       totalInRange,
+      volume,
     ] = await Promise.all([
       this.statusDistribution(tenantId, branchFilter),
       this.averageTimeInStatus(tenantId, range, params.branchId),
@@ -79,6 +101,7 @@ export class ReportsOperationsService {
         where: { tenantId, ...branchFilter, status: "CANCELLED", updatedAt: { gte: range.from, lte: range.to } },
       }),
       this.prisma.workOrder.count({ where: { tenantId, ...branchFilter, createdAt: { gte: range.from, lte: range.to } } }),
+      this.volume(tenantId, range, resolveGranularity(params.groupBy), params.branchId),
     ]);
 
     return {
@@ -91,7 +114,63 @@ export class ReportsOperationsService {
       reopenedJobs,
       cancelledJobs,
       cancellationRate: safeDivide(cancelledJobs, totalInRange) * 100,
+      volume,
+      volumeTotals: volume.reduce(
+        (acc, p) => ({ created: acc.created + p.created, closed: acc.closed + p.closed }),
+        { created: 0, closed: 0 },
+      ),
     };
+  }
+
+  /**
+   * Created vs closed per bucket.
+   *
+   * Bucketed in the database rather than in JS for the same reason the
+   * financial trend is: date_trunc stays correct across timezones and at
+   * real data volume, where pulling every row back to count them does
+   * not. Two queries rather than one because a work order created in one
+   * bucket and closed in another belongs to both series, and a single
+   * grouped query would have to pick one.
+   */
+  private async volume(
+    tenantId: string,
+    range: { from: Date; to: Date },
+    granularity: "day" | "week" | "month",
+    branchId: string | undefined,
+  ): Promise<VolumePoint[]> {
+    const createdRows = await this.prisma.$queryRaw<{ bucket: Date; count: bigint }[]>(Prisma.sql`
+      SELECT date_trunc(${granularity}, w."createdAt") AS bucket, COUNT(*) AS count
+      FROM "work_orders" w
+      WHERE w."tenantId" = ${tenantId}
+        AND w."createdAt" >= ${range.from} AND w."createdAt" <= ${range.to}
+        ${branchId ? Prisma.sql`AND w."branchId" = ${branchId}` : Prisma.empty}
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `);
+
+    const closedRows = await this.prisma.$queryRaw<{ bucket: Date; count: bigint }[]>(Prisma.sql`
+      SELECT date_trunc(${granularity}, w."closedAt") AS bucket, COUNT(*) AS count
+      FROM "work_orders" w
+      WHERE w."tenantId" = ${tenantId} AND w."closedAt" IS NOT NULL
+        AND w."closedAt" >= ${range.from} AND w."closedAt" <= ${range.to}
+        ${branchId ? Prisma.sql`AND w."branchId" = ${branchId}` : Prisma.empty}
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `);
+
+    const byBucket = new Map<string, { created: number; closed: number }>();
+    for (const row of createdRows) {
+      const key = row.bucket.toISOString();
+      byBucket.set(key, { created: Number(row.count), closed: byBucket.get(key)?.closed ?? 0 });
+    }
+    for (const row of closedRows) {
+      const key = row.bucket.toISOString();
+      byBucket.set(key, { created: byBucket.get(key)?.created ?? 0, closed: Number(row.count) });
+    }
+
+    return [...byBucket.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([bucket, v]) => ({ bucket, ...v }));
   }
 
   private async statusDistribution(tenantId: string, branchFilter: object): Promise<StatusDistributionRow[]> {

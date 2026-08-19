@@ -163,3 +163,84 @@ describe("ReportsOperationsService -- historical duration from real event histor
     await prisma.tenant.delete({ where: { id: emptyTenant.id } });
   });
 });
+
+/**
+ * Vehicle throughput over time -- "how many cars did we do today, and
+ * this month". The Owner's most basic operational question, and one
+ * Reports could not answer before: the page had a status snapshot and a
+ * financial trend, but nothing counted work in and out over time, so a
+ * busy week and a quiet one looked identical.
+ */
+describe("ReportsOperationsService -- volume over time", () => {
+  it("counts vehicles in and out per bucket, and totals the range", async () => {
+    const now = new Date();
+    // Created and closed today.
+    const closed = await prisma.workOrder.create({
+      data: { tenantId, branchId, assetId, customerId, status: "CLOSED", closedAt: now },
+    });
+    // Created today, still open -- counts as created, not closed.
+    const open = await prisma.workOrder.create({
+      data: { tenantId, branchId, assetId, customerId, status: "IN_PROGRESS" },
+    });
+
+    const report = await operations.build(tenantId, {});
+
+    expect(report.volume.length).toBeGreaterThan(0);
+    expect(report.volumeTotals.created).toBeGreaterThanOrEqual(2);
+    expect(report.volumeTotals.closed).toBeGreaterThanOrEqual(1);
+    // Buckets arrive in chronological order so a chart can render them as-is.
+    const buckets = report.volume.map((p) => p.bucket);
+    expect([...buckets].sort()).toEqual(buckets);
+
+    await prisma.workOrder.deleteMany({ where: { id: { in: [closed.id, open.id] } } });
+  });
+
+  it("honours the requested granularity", async () => {
+    const daily = await operations.build(tenantId, { groupBy: "day" });
+    const monthly = await operations.build(tenantId, { groupBy: "month" });
+
+    // A month cannot contain more buckets than the days inside it.
+    expect(monthly.volume.length).toBeLessThanOrEqual(daily.volume.length);
+    // Whatever the bucketing, the same work is counted.
+    expect(monthly.volumeTotals.created).toBe(daily.volumeTotals.created);
+  });
+
+  it("never counts another workshop's vehicles", async () => {
+    const otherPlan = await prisma.plan.create({
+      data: {
+        code: `PLAN-OTHER-${SUFFIX}`,
+        name: "Other",
+        maxBranches: 5,
+        maxUsers: 50,
+        maxWarehouses: 5,
+        allowedCategories: ["CARS"],
+        allowedModules: [],
+        allowedFeatures: [],
+        allowedReports: [],
+        monthlyPrice: 0,
+      },
+    });
+    const other = await prisma.tenant.create({
+      data: {
+        name: `Other WS ${SUFFIX}`,
+        nameNormalized: `other ws ${SUFFIX}`,
+        slug: `other-ws-${SUFFIX}`,
+        customerRegistrationCode: `OTHV-${SUFFIX}`,
+        status: "ACTIVE",
+        planId: otherPlan.id,
+        country: "EG",
+        city: "Cairo",
+        businessType: "Garage",
+        primaryCategory: "CARS",
+        currency: "EGP",
+        timezone: "Africa/Cairo",
+      },
+    });
+
+    const report = await operations.build(other.id, {});
+    expect(report.volumeTotals).toEqual({ created: 0, closed: 0 });
+
+    await prisma.tenant.delete({ where: { id: other.id } });
+    await prisma.plan.delete({ where: { id: otherPlan.id } });
+  });
+});
