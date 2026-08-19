@@ -175,7 +175,7 @@
   block-size: 4px;
   min-inline-size: 2px;
   background: var(--brand);
-  border-radius: 1px;
+  border-radius: var(--radius-pill);
 }
 
 .slice-count {

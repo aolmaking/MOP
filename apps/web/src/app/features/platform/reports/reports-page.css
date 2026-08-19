@@ -171,7 +171,7 @@
   flex: 1;
   block-size: 6px;
   background: var(--border);
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
 

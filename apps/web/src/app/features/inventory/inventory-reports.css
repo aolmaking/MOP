@@ -118,14 +118,14 @@ a.bar-label:focus-visible {
 .bar-track {
   block-size: 10px;
   background: var(--bg);
-  border-radius: 1px;
+  border-radius: var(--radius-pill);
 }
 
 .bar-fill {
   display: block;
   block-size: 100%;
   background: var(--brand);
-  border-radius: 1px;
+  border-radius: var(--radius-pill);
 }
 
 .bar-value {

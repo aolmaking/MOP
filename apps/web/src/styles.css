@@ -348,6 +348,59 @@ a {
   border-radius: var(--radius-sm);
 }
 
+/*
+ * SHAPE BASELINE
+ *
+ * The product owner's rule is that nothing should read as a hard corner.
+ * Roughly ninety rules across the feature stylesheets paint a surface --
+ * a badge, a chip, a task row, a picker option, a severity marker -- and
+ * never declared a radius, so each was a sharp rectangle.
+ *
+ * Written with :where() on purpose: it contributes ZERO specificity, so
+ * this is a floor and never a fight. Any component rule that sets its own
+ * radius still wins, including the ones that deliberately want a pill or
+ * a square. Adding the radius here rather than editing ninety rules also
+ * means a component that gains a surface later is curved by default
+ * instead of being missed.
+ *
+ * Excluded deliberately: table internals (a radius on a `tr` or `td` is
+ * ignored by table layout anyway), and full-bleed furniture like the nav
+ * bar and scrims, which should meet the viewport edge squarely.
+ */
+:where(
+  button,
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea,
+  [class*='badge'],
+  [class*='chip'],
+  [class*='tag'],
+  [class*='pill'],
+  [class*='card'],
+  [class*='panel'],
+  [class*='tab'],
+  [class*='item'],
+  [class*='option'],
+  [class*='severity'],
+  [class*='state'],
+  [class*='banner'],
+  [class*='note'],
+  [class*='box'],
+  [class*='row'],
+  [class*='lane'],
+  [class*='job'],
+  [class*='task'],
+  [class*='entry'],
+  [class*='group']
+) {
+  border-radius: var(--radius-sm);
+}
+
+/* Larger containers earn the next step up. */
+:where([class*='dialog'], [class*='modal'], [class*='drawer'], [class*='editor'], [class*='popover']) {
+  border-radius: var(--radius-lg);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
