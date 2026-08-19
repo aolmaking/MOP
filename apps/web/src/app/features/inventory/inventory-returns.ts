@@ -248,9 +248,28 @@ export class InventoryReturns {
       });
   }
 
-  /** A signed delta reads faster than "before/after" arithmetic in a dense table. */
-  protected delta(row: { quantity: number; type: string }): string {
-    const sign = row.quantity < 0 ? '' : '+';
-    return `${sign}${row.quantity}`;
+  /**
+   * A signed delta reads faster than "before/after" arithmetic in a dense
+   * table -- but it has to agree with the two columns beside it.
+   *
+   * `StockMovement.quantity` is a magnitude; the direction lives in
+   * `type`. Signing off the quantity alone therefore printed "+1" on an
+   * ISSUE sitting next to "before 4, after 3", so the ledger contradicted
+   * itself on every row that took stock out.
+   *
+   * The sign is taken from the movement's actual effect rather than from
+   * a list of which types decrease stock. A hand-kept list would need
+   * updating for every new StockMovementType and would be wrong for
+   * ADJUSTMENT, which goes either way.
+   */
+  protected delta(row: { quantity: number; beforeQty: number; afterQty: number }): string {
+    const change = row.afterQty - row.beforeQty;
+    if (change === 0) {
+      // A movement that did not change what is on the shelf -- a return
+      // going into pending, say. Shown as its magnitude with no sign,
+      // because "+0" and "-0" both claim a direction it did not have.
+      return `${row.quantity}`;
+    }
+    return `${change > 0 ? '+' : '−'}${Math.abs(change)}`;
   }
 }

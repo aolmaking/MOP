@@ -81,3 +81,53 @@ describe('InventoryReturns', () => {
     expect(element.querySelector('.queue')).toBeNull();
   });
 });
+
+describe('InventoryReturns -- ledger delta', () => {
+  /**
+   * StockMovement.quantity is a magnitude and the direction lives in
+   * `type`, so signing off the quantity alone printed "+1" on an ISSUE
+   * shown next to "before 4, after 3". The ledger contradicted itself on
+   * every row that took stock out, which on an inventory ledger is not a
+   * cosmetic problem.
+   */
+  function delta(row: { quantity: number; beforeQty: number; afterQty: number }): string {
+    const component = TestBed.createComponent(InventoryReturns).componentInstance as unknown as {
+      delta(r: { quantity: number; beforeQty: number; afterQty: number }): string;
+    };
+    return component.delta(row);
+  }
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: InventoryApi,
+          useValue: {
+            openReturns: () => of({ returns: [] }),
+            movements: () => of({ rows: [], total: 0, page: 1, pageSize: 50 }),
+            stock: () => of({ warehouses: [], rows: [] }),
+          },
+        },
+      ],
+    });
+  });
+
+  it('shows stock leaving the shelf as a negative', () => {
+    expect(delta({ quantity: 1, beforeQty: 4, afterQty: 3 })).toBe('−1');
+  });
+
+  it('shows stock arriving as a positive', () => {
+    expect(delta({ quantity: 15, beforeQty: 0, afterQty: 15 })).toBe('+15');
+  });
+
+  it('agrees with the before and after columns rather than the raw quantity', () => {
+    // A four-litre oil issue: magnitude 4, effect -4.
+    expect(delta({ quantity: 4, beforeQty: 52, afterQty: 48 })).toBe('−4');
+  });
+
+  it('claims no direction for a movement that left the shelf unchanged', () => {
+    // A return going into pending is neither sellable nor still issued;
+    // "+0" would assert a direction it does not have.
+    expect(delta({ quantity: 2, beforeQty: 7, afterQty: 7 })).toBe('2');
+  });
+});
