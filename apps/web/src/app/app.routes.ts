@@ -56,6 +56,15 @@ export const routes: Routes = [
           import('./features/platform/control-center/control-center-page').then((m) => m.ControlCenterPage),
       },
       {
+        // The last rail link that pointed at nothing. Backed by a real
+        // cross-tenant read (platform/live-view) rather than a mock --
+        // it is the only endpoint in the product that aggregates across
+        // tenants, which is why it exposes counts and event kinds only.
+        path: 'live-view',
+        loadComponent: () =>
+          import('./features/platform/live-view/live-view-page').then((m) => m.LiveViewPage),
+      },
+      {
         path: 'workshops/new',
         loadComponent: () => import('./features/platform/add-workshop/add-workshop-page').then((m) => m.AddWorkshopPage),
       },

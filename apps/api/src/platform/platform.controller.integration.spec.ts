@@ -25,6 +25,11 @@ describe("PlatformController (integration, real HTTP)", () => {
   const prisma = new PrismaClient();
   let app: INestApplication;
   let planId: string;
+  // Captured rather than looked up by accountType, because more than one
+  // suite creates a PLATFORM account and "findFirst PLATFORM" would pick
+  // whichever happened to be inserted first -- including one another
+  // suite is about to delete in its own teardown.
+  let platformEmail: string;
   const tenantIdsToClean: string[] = [];
 
   async function login(email: string, password: string): Promise<string> {
@@ -49,10 +54,11 @@ describe("PlatformController (integration, real HTTP)", () => {
     });
     planId = plan.id;
 
+    platformEmail = `platform-http-${Date.now()}@example.com`;
     await prisma.account.create({
       data: {
         accountType: "PLATFORM",
-        email: `platform-http-${Date.now()}@example.com`,
+        email: platformEmail,
         passwordHash: hashPassword("platform-password-123"),
         status: "ACTIVE",
       },
@@ -115,8 +121,7 @@ describe("PlatformController (integration, real HTTP)", () => {
   }
 
   it("a platform session can create a workshop, and it leaves a real audit row behind", async () => {
-    const platformAccount = await prisma.account.findFirstOrThrow({ where: { accountType: "PLATFORM" } });
-    const cookieHeader = await login(platformAccount.email!, "platform-password-123");
+    const cookieHeader = await login(platformEmail, "platform-password-123");
     const suffix = `${Date.now()}-1`;
 
     const res = await request(app.getHttpServer())
@@ -155,8 +160,7 @@ describe("PlatformController (integration, real HTTP)", () => {
     // primary market is Arabic, so a directionality-override character
     // is exactly the kind of thing a slug field has to refuse rather
     // than store. docs/scenarios3/EDGE_CASE_REGISTER.md, H9.
-    const platformAccount = await prisma.account.findFirstOrThrow({ where: { accountType: "PLATFORM" } });
-    const cookieHeader = await login(platformAccount.email!, "platform-password-123");
+    const cookieHeader = await login(platformEmail, "platform-password-123");
     const suffix = `${Date.now()}-rtl`;
 
     const payload = workshopPayload(suffix);
@@ -170,8 +174,7 @@ describe("PlatformController (integration, real HTTP)", () => {
   });
 
   it("H9 -- refuses a slug with uppercase, spaces, or other characters outside the documented pattern", async () => {
-    const platformAccount = await prisma.account.findFirstOrThrow({ where: { accountType: "PLATFORM" } });
-    const cookieHeader = await login(platformAccount.email!, "platform-password-123");
+    const cookieHeader = await login(platformEmail, "platform-password-123");
     const suffix = `${Date.now()}-bad`;
 
     const payload = workshopPayload(suffix);
@@ -183,8 +186,7 @@ describe("PlatformController (integration, real HTTP)", () => {
   });
 
   it("seeds a real starter service card when a starter specialization profile is chosen (Phase 17.A)", async () => {
-    const platformAccount = await prisma.account.findFirstOrThrow({ where: { accountType: "PLATFORM" } });
-    const cookieHeader = await login(platformAccount.email!, "platform-password-123");
+    const cookieHeader = await login(platformEmail, "platform-password-123");
     const suffix = `${Date.now()}-quick`;
 
     const res = await request(app.getHttpServer())
@@ -205,8 +207,7 @@ describe("PlatformController (integration, real HTTP)", () => {
   });
 
   it("seeds nothing when no starter specialization profile is chosen -- NONE is not a stub, it is a real empty result", async () => {
-    const platformAccount = await prisma.account.findFirstOrThrow({ where: { accountType: "PLATFORM" } });
-    const cookieHeader = await login(platformAccount.email!, "platform-password-123");
+    const cookieHeader = await login(platformEmail, "platform-password-123");
     const suffix = `${Date.now()}-none`;
 
     const res = await request(app.getHttpServer())

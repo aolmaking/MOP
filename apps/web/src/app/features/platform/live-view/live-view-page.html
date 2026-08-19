@@ -1,0 +1,141 @@
+<section class="live-view">
+  <header class="head">
+    <div class="head-text">
+      <h1 class="title">Live View</h1>
+      <p class="sub">
+        Every workshop on the platform, right now. Workshops with open work and no activity in the last 24 hours sort to
+        the top — those are the ones worth a phone call.
+      </p>
+    </div>
+
+    <div class="head-actions">
+      <button
+        type="button"
+        class="refresh-toggle"
+        [class.refresh-toggle--on]="autoRefresh()"
+        [attr.aria-pressed]="autoRefresh()"
+        (click)="toggleAutoRefresh()"
+      >
+        <span class="dot" aria-hidden="true"></span>
+        {{ autoRefresh() ? 'Live' : 'Paused' }}
+      </button>
+      <button appButton variant="secondary" size="small" (click)="load()">Refresh now</button>
+    </div>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('ready') {
+      @if (totals(); as t) {
+        <ul class="totals" aria-label="Platform totals">
+          <li class="total">
+            <span class="total-value">{{ t.workshops }}</span>
+            <span class="total-label">Workshops</span>
+          </li>
+          <li class="total">
+            <span class="total-value">{{ t.activeWorkshops }}</span>
+            <span class="total-label">Active</span>
+          </li>
+          <li class="total">
+            <span class="total-value">{{ t.openJobs }}</span>
+            <span class="total-label">Open jobs</span>
+          </li>
+          <li class="total">
+            <span class="total-value">{{ t.eventsToday }}</span>
+            <span class="total-label">Events in 24h</span>
+          </li>
+          <!-- The only figure here that is a problem rather than a fact. -->
+          <li class="total" [class.total--alarm]="t.quietWorkshops > 0">
+            <span class="total-value">{{ t.quietWorkshops }}</span>
+            <span class="total-label">Quiet with open work</span>
+          </li>
+        </ul>
+      }
+
+      <div class="panels">
+        <section class="panel">
+          <h2 class="panel-title">Workshops</h2>
+
+          @if (workshops().length === 0) {
+            <p class="state-body">No workshops on the platform yet.</p>
+          } @else {
+            <div class="mop-table-scroll">
+              <table class="table">
+                <caption class="sr-only">Every workshop, sorted by whether it needs attention</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Workshop</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" class="num">Open jobs</th>
+                    <th scope="col" class="num">Events 24h</th>
+                    <th scope="col">Last activity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (w of workshops(); track w.workshopId) {
+                    <tr [class.row--quiet]="isQuiet(w)">
+                      <td>
+                        <span class="shop-name">{{ w.workshopName }}</span>
+                        <span class="shop-slug">{{ w.slug }}</span>
+                      </td>
+                      <td><span class="badge">{{ label(w.status) }}</span></td>
+                      <td class="num">{{ w.openJobs }}</td>
+                      <td class="num">{{ w.eventsToday }}</td>
+                      <td>
+                        <span
+                          class="since"
+                          [title]="w.lastActivityAt ? 'Last event at ' + when(w.lastActivityAt) : 'Nothing has happened here in 24 hours'"
+                        >
+                          {{ sinceLabel(w.lastActivityAt) }}
+                        </span>
+                        @if (isQuiet(w)) {
+                          <span class="quiet-flag" title="Open work, but nobody has touched it in 24 hours">
+                            needs a look
+                          </span>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+
+        <section class="panel">
+          <h2 class="panel-title">Recent activity</h2>
+          <p class="panel-hint">
+            What kind of thing happened, and where. Job, customer and money detail stays inside the workshop it belongs
+            to.
+          </p>
+
+          @if (activity().length === 0) {
+            <p class="state-body">Nothing has happened anywhere on the platform in the last 24 hours.</p>
+          } @else {
+            <ol class="feed">
+              @for (row of activity(); track row.at + row.workshopId + row.eventKey) {
+                <li class="feed-row">
+                  <span class="feed-time">{{ when(row.at) }}</span>
+                  <span class="feed-body">
+                    <span class="feed-summary">{{ row.summary }}</span>
+                    <span class="feed-shop">{{ row.workshopName }}</span>
+                  </span>
+                </li>
+              }
+            </ol>
+          }
+        </section>
+      </div>
+    }
+  }
+</section>

@@ -394,3 +394,79 @@ message for the full trace. Probes removed, seed verified intact.
    came from a PartRequest back to that request in the timeline.
 4. Page-by-page capability audit across all 8 shells.
 5. Phase 16 -> 22 remaining work.
+
+---
+
+## Session 5 — the two dead platform rail links, closed
+
+Both links visible in the owner's very first screenshot pointed at no
+route, so they fell through to the placeholder landing page. Both are now
+real pages backed by real reads.
+
+### Control Center (`/platform/control-center`)
+
+Governance overrides: permission locks and workshop archive/restore. The
+backend already existed and was reachable only by calling the API
+directly. Every action demands a written reason.
+
+Live governance cycle proven end to end:
+`beforeLock 201 -> afterLock 403 -> remove 201 -> afterRelease 201`.
+
+While building it, lock **removal** turned out to be silently broken:
+`RemoveRoleLockDto` rejected the `reason` field with a 400 that the UI
+surfaced as nothing. Fixed by making `reason` required end to end, which
+also closed a real audit asymmetry — setting a lock recorded why,
+removing one did not.
+
+### Live View (`/platform/live-view`)
+
+The last dead link. Nothing existed behind it, so the backend was built:
+`LiveViewService` + `LiveViewController`, platform-guarded.
+
+It is the only endpoint in the product that aggregates **across** tenants,
+which shapes every decision in it:
+
+- It returns counts and event *kinds* only — never job, customer or money
+  detail.
+- Activity summaries are derived from `eventKey` alone. The payload is
+  never read, because the payload is where plate numbers, customer names
+  and amounts live. An integration test asserts a planted
+  `SECRET-PLATE-9999` payload does not appear anywhere in the response.
+- Nothing is actionable in-page. Acting on a workshop means going to
+  Control Center, where it is audited.
+
+The figure the page exists for is **"quiet with open work"** — a workshop
+with open jobs and zero events in 24h. That is not calm; it is work
+abandoned mid-flow or stuck. Those rows sort to the top and are the only
+place the identity red is spent.
+
+Browser-verified against real data, then against a real quiet condition:
+a temporary open job in Delta Quick Service made the page re-sort Delta
+above Apex, render `needs a look`, and turn the total red (`rgb(212,23,23)`).
+Probe rows removed by exact id afterwards; page confirmed back to 0 quiet.
+
+**Two real defects found and fixed during verification:**
+
+1. `platform.controller.integration.spec.ts` logged in via
+   `findFirstOrThrow({ accountType: "PLATFORM" })` — any platform account.
+   Once a second suite created one, it picked an arbitrary account and the
+   suite failed. Now it uses the account it created.
+2. The mobile rule used `grid-template-columns: 1fr`, which floors at the
+   content's min-content width. The panel rendered 434px wide in a 375px
+   viewport and pushed 71px past the screen. `minmax(0, 1fr)` fixed it —
+   the same guard the desktop rule already had.
+
+**Gate: API 691/691 across 90 suites · web 235/235 across 47 files ·
+7/7 linters · typecheck clean.**
+
+### Remaining queue
+
+1. ~~Workflow Health~~ DONE.
+2. ~~Control Center~~ DONE. ~~Live View~~ DONE. No dead nav links remain
+   in the Platform shell.
+3. Reports & Charts: `bar-list` hover detail landed for Operations.
+   Consider whether Financial/Inventory/Customers need the same.
+4. Work Order / History dossier depth: remaining idea is linking
+   `WorkOrderPartLine` rows back to the `PartRequest` they came from.
+5. Page-by-page capability audit across the remaining 7 shells.
+6. Phase 16 -> 22 remaining work.

@@ -12,6 +12,8 @@ import { WorkshopHealthService } from "./workshops/workshop-health.service";
 import { SpecializationModule } from "../specialization/specialization.module";
 import { PlatformReportsController } from "./reports/platform-reports.controller";
 import { PlatformReportsService } from "./reports/platform-reports.service";
+import { LiveViewController } from "./live-view.controller";
+import { LiveViewService } from "./live-view.service";
 
 @Module({
   imports: [AuditModule, AuthModule, CapabilitiesModule, SpecializationModule],
@@ -22,11 +24,24 @@ import { PlatformReportsService } from "./reports/platform-reports.service";
   // for what's deliberately not built yet). Each sits under its own
   // literal prefix (platform/workshops, platform/reports), so registration
   // order between them never matters.
-  controllers: [PlatformController, WorkshopsController, CapabilitiesController, PlatformReportsController],
+  controllers: [
+    PlatformController,
+    WorkshopsController,
+    CapabilitiesController,
+    PlatformReportsController,
+    LiveViewController,
+  ],
   // PlatformGuard isn't exported by AuthModule (only AuthService and
   // SessionGuard are) -- it's small and stateless, so it's simplest to
   // just provide it directly here rather than widen AuthModule's exports
   // for one consumer.
-  providers: [PlatformService, PlatformGuard, WorkshopsService, WorkshopHealthService, PlatformReportsService],
+  providers: [
+    PlatformService,
+    PlatformGuard,
+    WorkshopsService,
+    WorkshopHealthService,
+    PlatformReportsService,
+    LiveViewService,
+  ],
 })
 export class PlatformModule {}

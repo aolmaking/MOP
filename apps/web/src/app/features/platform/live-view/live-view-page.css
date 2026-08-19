@@ -1,0 +1,320 @@
+/*
+ * Live View.
+ *
+ * A monitoring page, so it is built to be read at a glance and from a
+ * distance: big totals, one alarm colour used once, and a table that
+ * puts the workshop needing attention at the top rather than asking the
+ * reader to scan for it.
+ *
+ * The identity red is spent only on "quiet with open work". If every
+ * number here were red, none of them would mean anything.
+ */
+
+.live-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--text);
+}
+
+.title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.sub {
+  margin-top: var(--space-1);
+  max-inline-size: 62ch;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.head-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* -- live/paused toggle ------------------------------------------------ */
+
+.refresh-toggle {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-block-size: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
+}
+
+.refresh-toggle--on {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+.dot {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-track);
+}
+
+.refresh-toggle--on .dot {
+  background: var(--success, var(--accent-cool));
+  /* The only looping animation in the product: it is the one element
+     whose whole meaning is "this is still updating". */
+  animation: pulse 2s var(--ease-out) infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* -- totals ------------------------------------------------------------ */
+
+.totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-3);
+  list-style: none;
+}
+
+.total {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.total-value {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.total-label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.total--alarm {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-2);
+}
+
+.total--alarm .total-value {
+  color: var(--accent);
+}
+
+/* -- panels ------------------------------------------------------------ */
+
+.panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.panel {
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.panel-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.panel-hint {
+  margin-top: var(--space-1);
+  margin-bottom: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+/* -- workshop table ---------------------------------------------------- */
+
+.table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: start;
+  border-bottom: 1px solid var(--border);
+}
+
+.table th {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.row--quiet {
+  background: var(--accent-wash, transparent);
+}
+
+.shop-name {
+  display: block;
+  font-weight: 500;
+}
+
+.shop-slug {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  background: var(--neutral-track);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.since {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.quiet-flag {
+  display: inline-block;
+  margin-inline-start: var(--space-2);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-pill);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+/* -- activity feed ----------------------------------------------------- */
+
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-block-size: 32rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.feed-row {
+  display: flex;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.feed-time {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  padding-top: 2px;
+}
+
+.feed-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.feed-summary {
+  font-size: var(--text-sm);
+}
+
+.feed-shop {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+/* -- states ------------------------------------------------------------ */
+
+.state-body {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.state-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 1200px) {
+  .panels {
+    /* minmax(0, 1fr), never plain 1fr: a bare `1fr` track floors at the
+       content's min-content width, and the workshops table is wider than
+       a phone. That let the panel push past the viewport rather than
+       letting the table scroll inside its own box. */
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .refresh-toggle--on .dot {
+    animation: none;
+  }
+}
