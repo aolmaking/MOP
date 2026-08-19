@@ -591,3 +591,73 @@ command, not a flake in the code.
    Inventory Manager shell in particular has never been seen with real
    stock in it until now, so it is worth a fresh pass.
 4. Phase 16 -> 22 remaining work.
+
+---
+
+## Session 5 (cont. 2) — the Inventory shell and the dossier, with data at last
+
+Everything below was found by opening pages that had never been seen with
+real data in them. That is the pattern worth carrying forward: **empty
+demo data hides bugs, it does not prevent them.**
+
+### Inventory shell
+
+- **Stock table marker was physical.** `box-shadow: inset 3px 0 0 0` does
+  not flip, so under `dir="rtl"` the stripe stayed left while the first
+  column moved right. Now `border-inline-start`, carried transparent on
+  every row so flagged states do not shift the column.
+- **Level was colour-only**, and "low" had no colour on the number at all.
+  Now said in words beside the total, with a fuller phrase for assistive
+  tech and nothing at all on a healthy row.
+- **The directional-CSS linter could not see it** — it reads property
+  names, and the direction was hiding in a value. It now also flags inset
+  shadows with a non-zero horizontal offset, and only those. Took two
+  attempts: reading "the first length with a unit" skipped an unitless
+  zero and flagged `inset 0 -2px` as horizontal.
+- **The stock ledger contradicted itself.** Every movement rendered `+N`,
+  so an ISSUE read "+1" beside "before 4, after 3". `quantity` is a
+  magnitude and `delta()` took `type` and never read it. The sign comes
+  from `afterQty - beforeQty` now — not a hand-kept list of decreasing
+  types, which would need updating per enum member and would still be
+  wrong for ADJUSTMENT. No test covered `delta` at all; four do now.
+
+### Work-order dossier
+
+- **Money breakdown only read the RunningInvoice**, so an invoiced job
+  showed a total with nothing behind it. It reads the invoice's locked
+  lines once one exists, and drops the competing "running total".
+- **Cost was blanked, not omitted** — contradicting both the class comment
+  and the project rule. Worse, the *test* asserted `toBeNull()` under the
+  name "omits cost entirely". Null was also ambiguous with "allowed to
+  see, none recorded". The key is gone now, asserted against the
+  serialised JSON too.
+- **`Number(l.total)` summed money as floats.** Now `sum()` from
+  `@mop/shared`, in minor units.
+
+### The money rule had a hole
+
+That float sum survived because `tools/lint-money.mjs` scanned only four
+directories, and `apps/api/src/operations` — which composes the dossier —
+was not one. Adding it surfaced a second real bug: the payment gate used
+`Number(invoice.balance) <= 0` to decide whether a car could be handed
+over. Compared on the Decimal now.
+
+**`apps/api/src/reports` is deliberately still excluded.** It converts
+money to numbers through its own `toDecimalNumber` because its contracts
+return numbers for charting. That is a decision, not an oversight —
+switching the rule on there would produce eight suppressions that hide the
+question instead of answering it. **If anyone wants that changed it is a
+real piece of work: every report contract plus the frontend charts.**
+
+**Gate: API 694/694 across 90 suites · web 239/239 across 47 files ·
+7/7 linters.**
+
+### Resume here
+
+1. Page-by-page audit of the shells not yet re-walked with real data:
+   **technician, team-leader, branch (work-order detail), analyst,
+   customer portal, owner**. The Inventory pass above found four real bugs
+   in one shell — expect more.
+2. Phase 16 -> 22 remaining work.
+3. Open question for the product owner, not a bug: should
+   `apps/api/src/reports` stop representing money as JS numbers?
