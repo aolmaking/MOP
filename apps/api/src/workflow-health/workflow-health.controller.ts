@@ -1,9 +1,10 @@
-import { BadRequestException, Controller, ForbiddenException, Get, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, ForbiddenException, Get, HttpCode, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { IsIn, IsString, Length } from "class-validator";
 import type { SessionContext } from "@mop/shared";
 import { SessionGuard } from "../auth/session.guard";
 import { CurrentSession } from "../auth/current-session.decorator";
 import { EffectiveAccessService } from "../access/effective-access.service";
-import { WorkflowIntegrityService, type IntegrityReport } from "./workflow-integrity.service";
+import { WorkflowIntegrityService, type IntegrityIssueSeverity, type IntegrityReport } from "./workflow-integrity.service";
 import { WorkflowBottlenecksService, type BottlenecksReport } from "./workflow-bottlenecks.service";
 
 /**
@@ -13,6 +14,21 @@ import { WorkflowBottlenecksService, type BottlenecksReport } from "./workflow-b
  * diagnostics (`/bottlenecks`) -- both permission-gated the same way,
  * both consumers of facts a future Data Analyst surface could read too.
  */
+
+/**
+ * A note is required, not optional: an acknowledgement with no reason is
+ * indistinguishable from nobody having looked, and the whole point of the
+ * status is telling those two apart.
+ */
+export class AcknowledgeIssueDto {
+  @IsIn(["ACKNOWLEDGED", "INVESTIGATING", "ESCALATED"])
+  status!: "ACKNOWLEDGED" | "INVESTIGATING" | "ESCALATED";
+
+  @IsString()
+  @Length(3, 1000)
+  note!: string;
+}
+
 @Controller("organization/workflow-health")
 @UseGuards(SessionGuard)
 export class WorkflowHealthController {
@@ -22,10 +38,53 @@ export class WorkflowHealthController {
     private readonly access: EffectiveAccessService,
   ) {}
 
+  /**
+   * `severity`, `type` and `status` narrow the list only. The report's
+   * `totals` always describe every detected issue, so the filter controls
+   * can say what they would reveal instead of collapsing to whatever is
+   * currently on screen.
+   */
   @Get("issues")
-  async getIssues(@CurrentSession() session: SessionContext): Promise<IntegrityReport> {
+  async getIssues(
+    @CurrentSession() session: SessionContext,
+    @Query("severity") severity?: string,
+    @Query("type") type?: string,
+    @Query("status") status?: string,
+  ): Promise<IntegrityReport> {
     const tenantId = await this.require(session);
-    return this.integrity.build(tenantId);
+    return this.integrity.build(tenantId, {
+      severity: this.parseSeverity(severity),
+      type: type || undefined,
+      status: status === "open" || status === "handled" ? status : undefined,
+    });
+  }
+
+  /**
+   * Records what somebody decided about one issue.
+   *
+   * Deliberately not a "resolve": an integrity issue is resolved when the
+   * records stop producing it, so the only thing a person can add is what
+   * they found or what they are doing -- which is exactly what an Owner
+   * looking at the same list tomorrow needs to know.
+   */
+  @Post("issues/:fingerprint/acknowledge")
+  @HttpCode(200)
+  async acknowledgeIssue(
+    @CurrentSession() session: SessionContext,
+    @Param("fingerprint") fingerprint: string,
+    @Body() dto: AcknowledgeIssueDto,
+  ) {
+    const tenantId = await this.require(session);
+    return this.integrity.acknowledge(
+      tenantId,
+      decodeURIComponent(fingerprint),
+      { status: dto.status, note: dto.note },
+      { accountId: session.accountId, displayName: session.displayName },
+    );
+  }
+
+  private parseSeverity(value: string | undefined): IntegrityIssueSeverity | undefined {
+    return value === "CRITICAL" || value === "WARNING" || value === "INFO" ? value : undefined;
   }
 
   @Get("bottlenecks")

@@ -383,6 +383,7 @@ model Tenant {
 
   @@index([status])
   @@map("tenants")
+  workflowIssueAcks WorkflowIssueAcknowledgement[]
 }
 
 // Platform + tenant-level overrides that sit above everything else in the
@@ -2163,4 +2164,46 @@ model PlatformLiveViewSession {
 
   @@index([tenantId, startedAt])
   @@map("platform_live_view_sessions")
+}
+
+/// A person's response to a detected workflow issue.
+///
+/// Deliberately does NOT store the issues themselves. Integrity issues are
+/// derived facts -- recomputed from the records on every scan -- and
+/// persisting them would create a second copy that drifts from the data it
+/// was derived from, which is the exact failure Workflow Health exists to
+/// detect. What cannot be recomputed is what a human decided about one, so
+/// that is the only thing kept here.
+///
+/// Keyed by a deterministic fingerprint (`type:entityType:entityId`) so the
+/// same underlying problem is the same row across scans, and an issue that
+/// stops being detected is resolved by definition rather than by anyone
+/// remembering to close it.
+model WorkflowIssueAcknowledgement {
+  id          String                 @id @default(cuid())
+  tenantId    String
+  /// `${type}:${entityType}:${entityId}` -- stable across scans.
+  fingerprint String
+  issueType   String
+  entityType  String
+  entityId    String
+  status      WorkflowIssueStatus    @default(ACKNOWLEDGED)
+  /// Why it was acknowledged or escalated. Required by the service, not the schema.
+  note        String?
+  actorId     String
+  actorName   String
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, fingerprint])
+  @@index([tenantId, status])
+  @@map("workflow_issue_acknowledgements")
+}
+
+enum WorkflowIssueStatus {
+  ACKNOWLEDGED
+  INVESTIGATING
+  ESCALATED
 }

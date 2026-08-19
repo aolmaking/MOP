@@ -66,6 +66,7 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
+  await prisma.workflowIssueAcknowledgement.deleteMany({ where: { tenantId } });
   await prisma.customerDecisionItem.deleteMany({ where: { tenantId } });
   await prisma.customerDecisionRequest.deleteMany({ where: { tenantId } });
   await prisma.partReturnRequest.deleteMany({ where: { tenantId } });
@@ -272,5 +273,167 @@ describe("WorkflowIntegrityService", () => {
     expect(report.issues).toEqual([]);
 
     await prisma.tenant.delete({ where: { id: otherTenant.id } });
+  });
+});
+
+/**
+ * The issue lifecycle.
+ *
+ * Workflow Health detects derived facts, so the issues themselves are
+ * never stored -- storing them would create a second copy that drifts
+ * from the records they came from, which is the exact failure this page
+ * exists to catch. What cannot be recomputed is what a person decided, so
+ * that is the only thing persisted, keyed by a fingerprint that is stable
+ * across scans.
+ */
+describe("WorkflowIntegrityService -- issue lifecycle", () => {
+  const ACTOR = { accountId: "owner-acct", displayName: "Amira Hassan" };
+
+  async function anyIssue() {
+    const report = await integrity.build(tenantId);
+    expect(report.issues.length).toBeGreaterThan(0);
+    return report.issues[0];
+  }
+
+  it("gives every issue an id that survives a rescan", async () => {
+    const first = await integrity.build(tenantId);
+    const second = await integrity.build(tenantId);
+
+    const idsA = first.issues.map((i) => i.id).sort();
+    const idsB = second.issues.map((i) => i.id).sort();
+    expect(idsA).toEqual(idsB);
+    // The id says what the issue is about, so it can be acted on without
+    // a lookup table.
+    expect(first.issues[0].id.split(":").length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("starts every issue OPEN, and remembers a decision across rescans", async () => {
+    const issue = await anyIssue();
+    expect(issue.status).toBe("OPEN");
+
+    await integrity.acknowledge(
+      tenantId,
+      issue.id,
+      { status: "INVESTIGATING", note: "Checking the event history for this job." },
+      ACTOR,
+    );
+
+    const after = await integrity.build(tenantId);
+    const same = after.issues.find((i) => i.id === issue.id);
+    expect(same!.status).toBe("INVESTIGATING");
+    expect(same!.note).toBe("Checking the event history for this job.");
+    expect(same!.handledBy).toBe("Amira Hassan");
+    expect(same!.handledAt).not.toBeNull();
+  });
+
+  it("updates the decision rather than accumulating rows", async () => {
+    const issue = await anyIssue();
+
+    await integrity.acknowledge(tenantId, issue.id, { status: "ACKNOWLEDGED", note: "Seen it." }, ACTOR);
+    await integrity.acknowledge(tenantId, issue.id, { status: "ESCALATED", note: "Raised with the platform." }, ACTOR);
+
+    const rows = await prisma.workflowIssueAcknowledgement.count({ where: { tenantId, fingerprint: issue.id } });
+    expect(rows).toBe(1);
+
+    const after = await integrity.build(tenantId);
+    expect(after.issues.find((i) => i.id === issue.id)!.status).toBe("ESCALATED");
+  });
+
+  it("refuses an acknowledgement with no reason, because that is indistinguishable from nobody looking", async () => {
+    const issue = await anyIssue();
+    await expect(
+      integrity.acknowledge(tenantId, issue.id, { status: "ACKNOWLEDGED", note: "  " }, ACTOR),
+    ).rejects.toThrow(/what you found/i);
+  });
+
+  it("groups by fault class, so the Owner sees one cause rather than N symptoms", async () => {
+    const report = await integrity.build(tenantId);
+
+    expect(report.groups.length).toBeGreaterThan(0);
+    for (const group of report.groups) {
+      expect(group.total).toBeGreaterThan(0);
+      expect(group.open + group.handled).toBe(group.total);
+      // A group has to explain itself, not just count.
+      expect(group.whatItMeans.length).toBeGreaterThan(20);
+      expect(group.recommendedAction.length).toBeGreaterThan(10);
+      expect(group.fixableBy.length).toBeGreaterThan(0);
+    }
+    // Most severe first.
+    const severities = report.groups.map((g) => g.severity);
+    const rank = { CRITICAL: 0, WARNING: 1, INFO: 2 } as const;
+    expect(severities.map((sv) => rank[sv])).toEqual([...severities.map((sv) => rank[sv])].sort((a, b) => a - b));
+  });
+
+  it("filters the list without distorting the totals", async () => {
+    const all = await integrity.build(tenantId);
+    const criticalOnly = await integrity.build(tenantId, { severity: "CRITICAL" });
+
+    expect(criticalOnly.issues.every((i) => i.severity === "CRITICAL")).toBe(true);
+    // Totals describe everything detected, so the filter controls can say
+    // what they would reveal rather than collapsing to the current view.
+    expect(criticalOnly.totals).toEqual(all.totals);
+  });
+
+  it("separates what nobody has looked at from what somebody has", async () => {
+    const issue = await anyIssue();
+    await integrity.acknowledge(tenantId, issue.id, { status: "ACKNOWLEDGED", note: "Looked at this one." }, ACTOR);
+
+    const open = await integrity.build(tenantId, { status: "open" });
+    const handled = await integrity.build(tenantId, { status: "handled" });
+
+    expect(open.issues.some((i) => i.id === issue.id)).toBe(false);
+    expect(handled.issues.some((i) => i.id === issue.id)).toBe(true);
+    expect(handled.totals.handled).toBeGreaterThanOrEqual(1);
+  });
+
+  it("reports when it scanned, so nobody acts on a stale page", async () => {
+    const before = Date.now();
+    const report = await integrity.build(tenantId);
+    expect(new Date(report.scannedAt).getTime()).toBeGreaterThanOrEqual(before - 1000);
+  });
+
+  it("never shows one workshop's decisions on another's issues", async () => {
+    const issue = await anyIssue();
+    await integrity.acknowledge(tenantId, issue.id, { status: "ESCALATED", note: "Ours, not theirs." }, ACTOR);
+
+    // Same fingerprint, different tenant: the decision must not leak.
+    const otherPlan = await prisma.plan.create({
+      data: {
+        code: `PLAN-WIL-${SUFFIX}`,
+        name: "Other",
+        maxBranches: 5,
+        maxUsers: 50,
+        maxWarehouses: 5,
+        allowedCategories: ["CARS"],
+        allowedModules: [],
+        allowedFeatures: [],
+        allowedReports: [],
+        monthlyPrice: 0,
+      },
+    });
+    const other = await prisma.tenant.create({
+      data: {
+        name: `WIL Other ${SUFFIX}`,
+        nameNormalized: `wil other ${SUFFIX}`,
+        slug: `wil-other-${SUFFIX}`,
+        customerRegistrationCode: `WILO-${SUFFIX}`,
+        status: "ACTIVE",
+        planId: otherPlan.id,
+        country: "EG",
+        city: "Cairo",
+        businessType: "Garage",
+        primaryCategory: "CARS",
+        currency: "EGP",
+        timezone: "Africa/Cairo",
+      },
+    });
+
+    const leaked = await prisma.workflowIssueAcknowledgement.count({
+      where: { tenantId: other.id, fingerprint: issue.id },
+    });
+    expect(leaked).toBe(0);
+
+    await prisma.tenant.delete({ where: { id: other.id } });
+    await prisma.plan.delete({ where: { id: otherPlan.id } });
   });
 });
