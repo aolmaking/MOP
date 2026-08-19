@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { ErrorBanner } from '../../shared/error-banner/error-banner';
 import { ButtonDirective } from '../../shared/button/button.directive';
 import type { PresentedError } from '../../core/api/error.interceptor';
+import { DossierDrawer } from '../../shared/dossier/dossier-drawer';
 
 interface AuditRow {
   readonly id: string;
@@ -52,11 +53,18 @@ const ACTORS = [
  */
 @Component({
   selector: 'app-audit-page',
-  imports: [ErrorBanner, ButtonDirective],
+  imports: [ErrorBanner, ButtonDirective, DossierDrawer],
   templateUrl: './audit-page.html',
   styleUrl: './audit-page.css',
 })
 export class AuditPage {
+  /** The work order whose full history is open, if any. */
+  protected readonly dossierFor = signal<string | null>(null);
+
+  protected openDossier(workOrderId: string): void {
+    this.dossierFor.set(workOrderId);
+  }
+
   private readonly http = inject(HttpClient);
 
   protected readonly rows = signal<readonly AuditRow[]>([]);

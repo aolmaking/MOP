@@ -114,6 +114,14 @@
                   {{ isExpanded(row) ? 'Hide changes' : 'Show changes' }}
                 </button>
               }
+              <!-- "Show changes" answers what this one entry altered.
+                   "More" answers what happened to the job overall, which
+                   is usually the question an audit line prompts. Only on
+                   work orders, because that is the only target the
+                   dossier can assemble. -->
+              @if (row.targetType === 'WorkOrder') {
+                <button class="expand" type="button" (click)="openDossier(row.targetId)">More</button>
+              }
             </div>
 
             @if (isExpanded(row)) {
@@ -142,3 +150,7 @@
     }
   }
 </section>
+
+@if (dossierFor(); as workOrderId) {
+  <app-dossier-drawer [workOrderId]="workOrderId" (closed)="dossierFor.set(null)" />
+}
