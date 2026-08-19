@@ -286,3 +286,37 @@ Baseline at this point: **API 664/664 across 89 suites · web 229/229 ·
    grouping by root cause, filters, branch/time scope, drill-down. The
    detector itself is correct and its data source is now clean.
 5. **Page-by-page capability pass** across all 8 shells.
+
+## Session 3 (cont.) — reports volume + History dossier link
+
+Baseline now: **API 667/667 across 89 suites · web 229/229 · 6/6 linters.**
+
+- `ReportsOperationsService.volume` — created/closed per bucket at
+  day/week/month plus `volumeTotals`. This is the "how many cars today /
+  this month" report that did not exist: Operations had a snapshot,
+  Financial had a trend, nothing counted throughput. Bucketed with
+  date_trunc in SQL, matching the financial trend. 3 tests. Verified
+  live: 7 created today, correct at both granularities.
+- Owner History rows targeting a WorkOrder gained a **More** button that
+  opens the shared dossier drawer.
+
+**Full cross-role loop verified in the browser:** technician POSTed a
+blocker -> lifecycle moved the job and wrote a WorkOrder audit row ->
+Owner History rendered "More" on that row only (TaskBlocker, Invoice and
+PriceCatalogEntry rows correctly had none) -> drawer opened on DEMO-4471
+showing status Blocked and 7 timeline events, up from 4 before the
+blocker.
+
+### Next actions (unchanged order, 1 now done)
+
+1. ~~Reports volume~~ DONE. Still to do on reports: a **chart** for the
+   volume series (`shared/reports/bar-list/` is the primitive) and hover
+   detail on the existing report figures.
+2. ~~Dossier in History~~ DONE.
+3. Seed `serviceKey` on demo tasks so the demo shows a catalogued service
+   end to end; consider seeding a priced catalogue entry and delegating
+   `finance.running_invoice.add_line` so billing is demonstrable from a
+   fresh seed.
+4. Workflow Health depth: issue lifecycle, grouping, filters, scope,
+   drill-down.
+5. Page-by-page capability pass across all 8 shells.
