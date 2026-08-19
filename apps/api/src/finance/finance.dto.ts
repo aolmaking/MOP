@@ -23,8 +23,16 @@ export class AddLineDto {
   @Min(1)
   quantity!: number;
 
+  /**
+   * Optional: omit it and the workshop's own Service Catalog prices the
+   * line by `name`. Required at the DTO level until the catalogue could
+   * actually be consulted, which meant the HTTP surface could not use the
+   * capability the service had gained -- a caller that left the price out
+   * got "Validation failed" instead of the catalogued price.
+   */
+  @IsOptional()
   @Matches(MONEY, { message: "unitPrice must be a money value with at most 2 decimal places, as a string" })
-  unitPrice!: string;
+  unitPrice?: string;
 
   @IsOptional()
   @Matches(MONEY, { message: "labour must be a money value with at most 2 decimal places, as a string" })

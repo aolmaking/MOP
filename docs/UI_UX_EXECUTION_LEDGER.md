@@ -43,7 +43,7 @@ the next session will "restore" the old rules as a regression.
 | 6 | Workflow Health subsystem | PENDING | Large. Needs capability matrix first (what exists vs missing). |
 | 7 | History "More" full-detail report | PENDING | Needs an aggregation service across audit + events + tasks + inventory. |
 | 8 | Branch Manager work-order detail depth | PENDING | Shares the detail-report subsystem with #7. |
-| 9 | Service <-> inventory linkage (pricing half) | IMPLEMENTED | Biggest domain item. Inspect PriceCatalog + InventoryItem + Task first. |
+| 9 | Service <-> technician <-> inventory <-> money chain | VERIFIED | Biggest domain item. Inspect PriceCatalog + InventoryItem + Task first. |
 
 ## Verification commands
 
@@ -179,3 +179,54 @@ corepack pnpm --filter @mop/api exec jest people-analytics --runInBand
 If they pass on a clean database, the defect is test-data accumulation and
 the suites need proper per-run isolation. If they still fail, the defect is
 in the analytics services' assignment/fault queries and must be fixed there.
+
+
+---
+
+## Service chain — COMPLETE and browser-verified
+
+The chain Owner -> price -> task -> technician -> stock -> bill now runs
+end to end and is proven twice: by integration tests against real
+Postgres, and by driving the running application.
+
+Implemented:
+- `PriceCatalogService.resolve()` / `resolveMany()` — the lookup the
+  catalogue never had.
+- `FinanceService.addLine()` consults it when the caller states no price;
+  an explicit price still wins; an uncatalogued line is refused rather
+  than billed as zero.
+- `AddLineDto.unitPrice` made optional — without this the HTTP surface
+  could not use the capability the service had gained, and a caller who
+  omitted the price got "Validation failed". Found by driving the browser,
+  not by the unit tests.
+- `Task.serviceKey` (migration `20260819142532_task_service_key`) plus an
+  index on `(tenantId, serviceKey)`. Keyed by the stable business key, not
+  a row id, because PriceCatalogEntry is effective-dated.
+- `createTask()` rejects a serviceKey the workshop has not priced.
+- `task.completed` event carries serviceKey; `performedServices()` answers
+  "what was actually done, by whom" from the system that owns Task.
+
+Browser evidence (live app, real seeded workshop):
+```
+Owner   POST /organization/finance-configuration/catalog  -> 201  450 + 90
+Owner   GET  .../catalog                                  -> visible 450/90
+Owner   POST /finance/work-orders/:id/lines               -> 403 (read-only, correct)
+        [Owner delegates finance.running_invoice.add_line]
+Manager POST /finance/work-orders/:id/lines  (NO price)   -> 201  total 540.00
+Manager POST .../lines  "Never priced service"            -> 400  names the Service Catalog
+```
+
+Note on the 403: `finance.running_invoice.add_line` is deliberately
+ungranted to every role by default — tenant-owner.md's "Who Can Handle
+Money" requires the Owner to delegate it. The 403 is the product working,
+not a defect; billing was verified after performing that delegation.
+
+## Analytics suites — RESOLVED, and the cause was a real product bug
+
+Not contamination. `resolveDateRange` defaulted `to` to `new Date()`, so
+rows written in the same instant the report was built fell outside a
+window claiming to cover "up to now" (assignedAt .809 vs range.to .804).
+In production this under-reported the most recent activity. Fixed to end
+at end-of-day, with six regression tests.
+
+Full API suite: 658/658 across 88 suites. Web: 229/229. Linters: 6/6.
