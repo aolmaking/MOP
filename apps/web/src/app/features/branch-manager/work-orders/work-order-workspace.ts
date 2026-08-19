@@ -4,6 +4,7 @@ import { WORK_ORDER_LANES } from '@mop/shared';
 import { Identifier } from '../../../shared/identifier/identifier';
 import { ErrorBanner } from '../../../shared/error-banner/error-banner';
 import { ButtonDirective } from '../../../shared/button/button.directive';
+import { DossierDrawer } from '../../../shared/dossier/dossier-drawer';
 import type { PresentedError } from '../../../core/api/error.interceptor';
 import { WorkOrdersApi, type WorkOrderDetail } from './work-orders.api';
 
@@ -19,7 +20,7 @@ type State = 'loading' | 'ready' | 'not-found' | 'forbidden' | 'error';
  */
 @Component({
   selector: 'app-work-order-workspace',
-  imports: [RouterLink, Identifier, ErrorBanner, ButtonDirective],
+  imports: [RouterLink, Identifier, ErrorBanner, ButtonDirective, DossierDrawer],
   templateUrl: './work-order-workspace.html',
   styleUrl: './work-order-workspace.css',
 })
@@ -32,6 +33,7 @@ export class WorkOrderWorkspace {
   protected readonly detail = signal<WorkOrderDetail | null>(null);
   protected readonly error = signal<PresentedError | null>(null);
   protected readonly state = signal<State>('loading');
+  protected readonly showDossier = signal(false);
 
   constructor() {
     // Re-fetches when the route id changes, so navigating between two

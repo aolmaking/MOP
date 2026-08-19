@@ -49,6 +49,14 @@
             <span class="job-phone">{{ job.customer.phone }}</span>
           </p>
 
+          <!-- The whole life of this job, without leaving the job. The
+               page above answers "what is happening now"; this answers
+               "what has happened, what came off the shelf, what did it
+               cost, what did we charge". -->
+          <button appButton variant="secondary" size="small" class="job-dossier" (click)="showDossier.set(true)">
+            Full history
+          </button>
+
           <dl class="job-facts">
             <div class="fact">
               <dt>Status</dt>
@@ -188,3 +196,7 @@
     }
   }
 </section>
+
+@if (showDossier()) {
+  <app-dossier-drawer [workOrderId]="id()" (closed)="showDossier.set(false)" />
+}

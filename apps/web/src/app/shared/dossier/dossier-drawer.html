@@ -1,0 +1,189 @@
+<div class="scrim" (click)="closed.emit()"></div>
+
+<aside
+  class="dossier"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="dossier-title"
+  appDismissOnEscape
+  (dismissed)="closed.emit()"
+>
+  <header class="head">
+    <div>
+      <h2 class="title" id="dossier-title">Full history</h2>
+      @if (data(); as d) {
+        <p class="sub">
+          <mop-identifier [value]="d.asset?.identifier ?? '—'" />
+          @if (d.customer) {
+            <span class="sub-sep">·</span>{{ d.customer.fullName }}
+          }
+        </p>
+      }
+    </div>
+    <button type="button" class="close" (click)="closed.emit()" aria-label="Close full history">✕</button>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state" aria-busy="true">Loading…</p>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="retry()">Try again</button>
+      </div>
+    }
+
+    @case ('ready') {
+      @if (data(); as d) {
+        <!-- What this job is, answered before anything else. -->
+        <section class="band">
+          <div class="facts">
+            <div class="fact">
+              <span class="fact-label">Status</span>
+              <span class="fact-value">{{ label(d.status) }}</span>
+            </div>
+            <div class="fact">
+              <span class="fact-label">Opened</span>
+              <span class="fact-value">{{ when(d.openedAt) }}</span>
+            </div>
+            @if (d.closedAt) {
+              <div class="fact">
+                <span class="fact-label">Closed</span>
+                <span class="fact-value">{{ when(d.closedAt) }}</span>
+              </div>
+            }
+            <div class="fact">
+              <span class="fact-label">Prior visits</span>
+              <!-- The number a technician actually asks about before
+                   touching a car they have seen before. -->
+              <span class="fact-value">{{ d.priorVisits }}</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Work -->
+        <section class="band">
+          <h3 class="band-title">Work done</h3>
+          @if (d.servicesPerformed.length === 0) {
+            <p class="empty">No tasks recorded on this job yet.</p>
+          } @else {
+            <ul class="list">
+              @for (s of d.servicesPerformed; track s.taskId) {
+                <li class="row">
+                  <span class="row-main">{{ s.title }}</span>
+                  <span class="row-meta">
+                    @if (s.serviceKey) {
+                      <span class="chip chip--service">catalogued</span>
+                    } @else {
+                      <span class="chip">ad-hoc</span>
+                    }
+                    <span class="status">{{ label(s.status) }}</span>
+                  </span>
+                </li>
+              }
+            </ul>
+          }
+
+          @if (d.people.length > 0) {
+            <p class="people">
+              <span class="fact-label">Who worked on it</span>
+              @for (p of d.people; track p.staffUserId) {
+                <span class="person">{{ p.fullName }} <span class="person-role">{{ label(p.role) }}</span></span>
+              }
+            </p>
+          }
+        </section>
+
+        <!-- Parts and the stock they moved -->
+        <section class="band">
+          <h3 class="band-title">Parts &amp; stock</h3>
+          @if (d.parts.length === 0) {
+            <p class="empty">No parts were used on this job.</p>
+          } @else {
+            <ul class="list">
+              @for (p of d.parts; track p.name) {
+                <li class="row">
+                  <span class="row-main">{{ p.name }} <span class="qty">×{{ p.quantity }}</span></span>
+                  <span class="row-meta">
+                    <span class="chip">{{ label(p.provenance) }}</span>
+                    @if (!p.workshopWarranted) {
+                      <span class="chip chip--warn">not warranted</span>
+                    }
+                    <span class="money">{{ p.charged }}</span>
+                    <!-- Absent, not blanked, when the reader may not see cost. -->
+                    @if (p.cost !== null) {
+                      <span class="cost">cost {{ p.cost }}</span>
+                    }
+                  </span>
+                </li>
+              }
+            </ul>
+          }
+
+          @if (d.stockMovements.length > 0) {
+            <ul class="list list--tight">
+              @for (m of d.stockMovements; track m.at) {
+                <li class="row row--sub">
+                  <span class="row-main">{{ label(m.type) }} ×{{ m.quantity }}</span>
+                  <span class="row-meta">
+                    <span class="stock-delta">{{ m.beforeQty }} → {{ m.afterQty }}</span>
+                    <span class="when">{{ when(m.at) }}</span>
+                  </span>
+                </li>
+              }
+            </ul>
+          }
+        </section>
+
+        <!-- Money -->
+        <section class="band">
+          <h3 class="band-title">Money</h3>
+          @if (d.money.lines.length === 0 && !d.money.invoiceNumber) {
+            <p class="empty">Nothing has been charged on this job.</p>
+          } @else {
+            <ul class="list">
+              @for (l of d.money.lines; track l.name) {
+                <li class="row">
+                  <span class="row-main">{{ l.name }} <span class="qty">×{{ l.quantity }}</span></span>
+                  <span class="money">{{ l.total }}</span>
+                </li>
+              }
+            </ul>
+
+            <div class="totals">
+              @if (d.money.runningTotal) {
+                <div class="total"><span class="fact-label">Running total</span><span class="money">{{ d.money.runningTotal }}</span></div>
+              }
+              @if (d.money.invoiceNumber) {
+                <div class="total"><span class="fact-label">Invoice</span><span class="fact-value">{{ d.money.invoiceNumber }}</span></div>
+                <div class="total"><span class="fact-label">Invoiced</span><span class="money">{{ d.money.invoiceTotal }}</span></div>
+                <div class="total"><span class="fact-label">Paid</span><span class="money">{{ d.money.paid }}</span></div>
+                <div class="total total--due"><span class="fact-label">Outstanding</span><span class="money">{{ d.money.outstanding }}</span></div>
+              }
+            </div>
+          }
+        </section>
+
+        <!-- The narrative, in order -->
+        <section class="band">
+          <h3 class="band-title">Timeline</h3>
+          @if (d.timeline.length === 0) {
+            <p class="empty">Nothing has been recorded against this job yet.</p>
+          } @else {
+            <ol class="timeline">
+              @for (t of d.timeline; track $index) {
+                <li class="event" [attr.data-kind]="t.kind">
+                  <span class="event-kind">{{ label(t.kind) }}</span>
+                  <span class="event-summary">{{ t.summary }}</span>
+                  <span class="event-when">{{ when(t.at) }}</span>
+                </li>
+              }
+            </ol>
+          }
+        </section>
+      }
+    }
+  }
+</aside>
