@@ -13,6 +13,7 @@ import { ApprovalsService, type ApprovalsResult } from "./approvals.service";
 import { DeliveryService, type DeliveryBoard } from "./delivery.service";
 import { CustomerDecisionService } from "../customer/decision.service";
 import { RecordDecisionDto } from "./record-decision.dto";
+import { WorkOrderDossierService } from "../operations/work-order-dossier.service";
 
 export interface AttentionCenterResponse {
   /** Ranked most urgent first. Empty is a valid and desirable state. */
@@ -35,6 +36,7 @@ export class BranchManagerController {
     private readonly approvalsService: ApprovalsService,
     private readonly deliveryService: DeliveryService,
     private readonly customerDecisions: CustomerDecisionService,
+    private readonly dossierService: WorkOrderDossierService,
   ) {}
 
   /**
@@ -169,6 +171,26 @@ export class BranchManagerController {
       { tenantId: session.tenantId as string, branchScope: session.branchScope },
       id,
     );
+  }
+
+  /**
+   * Everything that happened to one job, in one call.
+   *
+   * Same read permission as the work order itself -- a dossier is a
+   * reading of records the caller can already reach individually, so it
+   * must not become a way around the branch scope that guards them. Cost
+   * is the one exception: it needs inventory.cost.view on top, and is
+   * absent from the response rather than hidden client-side when the
+   * reader does not hold it.
+   */
+  @Get("work-orders/:id/dossier")
+  async dossier(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    await this.requireBranchView(session);
+    const canViewCost = await this.access.can(session, "inventory.cost.view");
+    return this.dossierService.build(session.tenantId as string, id, {
+      branchScope: session.branchScope,
+      canViewCost,
+    });
   }
 
   /** The chase list. Oldest first, because it is worked top to bottom. */

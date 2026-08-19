@@ -6,6 +6,7 @@ import { GateEvaluatorService } from "./gate-evaluator.service";
 import { WorkOrderLifecycleService } from "./work-order-lifecycle.service";
 import { IntakeService } from "./intake.service";
 import { TechnicianWorkService } from "./technician-work.service";
+import { WorkOrderDossierService } from "./work-order-dossier.service";
 
 /**
  * The operations spine: the work-order lifecycle and the gates that guard
@@ -15,7 +16,7 @@ import { TechnicianWorkService } from "./technician-work.service";
  */
 @Module({
   imports: [DatabaseModule, CapabilitiesModule, OperationEventsModule],
-  providers: [GateEvaluatorService, WorkOrderLifecycleService, IntakeService, TechnicianWorkService],
-  exports: [WorkOrderLifecycleService, GateEvaluatorService, IntakeService, TechnicianWorkService],
+  providers: [GateEvaluatorService, WorkOrderLifecycleService, IntakeService, TechnicianWorkService, WorkOrderDossierService],
+  exports: [WorkOrderLifecycleService, GateEvaluatorService, IntakeService, TechnicianWorkService, WorkOrderDossierService],
 })
 export class OperationsModule {}
