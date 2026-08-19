@@ -162,7 +162,12 @@ export class GateEvaluatorService {
           select: { balance: true, tenantId: true },
         });
         if (!invoice) return false;
-        if (Number(invoice.balance) <= 0) return true;
+        // Compared on the Decimal itself. `Number(balance) <= 0` is a
+        // float conversion standing between a customer and their vehicle:
+        // it decides whether the payment gate opens, so a rounding error
+        // here either releases a car that still owes money or holds one
+        // that does not.
+        if (invoice.balance.lte(0)) return true;
 
         // An unpaid balance is only acceptable where the workshop's own
         // policy says so.

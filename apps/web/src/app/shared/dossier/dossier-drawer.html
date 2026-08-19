@@ -115,8 +115,11 @@
                       <span class="chip chip--warn">not warranted</span>
                     }
                     <span class="money">{{ p.charged }}</span>
-                    <!-- Absent, not blanked, when the reader may not see cost. -->
-                    @if (p.cost !== null) {
+                    <!-- Absent, not blanked, when the reader may not see
+                         cost; null when they may but none was recorded.
+                         `!= null` catches both, where `!== null` would
+                         have printed "cost undefined" for the first. -->
+                    @if (p.cost != null) {
                       <span class="cost">cost {{ p.cost }}</span>
                     }
                   </span>

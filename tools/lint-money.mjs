@@ -37,6 +37,18 @@ const ROOTS = [
   "apps/api/src/finance",
   "apps/api/src/inventory",
   "apps/api/src/branch-manager",
+  // Operations composes the work-order dossier, which reports what a
+  // customer was charged. It handled money while sitting outside this
+  // rule, and a float sum over invoice lines survived there unnoticed
+  // until the demo workshop finally had invoices to sum.
+  //
+  // apps/api/src/reports is deliberately NOT here. That layer converts
+  // money to numbers on purpose, through its own `toDecimalNumber`, because
+  // its contracts return numbers for charting. Whether that is the right
+  // call is a real architectural question, but it is a decision rather
+  // than an oversight, and switching this rule on over it would only
+  // produce eight suppressions that hide it.
+  "apps/api/src/operations",
   "packages/shared/src/money",
 ];
 

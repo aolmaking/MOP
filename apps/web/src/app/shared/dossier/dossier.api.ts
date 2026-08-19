@@ -17,8 +17,12 @@ export interface DossierPartLine {
   readonly inventoryItemId: string | null;
   /** Money crosses the API as a string, never a JS number. */
   readonly charged: string;
-  /** Null when the reader does not hold inventory.cost.view. */
-  readonly cost: string | null;
+  /**
+   * ABSENT when the reader does not hold inventory.cost.view, and null
+   * when they may see cost but none was recorded. Two different facts,
+   * so they are two different shapes.
+   */
+  readonly cost?: string | null;
   readonly workshopWarranted: boolean;
   readonly taskId: string | null;
   /** Null for a part with no PartRequest -- e.g. customer-supplied. */

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import { sum as sumMoney, type Money } from "@mop/shared";
 import { PrismaService } from "../database/prisma.service";
 
 export interface DossierTimelineEntry {
@@ -15,8 +16,16 @@ export interface DossierPartLine {
   readonly provenance: string;
   readonly inventoryItemId: string | null;
   readonly charged: string;
-  /** Null unless the reader holds inventory.cost.view. */
-  readonly cost: string | null;
+  /**
+   * ABSENT unless the reader holds inventory.cost.view -- not null.
+   *
+   * Optional rather than nullable because null is ambiguous here: a
+   * reader who may see cost and finds none recorded, and a reader who may
+   * not see cost at all, were getting the identical response. Omitting
+   * the key keeps "you cannot see this" distinct from "there is nothing
+   * to see", and matches what the class comment already claimed.
+   */
+  readonly cost?: string | null;
   readonly workshopWarranted: boolean;
   readonly taskId: string | null;
   /** Null for a part with no PartRequest -- e.g. customer-supplied. */
@@ -158,7 +167,19 @@ export class WorkOrderDossierService {
         // payment path, so they are read rather than recomputed here --
         // summing payments in a second place is how two screens start
         // disagreeing about what a customer owes.
-        select: { invoiceNumber: true, total: true, paid: true, balance: true },
+        select: {
+          invoiceNumber: true,
+          total: true,
+          paid: true,
+          balance: true,
+          // The locked breakdown. Once a job is invoiced its RunningInvoice
+          // is no longer the record of what the customer was charged --
+          // these lines are, and they carry the prices as they were at
+          // issue. Without them a closed job showed a total with nothing
+          // behind it, which is the one question the money band exists to
+          // answer.
+          lines: { select: { name: true, itemType: true, quantity: true, total: true } },
+        },
       }),
       this.priorVisitCount(tenantId, workOrder.assetId, workOrderId),
     ]);
@@ -206,7 +227,7 @@ export class WorkOrderDossierService {
         provenance: p.provenance,
         inventoryItemId: p.inventoryItemId,
         charged: p.sellingPrice.toString(),
-        cost: options.canViewCost ? (p.cost === null ? null : p.cost.toString()) : null,
+        ...(options.canViewCost ? { cost: p.cost === null ? null : p.cost.toString() } : {}),
         workshopWarranted: p.workshopWarranted,
         taskId: p.taskId,
         partRequestId: p.partRequestId,
@@ -233,18 +254,34 @@ export class WorkOrderDossierService {
   }
 
   private money(
-    lines: readonly { name: string; itemType: string; quantity: number; total: unknown }[],
-    invoice: { invoiceNumber: string; total: unknown; paid: unknown; balance: unknown } | null,
+    runningLines: readonly { name: string; itemType: string; quantity: number; total: unknown }[],
+    invoice:
+      | {
+          invoiceNumber: string;
+          total: unknown;
+          paid: unknown;
+          balance: unknown;
+          lines: readonly { name: string; itemType: string; quantity: number; total: unknown }[];
+        }
+      | null,
   ): DossierMoney {
+    // Invoiced work reads from the invoice; work still in progress reads
+    // from the running invoice. Never a merge of the two -- a line that
+    // appears twice because it exists in both places is worse than one
+    // that appears in neither.
+    const lines = invoice ? invoice.lines : runningLines;
     const mapped = lines.map((l) => ({
       name: l.name,
       itemType: l.itemType,
       quantity: l.quantity,
       total: String(l.total),
     }));
-    const runningTotal = mapped.length
-      ? mapped.reduce((sum, l) => sum + Number(l.total), 0).toFixed(2)
-      : null;
+    // sum() from @mop/shared works in minor units. The previous
+    // `reduce((s, l) => s + Number(l.total), 0).toFixed(2)` converted every
+    // line to a float first, which is the one thing the money rule exists
+    // to prevent -- the dossier simply sat outside the directories that
+    // rule scans.
+    const runningTotal = mapped.length ? sumMoney(mapped.map((l) => l.total as Money)) : null;
 
     if (!invoice) {
       return { lines: mapped, runningTotal, invoiceNumber: null, invoiceTotal: null, paid: null, outstanding: null };
@@ -252,7 +289,10 @@ export class WorkOrderDossierService {
 
     return {
       lines: mapped,
-      runningTotal,
+      // Null once invoiced: the invoice total is the figure that counts,
+      // and showing a second "running" total beside it invites the reader
+      // to wonder which one is real.
+      runningTotal: null,
       invoiceNumber: invoice.invoiceNumber,
       invoiceTotal: String(invoice.total),
       paid: String(invoice.paid),

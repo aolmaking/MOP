@@ -151,6 +151,11 @@ afterAll(async () => {
   const where = { tenantId };
   await prisma.operationEvent.deleteMany({ where });
   await prisma.auditLog.deleteMany({ where });
+  await prisma.payment.deleteMany({ where });
+  await prisma.invoiceLine.deleteMany({ where });
+  await prisma.invoice.deleteMany({ where });
+  await prisma.runningInvoiceLine.deleteMany({ where }).catch(() => undefined);
+  await prisma.runningInvoice.deleteMany({ where }).catch(() => undefined);
   await prisma.workOrderPartLine.deleteMany({ where });
   await prisma.stockMovement.deleteMany({ where });
   await prisma.taskAssignment.deleteMany({ where });
@@ -198,10 +203,70 @@ describe("WorkOrderDossierService", () => {
     const without = await dossier.build(tenantId, workOrderId, { canViewCost: false });
 
     expect(withCost.parts[0].cost).toBe("540");
-    // Absent, not blanked client-side: anyone can open developer tools.
-    expect(without.parts[0].cost).toBeNull();
+
+    // Absent, not blanked: anyone can open developer tools, and this test
+    // previously asserted `toBeNull()` under the name "omits cost
+    // entirely" -- pinning the opposite of what it claimed. A null cost
+    // is also indistinguishable from "may see cost, none recorded", so
+    // the key itself has to be gone.
+    expect("cost" in without.parts[0]).toBe(false);
+    expect(Object.keys(without.parts[0])).not.toContain("cost");
+    expect(JSON.stringify(without.parts[0])).not.toContain("cost");
+
     // What the customer is charged is not a secret, and must survive.
     expect(without.parts[0].charged).toBe("900");
+  });
+
+
+  it("reports the invoice's own locked lines once a job has been invoiced", async () => {
+    // Before invoicing there is nothing to break down.
+    const before = await dossier.build(tenantId, workOrderId, { canViewCost: true });
+    expect(before.money.invoiceNumber).toBeNull();
+
+    const invoice = await prisma.invoice.create({
+      data: {
+        tenantId,
+        workOrderId,
+        invoiceNumber: `DOSSIER-INV-${Date.now()}`,
+        subtotal: "900.00",
+        total: "900.00",
+        paid: "400.00",
+        balance: "500.00",
+        issuedById: technicianId,
+      },
+    });
+    await prisma.invoiceLine.create({
+      data: {
+        tenantId,
+        invoiceId: invoice.id,
+        name: "Replace front brake pads",
+        itemType: "SERVICE",
+        quantity: 1,
+        lockedUnitPrice: "700.00",
+        lockedLaborPrice: "200.00",
+        total: "900.00",
+      },
+    });
+
+    const after = await dossier.build(tenantId, workOrderId, { canViewCost: true });
+
+    // The breakdown comes from the invoice, not the running invoice: once
+    // issued, the locked lines are the record of what was charged, and a
+    // total with nothing behind it fails the one question this band
+    // exists to answer.
+    expect(after.money.lines).toHaveLength(1);
+    expect(after.money.lines[0]!.name).toBe("Replace front brake pads");
+    expect(after.money.lines[0]!.total).toBe("900");
+
+    expect(after.money.invoiceTotal).toBe("900");
+    expect(after.money.paid).toBe("400");
+    expect(after.money.outstanding).toBe("500");
+
+    // No second, competing total beside the invoice's own.
+    expect(after.money.runningTotal).toBeNull();
+
+    await prisma.invoiceLine.deleteMany({ where: { invoiceId: invoice.id } });
+    await prisma.invoice.delete({ where: { id: invoice.id } });
   });
 
   it("refuses a job outside the reader's branch scope, indistinguishably from one that does not exist", async () => {

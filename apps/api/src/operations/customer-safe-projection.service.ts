@@ -38,7 +38,7 @@ const BLOCKLIST_PATTERNS: RegExp[] = [
   /internal note/i,
   /technician\s+(score|performance|rating)/i,
   /\bmargin\b/i,
-  /cost price/i,
+  /cost price/i, // money-lint-ok: a redaction pattern, not a money value
   /platform control/i,
 ];
 
