@@ -37,6 +37,17 @@ const MANAGER_PASSWORD = "ChangeMe-Manager-123";
 
 /** Permissions a branch manager needs to open their own pages. */
 const MANAGER_PERMISSIONS = [
+  // Delegated money handling.
+  //
+  // finance.running_invoice.add_line is ungranted to every role by
+  // default, and deliberately so: tenant-owner.md's "Who Can Handle
+  // Money" makes it something an Owner hands out rather than something a
+  // role arrives with. That default is correct and stays -- but a demo
+  // workshop where nobody can bill anything cannot show the service
+  // chain reaching an invoice, so the seed performs the delegation the
+  // Owner would perform on their first day.
+  "finance.running_invoice.add_line",
+  "finance.invoice.view",
   "workorders.branch.view",
   "workorders.branch.reassign_technician",
   "workorders.branch.manage_blockers",
@@ -70,6 +81,7 @@ async function main() {
   await ensureInventoryManager(tenant.id);
   await ensureDataAnalyst(tenant.id);
   await ensureDelegatedTeams(tenant.id, branch.id);
+  await ensureServiceCatalog(tenant.id);
   await clearDemoWork(tenant.id);
   await createStuckJobs(tenant.id, branch.id, technician.staffUserId);
 
@@ -512,6 +524,41 @@ async function recordLifecycleHistory(tenantId: string, workOrderId: string, fin
   }
 }
 
+
+/**
+ * The workshop's own Service Catalog.
+ *
+ * Seeded because the whole service chain hangs off it: a task carries a
+ * `serviceKey` naming a row here, billing resolves the price from here,
+ * and Reports group work by it. Without a catalogue the demo can only
+ * show ad-hoc work, which is the one case that proves nothing.
+ */
+const DEMO_SERVICES: readonly { itemKey: string; unitPrice: number; laborPrice: number }[] = [
+  { itemKey: "Replace front brake pads", unitPrice: 1800, laborPrice: 400 },
+  { itemKey: "Diagnose gearbox noise", unitPrice: 350, laborPrice: 350 },
+  { itemKey: "Replace alternator", unitPrice: 2200, laborPrice: 500 },
+];
+
+async function ensureServiceCatalog(tenantId: string): Promise<void> {
+  for (const service of DEMO_SERVICES) {
+    const open = await prisma.priceCatalogEntry.findFirst({
+      where: { tenantId, itemKey: service.itemKey, effectiveTo: null },
+    });
+    if (open) continue;
+
+    await prisma.priceCatalogEntry.create({
+      data: {
+        tenantId,
+        itemKey: service.itemKey,
+        itemType: "SERVICE",
+        unitPrice: service.unitPrice,
+        laborPrice: service.laborPrice,
+        isActive: true,
+      },
+    });
+  }
+}
+
 async function createStuckJobs(tenantId: string, branchId: string, technicianStaffUserId: string) {
   const jobs = [
     { plate: "DEMO-4471", customer: "Mona Adel", kind: "critical" as const },
@@ -664,6 +711,11 @@ async function createStuckJobs(tenantId: string, branchId: string, technicianSta
             tenantId,
             workOrderId: workOrder.id,
             title: job.kind === "critical" ? "Replace front brake pads" : "Diagnose gearbox noise",
+            // Names a real row in the catalogue above, so the job is
+            // billable at the workshop's own price and countable by
+            // service in Reports -- not a string that merely looks like
+            // one.
+            serviceKey: job.kind === "critical" ? "Replace front brake pads" : "Diagnose gearbox noise",
             // One started, one waiting: "Now" needs exactly one active
             // job or it cannot demonstrate what it is for.
             status: job.kind === "critical" ? "IN_PROGRESS" : "ASSIGNED",
@@ -677,7 +729,13 @@ async function createStuckJobs(tenantId: string, branchId: string, technicianSta
 
     if (job.kind === "blocked") {
       const task = await prisma.task.create({
-        data: { tenantId, workOrderId: workOrder.id, title: "Replace alternator", status: "BLOCKED" },
+        data: {
+          tenantId,
+          workOrderId: workOrder.id,
+          title: "Replace alternator",
+          serviceKey: "Replace alternator",
+          status: "BLOCKED",
+        },
       });
       await prisma.taskAssignment.create({
         data: { tenantId, taskId: task.id, staffUserId: technicianStaffUserId },
