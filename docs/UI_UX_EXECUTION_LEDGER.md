@@ -510,3 +510,84 @@ session and confirm the chip renders.
    already be mid-flight on this -- check before starting).
 5. Page-by-page capability audit across the remaining 7 shells.
 6. Phase 16 -> 22 remaining work.
+
+---
+
+## Session 5 (cont.) — reports detail, and the demo data behind it
+
+### Dead-link sweep: clean
+
+Every `routerLink` and every shell `navigation` route was cross-referenced
+against `app.routes.ts`. **No dead nav links remain anywhere.** Control
+Center and Live View were the only two, and both are now real pages.
+
+(A first pass reported three more — `/customer/assets`, `/customer/history`,
+`/tech/work`. That was a bad parser, not a bug: it only matched route
+definitions written across multiple lines and missed single-line ones.
+All three are registered. Worth remembering before trusting a sweep like
+that again.)
+
+### Hover detail on every report list
+
+Financial, Inventory and Customers had none while Operations had it on
+all four lists. Each row now states what the bar cannot: the count behind
+a total and the per-unit average it implies. Division guards on zero
+instead of printing NaN — confirmed live against empty aging buckets.
+
+### The demo data gap this exposed
+
+Pulling that thread showed two of the five report tabs were empty because
+the demo workshop had no data to report on:
+
+- **No invoice was ever issued and no payment ever recorded.** The seed
+  now carries twelve jobs through to CLOSED with invoices and payments
+  over ten weeks, three payment methods, two part-paid, and three unpaid
+  at 10/45/80 days — one per aging bucket. Books balance: 18,970
+  collected + 8,530 outstanding = 27,500 invoiced.
+- **The workshop owned two warehouses and zero parts.** Six parts now,
+  with real costs, plus stock, receipts, issues and part lines. Dead
+  stock, profitability and stock risk all read from real rows.
+
+### Four real bugs found by having data at last
+
+1. `clearDemoWork` deleted work orders without unwinding finance first.
+   `Invoice -> WorkOrder` is `onDelete: Restrict`, so the second seed run
+   failed outright rather than leaving strays.
+2. `recordLifecycleHistory` had no CLOSED path and always replayed
+   backwards from *now*, so twelve jobs closed weeks apart all reported
+   their transitions as today's activity. It now takes the moment the job
+   reached its final status.
+3. `StockMovement` references a work order by plain string, not a foreign
+   key, so nothing cascaded them away — each re-seed drained the shelf
+   further. Cleared with their jobs now, balances reset.
+4. **`averageTimeInStatus` published terminal states.** That slice
+   measures time since the job finished and runs to the end of the report
+   range, so the same twelve jobs told a different story depending on the
+   dates asked for — a year of history made "average time in CLOSED"
+   larger than a month of it.
+
+   Fixed at the report layer, **not** in `computeStatusDurations`. That
+   function partitions the whole timeline on purpose, `workflow-bottlenecks`
+   reads it that way, and an existing test pins the contract deliberately.
+   The unsound part is presenting a terminal slice as a stage duration, so
+   both callers that make that claim to a human exclude it. First attempt
+   changed the util and broke that test — the test was right.
+
+5. "Most profitable parts" took the top ten by revenue and drew them by
+   profit. Sorted where the heading makes the claim.
+
+**Gate: API 693/693 across 90 suites · web 235/235 across 47 files ·
+7/7 linters.** API suite run twice consecutively at exit 0 — a single
+earlier failure was contention from chaining the web and API suites in one
+command, not a flake in the code.
+
+### Remaining queue
+
+1. ~~Workflow Health~~ · ~~Control Center~~ · ~~Live View~~ · ~~report
+   hover detail~~ — all DONE.
+2. Dossier depth: link `WorkOrderPartLine` rows back to the `PartRequest`
+   they came from. Now genuinely reachable — part lines finally exist.
+3. Page-by-page capability audit across the remaining 7 shells. The
+   Inventory Manager shell in particular has never been seen with real
+   stock in it until now, so it is worth a fresh pass.
+4. Phase 16 -> 22 remaining work.
