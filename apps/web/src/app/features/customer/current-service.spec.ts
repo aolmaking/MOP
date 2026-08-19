@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
-import { CurrentService } from './current-service';
+import { CurrentService, CUSTOMER_STATUS_LABELS, CUSTOMER_VISIBLE_STATUSES } from './current-service';
 import { CustomerPortalApi, type CurrentServiceItem } from './customer-portal.api';
 
 function item(overrides: Partial<CurrentServiceItem> = {}): CurrentServiceItem {
@@ -44,5 +44,32 @@ describe('CurrentService', () => {
   it('does not flag an ordinary in-progress job', () => {
     const { element } = render([item({ status: 'IN_PROGRESS' })]);
     expect(element.querySelector('.job--needs-you')).toBeNull();
+  });
+});
+
+describe('customer status wording', () => {
+  /**
+   * This page is read by a paying customer, and the label lookup falls
+   * back to the lowercased enum. CLOSED and CANCELLED were missing, so a
+   * finished repair was reported as "closed" -- the workshop's word for a
+   * record, not a person's word for their car being ready.
+   *
+   * Checked per status so a status added later fails here rather than
+   * appearing as "ready_for_qc" on a customer's screen.
+   */
+  it.each(CUSTOMER_VISIBLE_STATUSES)('gives %s wording written for a customer', (status) => {
+    const label = CUSTOMER_STATUS_LABELS[status];
+
+    expect(label).toBeDefined();
+    expect(label).not.toContain('_');
+    expect(label.toUpperCase()).not.toBe(label);
+    // Not the enum with its underscores swapped for spaces -- but only
+    // where that would actually read as machine output. A single-word
+    // status like CANCELLED maps to "Cancelled" because that genuinely is
+    // the word a customer wants; it is the multi-word ones that turn into
+    // "ready for qc" and give the game away.
+    if (status.includes('_')) {
+      expect(label.toLowerCase()).not.toBe(status.toLowerCase().replace(/_/g, ' '));
+    }
   });
 });

@@ -31,7 +31,39 @@ const STATUS_LABEL: Record<string, string> = {
   QC_FAILED: 'Being corrected',
   READY_FOR_DELIVERY: 'Ready for pickup',
   PAYMENT_PENDING: 'Ready — payment pending',
+  // The two terminal states were missing, so they fell through to the
+  // lowercased enum: a customer was told their car was "closed", which is
+  // workshop vocabulary for a record, not English for a finished repair.
+  CLOSED: 'Completed',
+  CANCELLED: 'Cancelled',
 };
+
+/**
+ * Every status a work order can hold. Kept here so the label map can be
+ * checked against it: the fallback prints a lowercased enum on a page a
+ * paying customer reads, so a status added later must fail a test rather
+ * than quietly show them "ready_for_qc".
+ */
+export const CUSTOMER_VISIBLE_STATUSES: readonly string[] = [
+  'DRAFT',
+  'REGISTERED',
+  'UNDER_INSPECTION',
+  'AWAITING_CUSTOMER_APPROVAL',
+  'APPROVED_FOR_WORK',
+  'IN_PROGRESS',
+  'WAITING_PARTS',
+  'WAITING_CUSTOMER',
+  'BLOCKED',
+  'READY_FOR_TEAM_REVIEW',
+  'READY_FOR_QC',
+  'QC_FAILED',
+  'READY_FOR_DELIVERY',
+  'PAYMENT_PENDING',
+  'CLOSED',
+  'CANCELLED',
+];
+
+export const CUSTOMER_STATUS_LABELS = STATUS_LABEL;
 
 const NEEDS_YOU = new Set(['AWAITING_CUSTOMER_APPROVAL', 'WAITING_CUSTOMER']);
 
