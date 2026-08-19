@@ -5,6 +5,7 @@ import { ErrorBanner } from '../../../shared/error-banner/error-banner';
 import { ButtonDirective } from '../../../shared/button/button.directive';
 import { BarList, type BarListItem } from '../../../shared/reports/bar-list/bar-list';
 import { KpiCard } from '../../../shared/reports/kpi-card/kpi-card';
+import type { IntegrityIssueSeverity } from './workflow-health.api';
 import type { PresentedError } from '../../../core/api/error.interceptor';
 import { WorkflowHealthApi, type BottlenecksReport, type IntegrityReport } from './workflow-health.api';
 
@@ -50,8 +51,26 @@ export class WorkflowHealthPage {
         .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]) ?? [],
   );
 
-  protected readonly criticalCount = computed(() => this.sortedIssues().filter((i) => i.severity === 'CRITICAL').length);
-  protected readonly warningCount = computed(() => this.sortedIssues().filter((i) => i.severity === 'WARNING').length);
+  // Read from `totals`, not from the visible list: filtering the list
+  // must not make the headline count appear to drop.
+  protected readonly criticalCount = computed(() => this.issues()?.totals.critical ?? 0);
+  protected readonly warningCount = computed(() => this.issues()?.totals.warning ?? 0);
+  protected readonly openCount = computed(() => this.issues()?.totals.open ?? 0);
+  protected readonly handledCount = computed(() => this.issues()?.totals.handled ?? 0);
+  protected readonly groups = computed(() => this.issues()?.groups ?? []);
+  protected readonly scannedAt = computed(() => this.issues()?.scannedAt ?? null);
+
+  /** Narrows the list only. Totals above are unaffected by design. */
+  protected readonly severityFilter = signal<IntegrityIssueSeverity | null>(null);
+  protected readonly typeFilter = signal<string | null>(null);
+  protected readonly statusFilter = signal<'open' | 'handled' | null>(null);
+
+  /** The issue whose acknowledgement form is open, if any. */
+  protected readonly acknowledging = signal<string | null>(null);
+  protected readonly ackNote = signal('');
+  protected readonly ackStatus = signal<'ACKNOWLEDGED' | 'INVESTIGATING' | 'ESCALATED'>('INVESTIGATING');
+  protected readonly ackError = signal<string | null>(null);
+  protected readonly ackSaving = signal(false);
 
   protected readonly biggestProblem = computed(() => {
     const causes = this.bottlenecks()?.waitingCauseBreakdown ?? [];
@@ -119,4 +138,92 @@ export class WorkflowHealthPage {
   protected severityClass(severity: string): string {
     return `severity--${severity.toLowerCase()}`;
   }
+
+  protected setSeverity(value: IntegrityIssueSeverity | null): void {
+    this.severityFilter.set(this.severityFilter() === value ? null : value);
+    this.reloadIssues();
+  }
+
+  protected setType(value: string | null): void {
+    this.typeFilter.set(this.typeFilter() === value ? null : value);
+    this.reloadIssues();
+  }
+
+  protected setStatus(value: 'open' | 'handled' | null): void {
+    this.statusFilter.set(this.statusFilter() === value ? null : value);
+    this.reloadIssues();
+  }
+
+  protected clearFilters(): void {
+    this.severityFilter.set(null);
+    this.typeFilter.set(null);
+    this.statusFilter.set(null);
+    this.reloadIssues();
+  }
+
+  protected readonly hasFilters = computed(
+    () => this.severityFilter() !== null || this.typeFilter() !== null || this.statusFilter() !== null,
+  );
+
+  private reloadIssues(): void {
+    this.api
+      .issuesFiltered({
+        severity: this.severityFilter() ?? undefined,
+        type: this.typeFilter() ?? undefined,
+        status: this.statusFilter() ?? undefined,
+      })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: (report) => this.issues.set(report) });
+  }
+
+  protected startAcknowledge(issueId: string): void {
+    this.acknowledging.set(issueId);
+    this.ackNote.set('');
+    this.ackStatus.set('INVESTIGATING');
+    this.ackError.set(null);
+  }
+
+  protected cancelAcknowledge(): void {
+    this.acknowledging.set(null);
+    this.ackError.set(null);
+  }
+
+  protected submitAcknowledge(issueId: string): void {
+    const note = this.ackNote().trim();
+    // Mirrors the server rule rather than replacing it: an acknowledgement
+    // with no reason cannot be told apart from nobody having looked.
+    if (note.length < 3) {
+      this.ackError.set('Say what you found or what you are doing about it.');
+      return;
+    }
+
+    this.ackSaving.set(true);
+    this.api
+      .acknowledgeIssue(issueId, { status: this.ackStatus(), note })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.ackSaving.set(false);
+          this.acknowledging.set(null);
+          this.reloadIssues();
+        },
+        error: (err: PresentedError) => {
+          this.ackSaving.set(false);
+          this.ackError.set(err.message ?? 'That did not save.');
+        },
+      });
+  }
+
+  protected typeLabel(value: string): string {
+    return value.toLowerCase().replace(/_/g, ' ');
+  }
+
+  protected statusLabel(value: string): string {
+    return value.toLowerCase();
+  }
+
+  protected when(iso: string | null): string {
+    return iso ? new Date(iso).toLocaleString() : '';
+  }
+
 }

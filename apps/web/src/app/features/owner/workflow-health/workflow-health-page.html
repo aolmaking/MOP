@@ -63,34 +63,146 @@
         </section>
       }
 
+      <!--
+        Causes first, then the individual records.
+
+        Seven identical CRITICAL rows tell an Owner far less than "seven
+        work orders share one integrity fault", because only the second
+        names the thing to fix. The list stays underneath for the records
+        themselves.
+      -->
+      @if (groups().length > 0) {
+        <section class="panel">
+          <h2 class="panel-title">What is actually wrong</h2>
+          <ul class="cause-list">
+            @for (group of groups(); track group.type) {
+              <li class="cause" [attr.data-severity]="group.severity">
+                <div class="cause-head">
+                  <span class="badge" [class]="severityClass(group.severity)">{{ group.severity }}</span>
+                  <span class="cause-title">{{ typeLabel(group.type) }}</span>
+                  <span class="cause-count">{{ group.total }} affected</span>
+                  @if (group.handled > 0) {
+                    <span class="cause-handled">{{ group.handled }} being handled</span>
+                  }
+                </div>
+                <p class="cause-means">{{ group.whatItMeans }}</p>
+                <p class="cause-action">
+                  <span class="cause-label">Do this</span>{{ group.recommendedAction }}
+                </p>
+                <p class="cause-owner">
+                  <span class="cause-label">Fixable by</span>{{ group.fixableBy }}
+                  <button type="button" class="cause-filter" (click)="setType(group.type)">
+                    {{ typeFilter() === group.type ? 'Show all issues' : 'Show only these' }}
+                  </button>
+                </p>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+
       <!-- 4 & 5. Which jobs are affected, what to investigate next -->
       <section class="panel">
-        <h2 class="panel-title">Issues requiring attention</h2>
-        @if (sortedIssues().length === 0) {
-          <p class="state-body">No consistency issues detected right now.</p>
-        } @else {
-          <div class="mop-table-scroll">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Severity</th>
-                <th>Description</th>
-                <th>Fixable by</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (issue of sortedIssues(); track issue.entityId + issue.type) {
-                <tr>
-                  <td><span class="badge" [class]="severityClass(issue.severity)">{{ issue.severity }}</span></td>
-                  <td>{{ issue.description }}</td>
-                  <td>{{ issue.ownerFixable ? 'You' : 'Platform Super Admin' }}</td>
-                  <td><a [routerLink]="issue.link">Investigate →</a></td>
-                </tr>
-              }
-            </tbody>
-          </table>
+        <div class="panel-head">
+          <h2 class="panel-title">Issues requiring attention</h2>
+          @if (scannedAt()) {
+            <!-- An integrity page that cannot say how fresh it is invites
+                 acting on stale facts. -->
+            <span class="scanned">Checked {{ when(scannedAt()) }}</span>
+          }
+        </div>
+
+        @if (issues() && issues()!.totals.all > 0) {
+          <div class="filters">
+            <span class="filters-label">Show</span>
+            <button type="button" class="chip" [attr.aria-pressed]="severityFilter() === 'CRITICAL'" (click)="setSeverity('CRITICAL')">
+              Critical {{ issues()!.totals.critical }}
+            </button>
+            <button type="button" class="chip" [attr.aria-pressed]="severityFilter() === 'WARNING'" (click)="setSeverity('WARNING')">
+              Warning {{ issues()!.totals.warning }}
+            </button>
+            <button type="button" class="chip" [attr.aria-pressed]="statusFilter() === 'open'" (click)="setStatus('open')">
+              Not looked at {{ issues()!.totals.open }}
+            </button>
+            <button type="button" class="chip" [attr.aria-pressed]="statusFilter() === 'handled'" (click)="setStatus('handled')">
+              Being handled {{ issues()!.totals.handled }}
+            </button>
+            @if (hasFilters()) {
+              <button type="button" class="clear" (click)="clearFilters()">Clear filters</button>
+            }
           </div>
+        }
+
+        @if (sortedIssues().length === 0) {
+          @if (hasFilters()) {
+            <p class="state-body">Nothing matches these filters. <button type="button" class="clear" (click)="clearFilters()">Clear them</button></p>
+          } @else {
+            <p class="state-body">No consistency issues detected right now.</p>
+          }
+        } @else {
+          <ul class="issue-list">
+            @for (issue of sortedIssues(); track issue.id) {
+              <li class="issue" [attr.data-status]="issue.status">
+                <div class="issue-head">
+                  <span class="badge" [class]="severityClass(issue.severity)">{{ issue.severity }}</span>
+                  <span class="issue-desc">{{ issue.description }}</span>
+                </div>
+
+                <div class="issue-meta">
+                  <span class="issue-status">{{ statusLabel(issue.status) }}</span>
+                  @if (issue.handledBy) {
+                    <span class="issue-by">{{ issue.handledBy }} · {{ when(issue.handledAt) }}</span>
+                  }
+                  <a class="issue-link" [routerLink]="issue.link">Open the record →</a>
+                  @if (acknowledging() !== issue.id) {
+                    <button type="button" class="issue-act" (click)="startAcknowledge(issue.id)">
+                      {{ issue.status === 'OPEN' ? 'I am looking at this' : 'Update' }}
+                    </button>
+                  }
+                </div>
+
+                @if (issue.note) {
+                  <p class="issue-note">“{{ issue.note }}”</p>
+                }
+
+                @if (acknowledging() === issue.id) {
+                  <!-- A note is required, not optional: an acknowledgement
+                       with no reason cannot be told apart from nobody
+                       having looked. -->
+                  <div class="ack">
+                    <label class="ack-field">
+                      <span class="ack-label">What did you find, or what are you doing?</span>
+                      <textarea
+                        rows="2"
+                        [value]="ackNote()"
+                        (input)="ackNote.set($any($event.target).value)"
+                      ></textarea>
+                    </label>
+
+                    <div class="ack-row">
+                      <label class="ack-field ack-field--inline">
+                        <span class="ack-label">Status</span>
+                        <select [value]="ackStatus()" (change)="ackStatus.set($any($event.target).value)">
+                          <option value="ACKNOWLEDGED">Acknowledged</option>
+                          <option value="INVESTIGATING">Investigating</option>
+                          <option value="ESCALATED">Escalated</option>
+                        </select>
+                      </label>
+
+                      <button appButton variant="primary" size="small" [disabled]="ackSaving()" (click)="submitAcknowledge(issue.id)">
+                        {{ ackSaving() ? 'Saving…' : 'Save' }}
+                      </button>
+                      <button appButton variant="secondary" size="small" (click)="cancelAcknowledge()">Cancel</button>
+                    </div>
+
+                    @if (ackError()) {
+                      <p class="ack-error" role="alert">{{ ackError() }}</p>
+                    }
+                  </div>
+                }
+              </li>
+            }
+          </ul>
         }
 
         @if (issues() && issues()!.notComputable.length > 0) {

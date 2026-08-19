@@ -142,3 +142,264 @@
 .not-computable ul {
   padding-inline-start: var(--space-4);
 }
+
+/* --- causes, issue lifecycle, filters ------------------------------- */
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.scanned {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.cause-list,
+.issue-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * A cause is the unit an Owner acts on, so it gets a card and the
+ * individual records get rows. The inline edge carries severity, matching
+ * the rack-edge language the rest of the product uses.
+ */
+.cause {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--border-strong);
+  border-radius: var(--radius-md);
+}
+
+.cause[data-severity='CRITICAL'] {
+  border-inline-start-color: var(--danger);
+}
+
+.cause[data-severity='WARNING'] {
+  border-inline-start-color: var(--warning);
+}
+
+.cause-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.cause-title {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.cause-count {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.cause-handled {
+  color: var(--success);
+  font-size: var(--text-xs);
+}
+
+.cause-means {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.cause-action,
+.cause-owner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.cause-label {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.cause-filter,
+.issue-act,
+.clear {
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--brand-text);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.cause-filter:focus-visible,
+.issue-act:focus-visible,
+.clear:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block: var(--space-3);
+}
+
+.filters-label {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.chip {
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--easing), border-color var(--duration-fast) var(--easing);
+}
+
+.chip[aria-pressed='true'] {
+  background: var(--accent-muted);
+  border-color: var(--brand);
+  color: var(--text);
+}
+
+.issue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+/* Something being worked on should look different from something nobody
+   has touched -- that difference is the entire point of the status. */
+.issue[data-status='OPEN'] {
+  border-inline-start: 3px solid var(--danger);
+}
+
+.issue:not([data-status='OPEN']) {
+  border-inline-start: 3px solid var(--success);
+  opacity: 0.86;
+}
+
+.issue-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.issue-desc {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.issue-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.issue-status {
+  color: var(--text-muted);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.issue-by {
+  color: var(--text-faint);
+}
+
+.issue-link {
+  color: var(--brand-text);
+}
+
+.issue-note {
+  padding-inline-start: var(--space-3);
+  border-inline-start: 2px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-style: italic;
+}
+
+.ack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.ack-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ack-field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ack-label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.ack textarea,
+.ack select {
+  padding: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  resize: vertical;
+}
+
+.ack-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.ack-error {
+  color: var(--danger-strong);
+  font-size: var(--text-xs);
+}

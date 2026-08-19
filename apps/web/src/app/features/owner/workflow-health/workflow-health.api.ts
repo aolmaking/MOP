@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import type { Observable } from 'rxjs';
 
@@ -10,15 +10,48 @@ export type IntegrityIssueType =
   | 'WORK_ORDER_TASK_STATUS_CONFLICT'
   | 'ORPHANED_STATUS_CHANGE';
 
+export type IntegrityIssueSeverity = 'INFO' | 'WARNING' | 'CRITICAL';
+
+/** OPEN until somebody records that they have looked at it. */
+export type IntegrityIssueStatus = 'OPEN' | 'ACKNOWLEDGED' | 'INVESTIGATING' | 'ESCALATED';
+
 export interface IntegrityIssue {
+  /** Stable across scans, so a decision about it survives a rescan. */
+  readonly id: string;
   readonly type: IntegrityIssueType;
-  readonly severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  readonly severity: IntegrityIssueSeverity;
   readonly description: string;
   readonly entityType: string;
   readonly entityId: string;
   readonly link: string;
   readonly ownerFixable: boolean;
   readonly detectedAt: string;
+  readonly status: IntegrityIssueStatus;
+  readonly note: string | null;
+  readonly handledBy: string | null;
+  readonly handledAt: string | null;
+}
+
+/** One row per fault class -- the cause, not each symptom of it. */
+export interface IntegrityGroup {
+  readonly type: IntegrityIssueType;
+  readonly severity: IntegrityIssueSeverity;
+  readonly total: number;
+  readonly open: number;
+  readonly handled: number;
+  readonly ownerFixable: boolean;
+  readonly whatItMeans: string;
+  readonly recommendedAction: string;
+  readonly fixableBy: string;
+}
+
+export interface IntegrityTotals {
+  readonly all: number;
+  readonly critical: number;
+  readonly warning: number;
+  readonly info: number;
+  readonly open: number;
+  readonly handled: number;
 }
 
 export interface MissingCapabilityNote {
@@ -28,7 +61,17 @@ export interface MissingCapabilityNote {
 
 export interface IntegrityReport {
   readonly issues: readonly IntegrityIssue[];
+  readonly groups: readonly IntegrityGroup[];
+  /** Always describes every detected issue, never just the filtered view. */
+  readonly totals: IntegrityTotals;
+  readonly scannedAt: string;
   readonly notComputable: readonly MissingCapabilityNote[];
+}
+
+export interface IssueFilters {
+  readonly severity?: IntegrityIssueSeverity;
+  readonly type?: string;
+  readonly status?: 'open' | 'handled';
 }
 
 export type WaitingCause = 'PEOPLE' | 'INVENTORY' | 'APPROVAL' | 'PAYMENT' | 'QUALITY' | 'OTHER';
@@ -73,6 +116,28 @@ export class WorkflowHealthApi {
 
   issues(): Observable<IntegrityReport> {
     return this.http.get<IntegrityReport>('/api/v1/organization/workflow-health/issues');
+  }
+
+  issuesFiltered(filters: IssueFilters): Observable<IntegrityReport> {
+    let params = new HttpParams();
+    if (filters.severity) params = params.set('severity', filters.severity);
+    if (filters.type) params = params.set('type', filters.type);
+    if (filters.status) params = params.set('status', filters.status);
+    return this.http.get<IntegrityReport>('/api/v1/organization/workflow-health/issues', { params });
+  }
+
+  /**
+   * Records what somebody decided. There is no "resolve": an issue is
+   * resolved when the records stop producing it.
+   */
+  acknowledgeIssue(
+    issueId: string,
+    body: { status: Exclude<IntegrityIssueStatus, 'OPEN'>; note: string },
+  ): Observable<{ fingerprint: string; status: string }> {
+    return this.http.post<{ fingerprint: string; status: string }>(
+      `/api/v1/organization/workflow-health/issues/${encodeURIComponent(issueId)}/acknowledge`,
+      body,
+    );
   }
 
   bottlenecks(from?: string, to?: string): Observable<BottlenecksReport> {
