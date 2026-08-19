@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import type { GateEvaluation } from "@mop/shared";
+import { gateDefinition, type GateEvaluation, type GateKey } from "@mop/shared";
 import { PrismaService } from "../database/prisma.service";
 import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
 import { AssetHistoryService } from "../vehicle-history/asset-history.service";
@@ -243,18 +243,26 @@ export class TechnicianWorkViewService {
         // A blocked evaluation always carries a message; the fallback is
         // for the type, not for a case that happens. It still says
         // something rather than rendering an empty row.
-        text: evaluation.satisfied ? describe(evaluation.gate) : (evaluation.blockedMessage ?? describe(evaluation.gate)),
+        text: evaluation.satisfied
+          ? describe(evaluation.gate)
+          : (evaluation.blockedMessage ?? describe(evaluation.gate)),
       })),
     };
   }
 }
 
 /**
- * A satisfied gate still needs words. The registry only carries a message
- * for the blocked case, because that is the one that has to be actionable
- * -- so a passed condition is stated as the gate turned into a phrase
- * rather than left blank.
+ * The words for a gate that is already satisfied.
+ *
+ * Read from the gate registry, never derived from the key. Stripping the
+ * separators out of `parts.received_used_or_returned` produced "parts
+ * received used or returned", which sat in a checklist directly beneath
+ * "Complete the inspection before finishing." -- half the list written
+ * for a technician and half of it leaked from the database.
+ *
+ * The fallback still says something rather than rendering an empty row,
+ * but it is for the type: every gate in the registry carries the text.
  */
 function describe(gate: string): string {
-  return gate.replace(/[._]/g, " ");
+  return gateDefinition(gate as GateKey)?.satisfiedMessage ?? gate.replace(/[._]/g, " ");
 }

@@ -54,6 +54,21 @@ export interface GateDefinition {
   readonly owner: CapabilityKey | null;
   /** Shown to the person who is blocked, so it must say what to do, not what failed. */
   readonly blockedMessage: string;
+  /**
+   * Shown when the gate is already satisfied.
+   *
+   * A checklist shows passed rows next to failed ones, so both states
+   * need real words. Without this the passing rows were rendered by
+   * stripping the separators out of the gate key -- so a technician read
+   * "Complete the inspection before finishing." directly above
+   * "parts received used or returned", half the list in English and half
+   * in database.
+   *
+   * It lives here rather than in a map beside the view because a gate's
+   * text must die with the gate: a hand-kept list elsewhere goes stale
+   * the moment a capability removes one.
+   */
+  readonly satisfiedMessage: string;
 }
 
 const DEFINITIONS: readonly GateDefinition[] = [
@@ -62,12 +77,14 @@ const DEFINITIONS: readonly GateDefinition[] = [
     checkpoint: "FINISH",
     owner: null,
     blockedMessage: "Complete the inspection before finishing.",
+    satisfiedMessage: "Inspection is complete.",
   },
   {
     key: "approved_work_completed",
     checkpoint: "FINISH",
     owner: null,
     blockedMessage: "Some approved work is still outstanding.",
+    satisfiedMessage: "All approved work is done.",
   },
   {
     key: "customer_decisions_resolved",
@@ -77,55 +94,70 @@ const DEFINITIONS: readonly GateDefinition[] = [
     // needs the customer's answer, recorded at the counter.
     owner: null,
     blockedMessage: "The customer has not answered every request yet.",
+    satisfiedMessage: "The customer has answered every request.",
   },
   {
     key: "critical_warning_acknowledged",
     checkpoint: "FINISH",
     owner: null,
     blockedMessage: "A critical item was rejected and needs the customer's acknowledgement.",
+    satisfiedMessage: "The customer has acknowledged the critical item.",
   },
   {
     key: "no_open_blocker",
     checkpoint: "FINISH",
     owner: null,
     blockedMessage: "Resolve or escalate the open blocker before finishing.",
+    satisfiedMessage: "No blocker is open.",
   },
   {
     key: "parts.received_used_or_returned",
     checkpoint: "FINISH",
     owner: "INVENTORY",
     blockedMessage: "A received part is neither marked used nor returned.",
+    satisfiedMessage: "Every received part is used or returned.",
   },
   {
     key: "parts.no_pending_return",
     checkpoint: "FINISH",
     owner: "PART_RETURNS",
     blockedMessage: "A return is still waiting for the inventory manager to accept it.",
+    satisfiedMessage: "No return is waiting on the inventory manager.",
   },
   {
     key: "parts.external_resolved",
     checkpoint: "FINISH",
     owner: "EXTERNAL_PARTS",
     blockedMessage: "A customer-supplied or externally-sourced part is still unresolved.",
+    satisfiedMessage: "Externally-sourced parts are resolved.",
   },
   {
     key: "review.team_review_passed",
     checkpoint: "FINISH",
     owner: "TEAM_REVIEW",
     blockedMessage: "Waiting for the team leader's review.",
+    satisfiedMessage: "The team leader has reviewed this job.",
   },
-  { key: "qc.passed", checkpoint: "FINISH", owner: "QC", blockedMessage: "Waiting for quality control to pass." },
+  {
+    key: "qc.passed",
+    checkpoint: "FINISH",
+    owner: "QC",
+    blockedMessage: "Waiting for quality control to pass.",
+    satisfiedMessage: "Quality control has passed.",
+  },
   {
     key: "invoice.issued",
     checkpoint: "DELIVERY",
     owner: "BILLING",
     blockedMessage: "The final invoice has not been issued.",
+    satisfiedMessage: "The final invoice has been issued.",
   },
   {
     key: "payment.settled_or_policy_allows",
     checkpoint: "DELIVERY",
     owner: "FINANCE_CORE",
     blockedMessage: "Payment is outstanding and this workshop does not allow unpaid delivery.",
+    satisfiedMessage: "Payment is settled, or policy allows delivery.",
   },
 ];
 

@@ -102,3 +102,37 @@ describe("gate ownership resolves the Inventory / Part Returns conflict", () => 
     expect(result.droppedGates).not.toContain("parts.received_used_or_returned");
   });
 });
+
+describe("gate wording", () => {
+  /**
+   * A finish checklist renders passed and failed rows side by side, so a
+   * gate missing either message falls back to its own key with the
+   * separators stripped -- which is how "parts received used or returned"
+   * came to sit directly under "Complete the inspection before finishing."
+   *
+   * This is pinned per gate rather than as a count, so adding a gate
+   * without wording fails here rather than in front of a technician.
+   */
+  it.each(GATE_DEFINITIONS.map((gate) => [gate.key, gate] as const))(
+    "%s states both the blocked and the satisfied case",
+    (_key, gate) => {
+      expect(gate.blockedMessage.trim().length).toBeGreaterThan(0);
+      expect(gate.satisfiedMessage.trim().length).toBeGreaterThan(0);
+
+      // Neither may be the key wearing a disguise.
+      expect(gate.satisfiedMessage).not.toBe(gate.key);
+      expect(gate.satisfiedMessage).not.toContain("_");
+      expect(gate.satisfiedMessage).not.toBe(gate.blockedMessage);
+
+      // Written for a person: a sentence, not a fragment.
+      expect(gate.satisfiedMessage).toMatch(/^[A-Z].*\.$/);
+      expect(gate.blockedMessage).toMatch(/^[A-Z].*\.$/);
+    },
+  );
+
+  it("gives every declared gate key a definition, so nothing renders raw", () => {
+    for (const key of GATE_KEYS) {
+      expect(gateDefinition(key)).not.toBeNull();
+    }
+  });
+});
