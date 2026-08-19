@@ -22,7 +22,17 @@ export class InventorySection {
     this.data()
       .partProfitability.filter((r) => r.profit !== null)
       .slice(0, 10)
-      .map((row) => ({ label: row.name, value: row.profit!, displayValue: this.fmt(row.profit!) })),
+      .map((row) => ({
+        label: row.name,
+        value: row.profit!,
+        displayValue: this.fmt(row.profit!),
+        // Margin, not just profit: a part earning the most in total and a
+        // part earning the most per sale are different decisions, and the
+        // bar only shows the first.
+        detail:
+          `${row.sku} · sold ${row.quantitySold} · ${this.fmt(row.revenue)} in, ${this.fmt(row.cost!)} cost` +
+          (row.revenue > 0 ? ` · ${((row.profit! / row.revenue) * 100).toFixed(0)}% margin` : ''),
+      })),
   );
 
   protected readonly noCostItems = computed(() => this.data().partProfitability.filter((r) => r.profit === null));
@@ -32,6 +42,10 @@ export class InventorySection {
       label: row.name,
       value: row.valueAtSellingPrice,
       displayValue: this.fmt(row.valueAtSellingPrice),
+      // The quantity is the actionable half: money tied up is the reason
+      // to care, but units on the shelf is what somebody has to do
+      // something about.
+      detail: `${row.sku} · ${row.availableQty} ${row.availableQty === 1 ? 'unit' : 'units'} on the shelf, unsold in this period`,
     })),
   );
 
@@ -46,6 +60,12 @@ export class InventorySection {
         label: row.name,
         value: 1 / (row.daysLeft! + 1),
         displayValue: `${row.daysLeft} day(s) left`,
+        // The bar is deliberately not proportional here, so the detail
+        // has to carry the real numbers the estimate was made from --
+        // otherwise "3 days left" is a figure with no visible basis.
+        detail:
+          `${row.sku} · ${row.available} left in ${row.warehouseCode}` +
+          (row.velocity > 0 ? `, using ${row.velocity.toFixed(1)}/day` : ''),
       })),
   );
 

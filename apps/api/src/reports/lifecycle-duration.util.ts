@@ -10,6 +10,22 @@
  * database -- the query layer's only job is fetching the right rows in
  * the right order.
  */
+/**
+ * The states a job cannot leave.
+ *
+ * `computeStatusDurations` deliberately still partitions the whole
+ * timeline, terminal states included -- that is a faithful account of
+ * where a work order's clock went, and workflow-bottlenecks reads it
+ * that way.
+ *
+ * What is NOT sound is publishing that slice as "average time in status".
+ * A job closed in March has not spent eight months in CLOSED, and because
+ * the slice runs to the end of the report range, asking for a year made
+ * the figure larger than asking for a month, for the same jobs. Callers
+ * that present a stage duration to a human filter these out first.
+ */
+export const TERMINAL_STATUSES: readonly string[] = ["CLOSED", "CANCELLED"];
+
 export interface StatusChangeEvent {
   readonly workOrderId: string;
   readonly from: string;

@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { Prisma } from "@mop/database";
 import { PrismaService } from "../database/prisma.service";
 import { resolveDateRange, resolveGranularity, type ReportQueryParams } from "../reports/date-range.util";
-import { averageMsByStatus, computeStatusDurations, type StatusChangeEvent } from "../reports/lifecycle-duration.util";
+import { averageMsByStatus, computeStatusDurations, type StatusChangeEvent, TERMINAL_STATUSES } from "../reports/lifecycle-duration.util";
 import { isMultiBranch, workOrderScopeFilter, type AnalyticsScope } from "./analytics-scope.util";
 
 export interface VolumePoint {
@@ -163,6 +163,9 @@ export class OperationsAnalyticsService {
     const durations = computeStatusDurations(statusEvents, range.to);
     const averages = averageMsByStatus(durations);
     return Object.entries(averages)
+      // Same exclusion as the Owner-facing report: a terminal state's
+      // slice is time-since-finished, not a stage duration.
+      .filter(([status]) => !TERMINAL_STATUSES.includes(status))
       .map(([status, ms]) => ({ status, averageHours: ms / (60 * 60 * 1000) }))
       .sort((a, b) => b.averageHours - a.averageHours);
   }

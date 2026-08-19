@@ -84,6 +84,7 @@ async function main() {
   await ensureServiceCatalog(tenant.id);
   await clearDemoWork(tenant.id);
   await createStuckJobs(tenant.id, branch.id, technician.staffUserId);
+  await createFinancialHistory(tenant.id, branch.id);
 
   console.log("\nDemo data ready.\n");
   console.log(`  Sign in at http://localhost:4200/login`);
@@ -466,6 +467,21 @@ async function clearDemoWork(tenantId: string) {
   await prisma.customerDecisionRequest.deleteMany({ where: { workOrderId: { in: workOrderIds } } });
   await prisma.taskBlocker.deleteMany({ where: { task: { workOrderId: { in: workOrderIds } } } });
   await prisma.task.deleteMany({ where: { workOrderId: { in: workOrderIds } } });
+
+  // Finance unwinds before the work orders it hangs off. Invoice ->
+  // WorkOrder is onDelete: Restrict, so skipping this does not leave
+  // stray rows behind -- it makes the second seed run fail outright.
+  const invoices = await prisma.invoice.findMany({
+    where: { workOrderId: { in: workOrderIds } },
+    select: { id: true },
+  });
+  const invoiceIds = invoices.map((invoice) => invoice.id);
+  if (invoiceIds.length > 0) {
+    await prisma.payment.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
+    await prisma.invoiceLine.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
+    await prisma.invoice.deleteMany({ where: { id: { in: invoiceIds } } });
+  }
+
   await prisma.workOrder.deleteMany({ where: { id: { in: workOrderIds } } });
   await prisma.assetOwnershipHistory.deleteMany({ where: { assetId: { in: assetIds } } });
   await prisma.asset.deleteMany({ where: { id: { in: assetIds } } });
@@ -498,12 +514,26 @@ const LIFECYCLE_PATHS: Record<string, readonly string[]> = {
   QC_FAILED: ["AWAITING_APPROVAL", "APPROVED", "IN_PROGRESS", "QC_FAILED"],
   READY_FOR_DELIVERY: ["AWAITING_APPROVAL", "APPROVED", "IN_PROGRESS", "PAYMENT_PENDING", "READY_FOR_DELIVERY"],
   PAYMENT_PENDING: ["AWAITING_APPROVAL", "APPROVED", "IN_PROGRESS", "PAYMENT_PENDING"],
+  CLOSED: ["AWAITING_APPROVAL", "APPROVED", "IN_PROGRESS", "PAYMENT_PENDING", "READY_FOR_DELIVERY", "CLOSED"],
 };
 
-async function recordLifecycleHistory(tenantId: string, workOrderId: string, finalStatus: string): Promise<void> {
+/**
+ * `endingAt` is when the job reached `finalStatus`, defaulting to now.
+ *
+ * It matters for anything already finished: without it every closed job
+ * -- whatever date it carries -- replays its transitions as having
+ * happened in the last few hours, so a workshop with ten weeks of
+ * history reports all of it as today's activity.
+ */
+async function recordLifecycleHistory(
+  tenantId: string,
+  workOrderId: string,
+  finalStatus: string,
+  endingAt: Date = new Date(),
+): Promise<void> {
   const path = LIFECYCLE_PATHS[finalStatus] ?? [finalStatus];
   let from = "DRAFT";
-  // Spread the hops backwards from now so each stage has a plausible
+  // Spread the hops backwards from the end so each stage has a plausible
   // dwell time rather than every transition sharing one timestamp.
   const stepMinutes = 45;
   let offset = path.length * stepMinutes;
@@ -515,7 +545,7 @@ async function recordLifecycleHistory(tenantId: string, workOrderId: string, fin
         eventKey: "work_order.status_changed",
         actorId: "seed-demo",
         actorType: "TENANT_STAFF",
-        createdAt: new Date(Date.now() - offset * 60_000),
+        createdAt: new Date(endingAt.getTime() - offset * 60_000),
         payload: { workOrderId, from, to, intent: "SEED_REPLAY", reason: null },
       },
     });
@@ -761,6 +791,139 @@ async function createStuckJobs(tenantId: string, branchId: string, technicianSta
     const age = backdated[job.kind];
     if (age) {
       await prisma.$executeRaw`UPDATE work_orders SET "updatedAt" = ${age} WHERE id = ${workOrder.id}`;
+    }
+  }
+}
+
+/**
+ * Jobs that finished, were invoiced, and were mostly paid.
+ *
+ * Every other seeded job is deliberately stuck somewhere, which is right
+ * for the operational surfaces but leaves Reports -> Financial completely
+ * empty: no invoice was ever issued, so revenue, collected, payment
+ * methods, branch revenue, top services and the aging buckets all read
+ * zero, and the tab demonstrated nothing.
+ *
+ * These twelve are the other half of the picture. They are spread back
+ * over ten weeks so the revenue trend has real shape rather than one
+ * spike, and the payment states are mixed on purpose:
+ *
+ *   - most are paid in full, across three different methods
+ *   - two are part-paid, so PARTIALLY_PAID and a real outstanding
+ *     balance exist
+ *   - three are unpaid at 10, 45 and 80 days, one for each aging bucket,
+ *     because an aging report whose buckets are all empty cannot be read
+ *
+ * Prices come from DEMO_SERVICES rather than invented numbers, so the
+ * invoice lines agree with the live price catalogue the technician and
+ * POS surfaces resolve against.
+ */
+const FINISHED_JOBS: readonly {
+  plate: string;
+  customer: string;
+  daysAgo: number;
+  services: readonly number[];
+  method: "CASH" | "CARD" | "BANK_TRANSFER";
+  /** Fraction of the total actually collected. */
+  paidFraction: number;
+}[] = [
+  { plate: "DEMO-2001", customer: "Rania Fouad", daysAgo: 68, services: [0], method: "CASH", paidFraction: 1 },
+  { plate: "DEMO-2002", customer: "Khaled Mansour", daysAgo: 61, services: [2], method: "CARD", paidFraction: 1 },
+  { plate: "DEMO-2003", customer: "Dalia Sobhy", daysAgo: 52, services: [0, 1], method: "BANK_TRANSFER", paidFraction: 1 },
+  { plate: "DEMO-2004", customer: "Ahmed Zaki", daysAgo: 44, services: [1], method: "CASH", paidFraction: 1 },
+  { plate: "DEMO-2005", customer: "Mervat Salah", daysAgo: 37, services: [2], method: "CARD", paidFraction: 0.5 },
+  { plate: "DEMO-2006", customer: "Bassem Nour", daysAgo: 29, services: [0], method: "CASH", paidFraction: 1 },
+  { plate: "DEMO-2007", customer: "Iman Tawfik", daysAgo: 22, services: [0, 2], method: "BANK_TRANSFER", paidFraction: 1 },
+  { plate: "DEMO-2008", customer: "Sherif Adel", daysAgo: 15, services: [1], method: "CARD", paidFraction: 1 },
+  { plate: "DEMO-2009", customer: "Ghada Hilmy", daysAgo: 9, services: [0], method: "CASH", paidFraction: 0.6 },
+  // The three that pay for the aging report: one per bucket.
+  { plate: "DEMO-2010", customer: "Fady Riad", daysAgo: 10, services: [2], method: "CASH", paidFraction: 0 },
+  { plate: "DEMO-2011", customer: "Nermin Osman", daysAgo: 45, services: [0, 1], method: "CASH", paidFraction: 0 },
+  { plate: "DEMO-2012", customer: "Waleed Hegazy", daysAgo: 80, services: [1], method: "CASH", paidFraction: 0 },
+];
+
+async function createFinancialHistory(tenantId: string, branchId: string): Promise<void> {
+  const manager = await prisma.staffUser.findFirst({ where: { tenantId, role: "BRANCH_MANAGER" } });
+  const issuedById = manager?.id ?? "seed-demo";
+
+  for (const [index, job] of FINISHED_JOBS.entries()) {
+    const closedAt = hoursAgo(job.daysAgo * 24);
+
+    const customer = await prisma.customer.create({
+      data: { tenantId, fullName: job.customer, phone: `0101${Math.floor(Math.random() * 9_000_000 + 1_000_000)}` },
+    });
+    const asset = await prisma.asset.create({
+      data: { tenantId, category: "CARS", plateNumber: job.plate, currentOwnerCustomerId: customer.id },
+    });
+    await prisma.assetOwnershipHistory.create({
+      data: { tenantId, assetId: asset.id, customerId: customer.id },
+    });
+
+    const workOrder = await prisma.workOrder.create({
+      data: {
+        tenantId,
+        branchId,
+        assetId: asset.id,
+        customerId: customer.id,
+        status: "CLOSED",
+        inspectionDeclined: false,
+        createdAt: closedAt,
+        closedAt,
+      },
+    });
+    await recordLifecycleHistory(tenantId, workOrder.id, "CLOSED", closedAt);
+
+    const lines = job.services.map((i) => DEMO_SERVICES[i]);
+    // Kept in minor-unit integers until the very last step. Summing
+    // floats and rounding at the end is how an invoice ends up one
+    // piastre away from the lines that make it up.
+    const totalPiastres = lines.reduce((sum, line) => sum + Math.round((line.unitPrice + line.laborPrice) * 100), 0);
+    const paidPiastres = Math.round(totalPiastres * job.paidFraction);
+    const money = (piastres: number) => (piastres / 100).toFixed(2);
+
+    const invoice = await prisma.invoice.create({
+      data: {
+        tenantId,
+        workOrderId: workOrder.id,
+        invoiceNumber: `DEMO-INV-${String(index + 1).padStart(4, "0")}`,
+        status: paidPiastres === 0 ? "ISSUED" : paidPiastres >= totalPiastres ? "PAID" : "PARTIALLY_PAID",
+        subtotal: money(totalPiastres),
+        total: money(totalPiastres),
+        paid: money(paidPiastres),
+        balance: money(totalPiastres - paidPiastres),
+        issuedById,
+        issuedAt: closedAt,
+      },
+    });
+
+    for (const line of lines) {
+      await prisma.invoiceLine.create({
+        data: {
+          tenantId,
+          invoiceId: invoice.id,
+          name: line.itemKey,
+          itemType: "SERVICE",
+          quantity: 1,
+          lockedUnitPrice: line.unitPrice.toFixed(2),
+          lockedLaborPrice: line.laborPrice.toFixed(2),
+          total: (line.unitPrice + line.laborPrice).toFixed(2),
+        },
+      });
+    }
+
+    if (paidPiastres > 0) {
+      await prisma.payment.create({
+        data: {
+          tenantId,
+          invoiceId: invoice.id,
+          amount: money(paidPiastres),
+          method: job.method,
+          status: "CONFIRMED",
+          idempotencyKey: `demo-payment-${invoice.id}`,
+          recordedById: issuedById,
+          createdAt: closedAt,
+        },
+      });
     }
   }
 }

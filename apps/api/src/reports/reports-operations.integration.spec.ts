@@ -9,6 +9,7 @@ process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432
 
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
+import { TERMINAL_STATUSES } from "./lifecycle-duration.util";
 import { ReportsOperationsService } from "./reports-operations.service";
 import type { PrismaService } from "../database/prisma.service";
 
@@ -110,6 +111,40 @@ describe("ReportsOperationsService -- historical duration from real event histor
     expect(waitingParts).toBeDefined();
     expect(waitingParts!.averageHours).toBeGreaterThan(3.9);
     expect(waitingParts!.averageHours).toBeLessThan(4.1);
+  });
+
+  it("never reports an average time in a terminal status, however wide the range", async () => {
+    const wo = await prisma.workOrder.create({
+      data: { tenantId, branchId, assetId, customerId, status: "CLOSED" },
+    });
+
+    const t0 = new Date("2026-01-01T00:00:00Z");
+    await emitStatusChange(wo.id, "DRAFT", "IN_PROGRESS", t0);
+    await emitStatusChange(wo.id, "IN_PROGRESS", "CLOSED", new Date(t0.getTime() + 2 * 60 * 60 * 1000));
+
+    const narrow = await operations.build(tenantId, {
+      from: t0.toISOString(),
+      to: new Date(t0.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+    });
+    const wide = await operations.build(tenantId, {
+      from: t0.toISOString(),
+      to: new Date(t0.getTime() + 300 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+
+    // The slice for a terminal state runs to the end of the range, so
+    // publishing it made "average time in CLOSED" grow with the dates
+    // asked for rather than describing the workshop.
+    expect(narrow.averageTimeInStatus.find((r) => r.status === "CLOSED")).toBeUndefined();
+    expect(wide.averageTimeInStatus.find((r) => r.status === "CLOSED")).toBeUndefined();
+
+    // Non-terminal stages are still reported -- the filter removes the
+    // meaningless rows, not the metric. (Their values are deliberately
+    // not compared across ranges: a job still sitting in IN_PROGRESS
+    // really has been there longer by the wider range's end date, which
+    // is the open-ended span working as intended.)
+    expect(narrow.averageTimeInStatus.some((r) => r.status === "IN_PROGRESS")).toBe(true);
+    expect(narrow.averageTimeInStatus.every((r) => !TERMINAL_STATUSES.includes(r.status))).toBe(true);
+    expect(wide.averageTimeInStatus.every((r) => !TERMINAL_STATUSES.includes(r.status))).toBe(true);
   });
 
   it("reflects the current status distribution regardless of date range (a snapshot, not history)", async () => {

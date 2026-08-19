@@ -8,7 +8,7 @@ import {
   type ReportGranularity,
   type ReportQueryParams,
 } from "./date-range.util";
-import { averageMsByStatus, computeStatusDurations } from "./lifecycle-duration.util";
+import { averageMsByStatus, computeStatusDurations, TERMINAL_STATUSES } from "./lifecycle-duration.util";
 
 export interface StatusDistributionRow {
   readonly status: string;
@@ -231,6 +231,10 @@ export class ReportsOperationsService {
     const averages = averageMsByStatus(durations);
 
     return Object.entries(averages)
+      // Terminal states are excluded: their slice measures time since the
+      // job finished, which grows with the report range rather than
+      // saying anything about how the workshop runs.
+      .filter(([status]) => !TERMINAL_STATUSES.includes(status))
       .map(([status, ms]) => ({ status, averageHours: ms / (60 * 60 * 1000) }))
       .sort((a, b) => b.averageHours - a.averageHours);
   }

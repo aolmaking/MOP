@@ -27,11 +27,16 @@ export class FinancialSection {
     { label: 'Collected', color: '#46a86a', values: this.data().trend.map((p) => p.collected) },
   ]);
 
+  // Each detail below states the figure the bar cannot: the count behind
+  // the total, and the per-unit average that count implies. A branch
+  // earning the most is a different fact from a branch earning the most
+  // per job, and only one of them is visible in a bar.
   protected readonly branchItems = computed<BarListItem[]>(() =>
     this.data().branchRevenue.map((row) => ({
       label: row.branchName,
       value: row.revenue,
       displayValue: this.fmtMoney(row.revenue),
+      detail: `${row.workOrderCount} ${this.plural(row.workOrderCount, 'job', 'jobs')}${this.per(row.revenue, row.workOrderCount, 'per job')}`,
     })),
   );
 
@@ -40,6 +45,7 @@ export class FinancialSection {
       label: row.name,
       value: row.revenue,
       displayValue: this.fmtMoney(row.revenue),
+      detail: `sold ${row.quantity} ${this.plural(row.quantity, 'time', 'times')}${this.per(row.revenue, row.quantity, 'each')}`,
     })),
   );
 
@@ -48,6 +54,7 @@ export class FinancialSection {
       label: row.method,
       value: row.amount,
       displayValue: this.fmtMoney(row.amount),
+      detail: `${row.count} ${this.plural(row.count, 'payment', 'payments')}${this.per(row.amount, row.count, 'per payment')}`,
     })),
   );
 
@@ -56,8 +63,19 @@ export class FinancialSection {
       label: row.label,
       value: row.amount,
       displayValue: this.fmtMoney(row.amount),
+      detail: `${row.invoiceCount} unpaid ${this.plural(row.invoiceCount, 'invoice', 'invoices')}${this.per(row.amount, row.invoiceCount, 'each')}`,
     })),
   );
+
+  private plural(n: number, one: string, many: string): string {
+    return n === 1 ? one : many;
+  }
+
+  /** Omitted rather than shown as a divide-by-zero when the count is 0. */
+  private per(total: number, count: number, suffix: string): string {
+    if (count <= 0) return '';
+    return `, ${this.fmtMoney(total / count)} ${suffix}`;
+  }
 
   protected fmtMoney(value: number): string {
     return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value)} ${this.data().currency}`;
