@@ -466,7 +466,47 @@ Probe rows removed by exact id afterwards; page confirmed back to 0 quiet.
    in the Platform shell.
 3. Reports & Charts: `bar-list` hover detail landed for Operations.
    Consider whether Financial/Inventory/Customers need the same.
-4. Work Order / History dossier depth: remaining idea is linking
-   `WorkOrderPartLine` rows back to the `PartRequest` they came from.
+4. ~~Work Order / History dossier depth~~ DONE (below). Remaining idea was
+   linking `WorkOrderPartLine` rows back to the `PartRequest` they came
+   from.
+5. Page-by-page capability audit across the remaining 7 shells.
+6. Phase 16 -> 22 remaining work.
+
+---
+
+## Session 6 -- part lines traced back to their PartRequest
+
+`WorkOrderPartLine.partRequestId` already existed on the model (unique,
+nullable) -- the field a part-request-issued part carries back to the
+request that produced it. The dossier neither selected nor exposed it, so
+a job's parts list read identically whether a part came off the shelf
+through a real, approved request or was typed in by hand: no way to tell
+"properly requested and issued" from "added directly" without leaving the
+dossier and opening Inventory separately.
+
+Selected onto `DossierPartLine`, threaded into the PART timeline entries
+(`"Part added: X x2 (from parts request)"` plus `partRequestId` in
+`detail`), and surfaced in the drawer as a "from parts request" chip.
+Proven with a real `PartRequest` + linked `WorkOrderPartLine` against the
+pre-existing seeded line that has neither, so both the present and the
+absent case are asserted, not just the happy path.
+
+**Gate: API 692/692 across 90 suites · web 235/235 · 7/7 linters ·
+typecheck + build clean.**
+
+Browser verification not performed this session -- dev-server preview is
+unavailable in this unattended run (a separate concurrent session already
+had the dev server open on this machine). Owed: drive a job with a
+requested part through `/branch/work-orders/:id` or `/owner/audit` next
+session and confirm the chip renders.
+
+### Remaining queue
+
+1. ~~Workflow Health~~ DONE.
+2. ~~Control Center~~ DONE. ~~Live View~~ DONE.
+3. ~~Work Order / History dossier depth~~ DONE.
+4. Reports & Charts: consider whether Financial/Inventory/Customers need
+   bar-list hover detail the way Operations got it (a parallel session may
+   already be mid-flight on this -- check before starting).
 5. Page-by-page capability audit across the remaining 7 shells.
 6. Phase 16 -> 22 remaining work.
