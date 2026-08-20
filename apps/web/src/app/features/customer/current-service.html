@@ -30,7 +30,10 @@
             <bdi class="job-asset">{{ item.asset }}</bdi>
             <span class="job-status">{{ label(item.status) }}</span>
             @if (needsYou(item.status)) {
-              <span class="job-flag">Needs you</span>
+              <!-- A link, not a label. The flag existed with nothing
+                   behind it: a customer was told they were needed and
+                   given nowhere to go. -->
+              <a class="job-flag" routerLink="/customer/decisions">Needs you</a>
             }
             <span class="job-since">Since {{ when(item.createdAt) }}</span>
           </li>

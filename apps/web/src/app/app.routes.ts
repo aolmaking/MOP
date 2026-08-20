@@ -252,6 +252,14 @@ export const routes: Routes = [
         loadComponent: () => import('./features/customer/current-service').then((m) => m.CurrentService),
       },
       {
+        // The authenticated way to answer what the workshop asked. The
+        // token link at /decide/:token still works and always will --
+        // this is the other end of the same feature, for a customer who
+        // no longer has the message.
+        path: 'decisions',
+        loadComponent: () => import('./features/customer/my-decisions').then((m) => m.MyDecisions),
+      },
+      {
         path: 'invoices',
         loadComponent: () => import('./features/customer/invoice-status').then((m) => m.InvoiceStatus),
       },

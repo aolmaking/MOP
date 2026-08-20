@@ -40,3 +40,38 @@ describe("CustomerSafeProjectionService", () => {
     );
   });
 });
+
+/**
+ * The canned sentences must be reachable.
+ *
+ * Every message in SAFE_DEFAULTS was written for a specific moment in a
+ * repair, and six of them were keyed on names no service emits -- the
+ * contract in `packages/shared/src/contracts/events.ts` says
+ * `part.requested` and `payment.recorded`, while Inventory emits
+ * `part_request.created` and Finance emits `finance.payment_recorded`.
+ * A customer therefore got the generic fallback at exactly the moments
+ * the product had something specific to say.
+ */
+describe("the keys services actually emit are all covered", () => {
+  const service = new CustomerSafeProjectionService();
+
+  const EMITTED_ON_THE_CORE_JOURNEY = [
+    "work_order.created",
+    "customer_decision.requested",
+    "customer_decision.responded",
+    "part_request.created",
+    "part_request.issued",
+    "part_request.used",
+    "finance.invoice_issued",
+    "finance.payment_recorded",
+  ];
+
+  it.each(EMITTED_ON_THE_CORE_JOURNEY)("has a written sentence for %s", (eventKey) => {
+    const message = service.project(eventKey);
+    // The fallback is the failure: it means nobody wrote words for this.
+    expect(message).not.toBe("Your service is being updated. We'll notify you of any changes.");
+    expect(message.length).toBeGreaterThan(10);
+    // Never an identifier leaking into a sentence a customer reads.
+    expect(message).not.toContain("_");
+  });
+});

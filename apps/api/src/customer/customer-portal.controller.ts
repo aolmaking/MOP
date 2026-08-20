@@ -1,8 +1,10 @@
-import { Controller, ForbiddenException, Get, UseGuards } from "@nestjs/common";
+import { Body, Controller, ForbiddenException, Get, Param, Post, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
 import { SessionGuard } from "../auth/session.guard";
 import { CurrentSession } from "../auth/current-session.decorator";
 import { CustomerPortalService } from "./customer-portal.service";
+import { CustomerDecisionService } from "./decision.service";
+import { RespondDto } from "./decision.dto";
 
 /**
  * The Customer Portal's authenticated pages.
@@ -23,7 +25,10 @@ import { CustomerPortalService } from "./customer-portal.service";
 @Controller("customer-portal")
 @UseGuards(SessionGuard)
 export class CustomerPortalController {
-  constructor(private readonly portal: CustomerPortalService) {}
+  constructor(
+    private readonly portal: CustomerPortalService,
+    private readonly decisions: CustomerDecisionService,
+  ) {}
 
   @Get("home")
   async home(@CurrentSession() session: SessionContext) {
@@ -47,6 +52,39 @@ export class CustomerPortalController {
   async invoices(@CurrentSession() session: SessionContext) {
     const { tenantId, customerId } = this.require(session);
     return this.portal.invoiceStatus(tenantId, customerId);
+  }
+
+  /**
+   * What the workshop is waiting to hear from this customer.
+   *
+   * The portal has counted these on its home page since Phase 11 and
+   * listed them nowhere; the only way to answer was a token link the
+   * customer had to still have. Same `PublicDecision` shape the token
+   * page renders, so both ends agree on what is safe to show.
+   */
+  @Get("decisions")
+  async decisionsPending(@CurrentSession() session: SessionContext) {
+    const { tenantId, customerId } = this.require(session);
+    return { decisions: await this.decisions.listForCustomer(tenantId, customerId) };
+  }
+
+  /**
+   * The answer, from inside the customer's own session.
+   *
+   * `requestId` is a route parameter here rather than a violation of
+   * this controller's own rule, because it is scoped BY the session:
+   * `respondAsCustomer` resolves it with `customerId` in the where
+   * clause, so another customer's id reads as not-found rather than as
+   * somebody else's decision.
+   */
+  @Post("decisions/:requestId/respond")
+  async respondToDecision(
+    @CurrentSession() session: SessionContext,
+    @Param("requestId") requestId: string,
+    @Body() dto: RespondDto,
+  ) {
+    const { tenantId, customerId } = this.require(session);
+    return this.decisions.respondAsCustomer(tenantId, customerId, requestId, dto.answers);
   }
 
   @Get("safe-history")

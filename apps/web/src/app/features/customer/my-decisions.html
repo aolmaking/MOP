@@ -1,0 +1,46 @@
+<section class="decisions">
+  <h1 class="decisions-title">Waiting on you</h1>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state-body" aria-busy="true">Loading…</p>
+    }
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">We can't open this right now</p>
+        <p class="state-body">Please contact your workshop for help.</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+    @case ('empty') {
+      <div class="state">
+        <p class="state-title">Nothing needs your answer</p>
+        <p class="state-body">
+          If the workshop finds something while working on your car, you'll be asked here before anything is done.
+        </p>
+      </div>
+    }
+    @case ('ready') {
+      <ul class="asks">
+        @for (d of decisions(); track d.requestId) {
+          <li class="ask">
+            @if (d.vehicle) {
+              <p class="ask-vehicle"><bdi>{{ d.vehicle }}</bdi></p>
+            }
+            <app-decision-answer
+              [decision]="d"
+              [submitting]="submitting() === d.requestId"
+              [error]="errorFor(d.requestId)"
+              (answered)="send(d.requestId, $event)"
+            />
+          </li>
+        }
+      </ul>
+    }
+  }
+</section>

@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { CurrentService, CUSTOMER_STATUS_LABELS, CUSTOMER_VISIBLE_STATUSES } from './current-service';
 import { CustomerPortalApi, type CurrentServiceItem } from './customer-portal.api';
@@ -15,7 +16,9 @@ function item(overrides: Partial<CurrentServiceItem> = {}): CurrentServiceItem {
 
 function render(response: readonly CurrentServiceItem[] | { readonly error: unknown }) {
   const api = { currentService: () => ('error' in response ? throwError(() => response.error) : of(response)) };
-  TestBed.configureTestingModule({ providers: [{ provide: CustomerPortalApi, useValue: api }] });
+  TestBed.configureTestingModule({
+    providers: [provideRouter([]), { provide: CustomerPortalApi, useValue: api }],
+  });
   const fixture = TestBed.createComponent(CurrentService);
   fixture.detectChanges();
   return { element: fixture.nativeElement as HTMLElement };

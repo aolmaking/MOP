@@ -1,0 +1,120 @@
+@if (decision(); as d) {
+  @if (d.state === 'EXPIRED') {
+    <!-- No items at all. A priced list nobody can act on is worse than
+         no list. -->
+    <p class="body">
+      Please contact the workshop and ask them to send a new link. Nothing has been approved or declined.
+    </p>
+  } @else {
+    @if (d.state === 'ANSWERED') {
+      <p class="banner">
+        You replied on {{ when(d.respondedAt) }}. This is what you chose — nothing more is needed from you.
+      </p>
+    } @else {
+      <p class="body">
+        The workshop found the following while working on your car. Please choose what you would like them to do.
+        Nothing is done until you decide.
+      </p>
+    }
+
+    @if (!d.pricingVisible) {
+      <!-- A rare configuration, and the page must not break on it. -->
+      <p class="note">Prices will be confirmed on your invoice.</p>
+    }
+
+    @if (error(); as message) {
+      <p class="error" role="alert">{{ message }}</p>
+    }
+
+    <ul class="items">
+      @for (item of d.items; track item.id) {
+        <li class="item" [class.item--critical]="item.importance === 'Critical'">
+          <div class="item-head">
+            <span class="item-name">{{ item.name }}</span>
+            @if (item.importance === 'Critical') {
+              <span class="badge badge--critical">Safety</span>
+            } @else if (item.importance === 'High') {
+              <span class="badge">Important</span>
+            }
+          </div>
+
+          <!-- The technician's own words, not a service code. -->
+          <p class="item-why">{{ item.explanation }}</p>
+
+          @if (item.total) {
+            <p class="item-price">
+              <span class="item-total">{{ item.total }}</span>
+              @if (item.labour && item.labour !== '0.00') {
+                <span class="item-parts">includes {{ item.labour }} labour</span>
+              }
+            </p>
+          }
+
+          @if (d.state === 'ANSWERED') {
+            <p class="verdict" [class.verdict--no]="item.decision === 'REJECTED'">
+              {{ item.decision === 'APPROVED' ? 'You approved this' : 'You declined this' }}
+            </p>
+          } @else {
+            <!-- Two equal-weight buttons. Nudging the customer toward
+                 approving would be selling, not asking. -->
+            <div class="choice">
+              <button
+                type="button"
+                class="pick pick--yes"
+                [class.pick--chosen]="chosen(item) === 'APPROVED'"
+                (click)="choose(item, 'APPROVED')"
+              >
+                Yes, do it
+              </button>
+              <button
+                type="button"
+                class="pick pick--no"
+                [class.pick--chosen]="chosen(item) === 'REJECTED'"
+                (click)="choose(item, 'REJECTED')"
+              >
+                No, skip it
+              </button>
+            </div>
+          }
+        </li>
+      }
+    </ul>
+
+    @if (d.state === 'OPEN') {
+      <button class="primary" type="button" [disabled]="!canSubmit()" (click)="submit()">
+        {{ submitting() ? 'Sending…' : 'Send my answers' }}
+      </button>
+      @if (!allAnswered()) {
+        <p class="note">Please choose for every item above.</p>
+      }
+    }
+  }
+
+  <!-- ── critical warning ─────────────────────────────────────────── -->
+  <!--
+    A courtesy, not the gate. The server refuses a critical rejection
+    without an acknowledgement independently, so a modified or replayed
+    request cannot skip this.
+  -->
+  @if (confirming(); as item) {
+    <div class="modal-backdrop">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="warn-title">
+        <h2 class="modal-title" id="warn-title">Please read this first</h2>
+        <p class="modal-body">{{ d.criticalWarning }}</p>
+        <p class="modal-item">{{ item.name }}</p>
+
+        <label class="ack">
+          <input type="checkbox" [checked]="acknowledged()" (change)="acknowledged.set($any($event.target).checked)" />
+          <span>I understand that declining this may affect safety, and that this will be recorded.</span>
+        </label>
+
+        <div class="modal-actions">
+          <button class="secondary" type="button" (click)="cancelCriticalRejection()">Go back</button>
+          <button class="danger" type="button" [disabled]="!acknowledged()" (click)="confirmCriticalRejection()">
+            Decline anyway
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+}

@@ -90,11 +90,15 @@ export class PartRequestService {
         select: { id: true, status: true },
       });
 
-      await this.emit(tx, input.tenantId, "part_request.created", request.id, actor, {
-        workOrderId: input.workOrderId,
-        inventoryItemId: input.inventoryItemId,
-        quantity: input.quantity,
-      });
+      await this.emit(
+        tx,
+        input.tenantId,
+        "part_request.created",
+        request.id,
+        actor,
+        { workOrderId: input.workOrderId, inventoryItemId: input.inventoryItemId, quantity: input.quantity },
+        input.workOrderId,
+      );
 
       // Same transaction as the create. A work order already WAITING_PARTS
       // from a different task's request simply refuses the move -- this
@@ -197,11 +201,15 @@ export class PartRequestService {
         await this.transition(tx, request, "ISSUED", actor);
       }
 
-      await this.emit(tx, request.tenantId, "part_request.issued", input.partRequestId, actor, {
-        quantity: input.quantity,
-        warehouseId: input.warehouseId,
-        fullyIssued,
-      });
+      await this.emit(
+        tx,
+        request.tenantId,
+        "part_request.issued",
+        input.partRequestId,
+        actor,
+        { quantity: input.quantity, warehouseId: input.warehouseId, fullyIssued },
+        request.workOrderId,
+      );
 
       // The technician's own blocker was "I don't have the part" -- once
       // the store has fully handed it over, that stops being true. Same
@@ -441,7 +449,7 @@ export class PartRequestService {
       );
 
       await this.transition(tx, request, "USED", actor);
-      await this.emit(tx, request.tenantId, "part_request.used", partRequestId, actor, {});
+      await this.emit(tx, request.tenantId, "part_request.used", partRequestId, actor, {}, request.workOrderId);
     });
 
     return { id: partRequestId, status: "USED" as const };
@@ -834,6 +842,16 @@ export class PartRequestService {
     request.status = to;
   }
 
+  /**
+   * `workOrderId` is optional and, when given, puts a safe sentence on
+   * the customer's own timeline as well.
+   *
+   * Not every part event is the customer's business -- a return being
+   * clarified between the technician and the store is internal -- so
+   * this is opt-in per call rather than automatic. Without it the
+   * customer's activity feed stayed empty through a whole repair, which
+   * is what "see meaningful progress" was supposed to mean.
+   */
   private async emit(
     tx: Prisma.TransactionClient,
     tenantId: string,
@@ -841,7 +859,10 @@ export class PartRequestService {
     targetId: string,
     actor: LifecycleActor,
     payload: Record<string, unknown>,
+    workOrderId?: string,
   ): Promise<void> {
+    const customer = workOrderId ? await this.customerOf(tx, workOrderId) : null;
+
     await this.events.emit(
       {
         tenantId,
@@ -853,9 +874,18 @@ export class PartRequestService {
         targetId,
         riskLevel: "LOW",
         payload,
+        ...(customer ? { customer: { customerId: customer, workOrderId } } : {}),
       },
       tx,
     );
+  }
+
+  private async customerOf(tx: Prisma.TransactionClient, workOrderId: string): Promise<string | null> {
+    const workOrder = await tx.workOrder.findUnique({
+      where: { id: workOrderId },
+      select: { customerId: true },
+    });
+    return workOrder?.customerId ?? null;
   }
 }
 

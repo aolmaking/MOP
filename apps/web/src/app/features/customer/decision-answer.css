@@ -1,0 +1,295 @@
+/*
+ * Answering a decision.
+ *
+ * Moved here wholesale from the public token page when the authenticated
+ * portal became a second host for the same component -- the values are
+ * unchanged, so a customer sees the identical page whichever way they
+ * arrived. See DESIGN_LANGUAGE.md section 0: this is read on a phone by
+ * somebody worried about money and their car.
+ */
+
+.body {
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+}
+
+.note {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.banner {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border-inline-start: 3px solid var(--success);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.error {
+  padding: var(--space-3) var(--space-4);
+  background: var(--danger-bg);
+  border-inline-start: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+/* --- items --------------------------------------------------------- */
+
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* Marked, but not shouted at. The customer should notice it without the
+   page looking like it is trying to frighten them into paying. */
+.item--critical {
+  border-inline-start: 4px solid var(--danger);
+}
+
+.item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.item-name {
+  color: var(--white);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.badge {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+/* Plain words, never the internal severity enum. "Safety" is what this
+   means to a person; "CRITICAL" is what it means to a database. */
+.badge--critical {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.item-why {
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+}
+
+.item-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+/* The number is stated before the choice, and stated large. Burying the
+   price under the buttons would be a dark pattern. */
+.item-total {
+  color: var(--white);
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
+.item-parts {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* --- the choice ---------------------------------------------------- */
+
+.choice {
+  display: flex;
+  gap: var(--space-3);
+  margin-block-start: var(--space-2);
+}
+
+/*
+ * Both options are the same size and weight. Making "yes" bigger would
+ * be selling rather than asking, and this page is asking.
+ *
+ * Sized for a thumb on a phone, like the technician's controls, because
+ * the reader is standing somewhere with one hand free.
+ */
+.pick {
+  flex: 1 1 0;
+  min-block-size: 3rem;
+  padding: 0 var(--space-3);
+  background: transparent;
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Chosen is filled, not outlined. On a phone in daylight an outline is
+   not a reliable signal of what you just picked. */
+.pick--chosen.pick--yes {
+  background: var(--success);
+  border-color: var(--success);
+  color: var(--bg);
+}
+
+.pick--chosen.pick--no {
+  background: var(--text-muted);
+  border-color: var(--text-muted);
+  color: var(--bg);
+}
+
+.verdict {
+  color: var(--success);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.verdict--no {
+  color: var(--text-muted);
+}
+
+/* --- buttons ------------------------------------------------------- */
+
+.primary,
+.secondary,
+.danger {
+  min-block-size: 3rem;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary {
+  background: var(--accent);
+  border: none;
+  color: var(--on-accent);
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.secondary {
+  background: transparent;
+  border: 2px solid var(--border-strong);
+  color: var(--text);
+}
+
+.danger {
+  background: var(--danger);
+  border: none;
+  color: var(--white);
+}
+
+.danger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* --- critical warning ---------------------------------------------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgb(0 0 0 / 0.72);
+  z-index: 100;
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  inline-size: 100%;
+  max-inline-size: 30rem;
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+}
+
+.modal-title {
+  color: var(--white);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.modal-body {
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+}
+
+.modal-item {
+  padding: var(--space-2) var(--space-3);
+  background: var(--danger-bg);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+/*
+ * The acknowledgement is a real checkbox with a full sentence beside it,
+ * not a styled div. This is the one control in the product with legal
+ * weight, and it must be operable by a screen reader and by a keyboard
+ * without any help from us.
+ */
+.ack {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  cursor: pointer;
+}
+
+.ack input {
+  margin-block-start: 0.2rem;
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.modal-actions button {
+  flex: 1 1 10rem;
+}

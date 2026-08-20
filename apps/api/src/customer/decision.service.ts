@@ -48,6 +48,65 @@ const IMPORTANCE: Record<string, PublicDecisionItem["importance"]> = {
   CRITICAL: "Critical",
 };
 
+/**
+ * The one shape every resolver below reads.
+ *
+ * Extracted when the authenticated portal became a third way into the
+ * same request -- token, staff id, and now the customer's own session.
+ * Three hand-copied selects would drift, and the one that drifted would
+ * be the one that quietly started leaking a field to the public page.
+ */
+const DECISION_SELECT = {
+  id: true,
+  tenantId: true,
+  customerId: true,
+  workOrderId: true,
+  status: true,
+  expiresAt: true,
+  respondedAt: true,
+  tenant: { select: { name: true } },
+  workOrder: {
+    select: {
+      status: true,
+      asset: { select: { plateNumber: true, serialNumber: true, currentOwnerCustomerId: true } },
+    },
+  },
+  items: {
+    select: {
+      id: true,
+      name: true,
+      explanation: true,
+      importance: true,
+      decision: true,
+      price: true,
+      laborPrice: true,
+      total: true,
+    },
+    orderBy: { importance: "desc" },
+  },
+} satisfies Prisma.CustomerDecisionRequestSelect;
+
+/**
+ * The states in which a decision is genuinely waiting on the customer.
+ *
+ * Three exclusions, each deliberate:
+ *
+ * `PENDING` means drafted and **not sent**. Those are the workshop's own
+ * unfinished business -- the Approvals page has a "Not sent yet" band for
+ * them -- and showing one to a customer would ask them about work nobody
+ * has decided to ask about yet.
+ *
+ * `RESOLVED`/`EXPIRED`/`CANCELLED` are settled, matching exactly what the
+ * `customer_decisions_resolved` gate treats as closed.
+ *
+ * Exported because the portal's home count and the portal's list must
+ * agree by construction. They did not: `home()` counted `PENDING` alone,
+ * so the count on the customer's home page was of the one set they are
+ * not allowed to see, and was zero for every decision actually sent to
+ * them.
+ */
+export const AWAITING_CUSTOMER_STATUSES = ["SENT", "VIEWED", "PARTIALLY_RESPONDED"] as const;
+
 const DEFAULT_CRITICAL_WARNING =
   "This repair affects the safety of the vehicle. If you decline it, the workshop will record that you were told, " +
   "and the vehicle may not be safe to drive.";
@@ -91,8 +150,19 @@ export class CustomerDecisionService {
 
   async read(token: string): Promise<PublicDecision> {
     const request = await this.resolve(token);
+    return this.present(request, await this.pricingVisible(request.tenantId));
+  }
 
-    const pricingVisible = await this.pricingVisible(request.tenantId);
+  /**
+   * One resolved request, rendered as what a customer may see.
+   *
+   * Shared by the token link and the authenticated portal so the two can
+   * never disagree about state, expiry, or which fields are safe.
+   */
+  private present(
+    request: Prisma.CustomerDecisionRequestGetPayload<{ select: typeof DECISION_SELECT }>,
+    pricingVisible: boolean,
+  ): PublicDecision {
     // `length > 0` is load-bearing. `[].every()` is vacuously true, so a
     // request with no items would report ANSWERED and the page would tell
     // a customer "you already replied" when they never did. Found against
@@ -134,6 +204,68 @@ export class CustomerDecisionService {
       actorType: "CUSTOMER",
     });
     return this.read(token);
+  }
+
+  // --- the authenticated portal's own way in ---------------------------
+
+  /**
+   * Every decision waiting on this customer, across all their jobs.
+   *
+   * The gap this closes: the portal counted `pendingDecisions` on its
+   * home page and listed them nowhere, and `current-service` showed a
+   * "Needs you" flag with no click-through. A logged-in customer could
+   * see that they were being asked something and had no way to answer it
+   * without the separate WhatsApp-style link -- which is the one channel
+   * the portal exists to make optional.
+   *
+   * Returns the same `PublicDecision` shape the token page renders, so
+   * both ends of this feature agree on what a customer may see by
+   * construction rather than by two developers remembering to match.
+   */
+  async listForCustomer(
+    tenantId: string,
+    customerId: string,
+  ): Promise<readonly (PublicDecision & { readonly requestId: string })[]> {
+    const requests = await this.prisma.customerDecisionRequest.findMany({
+      // Scoped by the session's customerId, never a parameter -- same
+      // rule as every other query in the portal.
+      where: { tenantId, customerId, status: { in: [...AWAITING_CUSTOMER_STATUSES] } },
+      select: DECISION_SELECT,
+      orderBy: { createdAt: "asc" },
+    });
+
+    const pricingVisible = await this.pricingVisible(tenantId);
+    return requests.map((request) => ({
+      requestId: request.id,
+      ...this.present(request, pricingVisible),
+    }));
+  }
+
+  /**
+   * The customer answers from inside their own session.
+   *
+   * Reuses `applyAnswers` verbatim, so the server-side re-validation of a
+   * critical rejection, the re-read of price and identity from stored
+   * rows, and the downstream workflow move are identical whether the
+   * answer arrived through a token link or a login. A second
+   * implementation here is exactly how the two paths would drift into
+   * disagreeing about what a customer is allowed to decline.
+   */
+  async respondAsCustomer(
+    tenantId: string,
+    customerId: string,
+    requestId: string,
+    answers: readonly SubmittedAnswer[],
+  ): Promise<PublicDecision> {
+    const request = await this.resolveForCustomer(tenantId, customerId, requestId);
+    await this.applyAnswers(request, answers, {
+      actorId: customerId,
+      actorName: "Customer",
+      actorType: "CUSTOMER",
+    });
+
+    const after = await this.resolveForCustomer(tenantId, customerId, requestId);
+    return this.present(after, await this.pricingVisible(tenantId));
   }
 
   /**
@@ -422,6 +554,12 @@ export class CustomerDecisionService {
             recordedOnBehalf: actor.recordedOnBehalf ?? false,
             evidenceReference: actor.evidenceReference ?? null,
           },
+          // "Thanks -- we've received your decision." That sentence has
+          // existed in CustomerSafeProjectionService since Phase 4 and
+          // was unreachable: only `customer_decision.requested` ever
+          // passed a customer, so a customer saw the workshop ask and
+          // never saw their own answer land.
+          customer: { customerId: request.customerId, workOrderId: request.workOrderId },
         },
         tx,
       );
@@ -442,35 +580,25 @@ export class CustomerDecisionService {
 
     const request = await this.prisma.customerDecisionRequest.findUnique({
       where: { secureToken: trimmed },
-      select: {
-        id: true,
-        tenantId: true,
-        customerId: true,
-        workOrderId: true,
-        status: true,
-        expiresAt: true,
-        respondedAt: true,
-        tenant: { select: { name: true } },
-        workOrder: {
-          select: {
-            status: true,
-            asset: { select: { plateNumber: true, serialNumber: true, currentOwnerCustomerId: true } },
-          },
-        },
-        items: {
-          select: {
-            id: true,
-            name: true,
-            explanation: true,
-            importance: true,
-            decision: true,
-            price: true,
-            laborPrice: true,
-            total: true,
-          },
-          orderBy: { importance: "desc" },
-        },
-      },
+      select: DECISION_SELECT,
+    });
+
+    if (!request || request.status === "CANCELLED") throw this.notFound();
+    return request;
+  }
+
+  /**
+   * The customer's own counterpart to `resolve(token)`.
+   *
+   * Scoped by `customerId` from the session as well as tenant, so a
+   * customer passing another customer's request id gets the same "not
+   * found" as a made-up one -- the id is not a capability here, the
+   * session is.
+   */
+  private async resolveForCustomer(tenantId: string, customerId: string, requestId: string) {
+    const request = await this.prisma.customerDecisionRequest.findFirst({
+      where: { id: requestId, tenantId, customerId },
+      select: DECISION_SELECT,
     });
 
     if (!request || request.status === "CANCELLED") throw this.notFound();
@@ -490,35 +618,7 @@ export class CustomerDecisionService {
         tenantId,
         workOrder: branchScope.length > 0 ? { branchId: { in: [...branchScope] } } : {},
       },
-      select: {
-        id: true,
-        tenantId: true,
-        customerId: true,
-        workOrderId: true,
-        status: true,
-        expiresAt: true,
-        respondedAt: true,
-        tenant: { select: { name: true } },
-        workOrder: {
-          select: {
-            status: true,
-            asset: { select: { plateNumber: true, serialNumber: true, currentOwnerCustomerId: true } },
-          },
-        },
-        items: {
-          select: {
-            id: true,
-            name: true,
-            explanation: true,
-            importance: true,
-            decision: true,
-            price: true,
-            laborPrice: true,
-            total: true,
-          },
-          orderBy: { importance: "desc" },
-        },
-      },
+      select: DECISION_SELECT,
     });
 
     // Deliberately the same "not found" a wrong id or an out-of-scope one

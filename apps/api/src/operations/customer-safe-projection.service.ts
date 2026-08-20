@@ -23,6 +23,27 @@ const SAFE_DEFAULTS: Record<string, string> = {
   "task.sent_to_review": "Your vehicle is undergoing a final quality check.",
   "invoice.issued": "Your final invoice is ready.",
   "payment.recorded": "We've recorded your payment.",
+
+  // --- the keys the services actually emit ---------------------------
+  //
+  // The block above matches `packages/shared/src/contracts/events.ts`.
+  // The services do not: Inventory emits `part_request.*` and Finance
+  // emits `finance.*`, so every one of those canned messages was
+  // unreachable and a customer would have been shown the generic
+  // fallback instead of the sentence written for the occasion.
+  //
+  // Renaming what the services emit is the tidier fix and is NOT done
+  // here: the emitted key is stored on every historical `OperationEvent`
+  // and `AuditLog` row and is read back by the reports and workflow-health
+  // services, so changing it is a data migration with real consumers, not
+  // a rename. Mapping both names is honest about the divergence and
+  // leaves the history readable.
+  "part_request.created": "We are waiting for a required part. The branch will update you when it is available.",
+  "part_request.issued": "The required part is on its way to your vehicle.",
+  "part_request.used": "Work on your vehicle is progressing.",
+  "part_request.returned": "A part we had set aside for your vehicle went back to stock.",
+  "finance.invoice_issued": "Your final invoice is ready.",
+  "finance.payment_recorded": "We've recorded your payment.",
 };
 
 const DEFAULT_FALLBACK = "Your service is being updated. We'll notify you of any changes.";

@@ -19,8 +19,11 @@
       @if (data(); as d) {
         @if (d.pendingDecisions > 0) {
           <!-- Leads the page, per the spec: this is usually why the
-               portal was opened at all. -->
-          <a class="decision-banner" routerLink="/customer/service">
+               portal was opened at all. Points at the page that can
+               actually answer it -- it pointed at Current Service until
+               that page existed, which showed the customer the flag
+               again rather than the question. -->
+          <a class="decision-banner" routerLink="/customer/decisions">
             <span class="decision-count">{{ d.pendingDecisions }}</span>
             <span class="decision-text">
               {{ d.pendingDecisions === 1 ? 'decision is' : 'decisions are' }} waiting for your answer

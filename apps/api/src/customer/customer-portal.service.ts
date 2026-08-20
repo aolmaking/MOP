@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { sum } from "@mop/shared";
 import { PrismaService } from "../database/prisma.service";
+import { AWAITING_CUSTOMER_STATUSES } from "./decision.service";
 
 export interface PortalHome {
   readonly assetCount: number;
@@ -80,7 +81,14 @@ export class CustomerPortalService {
       this.prisma.workOrder.count({
         where: { tenantId, customerId, status: { in: [...CURRENT_SERVICE_STATUSES] } },
       }),
-      this.prisma.customerDecisionRequest.count({ where: { tenantId, customerId, status: "PENDING" } }),
+      // Was `status: "PENDING"`, which counted DRAFTED-BUT-NOT-SENT
+      // requests -- the one set a customer must never be shown -- and
+      // therefore read zero for every decision actually sent to them.
+      // Shares its definition with the list on /customer/decisions so the
+      // count and the page can never disagree.
+      this.prisma.customerDecisionRequest.count({
+        where: { tenantId, customerId, status: { in: [...AWAITING_CUSTOMER_STATUSES] } },
+      }),
       this.prisma.invoice.findMany({
         where: { tenantId, workOrder: { customerId } },
         select: { balance: true },

@@ -311,10 +311,15 @@ export class FinanceService {
         })),
       });
 
-      await this.emit(tx, tenantId, "finance.invoice_issued", invoice.id, actor, {
+      await this.emit(
+        tx,
+        tenantId,
+        "finance.invoice_issued",
+        invoice.id,
+        actor,
+        { workOrderId, total: computed.total },
         workOrderId,
-        total: computed.total,
-      });
+      );
 
       const stored = await tx.invoice.findUniqueOrThrow({
         where: { id: invoice.id },
@@ -418,6 +423,15 @@ export class FinanceService {
       return this.resolveIdempotentReplay(existing, invoiceId, input.amount);
     }
 
+    // Resolved once, up front: the emit below puts "We've recorded your
+    // payment" on the customer's own timeline, and it needs the job the
+    // invoice belongs to. `recordPayment` is addressed by invoice.
+    const paidInvoice = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      select: { workOrderId: true },
+    });
+    const workOrderId = paidInvoice?.workOrderId;
+
     const before = await this.settlement(invoiceId);
     if (before.settled) {
       // Could be a genuine second payment against an already-full
@@ -445,10 +459,15 @@ export class FinanceService {
           },
         });
 
-        await this.emit(tx, tenantId, "finance.payment_recorded", invoiceId, actor, {
-          amount: input.amount,
-          method: input.method,
-        });
+        await this.emit(
+          tx,
+          tenantId,
+          "finance.payment_recorded",
+          invoiceId,
+          actor,
+          { amount: input.amount, method: input.method },
+          workOrderId,
+        );
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -831,6 +850,16 @@ export class FinanceService {
     }
   }
 
+  /**
+   * `workOrderId`, when given, also puts a safe sentence on the
+   * customer's timeline -- "Your final invoice is ready", "We've
+   * recorded your payment". Both sentences were written in
+   * `CustomerSafeProjectionService` and unreachable, because nothing in
+   * Finance ever passed a customer.
+   *
+   * Opt-in per call: a refund being requested internally is not the
+   * customer's business until somebody decides it.
+   */
   private async emit(
     tx: Prisma.TransactionClient,
     tenantId: string,
@@ -838,7 +867,12 @@ export class FinanceService {
     targetId: string,
     actor: LifecycleActor,
     payload: Record<string, unknown>,
+    workOrderId?: string,
   ): Promise<void> {
+    const customerId = workOrderId
+      ? (await tx.workOrder.findUnique({ where: { id: workOrderId }, select: { customerId: true } }))?.customerId
+      : null;
+
     await this.events.emit(
       {
         tenantId,
@@ -850,6 +884,7 @@ export class FinanceService {
         targetId,
         riskLevel: "MEDIUM",
         payload,
+        ...(customerId && workOrderId ? { customer: { customerId, workOrderId } } : {}),
       },
       tx,
     );

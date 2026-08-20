@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import type { Observable } from 'rxjs';
+import { map, type Observable } from 'rxjs';
+import type { PublicDecision, SubmittedAnswer } from './decision-answer';
 
 export interface PortalHome {
   readonly assetCount: number;
@@ -35,6 +36,14 @@ export interface InvoiceStatusRow {
   readonly issuedAt: string;
 }
 
+/**
+ * A decision waiting on this customer. Exactly the shape the public
+ * token page renders, plus the id needed to answer it from inside a
+ * session -- the two ends of this feature share one contract rather
+ * than two that have to be kept matching by hand.
+ */
+export type PendingDecision = PublicDecision & { readonly requestId: string };
+
 export interface SafeHistoryEntry {
   readonly id: string;
   readonly assetId: string;
@@ -60,6 +69,16 @@ export class CustomerPortalApi {
 
   invoices(): Observable<readonly InvoiceStatusRow[]> {
     return this.http.get<readonly InvoiceStatusRow[]>('/api/v1/customer-portal/invoices');
+  }
+
+  pendingDecisions(): Observable<readonly PendingDecision[]> {
+    return this.http
+      .get<{ decisions: readonly PendingDecision[] }>('/api/v1/customer-portal/decisions')
+      .pipe(map((response) => response.decisions));
+  }
+
+  respondToDecision(requestId: string, answers: readonly SubmittedAnswer[]): Observable<PublicDecision> {
+    return this.http.post<PublicDecision>(`/api/v1/customer-portal/decisions/${requestId}/respond`, { answers });
   }
 
   safeHistory(): Observable<readonly SafeHistoryEntry[]> {

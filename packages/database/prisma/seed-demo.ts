@@ -102,6 +102,10 @@ async function main() {
   console.log(`              lands on http://localhost:4200/inventory\n`);
   console.log(`  Data Analyst  ${ANALYST_EMAIL} / ${ANALYST_PASSWORD}`);
   console.log(`              lands on http://localhost:4200/analyst\n`);
+  console.log(`  Customer    sara.nabil@customer.local / ${CUSTOMER_PASSWORD}`);
+  console.log(`              has a decision waiting -- http://localhost:4200/customer/decisions`);
+  console.log(`              every demo customer follows first.last@customer.local
+`);
   console.log(`  Manager account ${manager.id}`);
 }
 
@@ -396,6 +400,20 @@ async function ensureInventoryManager(tenantId: string): Promise<void> {
   }
 }
 
+/**
+ * The demo customers' own logins.
+ *
+ * Added because the seed built seven customers with live jobs and gave
+ * none of them an account, so the Customer Portal -- a primary
+ * deliverable, not a secondary surface -- could not be opened as anybody
+ * who actually had a car in the workshop. The decision waiting on
+ * DEMO-1188 was unanswerable except through its token link.
+ *
+ * One password for all of them, matching every other demo credential
+ * here: this seed is for a local demo database and says so.
+ */
+const CUSTOMER_PASSWORD = "ChangeMe-Customer-123";
+
 const TECHNICIAN_EMAIL = "tech@apex-motors.local";
 const TECHNICIAN_PASSWORD = "ChangeMe-Tech-123";
 
@@ -504,8 +522,20 @@ async function clearDemoWork(tenantId: string) {
     const stillReferenced = await prisma.workOrder.count({ where: { customerId } });
     const stillOwns = await prisma.asset.count({ where: { currentOwnerCustomerId: customerId } });
     if (stillReferenced === 0 && stillOwns === 0) {
+      // The login goes with them. `customers.accountId` is ON DELETE SET
+      // NULL, so deleting the customer alone would strand an orphan
+      // account holding the demo email -- and the next re-seed would hit
+      // the (tenantId, email) unique index and fail.
+      const customer = await prisma.customer.findUnique({
+        where: { id: customerId },
+        select: { accountId: true },
+      });
       await prisma.assetOwnershipHistory.deleteMany({ where: { customerId } });
       await prisma.customer.deleteMany({ where: { id: customerId, tenantId } });
+      if (customer?.accountId) {
+        await prisma.session.deleteMany({ where: { accountId: customer.accountId } });
+        await prisma.account.deleteMany({ where: { id: customer.accountId } });
+      }
     }
   }
 }
@@ -616,8 +646,27 @@ async function createStuckJobs(tenantId: string, branchId: string, technicianSta
   ];
 
   for (const job of jobs) {
+    // An account each, so the Customer Portal can be opened as the person
+    // whose car is actually in the bay. Email is derived from the name so
+    // the demo credentials are guessable from the job list itself.
+    const email = `${job.customer.toLowerCase().replace(/\s+/g, ".")}@customer.local`;
+    const account = await prisma.account.create({
+      data: {
+        accountType: "CUSTOMER",
+        tenantId,
+        email,
+        passwordHash: hashPassword(CUSTOMER_PASSWORD),
+        status: "ACTIVE",
+      },
+    });
+
     const customer = await prisma.customer.create({
-      data: { tenantId, fullName: job.customer, phone: `0100${Math.floor(Math.random() * 9_000_000 + 1_000_000)}` },
+      data: {
+        tenantId,
+        fullName: job.customer,
+        phone: `0100${Math.floor(Math.random() * 9_000_000 + 1_000_000)}`,
+        accountId: account.id,
+      },
     });
     const asset = await prisma.asset.create({
       data: { tenantId, category: "CARS", plateNumber: job.plate, currentOwnerCustomerId: customer.id },

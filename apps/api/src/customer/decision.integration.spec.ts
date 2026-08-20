@@ -621,3 +621,92 @@ describe("raiseAndSend -- a technician actually asking the customer something", 
     expect(item.total.toFixed(2)).toBe("0.30");
   });
 });
+
+/**
+ * The authenticated portal's own way in.
+ *
+ * The portal counted pending decisions on its home page and listed them
+ * nowhere; Current Service showed a "Needs you" flag with nothing behind
+ * it. The only way to answer was a token link the customer had to still
+ * have -- which is the one channel the portal exists to make optional.
+ */
+describe("answering from inside the customer's own session", () => {
+  it("lists a sent decision, and does not list a drafted-but-unsent one", async () => {
+    const sent = await makeRequest();
+    const draft = await makeRequest();
+    // PENDING is the workshop's unfinished business, not the customer's.
+    await prisma.customerDecisionRequest.update({ where: { id: draft.requestId }, data: { status: "PENDING" } });
+
+    const listed = await decisions.listForCustomer(tenantId, customerId);
+    const ids = listed.map((entry) => entry.requestId);
+
+    expect(ids).toContain(sent.requestId);
+    expect(ids).not.toContain(draft.requestId);
+  });
+
+  it("does not list a decision that is already resolved", async () => {
+    const done = await makeRequest();
+    await prisma.customerDecisionRequest.update({ where: { id: done.requestId }, data: { status: "RESOLVED" } });
+
+    const listed = await decisions.listForCustomer(tenantId, customerId);
+    expect(listed.map((entry) => entry.requestId)).not.toContain(done.requestId);
+  });
+
+  it("shows the customer exactly what the token page shows", async () => {
+    const made = await makeRequest();
+
+    const [viaSession] = (await decisions.listForCustomer(tenantId, customerId)).filter(
+      (entry) => entry.requestId === made.requestId,
+    );
+    const viaToken = await decisions.read(made.token);
+
+    // requestId is the only addition; everything a customer reads matches.
+    const { requestId, ...sessionView } = viaSession;
+    expect(requestId).toBe(made.requestId);
+    expect(sessionView).toEqual(viaToken);
+  });
+
+  it("records an answer that the token page then agrees with", async () => {
+    const made = await makeRequest();
+
+    await decisions.respondAsCustomer(tenantId, customerId, made.requestId, [
+      { itemId: made.normalItemId, decision: "APPROVED" },
+      { itemId: made.criticalItemId, decision: "APPROVED" },
+    ]);
+
+    const viaToken = await decisions.read(made.token);
+    expect(viaToken.state).toBe("ANSWERED");
+    expect(viaToken.items.every((item) => item.decision === "APPROVED")).toBe(true);
+  });
+
+  it("re-validates a critical rejection exactly as the token path does", async () => {
+    const made = await makeRequest();
+
+    await expect(
+      decisions.respondAsCustomer(tenantId, customerId, made.requestId, [
+        { itemId: made.normalItemId, decision: "APPROVED" },
+        // No acknowledgement. The modal is a courtesy; this is the gate.
+        { itemId: made.criticalItemId, decision: "REJECTED" },
+      ]),
+    ).rejects.toThrow();
+  });
+
+  it("refuses another customer's request id as not-found", async () => {
+    const made = await makeRequest();
+    const stranger = await prisma.customer.create({
+      data: { tenantId, fullName: "Someone Else", phone: `019${Math.floor(Math.random() * 10000000)}` },
+    });
+
+    await expect(
+      decisions.respondAsCustomer(tenantId, stranger.id, made.requestId, [
+        { itemId: made.normalItemId, decision: "APPROVED" },
+      ]),
+    ).rejects.toThrow();
+
+    // And it never appears in that customer's own list.
+    const listed = await decisions.listForCustomer(tenantId, stranger.id);
+    expect(listed).toHaveLength(0);
+
+    await prisma.customer.delete({ where: { id: stranger.id } });
+  });
+});

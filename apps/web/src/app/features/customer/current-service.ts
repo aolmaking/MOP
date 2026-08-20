@@ -1,4 +1,5 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ErrorBanner } from '../../shared/error-banner/error-banner';
 import { ButtonDirective } from '../../shared/button/button.directive';
@@ -69,7 +70,7 @@ const NEEDS_YOU = new Set(['AWAITING_CUSTOMER_APPROVAL', 'WAITING_CUSTOMER']);
 
 @Component({
   selector: 'app-current-service',
-  imports: [ErrorBanner, ButtonDirective],
+  imports: [ErrorBanner, ButtonDirective, RouterLink],
   templateUrl: './current-service.html',
   styleUrl: './current-service.css',
 })
