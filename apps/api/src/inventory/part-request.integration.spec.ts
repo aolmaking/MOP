@@ -11,6 +11,7 @@ process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { PartRequestService } from "./part-request.service";
+import { PolicyResolutionService } from "../policies/policy-resolution.service";
 import { StockService } from "./stock.service";
 import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 import { OperationEventsService } from "../operations/operation-events.service";
@@ -24,7 +25,13 @@ const asService = prisma as unknown as PrismaService;
 const stock = new StockService(asService);
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
 const capabilities = new CapabilityResolutionService(asService);
-const parts = new PartRequestService(asService, capabilities, stock, events);
+const parts = new PartRequestService(
+  asService,
+  capabilities,
+  stock,
+  events,
+  new PolicyResolutionService(asService, new AuditService(asService), capabilities),
+);
 
 const ACTOR = { accountId: "store-1", displayName: "Storekeeper", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `pr-${Date.now()}`;

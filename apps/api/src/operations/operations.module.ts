@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { PoliciesModule } from "../policies/policies.module";
 import { DatabaseModule } from "../database/database.module";
 import { CapabilitiesModule } from "../capabilities/capabilities.module";
 import { OperationEventsModule } from "./operation-events.module";
@@ -15,7 +16,7 @@ import { WorkOrderDossierService } from "./work-order-dossier.service";
  * rather than scattered through the services that happen to need them.
  */
 @Module({
-  imports: [DatabaseModule, CapabilitiesModule, OperationEventsModule],
+  imports: [DatabaseModule, CapabilitiesModule, OperationEventsModule, PoliciesModule],
   providers: [GateEvaluatorService, WorkOrderLifecycleService, IntakeService, TechnicianWorkService, WorkOrderDossierService],
   exports: [WorkOrderLifecycleService, GateEvaluatorService, IntakeService, TechnicianWorkService, WorkOrderDossierService],
 })

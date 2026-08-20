@@ -8,6 +8,7 @@ import {
   type GateResult,
 } from "@mop/shared";
 import { PrismaService } from "../database/prisma.service";
+import { PolicyResolutionService } from "../policies/policy-resolution.service";
 
 /**
  * Evaluates the Finish and Delivery gates for one work order.
@@ -28,7 +29,10 @@ import { PrismaService } from "../database/prisma.service";
  */
 @Injectable()
 export class GateEvaluatorService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly policies: PolicyResolutionService,
+  ) {}
 
   async evaluate(
     workOrderId: string,
@@ -37,9 +41,17 @@ export class GateEvaluatorService {
     checkpoint: "FINISH" | "DELIVERY",
   ): Promise<GateResult> {
     const live = gates.filter((gate) => this.isLive(gate, capabilities));
+    const suppressed = await this.suppressedByPolicy(workOrderId, live);
 
     const evaluations: GateEvaluation[] = [];
     for (const gate of live) {
+      // A gate the workshop's own policy has switched off is not
+      // evaluated at all, exactly like one whose capability is gone.
+      // Evaluating it and then ignoring the result would leave a failing
+      // row on a technician's finish checklist that nothing acts on --
+      // which reads as a bug to the person holding the tablet.
+      if (suppressed.has(gate)) continue;
+
       const satisfied = await this.check(gate, workOrderId);
       evaluations.push(
         satisfied ? { gate, satisfied: true } : { gate, satisfied: false, blockedMessage: messageFor(gate) },
@@ -47,6 +59,40 @@ export class GateEvaluatorService {
     }
 
     return { checkpoint, passed: evaluations.every((e) => e.satisfied), evaluations };
+  }
+
+  /**
+   * Gates this workshop's policies have turned off or made advisory.
+   *
+   * The capability engine decides whether a gate EXISTS; a policy decides
+   * whether an existing gate BLOCKS. That split is Phase 21's own
+   * mechanical test (S3.1) doing real work here: dropping
+   * `parts.received_used_or_returned` cannot make any state unreachable,
+   * because loosening a gate only ever adds routes -- which is exactly
+   * why it is a policy and not a capability.
+   *
+   * One query, not one per gate: this runs on every finish attempt.
+   */
+  private async suppressedByPolicy(workOrderId: string, live: readonly GateKey[]): Promise<ReadonlySet<GateKey>> {
+    const suppressed = new Set<GateKey>();
+    if (!live.includes("parts.received_used_or_returned")) return suppressed;
+
+    const workOrder = await this.prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      select: { tenantId: true },
+    });
+    if (!workOrder) return suppressed;
+
+    const rule = await this.policies.resolveValue(workOrder.tenantId, "RETURN_UNUSED_BEFORE_FINISH");
+    // WARN_ONLY and NOT_REQUIRED both stop the gate blocking. They differ
+    // in what the workshop does about it afterwards -- reconciliation is
+    // Inventory's job, not the finish gate's -- and neither difference
+    // belongs in a check that only answers "may this job finish".
+    if (rule === "WARN_ONLY" || rule === "NOT_REQUIRED") {
+      suppressed.add("parts.received_used_or_returned");
+    }
+
+    return suppressed;
   }
 
   /** A gate lives only while the capability that produces what it checks does. */
