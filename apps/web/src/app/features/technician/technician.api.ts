@@ -128,6 +128,10 @@ export class TechnicianApi {
     return this.http.post(`/api/v1/technician/tasks/${taskId}/blocker`, { reason, note });
   }
 
+  recordInspection(workOrderId: string, type: 'QUICK' | 'FULL', note?: string): Observable<unknown> {
+    return this.http.post(`/api/v1/technician/work-orders/${workOrderId}/inspection`, { type, note });
+  }
+
   createFault(workOrderId: string, description: string, severity: string): Observable<unknown> {
     return this.http.post(`/api/v1/technician/work-orders/${workOrderId}/faults`, { description, severity });
   }

@@ -753,7 +753,14 @@ export class FinanceService {
     const issued = await this.prisma.invoice.findUnique({ where: { workOrderId }, select: { id: true } });
     if (issued) return;
 
-    const items = await this.chargeable.partItems(tenantId, workOrderId);
+    // Parts AND catalogued services. A job whose only work was labour
+    // previously reached the counter with "nothing to invoice", because
+    // only parts were ever collected.
+    const [partItems, serviceItems] = await Promise.all([
+      this.chargeable.partItems(tenantId, workOrderId),
+      this.chargeable.serviceItems(tenantId, workOrderId),
+    ]);
+    const items = [...serviceItems, ...partItems];
 
     // Nothing to bill AND nothing previously billed: leave without
     // creating an empty running invoice for a job that charges nothing.
@@ -785,10 +792,24 @@ export class FinanceService {
       for (const item of items) {
         const key = `${item.sourceType}:${item.sourceId}`;
         const existing = bySource.get(key);
-        // The contract guarantees a price on an approved item; a part
-        // line always carries the one snapshotted at issue.
-        const unitPrice = item.approvedUnitPrice ?? "0.00";
-        const labour = item.approvedLabourPrice ?? ZERO;
+
+        // A part carries the price snapshotted when it left the store.
+        // A SERVICE carries none -- Operations never prices anything --
+        // so Finance resolves it from the workshop's own Service Catalog
+        // here, which is what makes the Owner's Pricing page govern what
+        // a job actually bills.
+        let unitPrice = item.approvedUnitPrice;
+        let labour: Money = item.approvedLabourPrice ?? ZERO;
+        if (unitPrice === null) {
+          const priced = await this.priceCatalog.resolve(tenantId, item.itemName);
+          // Uncatalogued work is skipped rather than billed at zero: a
+          // zero line on an invoice reads as "free", which is a claim
+          // nobody made. It stays addable by hand.
+          if (!priced) continue;
+          unitPrice = priced.unitPrice;
+          labour = priced.laborPrice ?? ZERO;
+        }
+
         const computed = invoiceTotal([{ unitPrice, quantity: item.quantity, labour }]);
 
         if (!existing) {
@@ -829,6 +850,9 @@ export class FinanceService {
       // A part fully returned leaves no chargeable item behind it, so its
       // line must go too -- otherwise the customer keeps paying for a
       // part that is back on the shelf.
+      // Sources that still exist operationally. A line whose source
+      // vanished (a part fully returned) goes; one merely skipped above
+      // for want of a catalogue price is still live and stays.
       const live = new Set(items.map((item) => `${item.sourceType}:${item.sourceId}`));
       const stale = already.filter((line) => !live.has(`${line.sourceType}:${line.sourceId}`));
       if (stale.length > 0) {

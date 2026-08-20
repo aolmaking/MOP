@@ -65,8 +65,9 @@ export class TechWorkCard {
   protected readonly actionError = signal<string | null>(null);
 
   /** Which panel is open. Only one at a time -- this is a small screen. */
-  protected readonly panel = signal<'none' | 'blocker' | 'fault' | 'parts'>('none');
+  protected readonly panel = signal<'none' | 'blocker' | 'fault' | 'parts' | 'inspection'>('none');
   protected readonly faultText = signal('');
+  protected readonly inspectionNote = signal('');
   protected readonly faultSeverity = signal('MEDIUM');
 
   /**
@@ -213,6 +214,19 @@ export class TechWorkCard {
 
   protected complete(task: TechnicianTask): void {
     this.run(`done-${task.id}`, this.api.completeTask(task.id));
+  }
+
+  /**
+   * One press per inspection type. The category-specific measurement
+   * form is Phase 15/16 work; a type and a note is what a technician can
+   * honestly record today, and the finish gate only asks whether an
+   * inspection happened.
+   */
+  protected recordInspection(type: 'QUICK' | 'FULL'): void {
+    const note = this.inspectionNote().trim();
+    this.panel.set('none');
+    this.inspectionNote.set('');
+    this.run('inspection', this.api.recordInspection(this.id(), type, note || undefined));
   }
 
   protected reportBlocker(reason: string): void {

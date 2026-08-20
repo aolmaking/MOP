@@ -82,6 +82,14 @@ export class WorkOrdersApi {
     });
   }
 
+  /**
+   * Pass or fail this job at whichever stage it is at. The server picks
+   * the intent from the job's actual state -- see AdvanceWorkOrderDto.
+   */
+  advance(id: string, passed: boolean, note?: string): Observable<unknown> {
+    return this.http.post(`/api/v1/branch-manager/work-orders/${id}/advance`, { passed, note });
+  }
+
   journey(id: string): Observable<PresentedJourney> {
     return this.http.get<PresentedJourney>(`/api/v1/branch-manager/work-orders/${id}/journey`);
   }

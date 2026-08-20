@@ -9,7 +9,7 @@ import { TechnicianWorkViewService } from "./technician-work-view.service";
 import { CustomerDecisionService } from "../customer/decision.service";
 import { PartRequestService } from "../inventory/part-request.service";
 import { CatalogService } from "../inventory/catalog.service";
-import { ReportBlockerDto, CreateFaultDto, RequestPartDto } from "./technician.dto";
+import { ReportBlockerDto, CreateFaultDto, RequestPartDto, RecordInspectionDto } from "./technician.dto";
 import { RaiseDecisionDto } from "../customer/decision.dto";
 
 /**
@@ -95,6 +95,46 @@ export class TechnicianController {
   ) {
     await this.requireTechnician(session, "blocker.report");
     return this.work.reportBlocker({ taskId: id, reason: dto.reason, note: dto.note }, this.actor(session));
+  }
+
+  /**
+   * Record the inspection.
+   *
+   * `TechnicianWorkService.recordInspection` was fully built, wrote the
+   * row AND emitted `inspection.saved` -- and no controller ever exposed
+   * it, so the `inspection_completed` finish gate could only ever be
+   * satisfied by a job whose customer had DECLINED an inspection. A
+   * technician who actually did one had no way to say so, and their job
+   * could not finish.
+   *
+   * `technicianId` comes from the session, never the body: whose
+   * inspection this is is a server-side fact.
+   */
+  @Post("work-orders/:id/inspection")
+  async recordInspection(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: RecordInspectionDto,
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(
+      session,
+      dto.type === "FULL" ? "inspection.full.create" : "inspection.quick.create",
+    );
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.work.recordInspection(
+      {
+        workOrderId: id,
+        technicianId: staffUserId,
+        type: dto.type,
+        odometerOrHours: dto.odometerOrHours,
+        // The category-specific form is Phase 15/16 work; a note is what
+        // a technician can honestly give today, and an empty object is
+        // truthful about that rather than inventing fields.
+        fields: {},
+        note: dto.note,
+      },
+      this.actor(session),
+    );
   }
 
   @Post("work-orders/:id/faults")

@@ -256,6 +256,10 @@ export class TechnicianWorkService {
 
   async recordInspection(input: RecordInspectionInput, actor: LifecycleActor) {
     const workOrder = await this.requireWorkOrder(input.workOrderId);
+    const owner = await this.prisma.workOrder.findUnique({
+      where: { id: input.workOrderId },
+      select: { customerId: true },
+    });
 
     return this.prisma.$transaction(async (tx) => {
       const inspection = await tx.inspection.create({
@@ -281,6 +285,10 @@ export class TechnicianWorkService {
           targetId: inspection.id,
           riskLevel: "LOW",
           payload: { inspectionId: inspection.id, workOrderId: input.workOrderId, type: input.type },
+          // "Your vehicle is being inspected." -- another sentence that
+          // existed in CustomerSafeProjectionService and was unreachable
+          // because nothing passed a customer.
+          ...(owner ? { customer: { customerId: owner.customerId, workOrderId: input.workOrderId } } : {}),
         },
         tx,
       );

@@ -65,6 +65,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "workorders.branch.reassign_technician": true,
     "workorders.branch.manage_blockers": true,
     "workorders.branch.release_delivery": true,
+    // A branch manager runs QC by default. Team review belongs to the
+    // team leader below, but a branch small enough to have no team
+    // leader still needs somebody able to pass it, so the manager holds
+    // it too -- an enabled capability must never be orphaned by the
+    // absence of one specialised role.
+    "workorders.qc.decide": true,
+    "workorders.review.decide": true,
     "customer.intake.create": true,
     "decisions.branch.view": true,
     // P-18: the branch is where a customer answers verbally in person or
@@ -129,6 +136,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "team.workorders.view": true,
     "team.supervision_note.create": true,
     "team.issue.flag_to_branch_manager": true,
+    // Reading a technician's finished work is exactly this role's job.
+    "workorders.review.decide": true,
     "reports.team.view": true,
   },
   DATA_ANALYST: {

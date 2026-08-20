@@ -1,5 +1,5 @@
 import { IsEnum, IsInt, IsOptional, IsString, Length, Min } from "class-validator";
-import { BlockerReason, SeverityLevel } from "@mop/database";
+import { BlockerReason, InspectionType, SeverityLevel } from "@mop/database";
 
 export class ReportBlockerDto {
   @IsEnum(BlockerReason)
@@ -13,6 +13,21 @@ export class ReportBlockerDto {
   @IsOptional()
   @IsString()
   @Length(1, 1000)
+  note?: string;
+}
+
+export class RecordInspectionDto {
+  @IsEnum(InspectionType)
+  type!: InspectionType;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  odometerOrHours?: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 2000)
   note?: string;
 }
 

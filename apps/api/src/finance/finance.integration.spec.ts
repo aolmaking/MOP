@@ -174,6 +174,8 @@ afterAll(async () => {
     await prisma.runningInvoiceLine.deleteMany({ where });
     await prisma.runningInvoice.deleteMany({ where });
     await prisma.workOrderPartLine.deleteMany({ where });
+    await prisma.task.deleteMany({ where });
+    await prisma.priceCatalogEntry.deleteMany({ where });
     await prisma.operationEvent.deleteMany({ where });
     await prisma.auditLog.deleteMany({ where });
     await prisma.customerTimelineEvent.deleteMany({ where });
@@ -972,5 +974,96 @@ describe("paying in full moves the job on", () => {
 
     expect(settlement.settled).toBe(true);
     expect(settlement.paid).toBe("300.00");
+  });
+});
+
+/**
+ * A catalogued service that was actually performed reaches the bill.
+ *
+ * The other half of the chain: a `Task` names a Service Catalog row via
+ * `serviceKey`, and nothing turned a completed one into a charge -- so a
+ * job whose only work was labour reached the counter with "There is
+ * nothing on this job to invoice."
+ */
+describe("services performed on the job are billed", () => {
+  async function doneTask(shop: Shop, workOrderId: string, serviceKey: string | null): Promise<string> {
+    const task = await prisma.task.create({
+      data: { tenantId: shop.tenantId, workOrderId, title: serviceKey ?? "Ad-hoc work", serviceKey, status: "DONE" },
+    });
+    return task.id;
+  }
+
+  it("prices a finished task from the workshop's own catalogue", async () => {
+    const job = await makeJob(paid);
+    await prisma.priceCatalogEntry.create({
+      data: { tenantId: paid.tenantId, itemKey: "Brake service", itemType: "SERVICE", unitPrice: "800.00", laborPrice: "200.00", isActive: true },
+    });
+    await doneTask(paid, job, "Brake service");
+
+    const total = await finance.jobTotal(paid.tenantId, job);
+
+    expect(total.lines).toHaveLength(1);
+    expect(total.lines[0].name).toBe("Brake service");
+    expect(total.total).toBe("1000.00");
+  });
+
+  it("does not bill work that is not finished", async () => {
+    const job = await makeJob(paid);
+    await prisma.priceCatalogEntry.create({
+      data: { tenantId: paid.tenantId, itemKey: "Half done", itemType: "SERVICE", unitPrice: "500.00", isActive: true },
+    });
+    await prisma.task.create({
+      data: { tenantId: paid.tenantId, workOrderId: job, title: "Half done", serviceKey: "Half done", status: "IN_PROGRESS" },
+    });
+
+    const total = await finance.jobTotal(paid.tenantId, job);
+    expect(total.lines).toHaveLength(0);
+  });
+
+  it("skips uncatalogued work rather than billing it at zero", async () => {
+    const job = await makeJob(paid);
+    await doneTask(paid, job, "Never catalogued");
+
+    const total = await finance.jobTotal(paid.tenantId, job);
+    // A zero line reads as "free", which is a claim nobody made.
+    expect(total.lines).toHaveLength(0);
+  });
+
+  it("ignores ad-hoc work with no service key at all", async () => {
+    const job = await makeJob(paid);
+    await doneTask(paid, job, null);
+
+    const total = await finance.jobTotal(paid.tenantId, job);
+    expect(total.lines).toHaveLength(0);
+  });
+
+  it("bills a service exactly once however often the total is read", async () => {
+    const job = await makeJob(paid);
+    await prisma.priceCatalogEntry.create({
+      data: { tenantId: paid.tenantId, itemKey: "Repeatable", itemType: "SERVICE", unitPrice: "300.00", isActive: true },
+    });
+    await doneTask(paid, job, "Repeatable");
+
+    await finance.jobTotal(paid.tenantId, job);
+    await finance.jobTotal(paid.tenantId, job);
+    const total = await finance.jobTotal(paid.tenantId, job);
+
+    expect(total.lines).toHaveLength(1);
+    expect(total.total).toBe("300.00");
+  });
+
+  it("keeps the agreed price when the Owner reprices the catalogue afterwards", async () => {
+    const job = await makeJob(paid);
+    const entry = await prisma.priceCatalogEntry.create({
+      data: { tenantId: paid.tenantId, itemKey: "Repriced later", itemType: "SERVICE", unitPrice: "400.00", isActive: true },
+    });
+    await doneTask(paid, job, "Repriced later");
+
+    expect((await finance.jobTotal(paid.tenantId, job)).total).toBe("400.00");
+
+    await prisma.priceCatalogEntry.update({ where: { id: entry.id }, data: { unitPrice: "9999.00" } });
+
+    // The running line was snapshotted when the work was absorbed.
+    expect((await finance.jobTotal(paid.tenantId, job)).total).toBe("400.00");
   });
 });

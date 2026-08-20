@@ -194,6 +194,13 @@
         <h2 class="tools-title">Something's wrong</h2>
 
         <div class="tool-row">
+          <button
+            class="tap"
+            type="button"
+            (click)="panel.set(panel() === 'inspection' ? 'none' : 'inspection')"
+          >
+            Record inspection
+          </button>
           <button class="tap" type="button" (click)="togglePartsPanel()">Need a part</button>
           <button class="tap" type="button" (click)="panel.set(panel() === 'blocker' ? 'none' : 'blocker')">
             I'm blocked
@@ -202,6 +209,36 @@
             Found a fault
           </button>
         </div>
+
+        @if (panel() === 'inspection') {
+          <div class="fault">
+            <textarea
+              class="fault-text"
+              rows="3"
+              placeholder="What did you check? (optional)"
+              [value]="inspectionNote()"
+              (input)="inspectionNote.set($any($event.target).value)"
+            ></textarea>
+            <div class="tool-row">
+              <button
+                class="tap tap--primary"
+                type="button"
+                [disabled]="busy() !== null"
+                (click)="recordInspection('QUICK')"
+              >
+                {{ busy() === 'inspection' ? '…' : 'Quick check' }}
+              </button>
+              <button
+                class="tap tap--primary"
+                type="button"
+                [disabled]="busy() !== null"
+                (click)="recordInspection('FULL')"
+              >
+                {{ busy() === 'inspection' ? '…' : 'Full inspection' }}
+              </button>
+            </div>
+          </div>
+        }
 
         @if (panel() === 'parts') {
           <!-- Cards, not a SKU box. The technician knows the part by

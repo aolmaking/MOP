@@ -61,6 +61,12 @@ const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: "workorders.branch.reassign_technician", module: "OPERATIONS" },
   { key: "workorders.branch.manage_blockers", module: "OPERATIONS" },
   { key: "workorders.branch.release_delivery", module: "OPERATIONS" },
+  // Advancing a finished job. Two separate keys because they are two
+  // separate jobs: team review is a supervisor reading a technician's
+  // work, QC is the workshop's own last look before a customer sees it.
+  // A shop that runs both must be able to give them to different people.
+  { key: "workorders.review.decide", module: "OPERATIONS" },
+  { key: "workorders.qc.decide", module: "OPERATIONS" },
 
   // Customer intake / decisions (branch-facing, not the customer's own portal)
   { key: "customer.intake.create", module: "OPERATIONS" },

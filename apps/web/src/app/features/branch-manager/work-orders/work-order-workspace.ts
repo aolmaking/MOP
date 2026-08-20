@@ -34,6 +34,35 @@ export class WorkOrderWorkspace {
   protected readonly detail = signal<WorkOrderDetail | null>(null);
   /** The same projection the technician and customer see, in manager words. */
   protected readonly journey = signal<PresentedJourney | null>(null);
+  protected readonly advancing = signal(false);
+  protected readonly advanceError = signal<string | null>(null);
+
+  /**
+   * Only at the two stages where somebody has to say yes or no. Read off
+   * the job's own status rather than a capability flag: if the workshop
+   * has no QC, no job of theirs is ever in READY_FOR_QC.
+   */
+  protected readonly reviewStage = computed(() => {
+    const status = this.detail()?.status;
+    if (status === 'READY_FOR_TEAM_REVIEW') return 'review' as const;
+    if (status === 'READY_FOR_QC') return 'qc' as const;
+    return null;
+  });
+
+  protected advance(passed: boolean): void {
+    this.advancing.set(true);
+    this.advanceError.set(null);
+    this.api.advance(this.id(), passed).subscribe({
+      next: () => {
+        this.advancing.set(false);
+        this.load();
+      },
+      error: (err: PresentedError) => {
+        this.advancing.set(false);
+        this.advanceError.set(err.message ?? 'That did not go through.');
+      },
+    });
+  }
   protected readonly error = signal<PresentedError | null>(null);
   protected readonly state = signal<State>('loading');
   protected readonly showDossier = signal(false);

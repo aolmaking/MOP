@@ -13,6 +13,7 @@ import { ApprovalsService, type ApprovalsResult } from "./approvals.service";
 import { DeliveryService, type DeliveryBoard } from "./delivery.service";
 import { CustomerDecisionService } from "../customer/decision.service";
 import { RecordDecisionDto } from "./record-decision.dto";
+import { AdvanceWorkOrderDto } from "./advance-work-order.dto";
 import { WorkOrderDossierService } from "../operations/work-order-dossier.service";
 import { WorkflowJourneyService } from "../operations/workflow-journey.service";
 import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
@@ -306,6 +307,60 @@ export class BranchManagerController {
       displayName: session.displayName,
       actorType: "TENANT_STAFF",
     });
+  }
+
+  /**
+   * Advance a finished job: team review, then QC.
+   *
+   * `REVIEW_PASSED`, `REVIEW_REJECTED`, `QC_PASSED` and `QC_FAILED` were
+   * all edges in WORK_ORDER_GRAPH with no production call site, so any
+   * workshop with TEAM_REVIEW or QC switched on dead-ended the moment a
+   * technician pressed Finish -- the job reached READY_FOR_TEAM_REVIEW
+   * and could never leave it.
+   *
+   * The intent is chosen by the STATE the job is in and the `passed`
+   * flag, rather than by the client naming one: what "pass" means here
+   * is the graph's business, and letting a caller pick the intent would
+   * let it ask for QC_PASSED on a job that never reached QC.
+   */
+  @Post("work-orders/:id/advance")
+  async advance(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: AdvanceWorkOrderDto,
+  ) {
+    if (!session.tenantId) {
+      throw new ForbiddenException({ code: "forbidden", message: "You do not have access to branch operations." });
+    }
+
+    const workOrder = await this.boardService.detail(
+      { tenantId: session.tenantId, branchScope: session.branchScope },
+      id,
+    );
+
+    const stage = workOrder.status === "READY_FOR_TEAM_REVIEW" ? "review" : "qc";
+    const permission = stage === "review" ? "workorders.review.decide" : "workorders.qc.decide";
+    if (!(await this.access.can(session, permission))) {
+      throw new ForbiddenException({
+        code: "forbidden",
+        message: stage === "review" ? "You cannot decide a team review." : "You cannot decide QC.",
+      });
+    }
+
+    const intent =
+      stage === "review"
+        ? dto.passed
+          ? ("REVIEW_PASSED" as const)
+          : ("REVIEW_REJECTED" as const)
+        : dto.passed
+          ? ("QC_PASSED" as const)
+          : ("QC_FAILED" as const);
+
+    return this.lifecycle.apply(id, intent, {
+      accountId: session.accountId,
+      displayName: session.displayName,
+      actorType: "TENANT_STAFF",
+    }, { reason: dto.note });
   }
 
   private async requireBranchView(session: SessionContext): Promise<void> {

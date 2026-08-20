@@ -93,6 +93,37 @@
           <app-workflow-strip [journey]="j" />
         }
 
+        @if (reviewStage(); as stage) {
+          <!-- The decision this job is actually waiting on. Shown only at
+               the two stages that need one, so it is never a button
+               looking for a purpose. -->
+          <section class="advance">
+            <h2 class="advance-title">
+              {{ stage === 'review' ? 'Team review' : 'Quality check' }}
+            </h2>
+            <p class="advance-body">
+              {{
+                stage === 'review'
+                  ? 'The technician has finished. Does the work pass review?'
+                  : 'Last look before the customer sees it. Does it pass?'
+              }}
+            </p>
+
+            @if (advanceError(); as message) {
+              <p class="advance-error" role="alert">{{ message }}</p>
+            }
+
+            <div class="advance-actions">
+              <button appButton variant="primary" type="button" [disabled]="advancing()" (click)="advance(true)">
+                {{ advancing() ? 'Saving…' : 'Pass' }}
+              </button>
+              <button appButton variant="secondary" type="button" [disabled]="advancing()" (click)="advance(false)">
+                Send back
+              </button>
+            </div>
+          </section>
+        }
+
         <!-- ── liability first ─────────────────────────────────────── -->
         @if (unacknowledgedCritical().length) {
           <section class="critical">

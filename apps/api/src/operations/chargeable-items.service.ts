@@ -29,6 +29,65 @@ export class ChargeableItemsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Every catalogued service actually performed on this job.
+   *
+   * The other half of the chain the parts work opened up: a `Task`
+   * carries a `serviceKey` naming a row in the workshop's Service
+   * Catalog, and until this existed nothing turned a completed one into
+   * a charge -- so a job whose only work was labour reached the counter
+   * with "There is nothing on this job to invoice."
+   *
+   * **Only DONE tasks.** Work in progress is not yet a charge, and
+   * billing it would let a job be invoiced for something abandoned
+   * halfway. **Only tasks with a `serviceKey`** -- ad-hoc work with no
+   * catalogue row has no price this service could honestly claim, and
+   * inventing one is worse than leaving it to be added by hand.
+   *
+   * `approvedUnitPrice` is deliberately NULL: Operations states that
+   * something is billable and never what it costs. Finance resolves the
+   * price from the catalogue, per the contract's own rule.
+   */
+  async serviceItems(tenantId: string, workOrderId: string): Promise<readonly ChargeableWorkItem[]> {
+    const [workOrder, tasks] = await Promise.all([
+      this.prisma.workOrder.findFirst({
+        where: { id: workOrderId, tenantId },
+        select: { branchId: true, assetId: true, customerId: true },
+      }),
+      this.prisma.task.findMany({
+        where: { workOrderId, tenantId, status: "DONE", serviceKey: { not: null } },
+        select: { id: true, title: true, serviceKey: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
+
+    if (!workOrder) return [];
+
+    return tasks.map((task) => ({
+      tenantId,
+      branchId: workOrder.branchId,
+      workOrderId,
+      taskId: task.id,
+      assetId: workOrder.assetId,
+      customerId: workOrder.customerId,
+      itemType: "SERVICE" as const,
+      // The catalogue key is the billable identity; the title is only
+      // what somebody typed on the job card.
+      itemName: task.serviceKey as string,
+      quantity: 1,
+      provenance: "NOT_APPLICABLE" as const,
+      inventoryItemId: null,
+      sourceType: "TASK" as const,
+      sourceId: task.id,
+      requiresCustomerApproval: false,
+      approvalStatus: "NOT_REQUIRED" as const,
+      // Operations never computes money.
+      approvedUnitPrice: null,
+      approvedLabourPrice: null,
+      addedAt: task.createdAt.toISOString(),
+    }));
+  }
+
+  /**
    * Every part fitted to this job, as chargeable items.
    *
    * Reads `WorkOrderPartLine` -- Operations' own table -- and nothing
