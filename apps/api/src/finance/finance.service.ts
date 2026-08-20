@@ -19,7 +19,7 @@ import { PrismaService } from "../database/prisma.service";
 import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { BillingService } from "../billing/billing.service";
-import type { LifecycleActor } from "../operations/work-order-lifecycle.service";
+import { WorkOrderLifecycleService, type LifecycleActor } from "../operations/work-order-lifecycle.service";
 import { ChargeableItemsService } from "../operations/chargeable-items.service";
 import { PriceCatalogService } from "./price-catalog.service";
 import { PolicyResolutionService } from "../policies/policy-resolution.service";
@@ -96,6 +96,7 @@ export class FinanceService {
     private readonly priceCatalog: PriceCatalogService,
     private readonly policies: PolicyResolutionService,
     private readonly chargeable: ChargeableItemsService,
+    private readonly lifecycle: WorkOrderLifecycleService,
   ) {}
 
   /**
@@ -501,7 +502,41 @@ export class FinanceService {
     }
 
     await this.refreshCachedTotals(invoiceId);
-    return this.settlement(invoiceId);
+    const after = await this.settlement(invoiceId);
+
+    // A settled invoice is what turns PAYMENT_PENDING into a car somebody
+    // may drive away. `SETTLE_PAYMENT` has existed in WORK_ORDER_GRAPH
+    // since Phase 2 and NOTHING in production ever applied it, so a fully
+    // paid job sat in PAYMENT_PENDING forever and Delivery & Payments
+    // went on reporting "The invoice has not been settled." about an
+    // invoice it had just been paid in full.
+    //
+    // Deliberately after the payment transaction rather than inside it:
+    // the money is recorded either way, and a lifecycle refusal must
+    // never roll back a payment the customer actually made.
+    if (after.settled && workOrderId) {
+      await this.moveIfPossible(workOrderId, "SETTLE_PAYMENT", actor);
+    }
+
+    return after;
+  }
+
+  /**
+   * Applies a lifecycle intent where the graph allows it and stays quiet
+   * where it does not -- the same shape as
+   * `TechnicianWorkService.moveIfPossible` and `PartRequestService`'s.
+   *
+   * A workshop whose graph routes payment differently, or a job already
+   * past this point, simply does not move. The payment stands regardless,
+   * which is why this can never throw into the caller.
+   */
+  private async moveIfPossible(workOrderId: string, intent: "SETTLE_PAYMENT", actor: LifecycleActor): Promise<void> {
+    try {
+      await this.lifecycle.apply(workOrderId, intent, actor);
+    } catch {
+      // Not available from the work order's current state; the payment
+      // record stands on its own.
+    }
   }
 
   private resolveIdempotentReplay(

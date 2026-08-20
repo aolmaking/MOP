@@ -59,6 +59,7 @@ const finance = new FinanceService(
   priceCatalog,
   policiesForTest,
   new ChargeableItemsService(asService),
+  lifecycle,
 );
 
 const ACTOR = { accountId: "tech-1", displayName: "Technician", actorType: "TENANT_STAFF" as const };

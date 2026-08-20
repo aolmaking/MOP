@@ -47,6 +47,14 @@ export class ApprovalsApi {
     return this.http.get<ApprovalsResult>('/api/v1/branch-manager/approvals');
   }
 
+  /**
+   * Hand the car back. The server re-runs the delivery gates, so a board
+   * left open in a tab can never release a car that stopped qualifying.
+   */
+  releaseDelivery(workOrderId: string): Observable<unknown> {
+    return this.http.post(`/api/v1/branch-manager/work-orders/${workOrderId}/deliver`, {});
+  }
+
   delivery(): Observable<DeliveryBoard> {
     return this.http.get<DeliveryBoard>('/api/v1/branch-manager/delivery');
   }

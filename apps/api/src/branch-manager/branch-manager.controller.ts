@@ -15,6 +15,7 @@ import { CustomerDecisionService } from "../customer/decision.service";
 import { RecordDecisionDto } from "./record-decision.dto";
 import { WorkOrderDossierService } from "../operations/work-order-dossier.service";
 import { WorkflowJourneyService } from "../operations/workflow-journey.service";
+import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
 
 export interface AttentionCenterResponse {
   /** Ranked most urgent first. Empty is a valid and desirable state. */
@@ -39,6 +40,7 @@ export class BranchManagerController {
     private readonly customerDecisions: CustomerDecisionService,
     private readonly dossierService: WorkOrderDossierService,
     private readonly journey: WorkflowJourneyService,
+    private readonly lifecycle: WorkOrderLifecycleService,
   ) {}
 
   /**
@@ -266,6 +268,43 @@ export class BranchManagerController {
     return this.deliveryService.board({
       tenantId: session.tenantId as string,
       branchScope: session.branchScope,
+    });
+  }
+
+  /**
+   * Hand the car back.
+   *
+   * The last dead edge in the core journey: `DELIVER` was EVALUATED on
+   * the Delivery board to work out `canLeave`, and applied by nothing --
+   * so a car cleared to leave could never be marked delivered and the
+   * work order could never reach CLOSED, its own terminal state.
+   *
+   * `workorders.branch.release_delivery` was likewise declared in the
+   * permission manifest and granted to BRANCH_MANAGER by default, with
+   * no call site anywhere. This is it.
+   *
+   * The gates are NOT re-checked here by hand:
+   * `WorkOrderLifecycleService.apply` re-evaluates `invoice.issued` and
+   * `payment.settled_or_policy_allows` itself, so a board that went stale
+   * in somebody's tab cannot release an unpaid car.
+   */
+  @Post("work-orders/:id/deliver")
+  async deliver(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const allowed = await this.access.can(session, "workorders.branch.release_delivery");
+    if (!allowed || !session.tenantId) {
+      throw new ForbiddenException({ code: "forbidden", message: "You cannot release a vehicle." });
+    }
+    // Scoped through the board's own read first, exactly like every other
+    // write here, so a job outside this manager's branches is refused.
+    await this.boardService.detail(
+      { tenantId: session.tenantId, branchScope: session.branchScope },
+      id,
+    );
+
+    return this.lifecycle.apply(id, "DELIVER", {
+      accountId: session.accountId,
+      displayName: session.displayName,
+      actorType: "TENANT_STAFF",
     });
   }
 

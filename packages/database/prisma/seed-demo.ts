@@ -36,6 +36,14 @@ const MANAGER_EMAIL = "manager@apex-motors.local";
 const MANAGER_PASSWORD = "ChangeMe-Manager-123";
 
 /** Permissions a branch manager needs to open their own pages. */
+/**
+ * Demo-only delegations, applied ON TOP of the role's real defaults.
+ *
+ * Everything here is something an Owner would hand out on their first
+ * day; the defaults themselves come from
+ * `DEFAULT_ROLE_PERMISSIONS.BRANCH_MANAGER` and must not be re-listed
+ * here, or this array drifts from them again.
+ */
 const MANAGER_PERMISSIONS = [
   // Delegated money handling.
   //
@@ -243,11 +251,27 @@ async function ensureManager(tenantId: string) {
     });
   }
 
-  for (const permissionKey of MANAGER_PERMISSIONS) {
+  // The role's real defaults FIRST, then the demo-only delegations on
+  // top. A hand-kept list alone was the bug this replaces: it named
+  // seven keys and silently omitted whatever had been added to
+  // `DEFAULT_ROLE_PERMISSIONS.BRANCH_MANAGER` since somebody last
+  // remembered to edit it, so `workorders.branch.release_delivery` --
+  // true by default for this role since it was declared -- was denied in
+  // the demo and the Hand Over button answered "You cannot release a
+  // vehicle."
+  //
+  // A blind replace would have been just as wrong in the other
+  // direction: MANAGER_PERMISSIONS carries deliberate demo-only
+  // overrides on top of a `false` default. Hence a merge.
+  const managerDefaults = DEFAULT_ROLE_PERMISSIONS.BRANCH_MANAGER ?? {};
+  const managerGrants = new Map<string, boolean>(Object.entries(managerDefaults));
+  for (const permissionKey of MANAGER_PERMISSIONS) managerGrants.set(permissionKey, true);
+
+  for (const [permissionKey, allowed] of managerGrants) {
     await prisma.rolePermission.upsert({
       where: { tenantId_role_permissionKey: { tenantId, role: "BRANCH_MANAGER", permissionKey } },
-      create: { tenantId, role: "BRANCH_MANAGER", permissionKey, allowed: true },
-      update: { allowed: true },
+      create: { tenantId, role: "BRANCH_MANAGER", permissionKey, allowed },
+      update: { allowed },
     });
   }
 
@@ -501,6 +525,16 @@ async function clearDemoWork(tenantId: string) {
   if (invoiceIds.length > 0) {
     await prisma.payment.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
     await prisma.invoiceLine.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
+    // Billing's own artifacts come off first. `FinanceService.issueInvoice`
+    // calls BillingService in the same transaction, so any invoice issued
+    // through the product -- rather than inserted by this seed -- has a
+    // `BillingDocument` pointing at it, and a credit note if it was ever
+    // refunded. Neither cascades. This only started failing once the demo
+    // could actually issue an invoice from the UI, which is precisely when
+    // a re-seed matters most.
+    await prisma.creditNote.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
+    await prisma.refundRequest.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
+    await prisma.billingDocument.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
     await prisma.invoice.deleteMany({ where: { id: { in: invoiceIds } } });
   }
 
@@ -674,8 +708,17 @@ async function createStuckJobs(tenantId: string, branchId: string, technicianSta
     { plate: "DEMO-3356", customer: "Hala Kamal", kind: "waitingParts" as const },
     { plate: "DEMO-7742", customer: "Youssef Amin", kind: "rework" as const },
     // Two at the handover end, so Delivery & Payments has something to
-    // evaluate. Neither has an invoice, so the delivery gates should hold
-    // both -- which is the behaviour worth being able to see.
+    // evaluate, and deliberately in two DIFFERENT states.
+    //
+    // DEMO-5510 has completed work and a running total but NO invoice, so
+    // the delivery gate holds it -- the behaviour worth being able to see.
+    //
+    // DEMO-6621 carries completed work and a running total ready to be
+    // invoiced, so the money path can actually be walked end to end:
+    // invoice -> take payment -> balance clears -> the release gate opens.
+    // Until this carried charges both jobs totalled 0.00 with nothing to
+    // bill, so the payment half of the core journey could not be
+    // demonstrated at all -- only the gate refusing it.
     { plate: "DEMO-5510", customer: "Nadia Roshdy", kind: "readyToLeave" as const },
     { plate: "DEMO-6621", customer: "Tarek Selim", kind: "awaitingPayment" as const },
   ];
@@ -820,6 +863,43 @@ async function createStuckJobs(tenantId: string, branchId: string, technicianSta
             total: 180,
           },
         ],
+      });
+    }
+
+    // The handover-end jobs carry finished, catalogued work so there is
+    // something real to invoice and pay for. Priced from the Service
+    // Catalog above rather than typed here, so editing Pricing changes
+    // what the demo bills -- the same chain a real job follows.
+    if (job.kind === "readyToLeave" || job.kind === "awaitingPayment") {
+      const service = DEMO_SERVICES[0];
+      const task = await prisma.task.create({
+        data: {
+          tenantId,
+          workOrderId: workOrder.id,
+          title: service.itemKey,
+          serviceKey: service.itemKey,
+          status: "DONE",
+        },
+      });
+      await prisma.taskAssignment.create({
+        data: { tenantId, taskId: task.id, staffUserId: technicianStaffUserId },
+      });
+
+      const running = await prisma.runningInvoice.create({
+        data: { tenantId, workOrderId: workOrder.id },
+      });
+      await prisma.runningInvoiceLine.create({
+        data: {
+          tenantId,
+          runningInvoiceId: running.id,
+          name: service.itemKey,
+          itemType: "SERVICE",
+          quantity: 1,
+          unitPrice: service.unitPrice,
+          laborPrice: service.laborPrice,
+          total: service.unitPrice + service.laborPrice,
+          addedById: "seed",
+        },
       });
     }
 

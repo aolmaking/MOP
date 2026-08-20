@@ -28,6 +28,9 @@ export class DeliveryPage {
   protected readonly board = signal<DeliveryBoard | null>(null);
   protected readonly error = signal<PresentedError | null>(null);
   protected readonly state = signal<State>('loading');
+  /** Which row is mid-release, so only its own button shows the wait. */
+  protected readonly releasing = signal<string | null>(null);
+  protected readonly releaseError = signal<string | null>(null);
 
   constructor() {
     this.load();
@@ -43,6 +46,27 @@ export class DeliveryPage {
       error: (err: PresentedError) => {
         this.error.set(err);
         this.state.set(err.httpStatus === 403 ? 'forbidden' : 'error');
+      },
+    });
+  }
+
+  /**
+   * Reloads the whole board afterwards rather than removing the row
+   * locally: releasing closes the job, and the server is what decides
+   * that. Guessing here is how a page shows a car as gone that is still
+   * on the ramp.
+   */
+  protected release(row: DeliveryCandidate): void {
+    this.releasing.set(row.workOrderId);
+    this.releaseError.set(null);
+    this.api.releaseDelivery(row.workOrderId).subscribe({
+      next: () => {
+        this.releasing.set(null);
+        this.load();
+      },
+      error: (err: PresentedError) => {
+        this.releasing.set(null);
+        this.releaseError.set(err.message ?? 'That did not go through.');
       },
     });
   }

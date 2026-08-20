@@ -33,6 +33,8 @@ import type {
 } from "@mop/shared";
 import { FinanceService } from "../finance/finance.service";
 import { ChargeableItemsService } from "../operations/chargeable-items.service";
+import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
+import { GateEvaluatorService } from "../operations/gate-evaluator.service";
 import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../operations/customer-safe-projection.service";
@@ -61,6 +63,12 @@ const priceCatalog = new PriceCatalogService(asService, new AuditService(asServi
 
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
 const capabilities = new CapabilityResolutionService(asService);
+const lifecycleForFinance = new WorkOrderLifecycleService(
+  asService,
+  capabilities,
+  events,
+  new GateEvaluatorService(asService, policiesForTest),
+);
 const genericBilling = new BillingService(asService, new GenericBillingAdapter());
 const chargeable = new ChargeableItemsService(asService);
 const financeWithGeneric = new FinanceService(
@@ -71,6 +79,7 @@ const financeWithGeneric = new FinanceService(
   priceCatalog,
   policiesForTest,
   chargeable,
+  lifecycleForFinance,
 );
 
 const ACTOR = { accountId: "cashier-1", displayName: "Cashier", actorType: "TENANT_STAFF" as const };
@@ -303,6 +312,7 @@ describe("the adapter seam is provably swappable", () => {
       priceCatalog,
       policiesForTest,
       chargeable,
+      lifecycleForFinance,
     );
 
     const job = await makeJob(shop);

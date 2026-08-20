@@ -86,10 +86,27 @@
                     </span>
                     <span class="row-waited">{{ waited(row) }}</span>
                   </a>
+
+                  <!-- The press that actually closes the job. Everything
+                       above this line was a read; this is the write. -->
+                  <button
+                    appButton
+                    variant="primary"
+                    size="small"
+                    type="button"
+                    [disabled]="releasing() !== null"
+                    (click)="release(row)"
+                  >
+                    {{ releasing() === row.workOrderId ? 'Releasing…' : 'Hand over' }}
+                  </button>
                 </li>
               }
             </ul>
           </section>
+        }
+
+        @if (releaseError(); as message) {
+          <p class="release-error" role="alert">{{ message }}</p>
         }
       }
     }

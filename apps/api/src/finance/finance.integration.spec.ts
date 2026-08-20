@@ -15,6 +15,8 @@ import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { FinanceService } from "./finance.service";
 import { ChargeableItemsService } from "../operations/chargeable-items.service";
+import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
+import { GateEvaluatorService } from "../operations/gate-evaluator.service";
 import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../operations/customer-safe-projection.service";
@@ -51,6 +53,14 @@ const finance = new FinanceService(
   priceCatalog,
   policiesForTest,
   new ChargeableItemsService(asService),
+  // Real, not a stub: settling an invoice is supposed to move the work
+  // order, and a stub would prove nothing about whether it does.
+  new WorkOrderLifecycleService(
+    asService,
+    new CapabilityResolutionService(asService),
+    events,
+    new GateEvaluatorService(asService, policiesForTest),
+  ),
 );
 
 const ACTOR = { accountId: "cashier-1", displayName: "Cashier", actorType: "TENANT_STAFF" as const };
@@ -867,5 +877,100 @@ describe("parts fitted on the job are billed", () => {
     await expect(finance.jobTotal(free.tenantId, job)).resolves.toBeDefined();
     const lines = await prisma.runningInvoiceLine.findMany({ where: { tenantId: free.tenantId } });
     expect(lines).toHaveLength(0);
+  });
+});
+
+/**
+ * Settling the bill releases the car.
+ *
+ * `SETTLE_PAYMENT` has been an edge in WORK_ORDER_GRAPH since Phase 2
+ * and nothing in production ever applied it, so a fully paid job stayed
+ * in PAYMENT_PENDING forever and Delivery & Payments went on reporting
+ * "The invoice has not been settled." about an invoice it had just been
+ * paid in full. Same class of dead edge as REQUEST_PART was.
+ */
+describe("paying in full moves the job on", () => {
+  async function invoicedJob(shop: Shop, amount: string): Promise<{ workOrderId: string; invoiceId: string }> {
+    const workOrderId = await makeJob(shop);
+    await finance.addLine(
+      { tenantId: shop.tenantId, workOrderId, name: "Service", itemType: "SERVICE", quantity: 1, unitPrice: amount },
+      ACTOR,
+    );
+    const settlement = await finance.issueInvoice(shop.tenantId, workOrderId, ACTOR);
+    // The graph only offers SETTLE_PAYMENT from PAYMENT_PENDING, which is
+    // where FINISH would have left a job in a workshop with finance.
+    await prisma.workOrder.update({ where: { id: workOrderId }, data: { status: "PAYMENT_PENDING" } });
+    return { workOrderId, invoiceId: settlement.invoiceId };
+  }
+
+  it("leaves a part-paid job where it is", async () => {
+    const { workOrderId, invoiceId } = await invoicedJob(paid, "500.00");
+
+    await finance.recordPayment(
+      paid.tenantId,
+      invoiceId,
+      { amount: "200.00", method: "CASH", idempotencyKey: `partial-${Date.now()}` },
+      ACTOR,
+    );
+
+    const after = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrderId }, select: { status: true } });
+    expect(after.status).toBe("PAYMENT_PENDING");
+  });
+
+  it("moves a fully paid job to READY_FOR_DELIVERY", async () => {
+    const { workOrderId, invoiceId } = await invoicedJob(paid, "500.00");
+
+    await finance.recordPayment(
+      paid.tenantId,
+      invoiceId,
+      { amount: "500.00", method: "CASH", idempotencyKey: `full-${Date.now()}` },
+      ACTOR,
+    );
+
+    const after = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrderId }, select: { status: true } });
+    expect(after.status).toBe("READY_FOR_DELIVERY");
+  });
+
+  it("moves it once the LAST instalment lands, not before", async () => {
+    const { workOrderId, invoiceId } = await invoicedJob(paid, "900.00");
+    const key = Date.now();
+
+    await finance.recordPayment(
+      paid.tenantId,
+      invoiceId,
+      { amount: "400.00", method: "CASH", idempotencyKey: `i1-${key}` },
+      ACTOR,
+    );
+    expect(
+      (await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrderId }, select: { status: true } })).status,
+    ).toBe("PAYMENT_PENDING");
+
+    await finance.recordPayment(
+      paid.tenantId,
+      invoiceId,
+      { amount: "500.00", method: "CARD", idempotencyKey: `i2-${key}` },
+      ACTOR,
+    );
+    expect(
+      (await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrderId }, select: { status: true } })).status,
+    ).toBe("READY_FOR_DELIVERY");
+  });
+
+  it("still records the payment when the job cannot move", async () => {
+    const { invoiceId, workOrderId } = await invoicedJob(paid, "300.00");
+    // A job somewhere the graph has no SETTLE_PAYMENT edge from. The
+    // money must land regardless -- a lifecycle refusal must never roll
+    // back a payment the customer actually made.
+    await prisma.workOrder.update({ where: { id: workOrderId }, data: { status: "IN_PROGRESS" } });
+
+    const settlement = await finance.recordPayment(
+      paid.tenantId,
+      invoiceId,
+      { amount: "300.00", method: "CASH", idempotencyKey: `stuck-${Date.now()}` },
+      ACTOR,
+    );
+
+    expect(settlement.settled).toBe(true);
+    expect(settlement.paid).toBe("300.00");
   });
 });
