@@ -16,9 +16,22 @@ import { OperationEventsService } from "../operations/operation-events.service";
 import { AuditService } from "../audit/audit.service";
 import { CustomerSafeProjectionService } from "../operations/customer-safe-projection.service";
 import type { PrismaService } from "../database/prisma.service";
+import { PolicyResolutionService } from "../policies/policy-resolution.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
+
+/**
+ * Policies read at runtime by the services under test. Backed by the
+ * real Prisma client, so a test that writes a WorkshopPolicy row sees
+ * the behaviour change -- a stub here would prove nothing about the
+ * thing these tests exist to prove.
+ */
+const policiesForTest = new PolicyResolutionService(
+  asService,
+  new AuditService(asService),
+  new CapabilityResolutionService(asService),
+);
 const history = new AssetHistoryService(asService);
 
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
@@ -26,7 +39,7 @@ const lifecycle = new WorkOrderLifecycleService(
   asService,
   new CapabilityResolutionService(asService),
   events,
-  new GateEvaluatorService(asService),
+  new GateEvaluatorService(asService, policiesForTest),
 );
 const techView = new TechnicianWorkViewService(asService, lifecycle, history);
 

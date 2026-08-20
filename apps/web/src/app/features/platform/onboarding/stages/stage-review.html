@@ -1,0 +1,222 @@
+@if (blockers().length > 0) {
+  <section class="onb-review-blockers" role="alert">
+    <h3>{{ blockers().length }} thing(s) must be fixed first</h3>
+    <ul>
+      @for (finding of blockers(); track finding.code + (finding.subject ?? '')) {
+        <li>
+          <span>{{ finding.message }}</span>
+          <button type="button" class="onb-review-jump" (click)="jumpTo.emit(finding.stage)">
+            Go to {{ finding.stage.toLowerCase() }}
+          </button>
+        </li>
+      }
+    </ul>
+  </section>
+} @else {
+  <section class="onb-review-clear">
+    <h3>Ready to create</h3>
+    <p>
+      Nothing is blocking this. Creation is one transaction — it either produces the whole workshop or none of it.
+    </p>
+  </section>
+}
+
+@if (warnings().length > 0) {
+  <section class="onb-review-warnings">
+    <h3>Worth knowing</h3>
+    <ul>
+      @for (finding of warnings(); track finding.code + (finding.subject ?? '')) {
+        <li>
+          <span>{{ finding.message }}</span>
+          <button type="button" class="onb-review-jump" (click)="jumpTo.emit(finding.stage)">
+            {{ finding.stage.toLowerCase() }}
+          </button>
+        </li>
+      }
+    </ul>
+  </section>
+}
+
+<div class="onb-review-grid">
+  <section class="onb-review-section">
+    <div class="onb-review-section-head">
+      <h3>Identity</h3>
+      <button type="button" class="onb-review-edit" (click)="jumpTo.emit('IDENTITY')">Edit</button>
+    </div>
+    <dl class="onb-review-dl">
+      <div><dt>Name</dt><dd>{{ store.draft().identity.name || '—' }}</dd></div>
+      <div><dt>Address</dt><dd>mop.app/w/{{ store.draft().identity.slug || '—' }}</dd></div>
+      <div><dt>Where</dt><dd>{{ store.draft().identity.city }}, {{ countryEntry()?.name ?? store.draft().identity.country }}</dd></div>
+      <div><dt>Currency</dt><dd>{{ store.draft().identity.currency || '—' }} <span class="onb-review-note">permanent</span></dd></div>
+      <div><dt>Clock</dt><dd>{{ store.draft().identity.timezone || '—' }}</dd></div>
+      <div><dt>Works on</dt><dd>{{ store.draft().identity.primaryCategory || '—' }}</dd></div>
+    </dl>
+  </section>
+
+  <section class="onb-review-section">
+    <div class="onb-review-section-head">
+      <h3>Owner &amp; plan</h3>
+      <button type="button" class="onb-review-edit" (click)="jumpTo.emit('PLAN')">Edit</button>
+    </div>
+    <dl class="onb-review-dl">
+      <div><dt>Owner</dt><dd>{{ store.draft().owner.ownerFullName || '—' }}</dd></div>
+      <div><dt>Email</dt><dd>{{ store.draft().owner.ownerEmail || '—' }}</dd></div>
+      <div><dt>Plan</dt><dd>{{ plan()?.name ?? '—' }}</dd></div>
+      <div><dt>Can log in</dt><dd>{{ store.draft().plan.initialStatus }}</dd></div>
+    </dl>
+  </section>
+
+  <section class="onb-review-section onb-review-section--wide">
+    <div class="onb-review-section-head">
+      <h3>What it runs</h3>
+      <button type="button" class="onb-review-edit" (click)="jumpTo.emit('CAPABILITIES')">Edit</button>
+    </div>
+    <div class="onb-review-caps">
+      <div>
+        <h4>On</h4>
+        <ul class="onb-summary-chips">
+          @for (title of activeTitles(); track title) {
+            <li class="onb-chip onb-chip--on">{{ title }}</li>
+          }
+        </ul>
+      </div>
+      @if (externalTitles().length > 0) {
+        <div>
+          <h4>Outside MOP</h4>
+          <ul class="onb-summary-chips">
+            @for (title of externalTitles(); track title) {
+              <li class="onb-chip onb-chip--external">{{ title }}</li>
+            }
+          </ul>
+        </div>
+      }
+      @if (offTitles().length > 0) {
+        <div>
+          <h4>Off</h4>
+          <ul class="onb-summary-chips">
+            @for (title of offTitles(); track title) {
+              <li class="onb-chip onb-chip--off">{{ title }}</li>
+            }
+          </ul>
+        </div>
+      }
+    </div>
+  </section>
+
+  @if (answeredPolicies().length > 0) {
+    <section class="onb-review-section onb-review-section--wide">
+      <div class="onb-review-section-head">
+        <h3>Rules</h3>
+        <button type="button" class="onb-review-edit" (click)="jumpTo.emit('POLICIES')">Edit</button>
+      </div>
+      <ul class="onb-review-policies">
+        @for (policy of answeredPolicies(); track policy.key) {
+          <li>
+            <span class="onb-review-policy-q">{{ policy.question }}</span>
+            <span class="onb-review-policy-a">
+              {{ policy.answer }}
+              @if (policy.isDefault) {
+                <span class="onb-review-note">recommended</span>
+              }
+              @if (!policy.enforced) {
+                <span class="onb-review-note">recorded</span>
+              }
+            </span>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (responsibilities().length > 0) {
+    <section class="onb-review-section">
+      <div class="onb-review-section-head">
+        <h3>Who does what</h3>
+        <button type="button" class="onb-review-edit" (click)="jumpTo.emit('RESPONSIBILITY')">Edit</button>
+      </div>
+      <ul class="onb-review-list">
+        @for (item of responsibilities(); track item.capability) {
+          <li>
+            <strong>{{ titleOf(item.capability) }}</strong> —
+            {{ humanRole(item.holder) }}@if (item.delegated) { <span class="onb-review-note">covering</span> }
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (store.draft().specializationPacks.length > 0) {
+    <section class="onb-review-section">
+      <div class="onb-review-section-head">
+        <h3>Starter cards</h3>
+        <button type="button" class="onb-review-edit" (click)="jumpTo.emit('SPECIALIZATION')">Edit</button>
+      </div>
+      <ul class="onb-review-list">
+        @for (name of store.facts().specializationDefinitionNames; track name) {
+          <li>{{ name }}</li>
+        }
+      </ul>
+    </section>
+  }
+
+  <section class="onb-review-section">
+    <div class="onb-review-section-head">
+      <h3>Structure</h3>
+      <button type="button" class="onb-review-edit" (click)="jumpTo.emit('STRUCTURE')">Edit</button>
+    </div>
+    <ul class="onb-review-list">
+      @for (branch of store.draft().branches; track branch.code) {
+        <li><strong>{{ branch.name || branch.code }}</strong> <span class="onb-review-note">{{ branch.code }}</span></li>
+      }
+      @for (warehouse of store.draft().warehouses; track warehouse.code) {
+        <li>
+          <strong>{{ warehouse.name || warehouse.code }}</strong>
+          <span class="onb-review-note">
+            store &middot;
+            {{ warehouse.branchCodes.length === 0 ? 'every branch' : warehouse.branchCodes.join(', ') }}
+          </span>
+        </li>
+      }
+      @if (store.draft().branches.length === 0) {
+        <li>One branch will be created from the workshop's name.</li>
+      }
+    </ul>
+  </section>
+
+  @if (store.draft().services.length > 0) {
+    <section class="onb-review-section">
+      <div class="onb-review-section-head">
+        <h3>Prices</h3>
+        <button type="button" class="onb-review-edit" (click)="jumpTo.emit('SERVICES')">Edit</button>
+      </div>
+      <ul class="onb-review-list">
+        @for (service of store.draft().services; track service.name) {
+          <li>
+            <strong>{{ service.name }}</strong>
+            <span class="onb-review-note">{{ displayPrice(service.price) }} {{ store.draft().identity.currency }}</span>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+</div>
+
+<section class="onb-review-consequences">
+  <h3>Creating this will</h3>
+  <ul>
+    <li>Register the workshop at <code>mop.app/w/{{ store.draft().identity.slug }}</code>, trading permanently in {{ store.draft().identity.currency }}.</li>
+    <li>Invite {{ store.draft().owner.ownerFullName }} — they cannot log in until they set their own password.</li>
+    <li>Give {{ store.facts().activeRoles.length }} role(s) work, across {{ store.facts().pageCount }} pages.</li>
+    <li>Run {{ store.facts().liveGates.length }} check(s) before a job can finish or a car can leave.</li>
+    @if (store.facts().extraPermissionGrants > 0) {
+      <li>Grant {{ store.facts().extraPermissionGrants }} extra permission(s), so no capability is left with nobody able to operate it.</li>
+    }
+    @if (store.facts().specializationDefinitionCount > 0) {
+      <li>Author {{ store.facts().specializationDefinitionCount }} service card(s) and form(s) the workshop starts with.</li>
+    }
+  </ul>
+  <p class="onb-review-later">
+    Capabilities and rules can be changed afterwards through Governance Controls, with an impact preview each time.
+    Currency cannot — it is recorded against every price this workshop will ever take.
+  </p>
+</section>

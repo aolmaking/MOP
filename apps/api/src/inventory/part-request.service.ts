@@ -6,6 +6,7 @@ import { CapabilityResolutionService } from "../capabilities/capability-resoluti
 import { OperationEventsService } from "../operations/operation-events.service";
 import { WorkOrderLifecycleService, type LifecycleActor } from "../operations/work-order-lifecycle.service";
 import { StockService } from "./stock.service";
+import { PolicyResolutionService } from "../policies/policy-resolution.service";
 
 export interface RequestPartInput {
   readonly tenantId: string;
@@ -54,6 +55,7 @@ export class PartRequestService {
     private readonly capabilities: CapabilityResolutionService,
     private readonly stock: StockService,
     private readonly events: OperationEventsService,
+    private readonly policies: PolicyResolutionService,
     private readonly lifecycle: WorkOrderLifecycleService,
   ) {}
 
@@ -112,7 +114,42 @@ export class PartRequestService {
     return created;
   }
 
+  /**
+   * Approve a part request, under this workshop's own separation-of-duties
+   * rule.
+   *
+   * Phase 19.A built this enforcement as a *global* rule. It broke 22
+   * tests modelling a legitimate single-storekeeper shop -- where the
+   * person who raises the request is necessarily the person who approves
+   * it -- and was reverted, with `PHASE_19.md` concluding that the real
+   * fix needs a per-workshop opt-in policy. Policy P-07 is that policy,
+   * and this is where it is finally read: a workshop that never opts in
+   * behaves exactly as it does today.
+   */
   async approve(partRequestId: string, actor: LifecycleActor) {
+    const request = await this.load(partRequestId);
+    const rule = await this.policies.resolveValue(request.tenantId, "PARTS_SEPARATION_OF_DUTIES");
+
+    if (rule === "DIFFERENT_PERSON" && request.requestedById === actor.accountId) {
+      throw new ForbiddenException({
+        code: "self_approval_refused",
+        message: "This workshop requires a part request to be approved by someone other than the person who raised it.",
+      });
+    }
+
+    if (rule === "ROLE_SEPARATED") {
+      const approver = await this.prisma.staffUser.findFirst({
+        where: { accountId: actor.accountId, tenantId: request.tenantId },
+        select: { role: true },
+      });
+      if (approver?.role !== "INVENTORY_MANAGER") {
+        throw new ForbiddenException({
+          code: "approver_role_refused",
+          message: "This workshop requires an inventory manager to approve a part request.",
+        });
+      }
+    }
+
     return this.move(partRequestId, "APPROVED", actor);
   }
 
@@ -732,7 +769,17 @@ export class PartRequestService {
   private async load(id: string) {
     const request = await this.prisma.partRequest.findUnique({
       where: { id },
-      select: { id: true, tenantId: true, status: true, inventoryItemId: true, workOrderId: true, approvedById: true },
+      select: {
+        id: true,
+        tenantId: true,
+        status: true,
+        inventoryItemId: true,
+        workOrderId: true,
+        approvedById: true,
+        // Read for P-07's self-approval check -- the attribution has
+        // always been stored, it just had nothing reading it.
+        requestedById: true,
+      },
     });
     if (!request) throw new NotFoundException({ code: "part_request_not_found", message: "Request not found." });
     return request;

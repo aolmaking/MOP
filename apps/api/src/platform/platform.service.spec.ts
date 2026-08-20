@@ -18,8 +18,19 @@ describe("PlatformService", () => {
       tenantConfiguration: { create: jest.fn().mockResolvedValue({}) },
       account: { create: jest.fn().mockResolvedValue({ id: "account-owner-1" }) },
       staffUser: { create: jest.fn().mockResolvedValue({ id: "staff-1" }) },
-      rolePermission: { create: jest.fn().mockResolvedValue({}) },
-      rolePage: { create: jest.fn().mockResolvedValue({}) },
+      // createMany, not create: the baseline seeding writes several
+      // hundred rows and does it in two statements rather than a loop
+      // inside the creation transaction.
+      rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }), upsert: jest.fn().mockResolvedValue({}) },
+      rolePage: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      tenantCapability: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      workshopPolicy: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      financeConfiguration: { create: jest.fn().mockResolvedValue({}) },
+      branch: { create: jest.fn().mockResolvedValue({ id: "branch-1" }) },
+      warehouse: { create: jest.fn().mockResolvedValue({ id: "warehouse-1" }) },
+      branchWarehouseAccess: { create: jest.fn().mockResolvedValue({}) },
+      priceCatalogEntry: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      tenantConfigurationVersion: { create: jest.fn().mockResolvedValue({}) },
     };
   }
 
@@ -52,6 +63,12 @@ describe("PlatformService", () => {
       allowedWarehousesStart: 1,
       starterBuilderTemplate: "DEFAULT",
       initialStatus: "ACTIVE",
+      // Inventory is on unless a capability row says otherwise, so this
+      // workshop needs a store -- creation refuses stock with nowhere to
+      // hold it, and a fixture that skipped it would be testing a
+      // configuration the product will not create.
+      branches: [{ name: "Main", code: "MAIN" }],
+      warehouses: [{ name: "Main store", code: "WH1", branchCodes: ["MAIN"] }],
       ...overrides,
     } as CreateWorkshopDto;
   }
@@ -113,8 +130,13 @@ describe("PlatformService", () => {
 
     await service.createWorkshop(createDto(), { accountId: "platform-1", displayName: "Platform Admin" });
 
-    const seededRoles = new Set((tx.rolePermission.create as jest.Mock).mock.calls.map((call) => call[0].data.role));
-    const pagedRoles = new Set((tx.rolePage.create as jest.Mock).mock.calls.map((call) => call[0].data.role));
+    // One createMany per table, so the roles are read out of the single
+    // batch each one was given rather than out of a call log.
+    type SeededRow = { role: string };
+    const permissionRows = (tx.rolePermission.createMany as jest.Mock).mock.calls[0][0].data as SeededRow[];
+    const pageRows = (tx.rolePage.createMany as jest.Mock).mock.calls[0][0].data as SeededRow[];
+    const seededRoles = new Set(permissionRows.map((row) => row.role));
+    const pagedRoles = new Set(pageRows.map((row) => row.role));
     for (const role of ["TENANT_OWNER", "TENANT_ADMIN", "BRANCH_MANAGER", "TECHNICIAN", "INVENTORY_MANAGER", "TEAM_LEADER", "DATA_ANALYST"]) {
       expect(pagedRoles.has(role)).toBe(true);
     }

@@ -22,6 +22,7 @@ import { BillingService } from "../billing/billing.service";
 import type { LifecycleActor } from "../operations/work-order-lifecycle.service";
 import { ChargeableItemsService } from "../operations/chargeable-items.service";
 import { PriceCatalogService } from "./price-catalog.service";
+import { PolicyResolutionService } from "../policies/policy-resolution.service";
 
 export interface AddLineInput {
   readonly tenantId: string;
@@ -93,6 +94,7 @@ export class FinanceService {
     private readonly events: OperationEventsService,
     private readonly billing: BillingService,
     private readonly priceCatalog: PriceCatalogService,
+    private readonly policies: PolicyResolutionService,
     private readonly chargeable: ChargeableItemsService,
   ) {}
 
@@ -433,6 +435,21 @@ export class FinanceService {
     const workOrderId = paidInvoice?.workOrderId;
 
     const before = await this.settlement(invoiceId);
+
+    // P-05. A workshop that has opted into full settlement only refuses a
+    // short amount rather than banking it -- checked before the
+    // already-settled branch below, so the refusal reads as "this
+    // workshop does not take part payments" and not as a stray
+    // idempotency error.
+    if (!before.settled && (await this.policies.resolveValue(tenantId, "PARTIAL_PAYMENT")) === "FULL_ONLY") {
+      if (compare(input.amount, before.outstanding) !== 0) {
+        throw new ConflictException({
+          code: "partial_payment_refused",
+          message: `This workshop settles in full. The outstanding balance is ${before.outstanding}.`,
+        });
+      }
+    }
+
     if (before.settled) {
       // Could be a genuine second payment against an already-full
       // invoice, or this exact key's own payment landing between the

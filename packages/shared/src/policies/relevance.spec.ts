@@ -27,6 +27,7 @@ function definition(overrides: Partial<PolicyDefinition> = {}): PolicyDefinition
     buildPosture: "POLICY_CONTROLLED",
     dependsOnCapabilities: [],
     dependsOnPolicies: [],
+    enforcement: { status: "RECORDED", where: "A real, named consumer this test double stands in for." },
     ...overrides,
   };
 }
@@ -102,5 +103,32 @@ describe("isPolicyRelevant -- all three inputs together", () => {
     expect(isPolicyRelevant(def, { INVENTORY: "DISABLED" }, specializations, answers)).toBe(false);
     expect(isPolicyRelevant(def, { INVENTORY: "ENABLED" }, new Set(), answers)).toBe(false);
     expect(isPolicyRelevant(def, { INVENTORY: "ENABLED" }, specializations, new Map())).toBe(false);
+  });
+});
+
+describe("isPolicyRelevant -- a capability dependency with explicit statuses", () => {
+  /**
+   * P-01's real case: a workshop running External Finance Mode still
+   * hands cars back, so "is delivery blocked until paid?" still has a
+   * meaningful answer there. Reading EXTERNAL as "not active" -- which
+   * is what a bare capability key does -- would silently stop asking.
+   */
+  const externalCounts = definition({
+    dependsOnCapabilities: [{ key: "FINANCE_CORE", relevantUnder: ["ENABLED", "READ_ONLY", "LOCKED", "EXTERNAL"] }],
+  });
+
+  it("is relevant under a status the bare-key form would reject", () => {
+    expect(isPolicyRelevant(externalCounts, { FINANCE_CORE: "EXTERNAL" })).toBe(true);
+    expect(isPolicyRelevant(definition({ dependsOnCapabilities: ["FINANCE_CORE"] }), { FINANCE_CORE: "EXTERNAL" })).toBe(
+      false,
+    );
+  });
+
+  it("is still irrelevant when the capability is disabled outright", () => {
+    expect(isPolicyRelevant(externalCounts, { FINANCE_CORE: "DISABLED" })).toBe(false);
+  });
+
+  it("treats an absent row as ENABLED, the same convention the bare-key form uses", () => {
+    expect(isPolicyRelevant(externalCounts, {})).toBe(true);
   });
 });

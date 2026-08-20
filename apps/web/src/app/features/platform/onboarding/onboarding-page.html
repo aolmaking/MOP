@@ -1,0 +1,232 @@
+@if (loadError(); as error) {
+  <div class="onb-load-error">
+    <app-error-banner [error]="error" />
+    <a routerLink="/platform/workshops" appButton>Back to workshops</a>
+  </div>
+} @else if (blueprint(); as bp) {
+  <div class="onb" [class.onb--publishing]="phase() !== 'CONFIGURING'">
+    <!-- ------------------------------------------------------------ -->
+    <!-- Configuring                                                    -->
+    <!-- ------------------------------------------------------------ -->
+    @if (phase() === 'CONFIGURING') {
+      <header class="onb-masthead">
+        <div class="onb-masthead-title">
+          <p class="onb-eyebrow">New workshop</p>
+          <h1>{{ store.draft().identity.name || 'Configure a workshop' }}</h1>
+          <p class="onb-masthead-sub">
+            Every answer here changes the workshop being built — which pages exist, who can do what, and what has to be
+            true before a car leaves.
+          </p>
+        </div>
+        <a routerLink="/platform/workshops" class="onb-abandon">Cancel</a>
+      </header>
+
+      <div class="onb-body">
+        <!-- Stage rail ------------------------------------------------ -->
+        <nav class="onb-rail" aria-label="Configuration stages">
+          <ol class="onb-rail-list">
+            @for (item of stages; track item.id; let i = $index) {
+              @let stageProgress = store.progress().stages[i];
+              <li>
+                <button
+                  type="button"
+                  class="onb-rail-step"
+                  [class.onb-rail-step--current]="store.stage() === item.id"
+                  [class.onb-rail-step--done]="stageProgress.complete && store.visited().has(item.id)"
+                  [attr.aria-current]="store.stage() === item.id ? 'step' : null"
+                  (click)="goTo(item.id)"
+                >
+                  <span class="onb-rail-marker" aria-hidden="true">
+                    @if (stageProgress.complete && store.visited().has(item.id)) {
+                      &#10003;
+                    } @else {
+                      {{ i + 1 }}
+                    }
+                  </span>
+                  <span class="onb-rail-text">
+                    <span class="onb-rail-title">{{ item.title }}</span>
+                    @if (stageProgress.applicable > 0) {
+                      <span class="onb-rail-count">{{ stageProgress.satisfied }} / {{ stageProgress.applicable }}</span>
+                    } @else {
+                      <span class="onb-rail-count onb-rail-count--optional">optional</span>
+                    }
+                  </span>
+                </button>
+              </li>
+            }
+          </ol>
+        </nav>
+
+        <!-- The stage ------------------------------------------------- -->
+        <main class="onb-stage">
+          <div class="onb-stage-intro">
+            <h2 #stageHeading tabindex="-1" class="onb-stage-title">{{ stage().title }}</h2>
+            <p class="onb-stage-what">{{ stage().what }}</p>
+            <dl class="onb-stage-reasons">
+              <div>
+                <dt>Why it matters</dt>
+                <dd>{{ stage().why }}</dd>
+              </div>
+              <div>
+                <dt>What it changes</dt>
+                <dd>{{ stage().changes }}</dd>
+              </div>
+            </dl>
+          </div>
+
+          @if (store.currentStageFindings().length > 0) {
+            <ul class="onb-findings" role="status">
+              @for (finding of store.currentStageFindings(); track finding.code + (finding.subject ?? '')) {
+                <li
+                  class="onb-finding"
+                  [class.onb-finding--blocker]="finding.severity === 'BLOCKER'"
+                  [class.onb-finding--warning]="finding.severity === 'WARNING'"
+                >
+                  <span class="onb-finding-badge">{{ finding.severity === 'BLOCKER' ? 'Must fix' : 'Note' }}</span>
+                  <span>{{ finding.message }}</span>
+                </li>
+              }
+            </ul>
+          }
+
+          <div class="onb-stage-content">
+            @switch (store.stage()) {
+              @case ('IDENTITY') {
+                <app-stage-identity [blueprint]="bp" />
+              }
+              @case ('PLAN') {
+                <app-stage-plan [blueprint]="bp" />
+              }
+              @case ('CAPABILITIES') {
+                <app-stage-capabilities [blueprint]="bp" />
+              }
+              @case ('SPECIALIZATION') {
+                <app-stage-specialization [blueprint]="bp" />
+              }
+              @case ('POLICIES') {
+                <app-stage-policies [blueprint]="bp" />
+              }
+              @case ('RESPONSIBILITY') {
+                <app-stage-responsibility [blueprint]="bp" />
+              }
+              @case ('STRUCTURE') {
+                <app-stage-structure [blueprint]="bp" />
+              }
+              @case ('SERVICES') {
+                <app-stage-services [blueprint]="bp" />
+              }
+              @case ('REVIEW') {
+                <app-stage-review [blueprint]="bp" (jumpTo)="goTo($event)" />
+              }
+            }
+          </div>
+
+          <app-error-banner [error]="publishError()" (dismissed)="publishError.set(null)" />
+
+          <footer class="onb-stage-footer">
+            <button type="button" appButton variant="secondary" [disabled]="store.stageIndex() === 0" (click)="previous()">
+              Back
+            </button>
+
+            @if (isLastStage()) {
+              <button type="button" appButton variant="primary" [disabled]="!store.publishable()" (click)="publish()">
+                Create this workshop
+              </button>
+            } @else {
+              <button type="button" appButton variant="primary" (click)="next()">Continue</button>
+            }
+          </footer>
+        </main>
+
+        <!-- Live summary ---------------------------------------------- -->
+        <app-onboarding-summary class="onb-aside" [blueprint]="bp" />
+      </div>
+    }
+
+    <!-- ------------------------------------------------------------ -->
+    <!-- Publishing and ready                                           -->
+    <!-- ------------------------------------------------------------ -->
+    @if (phase() !== 'CONFIGURING') {
+      <div class="onb-publish">
+        <div class="onb-publish-inner">
+          @if (phase() === 'PUBLISHING' && publishedSteps().length === 0) {
+            <p class="onb-eyebrow">Creating</p>
+            <h1 class="onb-publish-title">{{ store.draft().identity.name }}</h1>
+            <p class="onb-publish-sub">
+              One transaction. It either produces the whole workshop or none of it.
+            </p>
+            <div class="onb-publish-pulse" aria-hidden="true"></div>
+            <p class="mop-visually-hidden" role="status">Creating the workshop.</p>
+          }
+
+          @if (publishedSteps().length > 0) {
+            @if (phase() === 'READY') {
+              <p class="onb-eyebrow">Ready</p>
+              <h1 class="onb-publish-title">{{ created()?.name }} is ready.</h1>
+              <p class="onb-publish-sub">
+                {{ store.facts().activeCapabilities.length }} capabilities live &middot;
+                {{ store.facts().pageCount }} pages &middot;
+                {{ store.facts().activeRoles.length }} roles &middot;
+                {{ store.facts().branchCount }} branch(es)
+              </p>
+            } @else {
+              <p class="onb-eyebrow">Building</p>
+              <h1 class="onb-publish-title">{{ store.draft().identity.name }}</h1>
+            }
+
+            <ol class="onb-steps" role="status" aria-live="polite">
+              @for (step of publishedSteps(); track step.key; let i = $index) {
+                @if (i < revealedStepCount()) {
+                  <li class="onb-step">
+                    <span class="onb-step-tick" aria-hidden="true">&#10003;</span>
+                    <span class="onb-step-body">
+                      <span class="onb-step-label">
+                        {{ step.label }}
+                        @if (step.count > 0) {
+                          <span class="onb-step-count">{{ step.count }}</span>
+                        }
+                      </span>
+                      <span class="onb-step-detail">{{ step.detail }}</span>
+                    </span>
+                  </li>
+                }
+              }
+            </ol>
+          }
+
+          @if (phase() === 'READY') {
+            <section class="onb-next">
+              <h2>What to do next</h2>
+              <ol class="onb-next-list">
+                @for (item of nextSteps(); track item.title) {
+                  <li>
+                    <strong>{{ item.title }}</strong>
+                    <span>{{ item.detail }}</span>
+                  </li>
+                }
+              </ol>
+            </section>
+
+            <section class="onb-invite">
+              <h2>The owner's invite link</h2>
+              <p>
+                Valid once, for fourteen days. Email delivery does not exist yet, so this is the link — send it to
+                {{ store.draft().owner.ownerEmail }} yourself.
+              </p>
+              <code class="onb-invite-link">{{ created()?.inviteLink }}</code>
+            </section>
+
+            <div class="onb-publish-actions">
+              <button type="button" appButton variant="primary" (click)="enterWorkshops()">Go to workshops</button>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  </div>
+} @else {
+  <div class="onb-loading" role="status">
+    <span class="mop-spinner" aria-hidden="true"></span>
+    Loading the configuration catalogue&hellip;
+  </div>
+}

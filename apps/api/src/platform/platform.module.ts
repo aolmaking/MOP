@@ -14,6 +14,8 @@ import { PlatformReportsController } from "./reports/platform-reports.controller
 import { PlatformReportsService } from "./reports/platform-reports.service";
 import { LiveViewController } from "./live-view.controller";
 import { LiveViewService } from "./live-view.service";
+import { OnboardingController } from "./onboarding/onboarding.controller";
+import { OnboardingService } from "./onboarding/onboarding.service";
 
 @Module({
   imports: [AuditModule, AuthModule, CapabilitiesModule, SpecializationModule],
@@ -30,6 +32,9 @@ import { LiveViewService } from "./live-view.service";
     CapabilitiesController,
     PlatformReportsController,
     LiveViewController,
+    // platform/onboarding -- its own literal prefix, so registration
+    // order against platform/workshops never matters.
+    OnboardingController,
   ],
   // PlatformGuard isn't exported by AuthModule (only AuthService and
   // SessionGuard are) -- it's small and stateless, so it's simplest to
@@ -42,6 +47,7 @@ import { LiveViewService } from "./live-view.service";
     WorkshopHealthService,
     PlatformReportsService,
     LiveViewService,
+    OnboardingService,
   ],
 })
 export class PlatformModule {}

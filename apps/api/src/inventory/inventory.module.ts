@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { PoliciesModule } from "../policies/policies.module";
 import { DatabaseModule } from "../database/database.module";
 import { AuthModule } from "../auth/auth.module";
 import { AccessModule } from "../access/access.module";
@@ -24,7 +25,23 @@ import { WarehouseService } from "./warehouse.service";
  * the sole writer of work-order status.
  */
 @Module({
-  imports: [DatabaseModule, AuthModule, AccessModule, CapabilitiesModule, OperationEventsModule, OperationsModule, AuditModule],
+  // PoliciesModule: PartRequestService.approve reads P-07's
+  // separation-of-duties rule, which is the policy Phase 19.A was
+  // reverted for want of.
+  //
+  // OperationsModule: issuing a part moves the WORK ORDER too, and
+  // WorkOrderLifecycleService is the only thing allowed to write a
+  // work-order status.
+  imports: [
+    DatabaseModule,
+    AuthModule,
+    AccessModule,
+    CapabilitiesModule,
+    OperationEventsModule,
+    OperationsModule,
+    AuditModule,
+    PoliciesModule,
+  ],
   controllers: [InventoryController],
   providers: [
     StockService,

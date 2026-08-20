@@ -14,7 +14,7 @@
  * graph can be validated in isolation.
  */
 
-import type { CapabilityKey, CapabilityProfile } from "../capabilities/types";
+import type { CapabilityKey, CapabilityProfile, CapabilityStatus } from "../capabilities/types";
 import { isCapabilityActive } from "../capabilities/types";
 
 /**
@@ -83,6 +83,69 @@ export type RelevancePredicate = (context: RelevanceContext) => boolean;
 export const POLICY_BUILD_POSTURES = ["CORE", "POLICY_CONTROLLED"] as const;
 export type PolicyBuildPosture = (typeof POLICY_BUILD_POSTURES)[number];
 
+/**
+ * A capability a policy's relevance hangs on.
+ *
+ * A bare key means the engine's ordinary reading: relevant only while
+ * that capability is active (`ACTIVE_STATUSES`). The object form exists
+ * for the one case the bare reading gets wrong, and it is the flagship
+ * policy that forced it -- P-01, "is delivery blocked until the invoice
+ * is paid?", is relevant when `FINANCE_CORE` is *any* status other than
+ * DISABLED, EXTERNAL included. A workshop running External Finance Mode
+ * still hands cars back; MOP still decides whether an outstanding
+ * balance holds one. Reading EXTERNAL as "not active" would silently
+ * stop asking that workshop a question whose answer still governs its
+ * delivery gate.
+ *
+ * The key stays introspectable in both forms, so the relevance graph
+ * (PHASE_21.md S9) can be built without evaluating a single predicate.
+ */
+export interface PolicyCapabilityCondition {
+  readonly key: CapabilityKey;
+  /** Statuses this policy is relevant under. Required in this form -- an object that omitted it would just be the bare key spelled longer. */
+  readonly relevantUnder: readonly CapabilityStatus[];
+}
+
+export type PolicyCapabilityDependency = CapabilityKey | PolicyCapabilityCondition;
+
+/** The capability key of a dependency in either form. */
+export function policyCapabilityKey(dependency: PolicyCapabilityDependency): CapabilityKey {
+  return typeof dependency === "string" ? dependency : dependency.key;
+}
+
+function dependencySatisfied(dependency: PolicyCapabilityDependency, profile: CapabilityProfile): boolean {
+  if (typeof dependency === "string") return isCapabilityActive(profile, dependency);
+  // Absent means ENABLED, the same convention `isCapabilityActive` uses
+  // -- a profile records deviations from the full product, so a workshop
+  // with no row for this capability has it.
+  const status = profile[dependency.key] ?? "ENABLED";
+  return dependency.relevantUnder.includes(status);
+}
+
+/**
+ * Whether a policy's chosen value actually changes runtime behaviour
+ * today, or is recorded now and consumed when named work lands.
+ *
+ * This exists because the onboarding experience shows a super admin what
+ * each answer will do, and a configuration screen that implies a stored
+ * string is changing behaviour when nothing reads it is the same class
+ * of defect as a gate hardcoded to `true` (CLAUDE.md's "no silent
+ * stubs"): believable, visible, and false. `RECORDED` is not a lesser
+ * state to be hidden -- the row is real, audited and time-ranged the
+ * moment it is written, and the UI says exactly that.
+ */
+export const POLICY_ENFORCEMENT_STATUSES = ["ENFORCED", "RECORDED"] as const;
+export type PolicyEnforcementStatus = (typeof POLICY_ENFORCEMENT_STATUSES)[number];
+
+export interface PolicyEnforcement {
+  readonly status: PolicyEnforcementStatus;
+  /**
+   * ENFORCED: the service or gate that reads this value today.
+   * RECORDED: what has to exist before it can be read, named honestly.
+   */
+  readonly where: string;
+}
+
 export interface PolicyDefinition {
   readonly key: string;
   readonly question: string;
@@ -108,8 +171,14 @@ export interface PolicyDefinition {
    * `relevantWhen` (a function, not introspectable) so the graph can be
    * built and validated without evaluating every predicate against
    * every possible profile.
+   *
+   * A bare key requires the capability to be *active*; see
+   * `PolicyCapabilityDependency` for the object form and the case that
+   * needed it.
    */
-  readonly dependsOnCapabilities: readonly CapabilityKey[];
+  readonly dependsOnCapabilities: readonly PolicyCapabilityDependency[];
+  /** Whether answering this policy changes behaviour today. See `PolicyEnforcement`. */
+  readonly enforcement: PolicyEnforcement;
   /**
    * Other POLICIES whose existence (not stored value) this policy's
    * option set depends on -- e.g. "this option is only offered if that
@@ -136,7 +205,7 @@ export function isPolicyRelevant(
   specializations: ReadonlySet<string> = new Set(),
   allAnswers: ReadonlyMap<string, string> = new Map(),
 ): boolean {
-  if (definition.dependsOnCapabilities.some((key) => !isCapabilityActive(profile, key))) return false;
+  if (definition.dependsOnCapabilities.some((dep) => !dependencySatisfied(dep, profile))) return false;
 
   const scopedAnswers = new Map<string, string>();
   for (const depKey of definition.dependsOnPolicies) {

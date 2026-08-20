@@ -19,6 +19,7 @@ import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { StockService } from "./stock.service";
 import { PartRequestService } from "./part-request.service";
+import { PolicyResolutionService } from "../policies/policy-resolution.service";
 import { InventoryViewService } from "./inventory-view.service";
 import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 import { OperationEventsService } from "../operations/operation-events.service";
@@ -31,12 +32,24 @@ import type { PrismaService } from "../database/prisma.service";
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
 
+/**
+ * Policies read at runtime by the services under test. Backed by the
+ * real Prisma client, so a test that writes a WorkshopPolicy row sees
+ * the behaviour change -- a stub here would prove nothing about the
+ * thing these tests exist to prove.
+ */
+const policiesForTest = new PolicyResolutionService(
+  asService,
+  new AuditService(asService),
+  new CapabilityResolutionService(asService),
+);
+
 const stock = new StockService(asService);
 const capabilities = new CapabilityResolutionService(asService);
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
-const gates = new GateEvaluatorService(asService);
+const gates = new GateEvaluatorService(asService, policiesForTest);
 const lifecycle = new WorkOrderLifecycleService(asService, capabilities, events, gates);
-const parts = new PartRequestService(asService, capabilities, stock, events, lifecycle);
+const parts = new PartRequestService(asService, capabilities, stock, events, policiesForTest, lifecycle);
 const view = new InventoryViewService(asService, parts);
 
 const ACTOR = { accountId: "store-1", displayName: "Storekeeper", actorType: "TENANT_STAFF" as const };

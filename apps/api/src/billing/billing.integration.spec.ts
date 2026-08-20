@@ -41,16 +41,37 @@ import { BillingService } from "./billing.service";
 import { GenericBillingAdapter } from "./generic-billing-adapter.service";
 import { PriceCatalogService } from "../finance/price-catalog.service";
 import type { PrismaService } from "../database/prisma.service";
+import { PolicyResolutionService } from "../policies/policy-resolution.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
+
+/**
+ * Policies read at runtime by the services under test. Backed by the
+ * real Prisma client, so a test that writes a WorkshopPolicy row sees
+ * the behaviour change -- a stub here would prove nothing about the
+ * thing these tests exist to prove.
+ */
+const policiesForTest = new PolicyResolutionService(
+  asService,
+  new AuditService(asService),
+  new CapabilityResolutionService(asService),
+);
 const priceCatalog = new PriceCatalogService(asService, new AuditService(asService));
 
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
 const capabilities = new CapabilityResolutionService(asService);
 const genericBilling = new BillingService(asService, new GenericBillingAdapter());
 const chargeable = new ChargeableItemsService(asService);
-const financeWithGeneric = new FinanceService(asService, capabilities, events, genericBilling, priceCatalog, chargeable);
+const financeWithGeneric = new FinanceService(
+  asService,
+  capabilities,
+  events,
+  genericBilling,
+  priceCatalog,
+  policiesForTest,
+  chargeable,
+);
 
 const ACTOR = { accountId: "cashier-1", displayName: "Cashier", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `bill-${Date.now()}`;
@@ -274,7 +295,15 @@ class TestOnlyAdapter implements BillingCountryAdapter {
 describe("the adapter seam is provably swappable", () => {
   it("produces a differently-shaped document from a different adapter, without the amount changing", async () => {
     const testBilling = new BillingService(asService, new GenericBillingAdapter(), new TestOnlyAdapter());
-    const financeWithTestAdapter = new FinanceService(asService, capabilities, events, testBilling, priceCatalog, chargeable);
+    const financeWithTestAdapter = new FinanceService(
+      asService,
+      capabilities,
+      events,
+      testBilling,
+      priceCatalog,
+      policiesForTest,
+      chargeable,
+    );
 
     const job = await makeJob(shop);
     await financeWithTestAdapter.addLine(

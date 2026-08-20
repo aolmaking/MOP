@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { PoliciesModule } from "../policies/policies.module";
 import { DatabaseModule } from "../database/database.module";
 import { AuthModule } from "../auth/auth.module";
 import { AccessModule } from "../access/access.module";
@@ -37,6 +38,7 @@ import { PriceCatalogService } from "./price-catalog.service";
     OperationsModule,
     BillingModule,
     AuditModule,
+    PoliciesModule,
   ],
   controllers: [FinanceController, FinanceConfigurationController],
   providers: [FinanceService, FinanceConfigurationService, PriceCatalogService],
