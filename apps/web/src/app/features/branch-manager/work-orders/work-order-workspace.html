@@ -86,6 +86,13 @@
           }
         </header>
 
+        @if (journey(); as j) {
+          <!-- Same projection the technician and the customer read, in the
+               manager's vocabulary: the headline names who owns the delay,
+               because unsticking it is their job. -->
+          <app-workflow-strip [journey]="j" />
+        }
+
         <!-- ── liability first ─────────────────────────────────────── -->
         @if (unacknowledgedCritical().length) {
           <section class="critical">

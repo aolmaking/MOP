@@ -4,6 +4,7 @@ import { SessionGuard } from "../auth/session.guard";
 import { CurrentSession } from "../auth/current-session.decorator";
 import { CustomerPortalService } from "./customer-portal.service";
 import { CustomerDecisionService } from "./decision.service";
+import { WorkflowJourneyService } from "../operations/workflow-journey.service";
 import { RespondDto } from "./decision.dto";
 
 /**
@@ -28,6 +29,7 @@ export class CustomerPortalController {
   constructor(
     private readonly portal: CustomerPortalService,
     private readonly decisions: CustomerDecisionService,
+    private readonly journey: WorkflowJourneyService,
   ) {}
 
   @Get("home")
@@ -85,6 +87,23 @@ export class CustomerPortalController {
   ) {
     const { tenantId, customerId } = this.require(session);
     return this.decisions.respondAsCustomer(tenantId, customerId, requestId, dto.answers);
+  }
+
+  /**
+   * Where this customer's car actually is, as a strip they can read.
+   *
+   * Scoped by asking the portal service for the customer's own jobs
+   * first: a work-order id from somebody else's car reads as not-found,
+   * because the id is not a capability here, the session is.
+   */
+  @Get("service/:workOrderId/journey")
+  async serviceJourney(@CurrentSession() session: SessionContext, @Param("workOrderId") workOrderId: string) {
+    const { tenantId, customerId } = this.require(session);
+    const mine = await this.portal.currentService(tenantId, customerId);
+    if (!mine.some((job) => job.workOrderId === workOrderId)) {
+      throw new ForbiddenException({ code: "forbidden", message: "You do not have access to this page." });
+    }
+    return this.journey.forWorkOrder(tenantId, workOrderId, "CUSTOMER");
   }
 
   @Get("safe-history")

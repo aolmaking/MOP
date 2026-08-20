@@ -18,6 +18,7 @@ export * from "./operations/blocker-routing";
 export * from "./operations/attention-ranking";
 export * from "./operations/work-order-lanes";
 export * from "./operations/categories";
+export * from "./operations/workflow-journey";
 export * from "./permissions/delegated-permissions";
 export * from "./money/money";
 export * from "./policies/types";

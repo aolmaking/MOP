@@ -92,3 +92,10 @@
   color: var(--text-muted);
   font-size: var(--text-base);
 }
+
+/* The strip takes the full row under the status line, rather than
+   competing with it for the same baseline. */
+.job-journey {
+  flex-basis: 100%;
+  margin-block-start: var(--space-2);
+}

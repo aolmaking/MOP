@@ -9,6 +9,7 @@ import { IntakeService } from "./intake.service";
 import { TechnicianWorkService } from "./technician-work.service";
 import { WorkOrderDossierService } from "./work-order-dossier.service";
 import { ChargeableItemsService } from "./chargeable-items.service";
+import { WorkflowJourneyService } from "./workflow-journey.service";
 
 /**
  * The operations spine: the work-order lifecycle and the gates that guard
@@ -25,6 +26,7 @@ import { ChargeableItemsService } from "./chargeable-items.service";
     TechnicianWorkService,
     WorkOrderDossierService,
     ChargeableItemsService,
+    WorkflowJourneyService,
   ],
   exports: [
     WorkOrderLifecycleService,
@@ -33,6 +35,7 @@ import { ChargeableItemsService } from "./chargeable-items.service";
     TechnicianWorkService,
     WorkOrderDossierService,
     ChargeableItemsService,
+    WorkflowJourneyService,
   ],
 })
 export class OperationsModule {}

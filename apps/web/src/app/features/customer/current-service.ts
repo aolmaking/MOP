@@ -2,6 +2,7 @@ import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ErrorBanner } from '../../shared/error-banner/error-banner';
+import { WorkflowStrip, type PresentedJourney } from '../../shared/workflow-strip/workflow-strip';
 import { ButtonDirective } from '../../shared/button/button.directive';
 import type { PresentedError } from '../../core/api/error.interceptor';
 import { CustomerPortalApi, type CurrentServiceItem } from './customer-portal.api';
@@ -70,7 +71,7 @@ const NEEDS_YOU = new Set(['AWAITING_CUSTOMER_APPROVAL', 'WAITING_CUSTOMER']);
 
 @Component({
   selector: 'app-current-service',
-  imports: [ErrorBanner, ButtonDirective, RouterLink],
+  imports: [ErrorBanner, ButtonDirective, RouterLink, WorkflowStrip],
   templateUrl: './current-service.html',
   styleUrl: './current-service.css',
 })
@@ -79,6 +80,15 @@ export class CurrentService {
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly items = signal<readonly CurrentServiceItem[]>([]);
+  /**
+   * One strip per open job, keyed by work order.
+   *
+   * `docs/detailed-specs/customer.md` asked for a lifecycle strip here
+   * and Phase 11 could not build one honestly, because the API exposed
+   * only a status. It exposes the real journey now, so the strip is the
+   * spec's own answer rather than a status phrase standing in for it.
+   */
+  protected readonly journeys = signal<Record<string, PresentedJourney>>({});
   protected readonly state = signal<State>('loading');
   protected readonly error = signal<PresentedError | null>(null);
 
@@ -95,12 +105,32 @@ export class CurrentService {
         next: (items) => {
           this.items.set(items);
           this.state.set(items.length === 0 ? 'empty' : 'ready');
+          for (const item of items) this.loadJourney(item.workOrderId);
         },
         error: (err: PresentedError) => {
           this.error.set(err);
           this.state.set(err.httpStatus === 403 ? 'forbidden' : 'error');
         },
       });
+  }
+
+  /**
+   * Failure here is deliberately silent: the job row still says where the
+   * car is in words, so a strip that could not load costs detail rather
+   * than meaning, and an error banner over a working page would be worse.
+   */
+  private loadJourney(workOrderId: string): void {
+    this.api
+      .journey(workOrderId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (journey) => this.journeys.update((all) => ({ ...all, [workOrderId]: journey })),
+        error: () => undefined,
+      });
+  }
+
+  protected journeyFor(workOrderId: string): PresentedJourney | null {
+    return this.journeys()[workOrderId] ?? null;
   }
 
   protected label(status: string): string {

@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import type { Observable } from 'rxjs';
+import type { PresentedJourney } from '../../../shared/workflow-strip/workflow-strip';
 
 export interface BoardRow {
   readonly id: string;
@@ -79,6 +80,10 @@ export class WorkOrdersApi {
     return this.http.get<BoardResult>('/api/v1/branch-manager/work-orders', {
       params: query ? { q: query } : {},
     });
+  }
+
+  journey(id: string): Observable<PresentedJourney> {
+    return this.http.get<PresentedJourney>(`/api/v1/branch-manager/work-orders/${id}/journey`);
   }
 
   detail(id: string): Observable<WorkOrderDetail> {

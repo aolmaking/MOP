@@ -2,6 +2,7 @@ import { Component, computed, inject, input, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Identifier } from '../../shared/identifier/identifier';
+import { WorkflowStrip, type PresentedJourney } from '../../shared/workflow-strip/workflow-strip';
 import type { PresentedError } from '../../core/api/error.interceptor';
 import {
   TechnicianApi,
@@ -42,7 +43,7 @@ const BLOCKER_REASONS = [
  */
 @Component({
   selector: 'app-tech-work-card',
-  imports: [RouterLink, Identifier, DatePipe],
+  imports: [RouterLink, Identifier, DatePipe, WorkflowStrip],
   templateUrl: './tech-work-card.html',
   styleUrl: './tech-work-card.css',
 })
@@ -52,6 +53,13 @@ export class TechWorkCard {
   readonly id = input.required<string>();
 
   protected readonly card = signal<WorkCard | null>(null);
+  /**
+   * The workflow strip. Loaded alongside the card and reloaded with it,
+   * because almost every write here can move the job -- a strip that
+   * only refreshed on navigation would show the stage the job was at
+   * before the technician pressed the button.
+   */
+  protected readonly journey = signal<PresentedJourney | null>(null);
   protected readonly state = signal<State>('loading');
   protected readonly busy = signal<string | null>(null);
   protected readonly actionError = signal<string | null>(null);
@@ -174,6 +182,12 @@ export class TechWorkCard {
       next: (card) => {
         this.card.set(card);
         this.state.set('ready');
+        // Fired after the card resolves, so a technician never sees a
+        // strip for a job the card then refuses to show them.
+        this.api.journey(this.id()).subscribe({
+          next: (journey) => this.journey.set(journey),
+          error: () => this.journey.set(null),
+        });
       },
       error: (err: PresentedError) => {
         if (err.httpStatus === 404) this.state.set('not-mine');

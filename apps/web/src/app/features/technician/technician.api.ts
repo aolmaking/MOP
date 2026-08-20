@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import type { Observable } from 'rxjs';
+import type { PresentedJourney } from '../../shared/workflow-strip/workflow-strip';
 
 export interface TechnicianJob {
   readonly workOrderId: string;
@@ -149,6 +150,10 @@ export class TechnicianApi {
       quantity,
       reason,
     });
+  }
+
+  journey(workOrderId: string): Observable<PresentedJourney> {
+    return this.http.get<PresentedJourney>(`/api/v1/technician/work-orders/${workOrderId}/journey`);
   }
 
   receivePart(partRequestId: string): Observable<unknown> {

@@ -5,6 +5,7 @@ import { Identifier } from '../../../shared/identifier/identifier';
 import { ErrorBanner } from '../../../shared/error-banner/error-banner';
 import { ButtonDirective } from '../../../shared/button/button.directive';
 import { DossierDrawer } from '../../../shared/dossier/dossier-drawer';
+import { WorkflowStrip, type PresentedJourney } from '../../../shared/workflow-strip/workflow-strip';
 import type { PresentedError } from '../../../core/api/error.interceptor';
 import { WorkOrdersApi, type WorkOrderDetail } from './work-orders.api';
 
@@ -20,7 +21,7 @@ type State = 'loading' | 'ready' | 'not-found' | 'forbidden' | 'error';
  */
 @Component({
   selector: 'app-work-order-workspace',
-  imports: [RouterLink, Identifier, ErrorBanner, ButtonDirective, DossierDrawer],
+  imports: [RouterLink, Identifier, ErrorBanner, ButtonDirective, DossierDrawer, WorkflowStrip],
   templateUrl: './work-order-workspace.html',
   styleUrl: './work-order-workspace.css',
 })
@@ -31,6 +32,8 @@ export class WorkOrderWorkspace {
   readonly id = input.required<string>();
 
   protected readonly detail = signal<WorkOrderDetail | null>(null);
+  /** The same projection the technician and customer see, in manager words. */
+  protected readonly journey = signal<PresentedJourney | null>(null);
   protected readonly error = signal<PresentedError | null>(null);
   protected readonly state = signal<State>('loading');
   protected readonly showDossier = signal(false);
@@ -47,6 +50,12 @@ export class WorkOrderWorkspace {
       next: (detail) => {
         this.detail.set(detail);
         this.state.set('ready');
+        // After the detail read, which is what scopes this job to the
+        // manager's own branches.
+        this.api.journey(this.id()).subscribe({
+          next: (journey) => this.journey.set(journey),
+          error: () => this.journey.set(null),
+        });
       },
       error: (err: PresentedError) => {
         this.error.set(err);

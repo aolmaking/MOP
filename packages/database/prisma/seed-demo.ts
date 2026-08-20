@@ -19,7 +19,7 @@
  */
 import { PrismaClient } from "../generated/client";
 import { randomBytes, scryptSync } from "node:crypto";
-import { DEFAULT_ROLE_PERMISSIONS } from "@mop/shared";
+import { DEFAULT_ROLE_PERMISSIONS, WORK_ORDER_GRAPH } from "@mop/shared";
 
 const prisma = new PrismaClient();
 
@@ -551,13 +551,48 @@ async function clearDemoWork(tenantId: string) {
  * seeded job look like it spent zero time in every stage.
  */
 const LIFECYCLE_PATHS: Record<string, readonly string[]> = {
-  IN_PROGRESS: ["AWAITING_APPROVAL", "APPROVED", "IN_PROGRESS"],
-  WAITING_PARTS: ["AWAITING_APPROVAL", "APPROVED", "IN_PROGRESS", "WAITING_PARTS"],
-  QC_FAILED: ["AWAITING_APPROVAL", "APPROVED", "IN_PROGRESS", "QC_FAILED"],
-  READY_FOR_DELIVERY: ["AWAITING_APPROVAL", "APPROVED", "IN_PROGRESS", "PAYMENT_PENDING", "READY_FOR_DELIVERY"],
-  PAYMENT_PENDING: ["AWAITING_APPROVAL", "APPROVED", "IN_PROGRESS", "PAYMENT_PENDING"],
-  CLOSED: ["AWAITING_APPROVAL", "APPROVED", "IN_PROGRESS", "PAYMENT_PENDING", "READY_FOR_DELIVERY", "CLOSED"],
+  IN_PROGRESS: ["AWAITING_CUSTOMER_APPROVAL", "APPROVED_FOR_WORK", "IN_PROGRESS"],
+  WAITING_PARTS: ["AWAITING_CUSTOMER_APPROVAL", "APPROVED_FOR_WORK", "IN_PROGRESS", "WAITING_PARTS"],
+  QC_FAILED: ["AWAITING_CUSTOMER_APPROVAL", "APPROVED_FOR_WORK", "IN_PROGRESS", "QC_FAILED"],
+  READY_FOR_DELIVERY: [
+    "AWAITING_CUSTOMER_APPROVAL",
+    "APPROVED_FOR_WORK",
+    "IN_PROGRESS",
+    "PAYMENT_PENDING",
+    "READY_FOR_DELIVERY",
+  ],
+  PAYMENT_PENDING: ["AWAITING_CUSTOMER_APPROVAL", "APPROVED_FOR_WORK", "IN_PROGRESS", "PAYMENT_PENDING"],
+  CLOSED: [
+    "AWAITING_CUSTOMER_APPROVAL",
+    "APPROVED_FOR_WORK",
+    "IN_PROGRESS",
+    "PAYMENT_PENDING",
+    "READY_FOR_DELIVERY",
+    "CLOSED",
+  ],
 };
+
+/**
+ * Every status above must be a real one.
+ *
+ * This map used to name `AWAITING_APPROVAL` and `APPROVED`, which are not
+ * `WorkOrderStatus` members and not states in WORK_ORDER_GRAPH -- so the
+ * demo workshop's entire lifecycle history was written in a vocabulary
+ * the product does not use. Nothing caught it because the history is
+ * stored as JSON payload, not as an enum column, so the database accepted
+ * it happily and every reader downstream (stage durations, Workflow
+ * Health, and the workflow strip) silently carried the invented names.
+ *
+ * Checked at seed time against the graph itself rather than a second
+ * hand-kept list.
+ */
+for (const [final, path] of Object.entries(LIFECYCLE_PATHS)) {
+  for (const status of [final, ...path]) {
+    if (!WORK_ORDER_GRAPH.states.includes(status)) {
+      throw new Error(`LIFECYCLE_PATHS names "${status}", which is not a state in WORK_ORDER_GRAPH.`);
+    }
+  }
+}
 
 /**
  * `endingAt` is when the job reached `finalStatus`, defaulting to now.

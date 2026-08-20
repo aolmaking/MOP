@@ -14,6 +14,7 @@ import { DeliveryService, type DeliveryBoard } from "./delivery.service";
 import { CustomerDecisionService } from "../customer/decision.service";
 import { RecordDecisionDto } from "./record-decision.dto";
 import { WorkOrderDossierService } from "../operations/work-order-dossier.service";
+import { WorkflowJourneyService } from "../operations/workflow-journey.service";
 
 export interface AttentionCenterResponse {
   /** Ranked most urgent first. Empty is a valid and desirable state. */
@@ -37,6 +38,7 @@ export class BranchManagerController {
     private readonly deliveryService: DeliveryService,
     private readonly customerDecisions: CustomerDecisionService,
     private readonly dossierService: WorkOrderDossierService,
+    private readonly journey: WorkflowJourneyService,
   ) {}
 
   /**
@@ -183,6 +185,24 @@ export class BranchManagerController {
    * absent from the response rather than hidden client-side when the
    * reader does not hold it.
    */
+  /**
+   * The workflow strip in the manager's vocabulary -- same projection the
+   * technician and the customer read, different words. The manager's
+   * headline names the ROLE that owns the delay, because their job is to
+   * go and unstick it rather than to wait.
+   */
+  @Get("work-orders/:id/journey")
+  async workOrderJourney(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    await this.requireBranchView(session);
+    // Scoped through the board's own detail read first, so a job outside
+    // this manager's branches is refused exactly as it is everywhere else.
+    await this.boardService.detail(
+      { tenantId: session.tenantId as string, branchScope: session.branchScope },
+      id,
+    );
+    return this.journey.forWorkOrder(session.tenantId as string, id, "MANAGER");
+  }
+
   @Get("work-orders/:id/dossier")
   async dossier(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     await this.requireBranchView(session);

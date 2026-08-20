@@ -36,6 +36,13 @@
               <a class="job-flag" routerLink="/customer/decisions">Needs you</a>
             }
             <span class="job-since">Since {{ when(item.createdAt) }}</span>
+
+            @if (journeyFor(item.workOrderId); as j) {
+              <!-- The lifecycle strip customer.md asked for. Generated
+                   from this workshop's own graph, so it shows the stages
+                   this workshop actually has. -->
+              <app-workflow-strip class="job-journey" [journey]="j" />
+            }
           </li>
         }
       </ul>

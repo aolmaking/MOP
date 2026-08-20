@@ -1,0 +1,40 @@
+@if (journey(); as j) {
+  <section class="strip" [class.strip--waiting]="j.waiting">
+    <!-- The sentence first. Somebody scanning this wants "whose move is
+         it" before they want the diagram. -->
+    <p class="strip-headline">{{ j.headline }}</p>
+
+    <ol class="stages">
+      @for (stage of j.stages; track stage.status) {
+        <li
+          class="stage"
+          [class.stage--done]="stage.state === 'DONE'"
+          [class.stage--current]="stage.state === 'CURRENT'"
+          [class.stage--waiting]="stage.state === 'WAITING'"
+          [class.stage--ahead]="stage.state === 'AHEAD'"
+          [attr.aria-current]="stage.state === 'CURRENT' || stage.state === 'WAITING' ? 'step' : null"
+        >
+          <span class="stage-mark" aria-hidden="true"></span>
+          <span class="stage-body">
+            <span class="stage-label">{{ stage.label }}</span>
+            @if (stage.at) {
+              <span class="stage-when">{{ when(stage) }}</span>
+            }
+          </span>
+
+          <!-- Said in words as well as drawn, so the state does not depend
+               on seeing a colour. -->
+          @if (stage.state === 'CURRENT') {
+            <span class="visually-hidden">— current stage</span>
+          } @else if (stage.state === 'WAITING') {
+            <span class="stage-note">Waiting</span>
+          } @else if (stage.state === 'DONE') {
+            <span class="visually-hidden">— done</span>
+          } @else {
+            <span class="visually-hidden">— still to come</span>
+          }
+        </li>
+      }
+    </ol>
+  </section>
+}

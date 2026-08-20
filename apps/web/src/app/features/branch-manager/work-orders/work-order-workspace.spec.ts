@@ -26,6 +26,7 @@ function detail(overrides: Partial<WorkOrderDetail> = {}): WorkOrderDetail {
 async function render(result: WorkOrderDetail | { error: unknown }) {
   const api = {
     detail: () => ('error' in result ? throwError(() => result.error) : of(result)),
+    journey: () => of({ stages: [], finished: false, waiting: false, headline: 'Moving normally.' }),
   };
   TestBed.configureTestingModule({
     providers: [provideRouter([]), { provide: WorkOrdersApi, useValue: api }],

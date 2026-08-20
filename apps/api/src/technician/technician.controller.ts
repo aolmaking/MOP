@@ -4,6 +4,7 @@ import { SessionGuard } from "../auth/session.guard";
 import { CurrentSession } from "../auth/current-session.decorator";
 import { EffectiveAccessService } from "../access/effective-access.service";
 import { TechnicianWorkService } from "../operations/technician-work.service";
+import { WorkflowJourneyService } from "../operations/workflow-journey.service";
 import { TechnicianWorkViewService } from "./technician-work-view.service";
 import { CustomerDecisionService } from "../customer/decision.service";
 import { PartRequestService } from "../inventory/part-request.service";
@@ -28,6 +29,7 @@ export class TechnicianController {
     private readonly decisions: CustomerDecisionService,
     private readonly partRequests: PartRequestService,
     private readonly catalog: CatalogService,
+    private readonly journey: WorkflowJourneyService,
   ) {}
 
   /** Home: the car in front of them, if there is one. */
@@ -47,6 +49,20 @@ export class TechnicianController {
   async workCard(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
     return this.view.workCard(staffUserId, tenantId, id);
+  }
+
+  /**
+   * The workflow strip for this job, in the technician's own vocabulary.
+   *
+   * Generated from the workshop's effective graph, so a workshop without
+   * QC has no QC stage here -- and the headline says whose move it is,
+   * which for a technician usually means "not yours, and here is why".
+   */
+  @Get("work-orders/:id/journey")
+  async journeyFor(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.journey.forWorkOrder(tenantId, id, "TECHNICIAN");
   }
 
   /** "Previous history detected" -- P-81, docs/POLICY_DECISION_INVENTORY.md §8.B. */

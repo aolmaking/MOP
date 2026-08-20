@@ -15,7 +15,13 @@ function item(overrides: Partial<CurrentServiceItem> = {}): CurrentServiceItem {
 }
 
 function render(response: readonly CurrentServiceItem[] | { readonly error: unknown }) {
-  const api = { currentService: () => ('error' in response ? throwError(() => response.error) : of(response)) };
+  const api = {
+    currentService: () => ('error' in response ? throwError(() => response.error) : of(response)),
+    // The strip loads per job; failing it must not break the page, which
+    // is why the component swallows the error -- stub it so the tests
+    // exercise the succeeding path rather than that fallback.
+    journey: () => of({ stages: [], finished: false, waiting: false, headline: 'Your vehicle is being worked on.' }),
+  };
   TestBed.configureTestingModule({
     providers: [provideRouter([]), { provide: CustomerPortalApi, useValue: api }],
   });

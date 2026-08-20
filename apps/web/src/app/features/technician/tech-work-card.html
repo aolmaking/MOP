@@ -39,6 +39,12 @@
         }
       </header>
 
+      @if (journey(); as j) {
+        <!-- Where this job actually is, generated from the workshop's own
+             effective graph. A workshop without QC has no QC stage here. -->
+        <app-workflow-strip [journey]="j" />
+      }
+
       <section class="history">
         <button type="button" class="history-toggle" (click)="toggleVehicleHistory()">
           @if (vehicleHistoryOpen()) {

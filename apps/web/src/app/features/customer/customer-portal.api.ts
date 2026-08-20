@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { map, type Observable } from 'rxjs';
 import type { PublicDecision, SubmittedAnswer } from './decision-answer';
+import type { PresentedJourney } from '../../shared/workflow-strip/workflow-strip';
 
 export interface PortalHome {
   readonly assetCount: number;
@@ -79,6 +80,10 @@ export class CustomerPortalApi {
 
   respondToDecision(requestId: string, answers: readonly SubmittedAnswer[]): Observable<PublicDecision> {
     return this.http.post<PublicDecision>(`/api/v1/customer-portal/decisions/${requestId}/respond`, { answers });
+  }
+
+  journey(workOrderId: string): Observable<PresentedJourney> {
+    return this.http.get<PresentedJourney>(`/api/v1/customer-portal/service/${workOrderId}/journey`);
   }
 
   safeHistory(): Observable<readonly SafeHistoryEntry[]> {
