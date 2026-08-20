@@ -201,22 +201,13 @@
   }
 </div>
 
-<section class="onb-review-consequences">
-  <h3>Creating this will</h3>
-  <ul>
-    <li>Register the workshop at <code>mop.app/w/{{ store.draft().identity.slug }}</code>, trading permanently in {{ store.draft().identity.currency }}.</li>
-    <li>Invite {{ store.draft().owner.ownerFullName }} — they cannot log in until they set their own password.</li>
-    <li>Give {{ store.facts().activeRoles.length }} role(s) work, across {{ store.facts().pageCount }} pages.</li>
-    <li>Run {{ store.facts().liveGates.length }} check(s) before a job can finish or a car can leave.</li>
-    @if (store.facts().extraPermissionGrants > 0) {
-      <li>Grant {{ store.facts().extraPermissionGrants }} extra permission(s), so no capability is left with nobody able to operate it.</li>
-    }
-    @if (store.facts().specializationDefinitionCount > 0) {
-      <li>Author {{ store.facts().specializationDefinitionCount }} service card(s) and form(s) the workshop starts with.</li>
-    }
-  </ul>
-  <p class="onb-review-later">
-    Capabilities and rules can be changed afterwards through Governance Controls, with an impact preview each time.
-    Currency cannot — it is recorded against every price this workshop will ever take.
-  </p>
-</section>
+<app-review-consequences
+  [slug]="store.draft().identity.slug"
+  [currency]="store.draft().identity.currency"
+  [ownerName]="store.draft().owner.ownerFullName"
+  [roleCount]="store.facts().activeRoles.length"
+  [pageCount]="store.facts().pageCount"
+  [gateCount]="store.facts().liveGates.length"
+  [grantCount]="store.facts().extraPermissionGrants"
+  [cardCount]="store.facts().specializationDefinitionCount"
+/>

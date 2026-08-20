@@ -1,0 +1,23 @@
+<section class="onb-review-consequences">
+  <h3>Creating this will</h3>
+  <ul>
+    <li>
+      Register the workshop at <code>mop.app/w/{{ slug() }}</code>, trading permanently in {{ currency() }}.
+    </li>
+    <li>Invite {{ ownerName() }} — they cannot log in until they set their own password.</li>
+    <li>Give {{ roleCount() }} role(s) work, across {{ pageCount() }} pages.</li>
+    <li>Run {{ gateCount() }} check(s) before a job can finish or a car can leave.</li>
+    @if (grantCount() > 0) {
+      <li>
+        Grant {{ grantCount() }} extra permission(s), so no capability is left with nobody able to operate it.
+      </li>
+    }
+    @if (cardCount() > 0) {
+      <li>Author {{ cardCount() }} service card(s) and form(s) the workshop starts with.</li>
+    }
+  </ul>
+  <p class="onb-review-later">
+    Capabilities and rules can be changed afterwards through Governance Controls, with an impact preview each time.
+    Currency cannot — it is recorded against every price this workshop will ever take.
+  </p>
+</section>

@@ -1,0 +1,47 @@
+/*
+ * What creating this workshop will actually do.
+ *
+ * Its own component because the review stylesheet exceeded the
+ * per-component CSS budget with it inside -- and because this panel is a
+ * different kind of thing from the summary sections above it: those
+ * restate what was decided, this states what happens next.
+ */
+
+/* --- consequences ----------------------------------------------------- */
+.onb-review-consequences {
+  padding: var(--space-5);
+  background: linear-gradient(160deg, var(--brand-muted), var(--surface) 60%);
+  border: 1px solid var(--brand-deep);
+  border-radius: var(--radius-lg);
+}
+
+.onb-review-consequences h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-md);
+  color: var(--white);
+}
+
+.onb-review-consequences ul {
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.onb-review-consequences code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.onb-review-later {
+  margin: var(--space-4) 0 0;
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+}
