@@ -1,0 +1,196 @@
+/*
+ * The persistent preview.
+ *
+ * Every figure here is derived by the shared engine from the current
+ * draft, so the panel changes as the configuration does -- which is the
+ * whole reason it is on screen rather than on the review stage. A summary
+ * you have to navigate to is not a visible consequence.
+ */
+
+.onb-summary-host {
+  display: block;
+}
+
+.onb-summary {
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.onb-summary-heading {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--text-faint);
+  margin: 0 0 var(--space-4);
+}
+
+/* --- progress ---------------------------------------------------------
+   A ratio of real decisions, shown as its two numbers as well as a bar:
+   the bar is the glanceable form and the fraction is the honest one. */
+.onb-summary-progress {
+  margin-block-end: var(--space-5);
+}
+
+.onb-summary-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-block-end: var(--space-2);
+}
+
+.onb-summary-progress-label {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.onb-summary-progress-value {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--white);
+}
+
+.onb-summary-track {
+  block-size: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-track);
+  overflow: hidden;
+}
+
+.onb-summary-fill {
+  block-size: 100%;
+  background: var(--brand);
+  border-radius: var(--radius-pill);
+  transition: inline-size var(--duration-slow) var(--ease-out);
+}
+
+.onb-summary-blockers,
+.onb-summary-ready {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+.onb-summary-blockers {
+  color: var(--danger-strong);
+}
+
+.onb-summary-ready {
+  color: var(--success);
+}
+
+/* --- derived facts ---------------------------------------------------- */
+.onb-summary-facts {
+  margin: 0 0 var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.onb-summary-fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.onb-summary-fact dt {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+}
+
+.onb-summary-fact dd {
+  margin: 0;
+  font-size: var(--text-base);
+  font-variant-numeric: tabular-nums;
+  color: var(--white);
+  white-space: nowrap;
+}
+
+.onb-summary-of {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+}
+
+/* --- sections --------------------------------------------------------- */
+.onb-summary-section {
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--border);
+  margin-block-start: var(--space-4);
+}
+
+.onb-summary-section h3 {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--text-faint);
+  margin: 0 0 var(--space-3);
+}
+
+.onb-summary-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.onb-chip {
+  font-size: var(--text-xs);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.onb-chip--on {
+  background: var(--brand-muted);
+  border-color: var(--brand-deep);
+  color: var(--text);
+}
+
+.onb-chip--external {
+  background: var(--info-bg);
+  border-color: var(--info);
+  color: var(--text);
+}
+
+.onb-chip--delegated {
+  background: var(--warning-bg);
+  border-color: var(--warning);
+  color: var(--text);
+}
+
+.onb-chip--off {
+  background: var(--neutral-badge-bg);
+  border-color: var(--border-strong);
+  color: var(--text-faint);
+}
+
+.onb-summary-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.onb-summary-note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  line-height: var(--leading-normal);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-summary-fill {
+    transition-duration: 0.01ms;
+  }
+}

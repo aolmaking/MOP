@@ -1,0 +1,94 @@
+<div class="onb-policy-head">
+  <p class="onb-policy-count">
+    This workshop's shape raises <strong>{{ store.policies().length }}</strong> question(s).
+    @if (onDefaults() > 0) {
+      {{ onDefaults() }} still on the recommended answer.
+    }
+  </p>
+  <button type="button" class="onb-policy-defaults" (click)="store.useRecommendedPolicies()">
+    Use the recommended answers
+  </button>
+</div>
+<p class="onb-hint">
+  Every question has a recommended answer with a written reason behind it. Leaving one unanswered is not a gap — the
+  workshop runs on that answer, and this stage says which.
+</p>
+
+@for (group of groups(); track group.key) {
+  <section class="onb-policy-group">
+    <div class="onb-policy-group-head">
+      <h3>{{ group.title }}</h3>
+      <p>{{ group.summary }}</p>
+    </div>
+
+    @for (policy of group.policies; track policy.key) {
+      <fieldset class="onb-policy" [class.onb-policy--answered]="isAnswered(policy)">
+        <legend class="onb-policy-question">{{ policy.question }}</legend>
+
+        @if (raisedBy(policy).length > 0) {
+          <p class="onb-policy-raised">
+            Asked because this workshop runs
+            @for (title of raisedBy(policy); track title; let last = $last) {
+              <strong>{{ title }}</strong>{{ last ? '.' : ', ' }}
+            }
+          </p>
+        }
+
+        <div class="onb-policy-options">
+          @for (option of policy.options; track option.key) {
+            <label
+              class="onb-policy-option"
+              [class.onb-policy-option--selected]="valueOf(policy) === option.key"
+              [class.onb-policy-option--recommended]="policy.default === option.key"
+            >
+              <input
+                type="radio"
+                [name]="policy.key"
+                [value]="option.key"
+                [checked]="valueOf(policy) === option.key"
+                (change)="choose(policy, option.key)"
+              />
+              <span class="onb-policy-option-body">
+                <span class="onb-policy-option-label">
+                  {{ option.label }}
+                  @if (policy.default === option.key) {
+                    <span class="onb-policy-badge">Recommended</span>
+                  }
+                </span>
+                <span class="onb-policy-option-meaning">{{ option.meaning }}</span>
+              </span>
+            </label>
+          }
+        </div>
+
+        <details class="onb-policy-why">
+          <summary>Why that is the recommendation</summary>
+          <p class="onb-policy-reason">{{ policy.defaultReason }}</p>
+          <p class="onb-policy-enforcement">
+            @if (policy.enforcement.status === 'ENFORCED') {
+              <span class="onb-policy-enforcement-badge onb-policy-enforcement-badge--live">Live today</span>
+            } @else {
+              <span class="onb-policy-enforcement-badge">Recorded, not yet read</span>
+            }
+            {{ policy.enforcement.where }}
+          </p>
+          @if (policy.mutability === 'GOVERNED') {
+            <p class="onb-policy-mutability">
+              Changing this later runs the impact-preview pipeline, because it can release or hold work that is already
+              in flight.
+            </p>
+          } @else if (policy.mutability === 'IMMUTABLE_AFTER_FIRST_USE') {
+            <p class="onb-policy-mutability">Cannot be changed once real data exists under it.</p>
+          }
+        </details>
+      </fieldset>
+    }
+  </section>
+}
+
+@if (groups().length === 0) {
+  <p class="onb-empty">
+    This workshop's shape raises no policy questions at all. Nothing is missing — a workshop with fewer systems has
+    fewer rules to set.
+  </p>
+}

@@ -22,14 +22,27 @@ import { BillingService } from "../billing/billing.service";
 import { GenericBillingAdapter } from "../billing/generic-billing-adapter.service";
 import { PriceCatalogService } from "./price-catalog.service";
 import type { PrismaService } from "../database/prisma.service";
+import { PolicyResolutionService } from "../policies/policy-resolution.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
+
+/**
+ * Policies read at runtime by the services under test. Backed by the
+ * real Prisma client, so a test that writes a WorkshopPolicy row sees
+ * the behaviour change -- a stub here would prove nothing about the
+ * thing these tests exist to prove.
+ */
+const policiesForTest = new PolicyResolutionService(
+  asService,
+  new AuditService(asService),
+  new CapabilityResolutionService(asService),
+);
 const priceCatalog = new PriceCatalogService(asService, new AuditService(asService));
 
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
 const billing = new BillingService(asService, new GenericBillingAdapter());
-const finance = new FinanceService(asService, new CapabilityResolutionService(asService), events, billing, priceCatalog);
+const finance = new FinanceService(asService, new CapabilityResolutionService(asService), events, billing, priceCatalog, policiesForTest);
 
 const ACTOR = { accountId: "cashier-1", displayName: "Cashier", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `fin-${Date.now()}`;

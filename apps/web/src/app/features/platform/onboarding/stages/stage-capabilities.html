@@ -1,0 +1,193 @@
+<!-- What just moved because of the last toggle. Announced, not just shown. -->
+@if (store.lastCascade(); as cascade) {
+  <div class="onb-cascade" role="status">
+    <div class="onb-cascade-body">
+      <p class="onb-cascade-lead">Changing {{ titleOf(cascade.capability) }} moved other things:</p>
+      <ul class="onb-cascade-list">
+        @for (key of cascade.on; track key) {
+          <li><span class="onb-cascade-arrow" aria-hidden="true">&rarr;</span> {{ titleOf(key) }} was turned on, because this needs it.</li>
+        }
+        @for (key of cascade.off; track key) {
+          <li><span class="onb-cascade-arrow" aria-hidden="true">&rarr;</span> {{ titleOf(key) }} was turned off, because it needs what you removed.</li>
+        }
+        @for (key of cascade.droppedPolicies; track key) {
+          <li>
+            <span class="onb-cascade-arrow" aria-hidden="true">&rarr;</span>
+            "{{ questionOf(key) }}" is no longer asked, so your answer was dropped.
+          </li>
+        }
+      </ul>
+    </div>
+    <button type="button" class="onb-cascade-dismiss" (click)="store.dismissCascade()" aria-label="Dismiss">&times;</button>
+  </div>
+}
+
+@for (group of groups(); track group.system) {
+  <section class="onb-cap-group">
+    <div class="onb-cap-group-head">
+      <h3>{{ group.title }}</h3>
+      <p>{{ group.summary }}</p>
+    </div>
+
+    <ul class="onb-cap-grid">
+      @for (capability of group.capabilities; track capability.key) {
+        <li>
+          <article
+            class="onb-cap"
+            [class.onb-cap--on]="isOn(capability.key)"
+            [class.onb-cap--external]="isExternal(capability.key)"
+            [class.onb-cap--open]="expanded() === capability.key"
+          >
+            <header class="onb-cap-head">
+              <div>
+                <h4 class="onb-cap-title">{{ capability.title }}</h4>
+                <p class="onb-cap-summary">{{ capability.summary }}</p>
+              </div>
+              <span class="onb-cap-state" aria-hidden="true">
+                @if (isExternal(capability.key)) {
+                  Outside MOP
+                } @else if (isOn(capability.key)) {
+                  On
+                } @else {
+                  Off
+                }
+              </span>
+            </header>
+
+            @if (isOn(capability.key) && !isExternal(capability.key)) {
+              <ul class="onb-cap-enables">
+                @for (item of capability.enables; track item) {
+                  <li>{{ item }}</li>
+                }
+              </ul>
+            } @else if (isExternal(capability.key)) {
+              <p class="onb-cap-without">{{ capability.withoutIt }}</p>
+            } @else {
+              <p class="onb-cap-without"><span class="onb-cap-without-label">Instead:</span> {{ capability.withoutIt }}</p>
+            }
+
+            <!-- Dependencies, stated before they can be discovered. -->
+            @if (capability.consequence.requires.length > 0) {
+              <p class="onb-cap-dep">
+                Needs
+                @for (key of capability.consequence.requires; track key; let last = $last) {
+                  <strong>{{ titleOf(key) }}</strong>{{ last ? '' : ', ' }}
+                }
+              </p>
+            }
+            @if (capability.consequence.requiredBy.length > 0) {
+              <p class="onb-cap-dep">
+                Needed by
+                @for (key of capability.consequence.requiredBy; track key; let last = $last) {
+                  <strong>{{ titleOf(key) }}</strong>{{ last ? '' : ', ' }}
+                }
+              </p>
+            }
+            @if (isOn(capability.key) && capability.consequence.requiresLaterSetup.length > 0) {
+              <p class="onb-cap-later">
+                @for (item of capability.consequence.requiresLaterSetup; track item) {
+                  {{ item }}
+                }
+              </p>
+            }
+
+            <!-- Full preview, on demand. -->
+            @if (expanded() === capability.key) {
+              <div class="onb-cap-preview" [id]="'cap-preview-' + capability.key">
+                @if (capability.consequence.pagesAffected.length > 0) {
+                  <div class="onb-cap-preview-block">
+                    <h5>Pages it brings</h5>
+                    <ul>
+                      @for (page of capability.consequence.pagesAffected; track page) {
+                        <li><code>{{ page }}</code></li>
+                      }
+                    </ul>
+                  </div>
+                }
+                @if (capability.gateWords.length > 0) {
+                  <div class="onb-cap-preview-block">
+                    <h5>Checks it adds</h5>
+                    <ul>
+                      @for (gate of capability.gateWords; track gate.key) {
+                        <li>
+                          <span class="onb-cap-checkpoint">{{ gate.checkpoint === 'FINISH' ? 'Before finishing' : 'Before delivery' }}</span>
+                          {{ gate.blocked }}
+                        </li>
+                      }
+                    </ul>
+                  </div>
+                }
+                @if (capability.consequence.statesLostWithout.length > 0) {
+                  <div class="onb-cap-preview-block">
+                    <h5>Job states it makes possible</h5>
+                    <ul class="onb-cap-states">
+                      @for (state of capability.consequence.statesLostWithout; track state) {
+                        <li><code>{{ state }}</code></li>
+                      }
+                    </ul>
+                  </div>
+                }
+                @if (capability.consequence.policiesLostWithout.length > 0) {
+                  <div class="onb-cap-preview-block">
+                    <h5>Questions it raises later</h5>
+                    <ul>
+                      @for (key of capability.consequence.policiesLostWithout; track key) {
+                        <li>{{ questionOf(key) }}</li>
+                      }
+                    </ul>
+                  </div>
+                }
+                <div class="onb-cap-preview-block">
+                  <h5>Elsewhere</h5>
+                  <ul>
+                    @for (item of capability.changesElsewhere; track item) {
+                      <li>{{ item }}</li>
+                    }
+                  </ul>
+                </div>
+                @if (capability.consequence.customerSafeMessage) {
+                  <p class="onb-cap-customer">
+                    <span>What the customer is told without it:</span> "{{ capability.consequence.customerSafeMessage }}"
+                  </p>
+                }
+              </div>
+            }
+
+            <footer class="onb-cap-actions">
+              <button
+                type="button"
+                class="onb-cap-more"
+                [attr.aria-expanded]="expanded() === capability.key"
+                [attr.aria-controls]="'cap-preview-' + capability.key"
+                (click)="togglePreview(capability.key)"
+              >
+                {{ expanded() === capability.key ? 'Less' : 'What it changes' }}
+              </button>
+
+              @if (isCore(capability)) {
+                <span class="onb-cap-core">Always on</span>
+              } @else {
+                <div class="onb-cap-switches">
+                  @if (supportsExternal(capability) && !isExternal(capability.key)) {
+                    <button type="button" class="onb-cap-external" (click)="setExternal(capability)">Handle outside MOP</button>
+                  }
+                  <button
+                    type="button"
+                    class="onb-switch"
+                    role="switch"
+                    [attr.aria-checked]="isOn(capability.key)"
+                    [attr.aria-label]="capability.title"
+                    (click)="toggle(capability)"
+                  >
+                    <span class="onb-switch-track" aria-hidden="true"><span class="onb-switch-thumb"></span></span>
+                    <span class="onb-switch-text">{{ isOn(capability.key) ? 'On' : 'Off' }}</span>
+                  </button>
+                </div>
+              }
+            </footer>
+          </article>
+        </li>
+      }
+    </ul>
+  </section>
+}

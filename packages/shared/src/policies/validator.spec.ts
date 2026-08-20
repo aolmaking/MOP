@@ -17,6 +17,7 @@ function definition(overrides: Partial<PolicyDefinition> = {}): PolicyDefinition
     buildPosture: "POLICY_CONTROLLED",
     dependsOnCapabilities: [],
     dependsOnPolicies: [],
+    enforcement: { status: "RECORDED", where: "A real, named consumer this test double stands in for." },
     ...overrides,
   };
 }
@@ -105,5 +106,40 @@ describe("policy registration integrity", () => {
     const b = definition({ key: "POLICY_B", dependsOnPolicies: [] });
     const result = validatePolicyRegistry([a, b]);
     expect(result.valid).toBe(true);
+  });
+});
+
+describe("enforcement declarations", () => {
+  it("rejects a policy whose enforcement note is a placeholder", () => {
+    const result = validatePolicyRegistry([
+      definition({ enforcement: { status: "RECORDED", where: "TODO" } }),
+    ]);
+    expect(result.valid).toBe(false);
+    expect(result.issues.map((i) => i.code)).toContain("MISSING_ENFORCEMENT_NOTE");
+  });
+
+  it("every registered policy names a real consumer or a real precondition", () => {
+    for (const policy of POLICY_REGISTRY.values()) {
+      expect(policy.enforcement.where.trim().length).toBeGreaterThan(20);
+    }
+  });
+
+  /**
+   * The onboarding experience tells a super admin which of their answers
+   * change behaviour today. That claim is only true if an ENFORCED
+   * policy really does have a consumer -- so the ones asserted here are
+   * listed by name, and adding a fifth means wiring a fifth.
+   */
+  it("exactly the policies with a wired consumer are marked ENFORCED", () => {
+    const enforced = [...POLICY_REGISTRY.values()]
+      .filter((p) => p.enforcement.status === "ENFORCED")
+      .map((p) => p.key)
+      .sort();
+    expect(enforced).toEqual([
+      "DELIVERY_BLOCKED_UNTIL_PAID",
+      "PARTIAL_PAYMENT",
+      "PARTS_SEPARATION_OF_DUTIES",
+      "RETURN_UNUSED_BEFORE_FINISH",
+    ]);
   });
 });

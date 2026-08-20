@@ -1,0 +1,144 @@
+<section class="onb-struct">
+  <div class="onb-struct-head">
+    <h3>Branches</h3>
+    <p>
+      @if (multiBranch()) {
+        This workshop runs several locations, each with its own board and staff.
+      } @else {
+        One location. A job is taken in here, so at least one has to exist.
+      }
+    </p>
+  </div>
+
+  @for (branch of store.draft().branches; track $index) {
+    <div class="onb-row">
+      <div class="onb-field onb-field--grow">
+        <label [for]="'branch-name-' + $index">Name</label>
+        <input
+          [id]="'branch-name-' + $index"
+          type="text"
+          autocomplete="off"
+          [value]="branch.name"
+          (input)="store.updateBranch($index, { name: $any($event.target).value })"
+        />
+      </div>
+      <div class="onb-field onb-field--code">
+        <label [for]="'branch-code-' + $index">Code</label>
+        <input
+          [id]="'branch-code-' + $index"
+          type="text"
+          maxlength="12"
+          autocomplete="off"
+          [value]="branch.code"
+          (input)="setBranchCode($index, $any($event.target).value)"
+        />
+      </div>
+      <div class="onb-field onb-field--grow">
+        <label [for]="'branch-city-' + $index">City</label>
+        <input
+          [id]="'branch-city-' + $index"
+          type="text"
+          autocomplete="off"
+          [value]="branch.city ?? ''"
+          (input)="store.updateBranch($index, { city: $any($event.target).value })"
+        />
+      </div>
+      <button
+        type="button"
+        class="onb-row-remove"
+        [attr.aria-label]="'Remove branch ' + (branch.name || branch.code)"
+        (click)="store.removeBranch($index)"
+      >
+        Remove
+      </button>
+    </div>
+  }
+
+  @if (store.draft().branches.length === 0) {
+    <p class="onb-hint">
+      None yet. If you add none, one is created from the workshop's name — a workshop with no branch could not accept
+      its first job.
+    </p>
+  }
+
+  <button type="button" class="onb-add" (click)="addBranch()">Add a branch</button>
+</section>
+
+@if (hasInventory()) {
+  <section class="onb-struct">
+    <div class="onb-struct-head">
+      <h3>Stores</h3>
+      <p>
+        @if (multiWarehouse()) {
+          Stock is counted per store, and moves between them.
+        } @else {
+          One store. Every part comes out of it.
+        }
+      </p>
+    </div>
+
+    @for (warehouse of store.draft().warehouses; track $index) {
+      <div class="onb-warehouse">
+        <div class="onb-row">
+          <div class="onb-field onb-field--grow">
+            <label [for]="'wh-name-' + $index">Name</label>
+            <input
+              [id]="'wh-name-' + $index"
+              type="text"
+              autocomplete="off"
+              [value]="warehouse.name"
+              (input)="store.updateWarehouse($index, { name: $any($event.target).value })"
+            />
+          </div>
+          <div class="onb-field onb-field--code">
+            <label [for]="'wh-code-' + $index">Code</label>
+            <input
+              [id]="'wh-code-' + $index"
+              type="text"
+              maxlength="12"
+              autocomplete="off"
+              [value]="warehouse.code"
+              (input)="setWarehouseCode($index, $any($event.target).value)"
+            />
+          </div>
+          <button
+            type="button"
+            class="onb-row-remove"
+            [attr.aria-label]="'Remove store ' + (warehouse.name || warehouse.code)"
+            (click)="store.removeWarehouse($index)"
+          >
+            Remove
+          </button>
+        </div>
+
+        @if (store.draft().branches.length > 1) {
+          <fieldset class="onb-grants">
+            <legend>Which branches may draw from it?</legend>
+            <div class="onb-grant-row">
+              @for (branch of store.draft().branches; track branch.code) {
+                <label class="onb-grant" [class.onb-grant--on]="warehouse.branchCodes.includes(branch.code)">
+                  <input
+                    type="checkbox"
+                    [checked]="warehouse.branchCodes.includes(branch.code)"
+                    (change)="store.toggleWarehouseBranch($index, branch.code)"
+                  />
+                  <span>{{ branch.name || branch.code }}</span>
+                </label>
+              }
+            </div>
+            @if (warehouse.branchCodes.length === 0) {
+              <p class="onb-hint">None ticked, so every branch may draw from it.</p>
+            }
+          </fieldset>
+        }
+      </div>
+    }
+
+    <button type="button" class="onb-add" (click)="addWarehouse()">Add a store</button>
+  </section>
+} @else {
+  <p class="onb-hint">
+    This workshop holds no stock, so there is nothing to store. Parts are bought for the job or supplied by the
+    customer, and a wait for one is recorded as a blocker on the job.
+  </p>
+}

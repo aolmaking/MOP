@@ -1,0 +1,432 @@
+
+/* --- cascade notice ---------------------------------------------------
+   What just moved because of the last toggle. Appears in place rather
+   than as a toast: a toast that says "Part Returns was turned off" is
+   gone before the reader can look at the card it is talking about. */
+.onb-cascade {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  margin-block-end: var(--space-5);
+  background: var(--info-bg);
+  border: 1px solid var(--info);
+  border-radius: var(--radius-md);
+  animation: onb-cascade-in var(--duration-base) var(--ease-out) both;
+}
+
+@keyframes onb-cascade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.onb-cascade-body {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.onb-cascade-lead {
+  margin: 0 0 var(--space-2);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.onb-cascade-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+}
+
+.onb-cascade-arrow {
+  color: var(--info);
+  margin-inline-end: var(--space-1);
+}
+
+.onb-cascade-dismiss {
+  flex-shrink: 0;
+  inline-size: 28px;
+  block-size: 28px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.onb-cascade-dismiss:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
+/* --- groups ----------------------------------------------------------- */
+.onb-cap-group {
+  margin-block-end: var(--space-7);
+}
+
+.onb-cap-group-head h3 {
+  font-size: var(--text-md);
+  color: var(--white);
+  margin: 0 0 var(--space-1);
+}
+
+.onb-cap-group-head p {
+  margin: 0 0 var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.onb-cap-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-4);
+}
+
+/* --- the card ---------------------------------------------------------
+   The border and the tinted ground are the "activated" signal, paired
+   with a text state ("On"/"Off") so colour is never the only cue --
+   the same rule the rest of the product follows. */
+.onb-cap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  block-size: 100%;
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition:
+    border-color var(--duration-base) var(--easing),
+    background-color var(--duration-base) var(--easing),
+    box-shadow var(--duration-base) var(--easing);
+}
+
+.onb-cap--on {
+  border-color: var(--brand-deep);
+  background: linear-gradient(160deg, var(--brand-muted), var(--surface) 55%);
+  box-shadow: var(--shadow-1);
+}
+
+.onb-cap--external {
+  border-color: var(--info);
+  background: linear-gradient(160deg, var(--info-bg), var(--surface) 55%);
+}
+
+.onb-cap--open {
+  box-shadow: var(--shadow-2);
+}
+
+.onb-cap-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.onb-cap-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-md);
+  color: var(--white);
+}
+
+.onb-cap-summary {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+}
+
+.onb-cap-state {
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--text-faint);
+  padding-block-start: 2px;
+}
+
+.onb-cap--on .onb-cap-state {
+  color: var(--brand-text);
+}
+
+.onb-cap--external .onb-cap-state {
+  color: var(--info);
+}
+
+.onb-cap-enables {
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text);
+  line-height: var(--leading-normal);
+}
+
+.onb-cap-without {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+}
+
+.onb-cap-without-label {
+  color: var(--text-faint);
+  text-transform: uppercase;
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-label);
+  margin-inline-end: var(--space-1);
+}
+
+.onb-cap-dep,
+.onb-cap-later {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  line-height: var(--leading-normal);
+}
+
+.onb-cap-dep strong {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.onb-cap-later {
+  color: var(--warning);
+}
+
+/* --- preview ---------------------------------------------------------- */
+.onb-cap-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--bg);
+  border-radius: var(--radius-md);
+  animation: onb-preview-in var(--duration-base) var(--ease-out) both;
+}
+
+@keyframes onb-preview-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.onb-cap-preview-block h5 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--text-faint);
+}
+
+.onb-cap-preview-block ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+}
+
+.onb-cap-preview-block code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text);
+}
+
+.onb-cap-states {
+  flex-direction: row !important;
+  flex-wrap: wrap;
+  gap: var(--space-2) !important;
+}
+
+.onb-cap-checkpoint {
+  display: inline-block;
+  font-size: var(--text-xs);
+  padding: 1px var(--space-2);
+  margin-inline-end: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--neutral-badge-bg);
+  color: var(--neutral-badge);
+}
+
+.onb-cap-customer {
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: var(--leading-normal);
+}
+
+.onb-cap-customer span {
+  display: block;
+  font-style: normal;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  margin-block-end: var(--space-1);
+}
+
+/* --- actions ---------------------------------------------------------- */
+.onb-cap-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-block-start: auto;
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border);
+}
+
+.onb-cap-more {
+  background: transparent;
+  border: none;
+  padding: var(--space-2) 0;
+  color: var(--brand-text);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.onb-cap-more:hover {
+  text-decoration: underline;
+}
+
+.onb-cap-core {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+.onb-cap-switches {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.onb-cap-external {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.onb-cap-external:hover {
+  color: var(--info);
+  border-color: var(--info);
+}
+
+/* --- the switch -------------------------------------------------------
+   A real role="switch" button rather than a styled checkbox, so the
+   activation reads correctly to assistive technology and the visible text
+   ("On"/"Off") carries the state as well as the thumb position. */
+.onb-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: transparent;
+  border: none;
+  padding: var(--space-1);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.onb-switch-track {
+  inline-size: 40px;
+  block-size: 22px;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-track);
+  border: 1px solid var(--border-strong);
+  position: relative;
+  transition:
+    background-color var(--duration-base) var(--easing),
+    border-color var(--duration-base) var(--easing);
+}
+
+.onb-switch-thumb {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-start: 2px;
+  inline-size: 16px;
+  block-size: 16px;
+  border-radius: var(--radius-pill);
+  background: var(--text-faint);
+  transition:
+    transform var(--duration-base) var(--ease-spring),
+    background-color var(--duration-base) var(--easing);
+}
+
+.onb-switch[aria-checked='true'] .onb-switch-track {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.onb-switch[aria-checked='true'] .onb-switch-thumb {
+  background: var(--on-accent);
+  /* Logical: under dir="rtl" the thumb travels the other way, which is
+     what a mirrored switch has to do. */
+  transform: translateX(18px);
+}
+
+:dir(rtl) .onb-switch[aria-checked='true'] .onb-switch-thumb {
+  transform: translateX(-18px);
+}
+
+.onb-switch-text {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  min-inline-size: 24px;
+  text-align: start;
+}
+
+.onb-switch:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-cap,
+  .onb-switch-track,
+  .onb-switch-thumb {
+    transition-duration: 0.01ms;
+  }
+
+  .onb-cascade,
+  .onb-cap-preview {
+    animation-duration: 0.01ms;
+  }
+}

@@ -65,8 +65,13 @@ export const routes: Routes = [
           import('./features/platform/live-view/live-view-page').then((m) => m.LiveViewPage),
       },
       {
+        // The workshop creation journey. Replaces the single-form Add
+        // Workshop page: creating a workshop is the act of defining its
+        // operating model, not filling in eighteen fields, and the form
+        // could express none of the capability, policy, responsibility or
+        // structure decisions that actually shape one.
         path: 'workshops/new',
-        loadComponent: () => import('./features/platform/add-workshop/add-workshop-page').then((m) => m.AddWorkshopPage),
+        loadComponent: () => import('./features/platform/onboarding/onboarding-page').then((m) => m.OnboardingPage),
       },
       {
         path: 'workshops/:id/capabilities',

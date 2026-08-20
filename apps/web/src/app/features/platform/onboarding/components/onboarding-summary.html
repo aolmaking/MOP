@@ -1,0 +1,119 @@
+<aside class="onb-summary" aria-label="What this workshop will contain">
+  <h2 class="onb-summary-heading">This workshop</h2>
+
+  <!-- Progress: a ratio of real decisions, not an invented percentage. -->
+  <div class="onb-summary-progress">
+    <div class="onb-summary-progress-head">
+      <span class="onb-summary-progress-label">Configured</span>
+      <span class="onb-summary-progress-value">{{ progress().satisfied }} / {{ progress().applicable }}</span>
+    </div>
+    <div
+      class="onb-summary-track"
+      role="progressbar"
+      [attr.aria-valuenow]="progress().satisfied"
+      [attr.aria-valuemin]="0"
+      [attr.aria-valuemax]="progress().applicable"
+      [attr.aria-valuetext]="progress().satisfied + ' of ' + progress().applicable + ' decisions made'"
+    >
+      <div class="onb-summary-fill" [style.inline-size.%]="progress().percent"></div>
+    </div>
+    @if (blockerCount() > 0) {
+      <p class="onb-summary-blockers">{{ blockerCount() }} thing(s) must be fixed before this can be created.</p>
+    } @else {
+      <p class="onb-summary-ready">Nothing is blocking creation.</p>
+    }
+  </div>
+
+  <dl class="onb-summary-facts">
+    <div class="onb-summary-fact">
+      <dt>Capabilities live</dt>
+      <dd>{{ facts().activeCapabilities.length }}</dd>
+    </div>
+    <div class="onb-summary-fact">
+      <dt>Pages</dt>
+      <dd>{{ facts().pageCount }}</dd>
+    </div>
+    <div class="onb-summary-fact">
+      <dt>Roles with work</dt>
+      <dd>{{ facts().activeRoles.length }}</dd>
+    </div>
+    <div class="onb-summary-fact">
+      <dt>Checks before a job finishes</dt>
+      <dd>{{ facts().liveGates.length }}</dd>
+    </div>
+    @if (workOrderStates(); as states) {
+      <div class="onb-summary-fact">
+        <dt>Job states reachable</dt>
+        <dd>{{ states.reachable }} <span class="onb-summary-of">of {{ states.total }}</span></dd>
+      </div>
+    }
+    <div class="onb-summary-fact">
+      <dt>Questions that apply</dt>
+      <dd>
+        {{ facts().answeredPolicyCount }} <span class="onb-summary-of">of {{ facts().applicablePolicyCount }} answered</span>
+      </dd>
+    </div>
+  </dl>
+
+  @if (activeTitles().length > 0) {
+    <section class="onb-summary-section">
+      <h3>What it runs</h3>
+      <ul class="onb-summary-chips">
+        @for (title of activeTitles(); track title) {
+          <li class="onb-chip onb-chip--on">{{ title }}</li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (externalTitles().length > 0) {
+    <section class="onb-summary-section">
+      <h3>Handled outside MOP</h3>
+      <ul class="onb-summary-chips">
+        @for (title of externalTitles(); track title) {
+          <li class="onb-chip onb-chip--external">{{ title }}</li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (facts().delegatedCapabilities.length > 0) {
+    <section class="onb-summary-section">
+      <h3>Covered by another role</h3>
+      <ul class="onb-summary-chips">
+        @for (key of facts().delegatedCapabilities; track key) {
+          <li class="onb-chip onb-chip--delegated">{{ key }}</li>
+        }
+      </ul>
+      <p class="onb-summary-note">{{ facts().extraPermissionGrants }} extra permission(s) will be granted.</p>
+    </section>
+  }
+
+  @if (facts().specializationDefinitionCount > 0) {
+    <section class="onb-summary-section">
+      <h3>Starter cards</h3>
+      <ul class="onb-summary-list">
+        @for (name of facts().specializationDefinitionNames; track name) {
+          <li>{{ name }}</li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (facts().branchCount > 0 || facts().warehouseCount > 0 || facts().serviceCount > 0) {
+    <section class="onb-summary-section">
+      <h3>Structure</h3>
+      <ul class="onb-summary-list">
+        @if (facts().branchCount > 0) {
+          <li>{{ facts().branchCount }} branch(es)</li>
+        }
+        @if (facts().warehouseCount > 0) {
+          <li>{{ facts().warehouseCount }} store(s)</li>
+        }
+        @if (facts().serviceCount > 0) {
+          <li>{{ facts().serviceCount }} priced service(s)</li>
+        }
+      </ul>
+    </section>
+  }
+</aside>

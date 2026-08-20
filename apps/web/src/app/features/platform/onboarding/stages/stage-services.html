@@ -1,0 +1,49 @@
+@if (!pricesMoney()) {
+  <p class="onb-empty">
+    This workshop does not price work in MOP, so there is no catalogue to fill. Pricing happens in whatever system
+    handles its money.
+  </p>
+} @else {
+  <p class="onb-hint">
+    Optional. A price set here is read by the running invoice from the workshop's first job — the alternative is staff
+    typing a figure fresh each time, which is how two people end up charging differently for the same job.
+  </p>
+
+  @for (service of store.draft().services; track $index) {
+    <div class="onb-row">
+      <div class="onb-field onb-field--grow">
+        <label [for]="'svc-name-' + $index">Service</label>
+        <input
+          [id]="'svc-name-' + $index"
+          type="text"
+          autocomplete="off"
+          placeholder="Oil change"
+          [value]="service.name"
+          (input)="store.updateService($index, { name: $any($event.target).value })"
+        />
+      </div>
+      <div class="onb-field onb-field--price">
+        <label [for]="'svc-price-' + $index">Price ({{ currency() }})</label>
+        <input
+          [id]="'svc-price-' + $index"
+          type="text"
+          inputmode="decimal"
+          autocomplete="off"
+          placeholder="450.00"
+          [value]="displayPrice(service.price)"
+          (input)="setPrice($index, $any($event.target).value)"
+        />
+      </div>
+      <button
+        type="button"
+        class="onb-row-remove"
+        [attr.aria-label]="'Remove ' + (service.name || 'service')"
+        (click)="store.removeService($index)"
+      >
+        Remove
+      </button>
+    </div>
+  }
+
+  <button type="button" class="onb-add" (click)="addService()">Add a service</button>
+}

@@ -1,0 +1,513 @@
+/* --- shared field primitives ------------------------------------------
+   Repeated per stage rather than lifted to a global: Angular scopes
+   component styles, and a global .onb-field would leak into every page
+   in the product for the benefit of one flow. */
+
+.onb-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-inline-size: 720px;
+}
+
+.onb-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+
+.onb-field label,
+.onb-field legend {
+  font-size: var(--text-sm);
+  color: var(--text);
+  font-weight: 500;
+  padding: 0;
+}
+
+.onb-field input[type='text'],
+.onb-field input[type='email'],
+.onb-field input[type='tel'],
+.onb-field select {
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-base);
+  transition: border-color var(--duration-fast) var(--easing);
+}
+
+.onb-field input:focus-visible,
+.onb-field select:focus-visible {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: var(--shadow-focus);
+}
+
+.onb-hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  line-height: var(--leading-normal);
+}
+
+.onb-hint--attention {
+  color: var(--warning);
+}
+
+.onb-field-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+}
+
+.onb-subhead {
+  font-size: var(--text-md);
+  color: var(--white);
+  margin: var(--space-5) 0 0;
+}
+
+.onb-empty {
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+  margin: 0;
+}
+
+/* --- choice cards ----------------------------------------------------- */
+.onb-card-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.onb-choice {
+  min-block-size: var(--tap);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-base);
+  cursor: pointer;
+  text-align: start;
+  transition:
+    border-color var(--duration-fast) var(--easing),
+    background-color var(--duration-fast) var(--easing),
+    transform var(--duration-fast) var(--ease-spring);
+}
+
+.onb-choice:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+}
+
+.onb-choice:active {
+  transform: translateY(1px);
+}
+
+.onb-choice--selected {
+  border-color: var(--brand);
+  background: var(--brand-muted);
+  color: var(--white);
+}
+
+.onb-choice--wide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1 1 220px;
+}
+
+.onb-choice-title {
+  font-weight: 600;
+}
+
+.onb-choice-detail {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+}
+
+/* --- editable rows ---------------------------------------------------- */
+.onb-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.onb-field--grow {
+  flex: 1 1 180px;
+}
+
+.onb-field--code {
+  flex: 0 0 110px;
+}
+
+.onb-field--price {
+  flex: 0 0 160px;
+}
+
+.onb-row-remove {
+  min-block-size: var(--tap);
+  padding-inline: var(--space-3);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.onb-row-remove:hover {
+  color: var(--danger-strong);
+  border-color: var(--danger);
+}
+
+.onb-add {
+  min-block-size: var(--tap);
+  padding-inline: var(--space-4);
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.onb-add:hover {
+  color: var(--text);
+  border-color: var(--brand);
+}
+
+.onb-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+
+.onb-checkbox input {
+  margin-block-start: 3px;
+  inline-size: 18px;
+  block-size: 18px;
+  accent-color: var(--brand);
+}
+
+.onb-checkbox strong {
+  display: block;
+  color: var(--text);
+  font-weight: 600;
+  margin-block-end: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-choice,
+  .onb-field input,
+  .onb-field select {
+    transition-duration: 0.01ms;
+  }
+}
+
+.onb-review-blockers,
+.onb-review-clear,
+.onb-review-warnings {
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  margin-block-end: var(--space-5);
+}
+
+.onb-review-blockers {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+}
+
+.onb-review-clear {
+  background: var(--success-bg);
+  border: 1px solid var(--success);
+}
+
+.onb-review-warnings {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning);
+}
+
+.onb-review-blockers h3,
+.onb-review-clear h3,
+.onb-review-warnings h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-md);
+  color: var(--white);
+}
+
+.onb-review-clear p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+}
+
+.onb-review-blockers ul,
+.onb-review-warnings ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.onb-review-blockers li,
+.onb-review-warnings li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text);
+  line-height: var(--leading-normal);
+}
+
+.onb-review-jump,
+.onb-review-edit {
+  flex-shrink: 0;
+  min-block-size: 32px;
+  padding-inline: var(--space-3);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.onb-review-jump:hover,
+.onb-review-edit:hover {
+  color: var(--white);
+  border-color: var(--brand);
+}
+
+/* --- the grid --------------------------------------------------------- */
+.onb-review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-4);
+  margin-block-end: var(--space-6);
+}
+
+.onb-review-section {
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.onb-review-section--wide {
+  grid-column: 1 / -1;
+}
+
+.onb-review-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-block-end: var(--space-3);
+}
+
+.onb-review-section-head h3 {
+  margin: 0;
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--text-faint);
+}
+
+.onb-review-dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.onb-review-dl > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.onb-review-dl dt {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.onb-review-dl dd {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text);
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+
+.onb-review-note {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  margin-inline-start: var(--space-2);
+}
+
+.onb-review-caps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+
+.onb-review-caps h4 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+.onb-summary-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.onb-chip {
+  font-size: var(--text-xs);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.onb-chip--on {
+  background: var(--brand-muted);
+  border-color: var(--brand-deep);
+  color: var(--text);
+}
+
+.onb-chip--external {
+  background: var(--info-bg);
+  border-color: var(--info);
+  color: var(--text);
+}
+
+.onb-chip--off {
+  background: var(--neutral-badge-bg);
+  border-color: var(--border-strong);
+  color: var(--text-faint);
+}
+
+.onb-review-policies {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.onb-review-policies li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block-end: var(--space-2);
+  border-block-end: 1px solid var(--border);
+}
+
+.onb-review-policies li:last-child {
+  border-block-end: none;
+  padding-block-end: 0;
+}
+
+.onb-review-policy-q {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+}
+
+.onb-review-policy-a {
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+  color: var(--white);
+  text-align: end;
+}
+
+.onb-review-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.onb-review-list strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* --- consequences ----------------------------------------------------- */
+.onb-review-consequences {
+  padding: var(--space-5);
+  background: linear-gradient(160deg, var(--brand-muted), var(--surface) 60%);
+  border: 1px solid var(--brand-deep);
+  border-radius: var(--radius-lg);
+}
+
+.onb-review-consequences h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-md);
+  color: var(--white);
+}
+
+.onb-review-consequences ul {
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.onb-review-consequences code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.onb-review-later {
+  margin: var(--space-4) 0 0;
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+}

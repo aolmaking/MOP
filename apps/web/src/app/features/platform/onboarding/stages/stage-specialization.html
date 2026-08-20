@@ -1,0 +1,65 @@
+@if (!store.draft().identity.primaryCategory) {
+  <p class="onb-empty">
+    Choose what this workshop works on, back on Identity, and the packs that suit it appear here.
+  </p>
+} @else {
+  <p class="onb-hint">
+    Optional. A pack creates real service cards and measurement forms the workshop starts with — editable on day two,
+    and versioned so revising one never rewrites what has already been filled in.
+  </p>
+
+  <ul class="onb-pack-grid">
+    @for (pack of packs(); track pack.key) {
+      <li>
+        <button
+          type="button"
+          class="onb-pack"
+          [class.onb-pack--selected]="isSelected(pack.key)"
+          [attr.aria-pressed]="isSelected(pack.key)"
+          (click)="toggle(pack.key)"
+        >
+          <span class="onb-pack-head">
+            <span class="onb-pack-title">{{ pack.title }}</span>
+            <span class="onb-pack-tick" aria-hidden="true">{{ isSelected(pack.key) ? '&#10003;' : '' }}</span>
+          </span>
+          <span class="onb-pack-summary">{{ pack.summary }}</span>
+          <span class="onb-pack-contents">
+            @for (definition of pack.definitions; track definition.name) {
+              <span class="onb-pack-item">
+                <span class="onb-pack-item-kind">{{ kindWords(definition.kind) }}</span>
+                {{ definition.name }}
+                <span class="onb-pack-item-fields">{{ definition.fields.length }} fields</span>
+              </span>
+            }
+          </span>
+        </button>
+      </li>
+    }
+  </ul>
+
+  @if (willCreate().length > 0) {
+    <section class="onb-pack-preview">
+      <h3>{{ willCreate().length }} card(s) will be created</h3>
+      @for (definition of willCreate(); track definition.name) {
+        <details class="onb-pack-def">
+          <summary>
+            <span class="onb-pack-item-kind">{{ kindWords(definition.kind) }}</span>
+            {{ definition.name }}
+          </summary>
+          <ul class="onb-pack-fields">
+            @for (field of definition.fields; track field.key) {
+              <li>
+                <span class="onb-pack-field-label">{{ field.label }}</span>
+                <span class="onb-pack-field-type">{{ fieldSummary(field) }}</span>
+              </li>
+            }
+          </ul>
+        </details>
+      }
+    </section>
+  } @else {
+    <p class="onb-hint">
+      Nothing selected. That is a real, working shape — the owner authors their own cards in Forms &amp; Fields.
+    </p>
+  }
+}

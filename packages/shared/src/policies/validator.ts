@@ -17,6 +17,7 @@ export type PolicyValidationCode =
   | "DUPLICATE_OPTION_KEY"
   | "DEFAULT_NOT_AN_OPTION"
   | "MISSING_DEFAULT_REASON"
+  | "MISSING_ENFORCEMENT_NOTE"
   | "UNKNOWN_POLICY_DEPENDENCY"
   | "RELEVANCE_CYCLE";
 
@@ -82,6 +83,18 @@ export function validatePolicyRegistry(definitions: readonly PolicyDefinition[])
         code: "MISSING_DEFAULT_REASON",
         policyKey: definition.key,
         message: "defaultReason must be a real, written reason, not a placeholder.",
+      });
+    }
+
+    // Same reasoning as defaultReason above: the onboarding experience
+    // shows this string to a super admin as the answer to "what will
+    // this actually do?", so a placeholder here is a lie with a UI in
+    // front of it.
+    if (definition.enforcement.where.trim().length < 20) {
+      issues.push({
+        code: "MISSING_ENFORCEMENT_NOTE",
+        policyKey: definition.key,
+        message: "enforcement.where must name the real consumer, or what has to exist before there is one.",
       });
     }
 

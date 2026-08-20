@@ -117,6 +117,12 @@ describe("PlatformController (integration, real HTTP)", () => {
       allowedWarehousesStart: 1,
       starterBuilderTemplate: "DEFAULT",
       initialStatus: "ACTIVE",
+      // Inventory is on by default -- an absent capability row means
+      // ENABLED -- so this workshop needs somewhere for a part to come
+      // out of. Creation refuses stock with nowhere to hold it, which is
+      // the check this payload has to satisfy like any real caller.
+      branches: [{ name: "Main", code: "MAIN" }],
+      warehouses: [{ name: "Main store", code: "WH1", branchCodes: ["MAIN"] }],
     };
   }
 
