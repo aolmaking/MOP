@@ -61,8 +61,11 @@ describe("the three vocabularies are genuinely different", () => {
     const said = AUDIENCES.map((audience) => JOURNEY_LABELS[audience].AWAITING_CUSTOMER_APPROVAL);
 
     expect(new Set(said).size).toBe(AUDIENCES.length);
-    expect(JOURNEY_LABELS.CUSTOMER.AWAITING_CUSTOMER_APPROVAL).toContain("your");
-    expect(JOURNEY_LABELS.TECHNICIAN.AWAITING_CUSTOMER_APPROVAL).toContain("customer");
+    // Case-insensitive: the customer's label leads the sentence ("Your
+    // approval"), the technician's does not. What matters is WHOSE move
+    // each one says it is, not where the capital letter falls.
+    expect(JOURNEY_LABELS.CUSTOMER.AWAITING_CUSTOMER_APPROVAL.toLowerCase()).toContain("your");
+    expect(JOURNEY_LABELS.TECHNICIAN.AWAITING_CUSTOMER_APPROVAL.toLowerCase()).toContain("customer");
   });
 
   it("tells the customer a part wait is about a part, and the technician it is about the store", () => {

@@ -1,11 +1,12 @@
-import { Component, computed, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { WORK_ORDER_LANES } from '@mop/shared';
 import { Identifier } from '../../../shared/identifier/identifier';
 import { ErrorBanner } from '../../../shared/error-banner/error-banner';
 import { ButtonDirective } from '../../../shared/button/button.directive';
 import { DossierDrawer } from '../../../shared/dossier/dossier-drawer';
-import { WorkflowStrip, type PresentedJourney } from '../../../shared/workflow-strip/workflow-strip';
+import { WorkflowStrip } from '../../../shared/workflow-strip/workflow-strip';
+import { pollJourney, type JourneyFeed } from '../../../shared/workflow-strip/journey-poller';
 import type { PresentedError } from '../../../core/api/error.interceptor';
 import { WorkOrdersApi, type WorkOrderDetail } from './work-orders.api';
 
@@ -27,13 +28,15 @@ type State = 'loading' | 'ready' | 'not-found' | 'forbidden' | 'error';
 })
 export class WorkOrderWorkspace {
   private readonly api = inject(WorkOrdersApi);
+  private readonly destroyRef = inject(DestroyRef);
 
   /** Bound from the route. */
   readonly id = input.required<string>();
 
   protected readonly detail = signal<WorkOrderDetail | null>(null);
   /** The same projection the technician and customer see, in manager words. */
-  protected readonly journey = signal<PresentedJourney | null>(null);
+  private feed: JourneyFeed | null = null;
+  protected readonly journey = computed(() => this.feed?.journey() ?? null);
   protected readonly advancing = signal(false);
   protected readonly advanceError = signal<string | null>(null);
 
@@ -56,6 +59,7 @@ export class WorkOrderWorkspace {
       next: () => {
         this.advancing.set(false);
         this.load();
+        this.feed?.refresh();
       },
       error: (err: PresentedError) => {
         this.advancing.set(false);
@@ -79,12 +83,9 @@ export class WorkOrderWorkspace {
       next: (detail) => {
         this.detail.set(detail);
         this.state.set('ready');
-        // After the detail read, which is what scopes this job to the
-        // manager's own branches.
-        this.api.journey(this.id()).subscribe({
-          next: (journey) => this.journey.set(journey),
-          error: () => this.journey.set(null),
-        });
+        // Started after the detail read, which is what scopes this job
+        // to the manager's own branches.
+        this.feed ??= pollJourney(this.destroyRef, () => this.api.journey(this.id()));
       },
       error: (err: PresentedError) => {
         this.error.set(err);

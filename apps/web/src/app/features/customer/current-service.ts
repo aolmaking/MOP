@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ErrorBanner } from '../../shared/error-banner/error-banner';
 import { WorkflowStrip, type PresentedJourney } from '../../shared/workflow-strip/workflow-strip';
+import { pollJourney, type JourneyFeed } from '../../shared/workflow-strip/journey-poller';
 import { ButtonDirective } from '../../shared/button/button.directive';
 import type { PresentedError } from '../../core/api/error.interceptor';
 import { CustomerPortalApi, type CurrentServiceItem } from './customer-portal.api';
@@ -89,6 +90,13 @@ export class CurrentService {
    * spec's own answer rather than a status phrase standing in for it.
    */
   protected readonly journeys = signal<Record<string, PresentedJourney>>({});
+
+  /**
+   * One feed per open job, kept so a customer watching this page sees
+   * the workshop's own actions land -- a part being issued, their
+   * decision being recorded -- without reloading.
+   */
+  private readonly feeds = new Map<string, JourneyFeed>();
   protected readonly state = signal<State>('loading');
   protected readonly error = signal<PresentedError | null>(null);
 
@@ -120,13 +128,15 @@ export class CurrentService {
    * than meaning, and an error banner over a working page would be worse.
    */
   private loadJourney(workOrderId: string): void {
-    this.api
-      .journey(workOrderId)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (journey) => this.journeys.update((all) => ({ ...all, [workOrderId]: journey })),
-        error: () => undefined,
-      });
+    if (this.feeds.has(workOrderId)) return;
+
+    // Mirrored into one map so the template can look a journey up by id.
+    // A callback rather than an `effect()` per row: this runs inside a
+    // subscribe callback, which is not an injection context.
+    const feed = pollJourney(this.destroyRef, () => this.api.journey(workOrderId), (journey) =>
+      this.journeys.update((all) => ({ ...all, [workOrderId]: journey })),
+    );
+    this.feeds.set(workOrderId, feed);
   }
 
   protected journeyFor(workOrderId: string): PresentedJourney | null {

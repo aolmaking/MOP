@@ -23,39 +23,12 @@
 
       <div class="onb-body">
         <!-- Stage rail ------------------------------------------------ -->
-        <nav class="onb-rail" aria-label="Configuration stages">
-          <ol class="onb-rail-list">
-            @for (item of stages; track item.id; let i = $index) {
-              @let stageProgress = store.progress().stages[i];
-              <li>
-                <button
-                  type="button"
-                  class="onb-rail-step"
-                  [class.onb-rail-step--current]="store.stage() === item.id"
-                  [class.onb-rail-step--done]="stageProgress.complete && store.visited().has(item.id)"
-                  [attr.aria-current]="store.stage() === item.id ? 'step' : null"
-                  (click)="goTo(item.id)"
-                >
-                  <span class="onb-rail-marker" aria-hidden="true">
-                    @if (stageProgress.complete && store.visited().has(item.id)) {
-                      &#10003;
-                    } @else {
-                      {{ i + 1 }}
-                    }
-                  </span>
-                  <span class="onb-rail-text">
-                    <span class="onb-rail-title">{{ item.title }}</span>
-                    @if (stageProgress.applicable > 0) {
-                      <span class="onb-rail-count">{{ stageProgress.satisfied }} / {{ stageProgress.applicable }}</span>
-                    } @else {
-                      <span class="onb-rail-count onb-rail-count--optional">optional</span>
-                    }
-                  </span>
-                </button>
-              </li>
-            }
-          </ol>
-        </nav>
+        <app-onboarding-rail
+          [current]="store.stage()"
+          [progress]="store.progress().stages"
+          [visited]="store.visited()"
+          (navigate)="goTo($event)"
+        />
 
         <!-- The stage ------------------------------------------------- -->
         <main class="onb-stage">

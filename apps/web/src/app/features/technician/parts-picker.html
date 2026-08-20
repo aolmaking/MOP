@@ -1,0 +1,82 @@
+<div class="parts">
+  @if (loading()) {
+    <p class="parts-loading" aria-busy="true">Loading parts…</p>
+  } @else if ((catalog() ?? []).length === 0) {
+    <p class="parts-empty">This workshop has no parts catalogued for work orders yet.</p>
+    <button class="tap tap--wide" type="button" (click)="uncatalogued.emit()">
+      Tell the branch I'm waiting on a part
+    </button>
+  } @else {
+    <label class="parts-search">
+      <span class="visually-hidden">Search parts</span>
+      <input
+        type="search"
+        placeholder="Search parts"
+        [value]="query()"
+        (input)="query.set($any($event.target).value)"
+      />
+    </label>
+
+    @if (visible().length === 0) {
+      <p class="parts-empty">Nothing matches “{{ query() }}”.</p>
+    }
+
+    <ul class="part-grid">
+      @for (part of visible(); track part.id) {
+        <li>
+          <button
+            class="part-card"
+            type="button"
+            [class.part-card--chosen]="selected()?.id === part.id"
+            [attr.aria-pressed]="selected()?.id === part.id"
+            (click)="select(part)"
+          >
+            <span class="part-name">{{ part.name }}</span>
+            <span class="part-price">{{ part.sellingPrice }}</span>
+            <span class="part-stock" [class.part-stock--out]="part.stockTracked && part.onHand === 0">
+              @if (!part.stockTracked) {
+                Not stock-tracked
+              } @else if (part.onHand === 0) {
+                None on the shelf
+              } @else {
+                {{ part.onHand }} on the shelf
+              }
+            </span>
+          </button>
+        </li>
+      }
+    </ul>
+
+    @if (selected(); as part) {
+      <div class="part-confirm">
+        <p class="part-confirm-name">{{ part.name }}</p>
+
+        <div class="quantity">
+          <button
+            class="tap tap--quantity"
+            type="button"
+            aria-label="One fewer"
+            [disabled]="quantity() <= 1"
+            (click)="adjust(-1)"
+          >
+            −
+          </button>
+          <span class="quantity-value" aria-live="polite">{{ quantity() }}</span>
+          <button class="tap tap--quantity" type="button" aria-label="One more" (click)="adjust(1)">+</button>
+        </div>
+
+        @if (part.stockTracked && part.onHand < quantity()) {
+          <!-- Not a block: the store decides, and may order it in. Said
+               plainly so nobody is surprised later. -->
+          <p class="part-warn">Only {{ part.onHand }} on the shelf. The store will have to order the rest.</p>
+        }
+
+        <button class="tap tap--primary tap--wide" type="button" [disabled]="busy()" (click)="confirm()">
+          {{ busy() ? '…' : 'Ask the store for this' }}
+        </button>
+      </div>
+    }
+
+    <button class="parts-fallback" type="button" (click)="uncatalogued.emit()">Not in the catalogue?</button>
+  }
+</div>

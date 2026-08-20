@@ -1,8 +1,10 @@
-import { Component, computed, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Identifier } from '../../shared/identifier/identifier';
-import { WorkflowStrip, type PresentedJourney } from '../../shared/workflow-strip/workflow-strip';
+import { WorkflowStrip } from '../../shared/workflow-strip/workflow-strip';
+import { PartsPicker, type PartRequestChoice } from './parts-picker';
+import { pollJourney, type JourneyFeed } from '../../shared/workflow-strip/journey-poller';
 import type { PresentedError } from '../../core/api/error.interceptor';
 import {
   TechnicianApi,
@@ -43,12 +45,13 @@ const BLOCKER_REASONS = [
  */
 @Component({
   selector: 'app-tech-work-card',
-  imports: [RouterLink, Identifier, DatePipe, WorkflowStrip],
+  imports: [RouterLink, Identifier, DatePipe, WorkflowStrip, PartsPicker],
   templateUrl: './tech-work-card.html',
   styleUrl: './tech-work-card.css',
 })
 export class TechWorkCard {
   private readonly api = inject(TechnicianApi);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly id = input.required<string>();
 
@@ -59,7 +62,14 @@ export class TechWorkCard {
    * only refreshed on navigation would show the stage the job was at
    * before the technician pressed the button.
    */
-  protected readonly journey = signal<PresentedJourney | null>(null);
+  /**
+   * Polled rather than fetched once: the store issuing a part or the
+   * customer answering a decision changes this job without the
+   * technician touching anything, and a strip that only refreshed on
+   * navigation would quietly go stale in their hand.
+   */
+  private feed: JourneyFeed | null = null;
+  protected readonly journey = computed(() => this.feed?.journey() ?? null);
   protected readonly state = signal<State>('loading');
   protected readonly busy = signal<string | null>(null);
   protected readonly actionError = signal<string | null>(null);
@@ -91,17 +101,6 @@ export class TechWorkCard {
    */
   protected readonly partsCatalog = signal<readonly PartCard[] | null>(null);
   protected readonly partsLoading = signal(false);
-  protected readonly partsQuery = signal('');
-  protected readonly chosenPart = signal<PartCard | null>(null);
-  protected readonly partQuantity = signal(1);
-
-  protected readonly visibleParts = computed(() => {
-    const all = this.partsCatalog() ?? [];
-    const q = this.partsQuery().trim().toLowerCase();
-    if (!q) return all;
-    return all.filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
-  });
-
   protected togglePartsPanel(): void {
     const opening = this.panel() !== 'parts';
     this.panel.set(opening ? 'parts' : 'none');
@@ -121,24 +120,9 @@ export class TechWorkCard {
     }
   }
 
-  protected choosePart(part: PartCard): void {
-    // Tapping the chosen card again clears it, so a mis-tap costs one tap.
-    this.chosenPart.set(this.chosenPart()?.id === part.id ? null : part);
-    this.partQuantity.set(1);
-  }
-
-  protected adjustQuantity(delta: number): void {
-    this.partQuantity.set(Math.max(1, this.partQuantity() + delta));
-  }
-
-  protected requestPart(): void {
-    const part = this.chosenPart();
-    if (!part) return;
-    const quantity = this.partQuantity();
+  protected requestPart(choice: PartRequestChoice): void {
     this.panel.set('none');
-    this.chosenPart.set(null);
-    this.partQuantity.set(1);
-    this.run('part', this.api.requestPart(this.id(), part.id, quantity));
+    this.run('part', this.api.requestPart(this.id(), choice.part.id, choice.quantity));
   }
 
   /** Only the parts still needing somebody -- settled ones are history. */
@@ -183,12 +167,9 @@ export class TechWorkCard {
       next: (card) => {
         this.card.set(card);
         this.state.set('ready');
-        // Fired after the card resolves, so a technician never sees a
+        // Started after the card resolves, so a technician never sees a
         // strip for a job the card then refuses to show them.
-        this.api.journey(this.id()).subscribe({
-          next: (journey) => this.journey.set(journey),
-          error: () => this.journey.set(null),
-        });
+        this.feed ??= pollJourney(this.destroyRef, () => this.api.journey(this.id()));
       },
       error: (err: PresentedError) => {
         if (err.httpStatus === 404) this.state.set('not-mine');
@@ -310,6 +291,9 @@ export class TechWorkCard {
       next: () => {
         this.busy.set(null);
         this.load();
+        // The write may well have moved the job -- ask the server rather
+        // than advancing the strip locally.
+        this.feed?.refresh();
       },
       error: (err: PresentedError) => {
         this.busy.set(null);

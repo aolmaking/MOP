@@ -131,44 +131,10 @@
   margin: 0 0 var(--space-3);
 }
 
-.onb-summary-chips {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.onb-chip {
-  font-size: var(--text-xs);
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-}
-
-.onb-chip--on {
-  background: var(--brand-muted);
-  border-color: var(--brand-deep);
-  color: var(--text);
-}
-
-.onb-chip--external {
-  background: var(--info-bg);
-  border-color: var(--info);
-  color: var(--text);
-}
-
 .onb-chip--delegated {
   background: var(--warning-bg);
   border-color: var(--warning);
   color: var(--text);
-}
-
-.onb-chip--off {
-  background: var(--neutral-badge-bg);
-  border-color: var(--border-strong);
-  color: var(--text-faint);
 }
 
 .onb-summary-list {

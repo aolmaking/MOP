@@ -17,6 +17,7 @@ import { StageResponsibility } from './stages/stage-responsibility';
 import { StageStructure } from './stages/stage-structure';
 import { StageServices } from './stages/stage-services';
 import { StageReview } from './stages/stage-review';
+import { OnboardingRail } from './components/onboarding-rail';
 
 type Phase = 'CONFIGURING' | 'PUBLISHING' | 'READY';
 
@@ -50,6 +51,7 @@ type Phase = 'CONFIGURING' | 'PUBLISHING' | 'READY';
     StageStructure,
     StageServices,
     StageReview,
+    OnboardingRail,
   ],
   providers: [OnboardingStore],
   templateUrl: './onboarding-page.html',

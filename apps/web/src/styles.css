@@ -865,3 +865,47 @@ summary,
   gap: var(--space-3);
   flex-shrink: 0;
 }
+
+/* --- capability chips ----------------------------------------------- */
+/*
+ * A capability's on/external/off/delegated state, as a small badge.
+ *
+ * Global because it is a genuine shared primitive: the onboarding review
+ * stage and the onboarding summary rendered byte-identical copies of
+ * these rules, and the duplication pushed both components over the 8 kB
+ * per-component CSS budget and broke the build. One definition, like
+ * .mop-button above it.
+ */
+.onb-summary-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.onb-chip {
+  font-size: var(--text-xs);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.onb-chip--on {
+  background: var(--brand-muted);
+  border-color: var(--brand-deep);
+  color: var(--text);
+}
+
+.onb-chip--external {
+  background: var(--info-bg);
+  border-color: var(--info);
+  color: var(--text);
+}
+
+.onb-chip--off {
+  background: var(--neutral-badge-bg);
+  border-color: var(--border-strong);
+  color: var(--text-faint);
+}

@@ -1,8 +1,26 @@
 @if (journey(); as j) {
-  <section class="strip" [class.strip--waiting]="j.waiting">
-    <!-- The sentence first. Somebody scanning this wants "whose move is
-         it" before they want the diagram. -->
-    <p class="strip-headline">{{ j.headline }}</p>
+  <section
+    class="journey"
+    [class.journey--waiting]="j.waiting"
+    [class.journey--blocked]="j.blocked"
+    [class.journey--done]="j.finished"
+    [class.journey--compact]="compact()"
+  >
+    <!-- Where are we, and why. Somebody scanning this wants "whose move
+         is it" before they want the diagram. -->
+    <header class="journey-head">
+      <p class="journey-headline">{{ j.headline }}</p>
+
+      @if (j.waitingOn; as owner) {
+        <p class="journey-owner">
+          <span class="journey-owner-label">Waiting on</span>
+          <span class="journey-owner-who">{{ owner.who }}</span>
+          @if (waitingFor(); as elapsed) {
+            <span class="journey-owner-since">{{ elapsed }}</span>
+          }
+        </p>
+      }
+    </header>
 
     <ol class="stages">
       @for (stage of j.stages; track stage.status) {
@@ -11,30 +29,98 @@
           [class.stage--done]="stage.state === 'DONE'"
           [class.stage--current]="stage.state === 'CURRENT'"
           [class.stage--waiting]="stage.state === 'WAITING'"
+          [class.stage--blocked]="stage.state === 'BLOCKED'"
           [class.stage--ahead]="stage.state === 'AHEAD'"
-          [attr.aria-current]="stage.state === 'CURRENT' || stage.state === 'WAITING' ? 'step' : null"
+          [class.stage--open]="isOpen(stage)"
+          [attr.aria-current]="stage.state === 'CURRENT' || stage.state === 'WAITING' || stage.state === 'BLOCKED' ? 'step' : null"
         >
-          <span class="stage-mark" aria-hidden="true"></span>
-          <span class="stage-body">
-            <span class="stage-label">{{ stage.label }}</span>
-            @if (stage.at) {
-              <span class="stage-when">{{ when(stage) }}</span>
-            }
-          </span>
-
-          <!-- Said in words as well as drawn, so the state does not depend
-               on seeing a colour. -->
-          @if (stage.state === 'CURRENT') {
-            <span class="visually-hidden">— current stage</span>
-          } @else if (stage.state === 'WAITING') {
-            <span class="stage-note">Waiting</span>
-          } @else if (stage.state === 'DONE') {
-            <span class="visually-hidden">— done</span>
+          <!-- A button only where there is something behind it. A control
+               that does nothing when pressed teaches people not to press. -->
+          @if (stage.facts.length > 0) {
+            <button
+              class="stage-main stage-main--pressable"
+              type="button"
+              [attr.aria-expanded]="isOpen(stage)"
+              (click)="toggleStage(stage)"
+            >
+              <span class="stage-mark" aria-hidden="true">{{ mark(stage) }}</span>
+              <span class="stage-body">
+                <span class="stage-label">{{ stage.label }}</span>
+                @if (stage.detail) {
+                  <span class="stage-detail">{{ stage.detail }}</span>
+                }
+              </span>
+              @if (stage.at) {
+                <span class="stage-when">{{ when(stage.at) }}</span>
+              }
+              <span class="visually-hidden">{{ spoken(stage) }}</span>
+            </button>
           } @else {
-            <span class="visually-hidden">— still to come</span>
+            <span class="stage-main">
+              <span class="stage-mark" aria-hidden="true">{{ mark(stage) }}</span>
+              <span class="stage-body">
+                <span class="stage-label">{{ stage.label }}</span>
+                @if (stage.detail) {
+                  <span class="stage-detail">{{ stage.detail }}</span>
+                }
+              </span>
+              @if (stage.at) {
+                <span class="stage-when">{{ when(stage.at) }}</span>
+              }
+              <span class="visually-hidden">{{ spoken(stage) }}</span>
+            </span>
+          }
+
+          @if (isOpen(stage)) {
+            <dl class="stage-facts">
+              @for (fact of stage.facts; track fact.label) {
+                <div class="fact">
+                  <dt class="fact-label">{{ fact.label }}</dt>
+                  <dd class="fact-value">{{ fact.value }}</dd>
+                </div>
+              }
+            </dl>
           }
         </li>
       }
     </ol>
+
+    @if (!compact()) {
+      <!-- What happened, and what happens next. The two questions a
+           strip alone cannot answer. -->
+      @if (j.happened || j.next) {
+        <div class="narrative">
+          @if (j.happened) {
+            <p class="narrative-line narrative-line--past">{{ j.happened }}</p>
+          }
+          @if (j.next) {
+            <p class="narrative-line narrative-line--next">{{ j.next }}</p>
+          }
+        </div>
+      }
+
+      @if (j.history.length > 0) {
+        <!-- Secondary on purpose: the full log is depth, not the summary. -->
+        <button
+          class="history-toggle"
+          type="button"
+          [attr.aria-expanded]="historyOpen()"
+          (click)="historyOpen.set(!historyOpen())"
+        >
+          {{ historyOpen() ? 'Hide history' : 'Show history (' + j.history.length + ')' }}
+        </button>
+
+        @if (historyOpen()) {
+          <ol class="history">
+            @for (entry of j.history; track $index) {
+              <li class="history-entry">
+                <span class="history-when">{{ when(entry.at) }}</span>
+                <span class="history-what">{{ entry.message }}</span>
+              </li>
+            }
+          </ol>
+        }
+      }
+    }
   </section>
 }

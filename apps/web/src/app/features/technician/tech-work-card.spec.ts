@@ -28,7 +28,7 @@ async function render(result: WorkCard | { error: unknown }) {
     reportBlocker: vi.fn(() => of({})),
     createFault: vi.fn(() => of({})),
     partsCatalog: vi.fn(() => of({ items: [], total: 0, categories: [] })),
-    journey: vi.fn(() => of({ stages: [], finished: false, waiting: false, headline: 'This job is yours to move.' })),
+    journey: vi.fn(() => of({ stages: [], finished: false, waiting: false, blocked: false, headline: 'This job is yours to move.', happened: null, next: null, waitingOn: null, history: [] })),
     requestPart: vi.fn(() => of({})),
     receivePart: vi.fn(() => of({})),
     usePart: vi.fn(() => of({})),

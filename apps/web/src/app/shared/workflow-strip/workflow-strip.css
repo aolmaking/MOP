@@ -1,108 +1,189 @@
 /*
- * The workflow strip.
+ * The workflow journey.
  *
- * Deliberately a marked list, not a progress bar. A bar implies a
- * percentage, and a job stopped in WAITING_PARTS has no meaningful
- * percentage -- it has a stage and an owner. See DESIGN_LANGUAGE.md §1:
- * the red is the only saturated colour and always means "attention
- * here", which is why WAITING wears it and CURRENT does not.
+ * Deliberately a marked LIST, not a progress bar. A bar implies a
+ * percentage; a job stopped in WAITING_PARTS has a stage and an owner,
+ * not a percentage.
  *
- * Every state is said in words as well as drawn (see the template), so
- * nothing here depends on distinguishing two colours.
+ * Layout is vertical BY DEFAULT and becomes a horizontal strip only when
+ * there is genuinely room (see the container query below). A horizontal
+ * strip on a phone either overflows or shrinks the labels past reading,
+ * and this component appears on the customer's phone more than anywhere
+ * else. Vertical is the honest default; horizontal is the enhancement.
+ *
+ * DESIGN_LANGUAGE.md §1: red is the only saturated colour and always
+ * means "attention here" — so BLOCKED wears it, WAITING wears the amber
+ * that is not it, and CURRENT wears neither. Every state is also said in
+ * a word (see the template), so nothing here depends on colour.
  */
 
-.strip {
+.journey {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
   padding: var(--space-4);
   background: var(--surface);
+  border: 1px solid var(--border);
   border-inline-start: 3px solid var(--border-strong);
   border-radius: var(--radius-sm);
 }
 
-/* The one case that earns the identity red: somebody is stuck. */
-.strip--waiting {
+.journey--waiting {
+  border-inline-start-color: var(--warning);
+}
+
+/* The one case that earns the identity red: something is wrong. */
+.journey--blocked {
   border-inline-start-color: var(--danger);
   background: var(--danger-bg);
 }
 
-.strip-headline {
+.journey--done {
+  border-inline-start-color: var(--success);
+}
+
+/* --- head ---------------------------------------------------------- */
+
+.journey-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.journey-headline {
   color: var(--text);
   font-size: var(--text-md);
   font-weight: 600;
   line-height: var(--leading-normal);
 }
 
-/* Wraps rather than scrolls: on a phone a six-stage journey becomes two
-   rows, which is legible, where a horizontal scroller hides the end of
-   the job the reader most wants to see. */
-.stages {
+.journey-owner {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.journey-owner-label {
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  font-size: var(--text-xs);
+}
+
+.journey-owner-who {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.journey-owner-since {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- stages -------------------------------------------------------- */
+
+.stages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   list-style: none;
   margin: 0;
   padding: 0;
-  counter-reset: stage;
 }
 
 .stage {
-  position: relative;
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-inline-size: 0;
+  flex-direction: column;
+  position: relative;
 }
 
-/* The connector. `::after` on the item rather than a border on the list,
-   so it flips with direction automatically and the last stage can drop
-   it without a :last-child border reset. */
-.stage:not(:last-child)::after {
+/* The spine joining one stage to the next, vertically. `::before` on the
+   item so it flips with writing direction and the last one can drop it
+   without a :last-child reset elsewhere. */
+.stage:not(:last-child)::before {
   content: '';
-  inline-size: var(--space-3);
-  block-size: 1px;
+  position: absolute;
+  inset-block-start: 1.75rem;
+  inset-block-end: -0.25rem;
+  inset-inline-start: 0.5rem;
+  inline-size: 1px;
   background: var(--border-strong);
+}
+
+.stage-main {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  inline-size: 100%;
+  min-block-size: 2.75rem;
+  padding: var(--space-2);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+
+.stage-main--pressable {
+  cursor: pointer;
+}
+
+.stage-main--pressable:hover {
+  background: var(--surface-raised);
+}
+
+.stage-main--pressable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .stage-mark {
   flex: 0 0 auto;
-  inline-size: 0.625rem;
-  block-size: 0.625rem;
-  border-radius: 50%;
-  border: 2px solid var(--border-strong);
-  background: transparent;
-  /* Only the mark animates, and only when the stage it belongs to
-     actually changes state -- there is no idle motion anywhere here. */
+  inline-size: 1rem;
+  text-align: center;
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  /* Only the mark animates, and only when the stage changes state.
+     There is no idle motion anywhere in this component. */
   transition:
-    background-color 180ms ease-out,
-    border-color 180ms ease-out,
-    transform 180ms ease-out;
+    color 200ms ease-out,
+    transform 200ms ease-out;
 }
 
 .stage-body {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
+  flex-direction: column;
+  gap: 0.125rem;
   min-inline-size: 0;
+  flex: 1 1 auto;
 }
 
 .stage-label {
+  font-size: var(--text-base);
+  line-height: var(--leading-tight);
+}
+
+.stage-detail {
+  color: var(--text-muted);
   font-size: var(--text-sm);
-  white-space: nowrap;
+  line-height: var(--leading-normal);
 }
 
 .stage-when {
+  flex: 0 0 auto;
   color: var(--text-faint);
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 
-/* --- states -------------------------------------------------------- */
+/* --- stage states -------------------------------------------------- */
 
 .stage--done .stage-mark {
-  background: var(--text-muted);
-  border-color: var(--text-muted);
+  color: var(--success);
 }
 
 .stage--done .stage-label {
@@ -110,9 +191,8 @@
 }
 
 .stage--current .stage-mark {
-  background: var(--text);
-  border-color: var(--text);
-  transform: scale(1.3);
+  color: var(--text);
+  transform: scale(1.2);
 }
 
 .stage--current .stage-label {
@@ -121,34 +201,184 @@
 }
 
 .stage--waiting .stage-mark {
-  background: var(--danger);
-  border-color: var(--danger);
-  transform: scale(1.3);
+  color: var(--warning);
+  transform: scale(1.1);
 }
 
 .stage--waiting .stage-label {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.stage--blocked .stage-mark {
+  color: var(--danger);
+  font-weight: 700;
+  transform: scale(1.2);
+}
+
+.stage--blocked .stage-label {
   color: var(--danger-strong);
   font-weight: 700;
 }
 
 .stage--ahead .stage-mark {
-  border-color: var(--border);
+  color: var(--border-strong);
 }
 
 .stage--ahead .stage-label {
   color: var(--text-faint);
 }
 
-/* The word beside a stopped stage, so "waiting" is never colour-only. */
-.stage-note {
-  padding-inline: var(--space-2);
-  border: 1px solid var(--danger);
+/* --- facts (progressive disclosure) -------------------------------- */
+
+.stage-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+  padding: var(--space-3);
+  margin-inline-start: calc(1rem + var(--space-3) + var(--space-2));
+  background: var(--surface-raised);
   border-radius: var(--radius-sm);
-  color: var(--danger-strong);
-  font-size: var(--text-xs);
+}
+
+.fact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: space-between;
+}
+
+.fact-label {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.fact-value {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-sm);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-label);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- narrative ----------------------------------------------------- */
+
+.narrative {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border);
+}
+
+.narrative-line {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.narrative-line--past {
+  color: var(--text-muted);
+}
+
+.narrative-line--next {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* --- history ------------------------------------------------------- */
+
+.history-toggle {
+  align-self: flex-start;
+  min-block-size: 2.75rem;
+  padding-inline: var(--space-3);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.history-toggle:hover {
+  color: var(--text);
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.history-entry {
+  display: flex;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.history-when {
+  flex: 0 0 4rem;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.history-what {
+  color: var(--text-muted);
+}
+
+/* --- compact ------------------------------------------------------- */
+
+.journey--compact {
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.journey--compact .stage-detail,
+.journey--compact .stage-when {
+  display: none;
+}
+
+/*
+ * Horizontal only where there is genuinely room.
+ *
+ * A container query rather than a viewport one, because this component
+ * sits inside a drawer, a card and a full page at three different
+ * widths on the SAME screen — the viewport does not know which.
+ */
+@container (min-width: 44rem) {
+  .stages {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-1);
+  }
+
+  .stage {
+    flex: 1 1 8rem;
+    min-inline-size: 0;
+  }
+
+  /* The spine becomes a connector between columns. */
+  .stage:not(:last-child)::before {
+    inset-block: auto;
+    inset-block-start: 1.25rem;
+    inset-inline: auto -0.5rem;
+    inline-size: var(--space-3);
+    block-size: 1px;
+  }
+
+  .stage-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .stage-facts {
+    margin-inline-start: 0;
+  }
 }
 
 .visually-hidden {
@@ -164,8 +394,8 @@
 
 /*
  * The transition above communicates a stage changing hands. Somebody who
- * has asked for less motion still needs to see WHICH stage is current --
- * so the scale and colour still apply, they simply arrive at once.
+ * asked for less motion still needs to see WHICH stage is current, so
+ * the scale and colour still apply — they simply arrive at once.
  */
 @media (prefers-reduced-motion: reduce) {
   .stage-mark {

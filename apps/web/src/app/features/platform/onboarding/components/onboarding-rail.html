@@ -1,0 +1,33 @@
+<nav class="onb-rail" aria-label="Configuration stages">
+  <ol class="onb-rail-list">
+    @for (item of stages; track item.id; let i = $index) {
+      @let stageProgress = progress()[i];
+      <li>
+        <button
+          type="button"
+          class="onb-rail-step"
+          [class.onb-rail-step--current]="current() === item.id"
+          [class.onb-rail-step--done]="isDone(i, item.id)"
+          [attr.aria-current]="current() === item.id ? 'step' : null"
+          (click)="navigate.emit(item.id)"
+        >
+          <span class="onb-rail-marker" aria-hidden="true">
+            @if (isDone(i, item.id)) {
+              &#10003;
+            } @else {
+              {{ i + 1 }}
+            }
+          </span>
+          <span class="onb-rail-text">
+            <span class="onb-rail-title">{{ item.title }}</span>
+            @if (stageProgress.applicable > 0) {
+              <span class="onb-rail-count">{{ stageProgress.satisfied }} / {{ stageProgress.applicable }}</span>
+            } @else {
+              <span class="onb-rail-count onb-rail-count--optional">optional</span>
+            }
+          </span>
+        </button>
+      </li>
+    }
+  </ol>
+</nav>

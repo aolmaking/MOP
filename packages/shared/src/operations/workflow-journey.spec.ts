@@ -137,3 +137,67 @@ describe("what already happened is history, not a guess", () => {
     expect(journey.stages.find((stage) => stage.status === "IN_PROGRESS")?.at).toBe("2026-08-01T11:00:00.000Z");
   });
 });
+
+describe("optional stages are not drawn on jobs that do not need them", () => {
+  it("routes past customer approval when the caller says this job does not need it", () => {
+    const journey = workflowJourney(WORK_ORDER_GRAPH, EVERYTHING, "UNDER_INSPECTION", [], {
+      skipAhead: ["AWAITING_CUSTOMER_APPROVAL"],
+    });
+
+    expect(statuses(journey)).not.toContain("AWAITING_CUSTOMER_APPROVAL");
+    expect(statuses(journey)).toContain("APPROVED_FOR_WORK");
+  });
+
+  it("draws customer approval when the job does need it", () => {
+    const journey = workflowJourney(WORK_ORDER_GRAPH, EVERYTHING, "UNDER_INSPECTION");
+
+    expect(statuses(journey)).toContain("AWAITING_CUSTOMER_APPROVAL");
+  });
+
+  it("still draws a skipped stage when it is the ONLY way forward", () => {
+    // Nothing leaves PAYMENT_PENDING except SETTLE_PAYMENT. Refusing to
+    // draw the only path would be a worse lie than drawing an optional
+    // stage, so the skip is ignored here.
+    const journey = workflowJourney(WORK_ORDER_GRAPH, EVERYTHING, "PAYMENT_PENDING", [], {
+      skipAhead: ["READY_FOR_DELIVERY"],
+    });
+
+    expect(statuses(journey)).toContain("READY_FOR_DELIVERY");
+  });
+
+  it("never invents a stage the workshop's graph does not have, skip or no skip", () => {
+    const journey = workflowJourney(WORK_ORDER_GRAPH, without("QC"), "IN_PROGRESS", [], {
+      skipAhead: ["AWAITING_CUSTOMER_APPROVAL"],
+    });
+
+    expect(statuses(journey)).not.toContain("READY_FOR_QC");
+  });
+});
+
+describe("stopped is not one state", () => {
+  it("calls a blocker BLOCKED, not merely waiting", () => {
+    const journey = workflowJourney(WORK_ORDER_GRAPH, EVERYTHING, "BLOCKED");
+
+    expect(journey.blocked).toBe(true);
+    expect(journey.waiting).toBe(false);
+    expect(journey.stages.find((s) => s.status === "BLOCKED")?.state).toBe("BLOCKED");
+  });
+
+  it("calls a failed QC blocked too -- something went wrong, nobody is merely waiting", () => {
+    const journey = workflowJourney(WORK_ORDER_GRAPH, EVERYTHING, "QC_FAILED");
+    expect(journey.blocked).toBe(true);
+  });
+
+  it("calls a job sitting at review WAITING -- it is healthy, somebody owes it a look", () => {
+    const journey = workflowJourney(WORK_ORDER_GRAPH, EVERYTHING, "READY_FOR_TEAM_REVIEW");
+
+    expect(journey.waiting).toBe(true);
+    expect(journey.blocked).toBe(false);
+  });
+
+  it("calls an unpaid invoice WAITING, not blocked", () => {
+    const journey = workflowJourney(WORK_ORDER_GRAPH, EVERYTHING, "PAYMENT_PENDING");
+    expect(journey.waiting).toBe(true);
+    expect(journey.blocked).toBe(false);
+  });
+});
