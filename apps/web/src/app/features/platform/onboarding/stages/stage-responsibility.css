@@ -296,7 +296,6 @@
   flex-wrap: wrap;
   color: var(--text);
   font-weight: 500;
-  text-transform: capitalize;
 }
 
 .onb-resp-badge {
@@ -313,7 +312,6 @@
   font-size: var(--text-sm);
   color: var(--text-muted);
   line-height: var(--leading-normal);
-  text-transform: none;
 }
 
 .onb-resp-summary {

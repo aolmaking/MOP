@@ -4,11 +4,6 @@
     already the natural holder.
   </p>
 } @else {
-  <p class="onb-hint">
-    Every capability is gated behind permissions only certain roles hold. Turning one on without anyone able to operate
-    it produces a system nobody in the building can use.
-  </p>
-
   @for (question of questions(); track question.capability) {
     <fieldset class="onb-resp">
       <legend class="onb-resp-question">{{ question.question }}</legend>
@@ -28,7 +23,7 @@
           />
           <span class="onb-resp-option-body">
             <span class="onb-resp-option-label">
-              We will hire a {{ humanRole(question.dedicatedRole) }}
+              {{ hireLabel(question.dedicatedRole) }}
               <span class="onb-resp-badge">Usual</span>
             </span>
             <span class="onb-resp-option-meaning">
@@ -47,7 +42,7 @@
               (change)="choose(question, role)"
             />
             <span class="onb-resp-option-body">
-              <span class="onb-resp-option-label">The {{ humanRole(role) }} covers it</span>
+              <span class="onb-resp-option-label">{{ coversLabel(role) }}</span>
               <span class="onb-resp-option-meaning">
                 Grants the {{ humanRole(role) }} the {{ grantsFor(question, role) }} permission(s) this work needs, at
                 creation. A permission the {{ humanRole(question.dedicatedRole) }} is explicitly denied stays denied.

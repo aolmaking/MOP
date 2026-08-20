@@ -79,17 +79,44 @@
   display: grid;
   grid-template-columns: 216px minmax(0, 1fr) 300px;
   gap: var(--space-6);
-  align-items: start;
+  /* NOT `align-items: start`.
+     A sticky element can only travel inside its own grid cell, and
+     `start` shrinks each cell to its content -- so the rail and the
+     summary scrolled away the moment the stage beside them was taller
+     than they were, which is almost always. Stretching the cells gives
+     both something to be sticky *within*. */
+  align-items: stretch;
   padding-block-end: var(--space-8);
+}
+
+/* The platform shell's nav is sticky at the top of the viewport and 52px
+   tall. Anything else that sticks has to clear it, or it slides
+   underneath -- which is exactly what both side columns did. Declared
+   once here rather than repeated at each use. */
+.onb {
+  --onb-sticky-top: 68px;
 }
 
 /* --- stage rail -------------------------------------------------------
    Sticky rather than scrolling away: the rail is how someone goes back to
    change an earlier answer, which is the single most common thing they
    will want to do on this page. */
+/* The grid cell itself stays stretched and static. A sticky element can
+   only travel inside its containing block, so the *cell* has to be the
+   full row height and the sticky thing has to be its child -- making the
+   cell itself sticky gives it a containing block exactly its own size,
+   which is why the first attempt scrolled away regardless. */
 .onb-rail {
+  min-inline-size: 0;
+}
+
+.onb-rail-list {
   position: sticky;
-  inset-block-start: var(--space-4);
+  inset-block-start: var(--onb-sticky-top);
+  /* Bounded so a rail taller than the viewport scrolls internally rather
+     than clipping its last stage off the bottom. */
+  max-block-size: calc(100vh - var(--onb-sticky-top) - var(--space-4));
+  overflow-y: auto;
 }
 
 .onb-rail-list {
@@ -300,9 +327,10 @@
   border-block-start: 1px solid var(--border);
 }
 
+/* Same reasoning as the rail: the cell stretches, and the panel inside it
+   is the sticky one (see onboarding-summary.css). */
 .onb-aside {
-  position: sticky;
-  inset-block-start: var(--space-4);
+  min-inline-size: 0;
 }
 
 /* --- loading / error -------------------------------------------------- */
@@ -352,6 +380,9 @@
   }
 
   .onb-rail-list {
+    position: static;
+    max-block-size: none;
+    overflow-y: visible;
     flex-direction: row;
     gap: var(--space-2);
     min-inline-size: max-content;

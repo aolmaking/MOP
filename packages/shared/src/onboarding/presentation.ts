@@ -237,3 +237,65 @@ export const OWNING_SYSTEM_PRESENTATION: Readonly<Record<OwningSystem, { title: 
 export function capabilityPresentation(key: CapabilityKey): CapabilityPresentation {
   return CAPABILITY_PRESENTATION[key];
 }
+
+/**
+ * The shipped capability profiles, with words.
+ *
+ * `SHIPPED_PROFILES` has existed since Phase 2, is validated in CI so a
+ * lifecycle change can never silently strand one of them, and carries a
+ * doc comment saying "Super Admin applies one at creation and adjusts
+ * after". Nothing has ever applied one -- the same gap the capability
+ * rows themselves had, one level up.
+ *
+ * A starting shape matters for a reason beyond convenience: a profile
+ * records *deviations* from the full product, so an untouched
+ * configuration is the complete twelve-capability platform. That is the
+ * correct default and a poor opening move -- it presents twelve
+ * capabilities all on and no indication that any of them is a decision.
+ * Naming the shapes gives the stage somewhere to start from and makes
+ * the differences legible in one press.
+ */
+export interface ProfilePresentation {
+  /** Key into `SHIPPED_PROFILES`. */
+  readonly key: string;
+  readonly title: string;
+  readonly summary: string;
+}
+
+export const PROFILE_PRESENTATION: readonly ProfilePresentation[] = [
+  {
+    key: "MULTI_BRANCH_FULL_SERVICE",
+    title: "Multi-branch full service",
+    summary: "Everything on. Several branches, stock, teams, quality control, portal and invoicing.",
+  },
+  {
+    key: "SINGLE_BAY_QUICK_SERVICE",
+    title: "Single-bay quick service",
+    summary: "One bay, two technicians. No stock, no supervision layer — parts are bought for the job.",
+  },
+  {
+    key: "DIAGNOSTICS_ONLY",
+    title: "Diagnostics only",
+    summary: "Sells the answer, not the repair. No parts at all, and no fitting.",
+  },
+  {
+    key: "HEAVY_EQUIPMENT_FIELD_SERVICE",
+    title: "Field service",
+    summary: "Work happens on the customer's site. Stock is carried; supervision and the portal are not.",
+  },
+  {
+    key: "MOTORCYCLE_WORKSHOP",
+    title: "Motorcycle workshop",
+    summary: "Two branches, quick services dominate, one store, no formal quality-control step.",
+  },
+  {
+    key: "EXTERNAL_BILLING",
+    title: "Invoices issued elsewhere",
+    summary: "MOP owns pricing, payments and balances; the legal invoice comes from accounting software.",
+  },
+  {
+    key: "EXTERNAL_FINANCE",
+    title: "Money handled outside MOP",
+    summary: "MOP runs the operation only. Every part of the money is somewhere else.",
+  },
+];

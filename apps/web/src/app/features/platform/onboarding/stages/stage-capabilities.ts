@@ -2,6 +2,7 @@ import { Component, computed, inject, input, signal } from '@angular/core';
 import { isCapabilityActive, type CapabilityKey } from '@mop/shared';
 import { OnboardingStore } from '../onboarding.store';
 import type { CapabilityBlueprint, OnboardingBlueprint } from '../onboarding.api';
+import { CapabilityShapes } from '../components/capability-shapes';
 
 /**
  * The capability stage.
@@ -24,7 +25,7 @@ import type { CapabilityBlueprint, OnboardingBlueprint } from '../onboarding.api
  */
 @Component({
   selector: 'app-stage-capabilities',
-  imports: [],
+  imports: [CapabilityShapes],
   templateUrl: './stage-capabilities.html',
   styleUrl: './stage-capabilities.css',
 })

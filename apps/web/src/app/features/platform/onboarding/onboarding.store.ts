@@ -8,7 +8,9 @@ import {
   derivedFacts,
   draftProgress,
   emptyDraft,
+  SHIPPED_PROFILES,
   packsForCategory,
+  pruneStrandedAnswers,
   recommendedPolicyAnswers,
   validateDraft,
   type CapabilityKey,
@@ -171,6 +173,29 @@ export class OnboardingStore {
   dismissCascade(): void {
     this._lastCascade.set(null);
   }
+
+  /**
+   * Starts from one of the platform's shipped shapes.
+   *
+   * The profile replaces the capability set wholesale rather than being
+   * merged into it -- a shape is a complete statement about a workshop,
+   * and half of one merged over half of another is a configuration
+   * nobody chose. Stranded policy answers are pruned for the same reason
+   * a single toggle prunes them.
+   */
+  applyProfile(key: string): void {
+    const profile = SHIPPED_PROFILES[key];
+    if (!profile) return;
+
+    const withProfile: WorkshopDraft = { ...this._draft(), capabilities: { ...profile } };
+    this._draft.set(pruneStrandedAnswers(withProfile));
+    this._appliedProfile.set(key);
+    this._lastCascade.set(null);
+  }
+
+  /** Which shape was last applied, so the stage can show it as the starting point. */
+  private readonly _appliedProfile = signal<string | null>(null);
+  readonly appliedProfile = this._appliedProfile.asReadonly();
 
   // --- specialization ----------------------------------------------------
 
