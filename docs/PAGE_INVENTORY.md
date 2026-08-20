@@ -26,7 +26,7 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
-| Add Workshop Owner | ✅ | `/platform/workshops/new` | Phase 2 |
+| Workshop Creation | ✅ | `/platform/workshops/new` | Rebuilt from the Phase-2 single form into a nine-stage configuration journey (identity · plan · capabilities · specialisation · policies · responsibility · structure · services · review). Creation now writes the workshop's actual shape in one transaction — `TenantCapability`, `WorkshopPolicy`, `FinanceConfiguration`, branches/warehouses and their grants, `PriceCatalogEntry`, `SpecializationDefinition`, and a version-1 snapshot — where it previously wrote only a tenant, a config blob, an owner and a permission baseline. Every figure on screen is derived by `@mop/shared/onboarding` from the same registries the runtime uses, and the server refuses a draft with the same `validateDraft` the browser previews with. `GET/POST /platform/onboarding/{blueprint,validate}` |
 | Workshops | ✅ | `/platform/workshops` | Server-side paged/sorted/filtered, details drawer, freeze/reactivate with impact preview. The API existed since Phase 2 with no UI |
 | Control Center — Governance Controls | ✅ | `/platform/control-center` | Per-role permission locks (set/remove, both audited, both require a written reason) and tenant archive/reactivate. Rail link had been dead since Phase 2; the backend (`RoleLock`, tenant archive lifecycle) predated the page |
 | Control Center — Builder Control | 🟡 | `/platform/workshops/:id/capabilities` | Capability shaping is built (5.F). The spec's Builder Control is broader |

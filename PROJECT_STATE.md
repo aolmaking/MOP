@@ -7,6 +7,63 @@
 
 ---
 
+## 0. Latest session — Workshop Creation rebuilt (2026-08-20)
+
+`Add Workshop Owner` was a single form with eighteen fields. Creating a
+workshop wrote a `Tenant`, a configuration blob, an owner and a
+permission baseline — and nothing else. **Every workshop the product had
+ever created was implicitly the full twelve-capability platform with no
+policies, no structure and no named operator**, whatever the operator had
+been shown. The capability engine's seven shipped profiles were
+documented as "Super Admin applies one at creation" and wired to nothing.
+
+It is now a nine-stage journey (identity · plan · capabilities ·
+specialisation · policies · responsibility · structure · services ·
+review) over a pure engine in `packages/shared/src/onboarding/`. The
+browser previews a workshop with exactly the functions the server refuses
+it with, so a preview cannot promise something the publish then rejects.
+
+**Three defects found by building it, not by looking for them:**
+
+1. **`TENANT_OWNER` holds no `inventory.*` permission.** A workshop that
+   enabled Inventory and never staffed a storekeeper had part requests
+   nobody on earth could approve, and nothing anywhere refused that
+   configuration. The Responsibility stage asks who operates each
+   capability and writes the missing grants at creation — never
+   laundering a permission the dedicated role is explicitly denied.
+2. **`enabledModules` came from the starter template while capabilities
+   came from the profile** — two sources of truth for one fact, with
+   `ModuleEnabledLayer` denying any key whose module is absent. A
+   workshop with pricing ON and a MINIMAL template got a live
+   `FINANCE_CORE` and no FINANCE module. Found by logging in as a created
+   workshop's owner. `modulesForProfile` derives it now.
+3. **`.rail-content { overflow-x: auto }` broke `position: sticky`
+   shell-wide** — a scroll container redirects every descendant's sticky
+   to itself. `clip` stops the same overflow without one; wide surfaces
+   already scroll in their own `.table-scroll` wrappers.
+
+**Also shipped:** the policy registry went from 3 to 14 entries (Tranche-1
+of `POLICY_DECISION_INVENTORY.md`), each carrying an `enforcement`
+declaration so the UI never implies a stored string is live when nothing
+reads it. Four are wired to real consumers — including P-07, the
+per-workshop separation-of-duties opt-in that Phase 19.A was reverted for
+want of. A 128-country registry replaced the free-text country field,
+deriving currency, timezone and the working week (the bug behind P-15).
+Specialization packs became data (7 packs, 11 real cards) instead of an
+if-chain over two profiles.
+
+**Verified:** 725 API + 239 web + 201 shared tests, six linters,
+typecheck and build clean. Three materially different workshops created
+through real HTTP against real Postgres and asserted row by row; one
+created through a real browser and its owner logged into afterwards to
+confirm the runtime product matches the configuration.
+
+**Owed:** bulk staff/customer/asset import (17.C/17.D) is still not part
+of creation. Ten of the fourteen policies are `RECORDED` rather than
+`ENFORCED`, each naming what has to exist before it can be read.
+
+---
+
 ## 1. Current objective
 
 **Three tracks are now open at once.** Continue closing the remaining
