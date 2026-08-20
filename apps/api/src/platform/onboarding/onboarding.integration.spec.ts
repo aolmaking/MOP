@@ -301,6 +301,23 @@ describe("Workshop onboarding (integration, real HTTP, real Postgres)", () => {
       expect(rows).toEqual([{ policyKey: "TIME_TRACKING", value: "OFF" }]);
     });
 
+    it("gives a MINIMAL-template workshop the FINANCE module its live capability needs", async () => {
+      // The contradiction this test exists for: `enabledModules` used to
+      // come from the chosen starter template, so a workshop with pricing
+      // ON and a MINIMAL template got a live FINANCE_CORE capability and
+      // no FINANCE module -- and `ModuleEnabledLayer` denied every finance
+      // permission with "this module is not enabled for your workshop".
+      // Found by logging in as a created workshop's owner, not by a test.
+      const config = await prisma.tenantConfiguration.findUnique({
+        where: { tenantId },
+        select: { enabledModules: true },
+      });
+      expect(config!.enabledModules).toContain("FINANCE");
+      // And nothing it does not have.
+      expect(config!.enabledModules).not.toContain("INVENTORY");
+      expect(config!.enabledModules).not.toContain("TEAM_MANAGEMENT");
+    });
+
     it("has the branch it declared, and no store", async () => {
       const [branches, warehouses] = await Promise.all([
         prisma.branch.findMany({ where: { tenantId }, select: { name: true, code: true } }),
@@ -413,6 +430,23 @@ describe("Workshop onboarding (integration, real HTTP, real Postgres)", () => {
       // Central serves two branches, Western serves one. Dammam draws
       // from neither, which is a real configuration, not an omission.
       expect(grants).toBe(3);
+    });
+
+    it("enables every module its capabilities require, whatever template was named", async () => {
+      const config = await prisma.tenantConfiguration.findUnique({
+        where: { tenantId },
+        select: { enabledModules: true },
+      });
+      expect([...config!.enabledModules].sort()).toEqual([
+        "AUDIT",
+        "CUSTOMER_PORTAL",
+        "FINANCE",
+        "INVENTORY",
+        "OPERATIONS",
+        "ORGANIZATION",
+        "REPORTS",
+        "TEAM_MANAGEMENT",
+      ]);
     });
 
     it("stores no capability rows at all, because nothing was removed", async () => {

@@ -516,3 +516,49 @@ export function gateWords(key: GateKey): { checkpoint: string; blocked: string; 
     satisfied: definition.satisfiedMessage,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Modules
+// ---------------------------------------------------------------------------
+
+/**
+ * The modules a workshop's capability profile actually requires.
+ *
+ * This exists because of a contradiction found by entering a created
+ * workshop and looking at what its owner got. `enabledModules` was
+ * written from the chosen starter *template* -- a list that predates
+ * capabilities being decided at creation at all -- while the capability
+ * profile was written separately. The two could disagree, and
+ * `ModuleEnabledLayer` sits in the permission resolver denying any key
+ * whose module is absent.
+ *
+ * So a workshop configured with pricing turned ON, but whose template
+ * happened to be MINIMAL, got a live FINANCE_CORE capability and no
+ * FINANCE module -- and every finance permission denied with "This
+ * module is not enabled for your workshop". The onboarding said one
+ * thing and the product did another, which is precisely the failure this
+ * whole surface exists to prevent.
+ *
+ * Deriving the list from the profile removes the second source of truth.
+ * ORGANIZATION, OPERATIONS and AUDIT are unconditional: every workshop
+ * has an owner who configures it, work that moves through it, and a
+ * record of what was done -- none of those is a capability anyone may
+ * remove, which is exactly why none of them is in the capability
+ * registry.
+ */
+export function modulesForProfile(profile: CapabilityProfile): readonly string[] {
+  const modules = new Set<string>(["ORGANIZATION", "OPERATIONS", "AUDIT"]);
+
+  if (isCapabilityActive(profile, "FINANCE_CORE") || profile.FINANCE_CORE === "EXTERNAL") modules.add("FINANCE");
+  if (isCapabilityActive(profile, "INVENTORY")) modules.add("INVENTORY");
+  if (isCapabilityActive(profile, "TEAMS")) modules.add("TEAM_MANAGEMENT");
+  if (isCapabilityActive(profile, "CUSTOMER_PORTAL")) modules.add("CUSTOMER_PORTAL");
+
+  // Reporting is not a capability -- there is no REPORTS key to remove --
+  // and every shape has something worth reporting on, so it is on for
+  // everyone. Listing it here rather than unconditionally above keeps the
+  // three genuinely-structural modules distinguishable from this one.
+  modules.add("REPORTS");
+
+  return [...modules].sort();
+}
