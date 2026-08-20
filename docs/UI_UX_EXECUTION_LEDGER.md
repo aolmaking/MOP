@@ -998,3 +998,92 @@ matches it.
    the action.
 4. Page-by-page real-data audit of the remaining shells (team-leader,
    analyst, owner) — unstarted.
+
+---
+
+## Session 8 — the journey becomes a subsystem
+
+Directive: build a real-time, capability-driven workflow journey
+subsystem, integrated into the product, never a decorative component.
+
+### What it is now
+
+```
+Capabilities → Policies → Workflow Graph → WorkOrder + real records
+    → Projection (@mop/shared, pure) → Facts (one DB read)
+    → Role presentation → one component, three shells
+```
+
+`workflowJourney()` stays pure and graph-driven.
+`JourneyFactsService` gathers everything true about the job in ONE read
+per work order — deliberately, because a manager's board draws a strip
+per row. `WorkflowJourneyService` presents it per audience.
+
+### The three lies it stopped telling
+
+Each was two individually-true facts arranged into a false picture, and
+each was found by opening a real screen rather than reading code.
+
+1. **Every job promised a customer-approval stage.** The graph offers
+   the edge and declaration order takes it, so every customer was told
+   "we will be asking you something" about work nobody had found.
+   Now `skipAhead`, decided from `APPROVAL_REQUIRED_SCOPE` plus whether
+   a decision actually exists. A skip is ignored if it would strand the
+   job — refusing to draw the only path is the worse lie.
+
+2. **"Your approval — done" above "2 items still need your answer."**
+   A technician can raise a decision mid-repair; the job carries on
+   while the customer still owes an answer. Such a stage reads WAITING.
+
+3. **"Moving normally" over a job nobody could move.** A blocker lives
+   on the TASK, so the work order legitimately stays IN_PROGRESS. The
+   demo's own DEMO-9023 is exactly this. An open blocker now marks
+   whichever stage is CURRENT as BLOCKED, with reason and owner.
+
+### Also
+
+- WAITING (somebody owes a move) is distinct from BLOCKED (something
+  went wrong). Drawing them alike misreports whether to worry.
+- Redaction is real: staff names and shop-floor blocker reasons are
+  ABSENT from the customer's response, asserted against serialised JSON.
+- Live by polling at 20s, matching Live View's existing cadence. No
+  websockets introduced for a screen whose truth changes on a human
+  timescale. Never optimistic — only ever redrawn from a server response.
+- Vertical by default, horizontal via a CONTAINER query: this component
+  sits in a drawer, a card and a full page at three widths on one screen.
+
+### Two bugs found while building it
+
+- Staff history read the tenant's events with `take: 200` and filtered
+  afterwards, so on a busy workshop the timeline came back **empty**.
+  Now a JSON-path predicate in the query — which also stops a manager's
+  board doing a table scan per row.
+- `happened` glued "completed" onto a label: "Approved to start
+  completed."
+
+### The build was red and nobody had noticed
+
+Three components exceeded the 8 kB CSS budget — two inherited from the
+onboarding merge. `ng build` had been failing. Fixed by extraction, this
+project's own remedy: parts picker out of the Work Card, stage rail out
+of the onboarding page, and the capability chips — duplicated
+byte-for-byte across two onboarding components — into the global sheet.
+**Run `corepack pnpm run build` before declaring a gate green; lint and
+tests alone did not catch this.**
+
+**Gate: API 803/803 across 93 suites · web 255/255 · shared 220/220 ·
+7/7 linters · typecheck and build clean.** Running all four suites in
+one command produces a spurious web failure through contention — a known
+pattern here; each is green on its own.
+
+### Resume here
+
+1. **Counter-approval still has no UI.** `recordOnBehalf` and its route
+   are built and tested; nothing calls them.
+2. **Team Leader has no review screen.** `workorders.review.decide` is
+   granted to the role; only the branch manager's workspace offers it.
+3. The journey is on the customer's Current Service, the technician's
+   Work Card and the manager's work-order workspace. Candidates not yet
+   done, judged by value rather than reflex: the customer's decisions
+   page (context while deciding) and the technician's Now page.
+4. Page-by-page real-data audit of the analyst and owner shells.
