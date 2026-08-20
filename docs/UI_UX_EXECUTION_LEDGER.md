@@ -986,11 +986,11 @@ matches it.
 
 ### Resume here
 
-1. **Approved customer-decision items do not become charges.** A
-   customer approving "Front brake discs 2800.00" creates no invoice
-   line — only tasks and parts bill. `ChargeableWorkItem` already
-   carries `approvalStatus`/`approvedUnitPrice` for exactly this; it
-   needs a third producer alongside `serviceItems`/`partItems`.
+1. ~~Approved customer-decision items do not become charges.~~ **DONE**
+   — `approvedDecisionItems()` is the third producer, billing at the
+   price snapshotted on the item when the customer agreed, never a
+   later catalogue lookup. Verified live: approving "Front brake discs"
+   and declining "Cabin air filter" produced a bill of exactly 2800.00.
 2. **Counter-approval still has no UI.** `recordOnBehalf` and its route
    are built and tested; nothing calls them.
 3. **Team Leader has no review screen.** `workorders.review.decide` is

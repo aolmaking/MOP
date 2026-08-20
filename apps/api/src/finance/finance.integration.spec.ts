@@ -175,6 +175,8 @@ afterAll(async () => {
     await prisma.runningInvoice.deleteMany({ where });
     await prisma.workOrderPartLine.deleteMany({ where });
     await prisma.task.deleteMany({ where });
+    await prisma.customerDecisionItem.deleteMany({ where });
+    await prisma.customerDecisionRequest.deleteMany({ where });
     await prisma.priceCatalogEntry.deleteMany({ where });
     await prisma.operationEvent.deleteMany({ where });
     await prisma.auditLog.deleteMany({ where });
@@ -1065,5 +1067,111 @@ describe("services performed on the job are billed", () => {
 
     // The running line was snapshotted when the work was absorbed.
     expect((await finance.jobTotal(paid.tenantId, job)).total).toBe("400.00");
+  });
+});
+
+/**
+ * What the customer approved is what the customer is charged.
+ *
+ * The money hole this closes: a customer approving "Front brake discs,
+ * 2800.00" produced no charge at all -- only tasks and parts were ever
+ * collected -- so the workshop did the work it was told to do and billed
+ * nothing for it. The approval loop existed to get consent to a number,
+ * and the number was then thrown away.
+ */
+describe("approved customer decisions are billed at the agreed price", () => {
+  async function decisionOn(
+    shop: Shop,
+    workOrderId: string,
+    items: readonly { name: string; price: string; labour?: string; decision: "APPROVED" | "REJECTED" | "PENDING" }[],
+  ): Promise<void> {
+    const request = await prisma.customerDecisionRequest.create({
+      data: {
+        tenantId: shop.tenantId,
+        workOrderId,
+        customerId: shop.customerId,
+        status: "SENT",
+        secureToken: `tok-${Math.random().toString(36).slice(2)}`,
+        createdById: "tech-1",
+        sentAt: new Date(),
+      },
+    });
+    for (const item of items) {
+      const labour = item.labour ?? "0.00";
+      await prisma.customerDecisionItem.create({
+        data: {
+          tenantId: shop.tenantId,
+          decisionRequestId: request.id,
+          name: item.name,
+          explanation: "Found during inspection.",
+          importance: "MEDIUM",
+          price: item.price,
+          laborPrice: labour,
+          total: item.price,
+          decision: item.decision,
+          decidedAt: item.decision === "PENDING" ? null : new Date(),
+        },
+      });
+    }
+  }
+
+  it("puts an approved extra on the bill at exactly the price shown to the customer", async () => {
+    const job = await makeJob(paid);
+    await decisionOn(paid, job, [{ name: "Front brake discs", price: "2400.00", labour: "400.00", decision: "APPROVED" }]);
+
+    const total = await finance.jobTotal(paid.tenantId, job);
+
+    expect(total.lines).toHaveLength(1);
+    expect(total.lines[0].name).toBe("Front brake discs");
+    expect(total.lines[0].unitPrice).toBe("2400.00");
+    expect(total.lines[0].labour).toBe("400.00");
+    expect(total.total).toBe("2800.00");
+  });
+
+  it("never bills something the customer declined", async () => {
+    const job = await makeJob(paid);
+    await decisionOn(paid, job, [
+      { name: "Wanted", price: "100.00", decision: "APPROVED" },
+      { name: "Declined", price: "900.00", decision: "REJECTED" },
+    ]);
+
+    const total = await finance.jobTotal(paid.tenantId, job);
+
+    expect(total.lines.map((line) => line.name)).toEqual(["Wanted"]);
+    expect(total.total).toBe("100.00");
+  });
+
+  it("never bills something the customer has not answered yet", async () => {
+    const job = await makeJob(paid);
+    await decisionOn(paid, job, [{ name: "Still thinking", price: "500.00", decision: "PENDING" }]);
+
+    const total = await finance.jobTotal(paid.tenantId, job);
+    expect(total.lines).toHaveLength(0);
+  });
+
+  it("bills an approved extra exactly once however often the total is read", async () => {
+    const job = await makeJob(paid);
+    await decisionOn(paid, job, [{ name: "Once only", price: "700.00", decision: "APPROVED" }]);
+
+    await finance.jobTotal(paid.tenantId, job);
+    await finance.jobTotal(paid.tenantId, job);
+    const total = await finance.jobTotal(paid.tenantId, job);
+
+    expect(total.lines).toHaveLength(1);
+    expect(total.total).toBe("700.00");
+  });
+
+  it("charges the agreed price even when the catalogue says something else", async () => {
+    const job = await makeJob(paid);
+    await prisma.priceCatalogEntry.create({
+      data: { tenantId: paid.tenantId, itemKey: "Agreed extra", itemType: "SERVICE", unitPrice: "50.00", isActive: true },
+    });
+    // The customer was shown 1200.00 and said yes to 1200.00. A cheaper
+    // catalogue row must not silently rewrite what was agreed, in either
+    // direction.
+    await decisionOn(paid, job, [{ name: "Agreed extra", price: "1200.00", decision: "APPROVED" }]);
+
+    const total = await finance.jobTotal(paid.tenantId, job);
+    expect(total.total).toBe("1200.00");
   });
 });

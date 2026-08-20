@@ -756,11 +756,12 @@ export class FinanceService {
     // Parts AND catalogued services. A job whose only work was labour
     // previously reached the counter with "nothing to invoice", because
     // only parts were ever collected.
-    const [partItems, serviceItems] = await Promise.all([
+    const [partItems, serviceItems, approvedItems] = await Promise.all([
       this.chargeable.partItems(tenantId, workOrderId),
       this.chargeable.serviceItems(tenantId, workOrderId),
+      this.chargeable.approvedDecisionItems(tenantId, workOrderId),
     ]);
-    const items = [...serviceItems, ...partItems];
+    const items = [...serviceItems, ...approvedItems, ...partItems];
 
     // Nothing to bill AND nothing previously billed: leave without
     // creating an empty running invoice for a job that charges nothing.

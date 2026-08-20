@@ -29,6 +29,68 @@ export class ChargeableItemsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Every extra the customer actually APPROVED.
+   *
+   * The third producer, and the one that closes a real money hole: a
+   * customer approving "Front brake discs, 2800.00" produced no charge
+   * at all, because only tasks and parts were ever collected. The
+   * workshop did the work it was told to do and billed nothing for it.
+   *
+   * **The price is the one the customer agreed to**, snapshotted onto
+   * the decision item when the request was raised. That is the whole
+   * point of `CustomerDecisionItem.price` existing rather than the
+   * catalogue being consulted again later: an approval is a contract
+   * about a number, and re-pricing it afterwards would change what
+   * somebody consented to.
+   *
+   * REJECTED and PENDING items produce nothing. Only work the customer
+   * said yes to is billable, which is the entire reason the approval
+   * loop exists.
+   */
+  async approvedDecisionItems(tenantId: string, workOrderId: string): Promise<readonly ChargeableWorkItem[]> {
+    const [workOrder, items] = await Promise.all([
+      this.prisma.workOrder.findFirst({
+        where: { id: workOrderId, tenantId },
+        select: { branchId: true, assetId: true, customerId: true },
+      }),
+      this.prisma.customerDecisionItem.findMany({
+        where: {
+          tenantId,
+          decision: "APPROVED",
+          decisionRequest: { workOrderId, status: { notIn: ["CANCELLED"] } },
+        },
+        select: { id: true, name: true, price: true, laborPrice: true, decidedAt: true },
+        orderBy: { decidedAt: "asc" },
+      }),
+    ]);
+
+    if (!workOrder) return [];
+
+    return items.map((item) => ({
+      tenantId,
+      branchId: workOrder.branchId,
+      workOrderId,
+      taskId: null,
+      assetId: workOrder.assetId,
+      customerId: workOrder.customerId,
+      itemType: "SERVICE" as const,
+      itemName: item.name,
+      quantity: 1,
+      provenance: "NOT_APPLICABLE" as const,
+      inventoryItemId: null,
+      sourceType: "MANUAL" as const,
+      sourceId: item.id,
+      requiresCustomerApproval: true,
+      approvalStatus: "APPROVED" as const,
+      // Money as a string, always -- and this one is a promise already
+      // made to a customer, not a lookup.
+      approvedUnitPrice: item.price.toFixed(2),
+      approvedLabourPrice: item.laborPrice.toFixed(2),
+      addedAt: (item.decidedAt ?? new Date()).toISOString(),
+    }));
+  }
+
+  /**
    * Every catalogued service actually performed on this job.
    *
    * The other half of the chain the parts work opened up: a `Task`
