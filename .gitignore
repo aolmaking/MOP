@@ -9,3 +9,7 @@ coverage
 *.tsbuildinfo
 packages/database/generated
 graphify-out/
+
+# A stray clone of this same repository that predates this session.
+# Committing it as an embedded git repo once already; never again.
+/MOP/
