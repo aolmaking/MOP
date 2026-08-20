@@ -1,0 +1,175 @@
+<div class="onb-form">
+  <div class="onb-field">
+    <label for="ws-name">Workshop name</label>
+    <input
+      id="ws-name"
+      type="text"
+      autocomplete="off"
+      [value]="store.draft().identity.name"
+      (input)="onName($any($event.target).value)"
+    />
+    <p class="onb-hint">What staff and customers will see. It has to be unique across the platform.</p>
+  </div>
+
+  <div class="onb-field">
+    <label for="ws-slug">Web address</label>
+    <div class="onb-slug">
+      <span class="onb-slug-prefix" aria-hidden="true">mop.app/w/</span>
+      <input
+        id="ws-slug"
+        type="text"
+        autocomplete="off"
+        [value]="store.draft().identity.slug"
+        (input)="onSlug($any($event.target).value)"
+      />
+    </div>
+    <p class="onb-hint">Derived from the name until you change it. Lowercase letters, digits and hyphens only.</p>
+  </div>
+
+  <!-- Country: the field the currency, timezone and working week come from. -->
+  <div class="onb-field onb-field--country">
+    <label for="ws-country">Country</label>
+    <input
+      id="ws-country"
+      type="text"
+      role="combobox"
+      autocomplete="off"
+      aria-expanded="false"
+      [attr.aria-expanded]="countryOpen()"
+      aria-controls="ws-country-list"
+      [attr.aria-activedescendant]="activeIndex() >= 0 ? 'ws-country-option-' + activeIndex() : null"
+      placeholder="Start typing — Egypt, Saudi Arabia, United Arab Emirates…"
+      [value]="countryQuery()"
+      (input)="countryQuery.set($any($event.target).value); openCountries()"
+      (focus)="openCountries()"
+      (keydown)="onCountryKey($event)"
+    />
+
+    @if (countryOpen() && matches().length > 0) {
+      <ul id="ws-country-list" class="onb-country-list" role="listbox" aria-label="Countries">
+        @for (entry of matches(); track entry.code; let i = $index) {
+          <li
+            [id]="'ws-country-option-' + i"
+            role="option"
+            class="onb-country-option"
+            [class.onb-country-option--active]="activeIndex() === i"
+            [attr.aria-selected]="store.draft().identity.country === entry.code"
+            (mousedown)="chooseCountry(entry)"
+            (mouseenter)="activeIndex.set(i)"
+          >
+            <span class="onb-country-name">{{ entry.name }}</span>
+            <span class="onb-country-meta">{{ entry.currency }} &middot; {{ entry.timezone }}</span>
+          </li>
+        }
+      </ul>
+    }
+
+    @if (selectedCountry(); as entry) {
+      <div class="onb-derived" role="status">
+        <p class="onb-derived-lead">{{ entry.name }} sets three things:</p>
+        <ul class="onb-derived-list">
+          <li><strong>{{ entry.currency }}</strong> — the currency, suggested. Every invoice is denominated in it, permanently.</li>
+          <li><strong>{{ entry.timezone }}</strong> — the clock every deadline and timestamp is read in.</li>
+          <li><strong>{{ weekendWords() }}</strong> — the weekend. Ageing and SLA figures skip it.</li>
+        </ul>
+      </div>
+    } @else {
+      <p class="onb-hint">
+        Not a formality. The country decides the working week every "waiting 24 hours" figure in this workshop is
+        counted against.
+      </p>
+    }
+  </div>
+
+  <div class="onb-field">
+    <label for="ws-city">City</label>
+    <input
+      id="ws-city"
+      type="text"
+      autocomplete="off"
+      [value]="store.draft().identity.city"
+      (input)="store.patchIdentity({ city: $any($event.target).value })"
+    />
+  </div>
+
+  <div class="onb-field-pair">
+    <div class="onb-field">
+      <label for="ws-currency">Currency</label>
+      <select
+        id="ws-currency"
+        [value]="store.draft().identity.currency"
+        (change)="store.patchIdentity({ currency: $any($event.target).value })"
+      >
+        <option value="" disabled>Select a currency</option>
+        @for (code of blueprint().currencies; track code) {
+          <option [value]="code">{{ code }}</option>
+        }
+      </select>
+      @if (currencyIsUnusual()) {
+        <p class="onb-hint onb-hint--attention">
+          {{ selectedCountry()?.name }} normally trades in {{ selectedCountry()?.currency }}. That is allowed — just
+          confirm it is deliberate.
+        </p>
+      } @else {
+        <p class="onb-hint">Can never be changed after creation. Every price is recorded against it.</p>
+      }
+    </div>
+
+    <div class="onb-field">
+      <label for="ws-timezone">Timezone</label>
+      <input
+        id="ws-timezone"
+        type="text"
+        autocomplete="off"
+        [value]="store.draft().identity.timezone"
+        (input)="store.patchIdentity({ timezone: $any($event.target).value })"
+      />
+      <p class="onb-hint">Suggested from the country. Change it for a workshop that trades in a different zone.</p>
+    </div>
+  </div>
+
+  <div class="onb-field">
+    <label for="ws-business-type">Business type</label>
+    <select
+      id="ws-business-type"
+      [value]="store.draft().identity.businessType"
+      (change)="store.patchIdentity({ businessType: $any($event.target).value })"
+    >
+      <option value="" disabled>Select a business type</option>
+      @for (type of blueprint().businessTypes; track type) {
+        <option [value]="type">{{ type }}</option>
+      }
+    </select>
+  </div>
+
+  @if (store.draft().identity.businessType === 'Other') {
+    <div class="onb-field">
+      <label for="ws-business-other">Describe the business</label>
+      <input
+        id="ws-business-other"
+        type="text"
+        autocomplete="off"
+        [value]="store.draft().identity.businessTypeOther ?? ''"
+        (input)="store.patchIdentity({ businessTypeOther: $any($event.target).value })"
+      />
+    </div>
+  }
+
+  <fieldset class="onb-field onb-field--cards">
+    <legend>What does this workshop work on?</legend>
+    <p class="onb-hint">Decides which specialisation packs are offered, and the identifiers a vehicle is recorded under.</p>
+    <div class="onb-card-row">
+      @for (category of blueprint().categories; track category.value) {
+        <button
+          type="button"
+          class="onb-choice"
+          [class.onb-choice--selected]="store.draft().identity.primaryCategory === category.value"
+          [attr.aria-pressed]="store.draft().identity.primaryCategory === category.value"
+          (click)="setCategory(category.value)"
+        >
+          {{ category.label }}
+        </button>
+      }
+    </div>
+  </fieldset>
+</div>

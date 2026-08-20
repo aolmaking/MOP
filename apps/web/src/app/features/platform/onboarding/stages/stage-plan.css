@@ -1,0 +1,281 @@
+/* --- shared field primitives ------------------------------------------
+   Repeated per stage rather than lifted to a global: Angular scopes
+   component styles, and a global .onb-field would leak into every page
+   in the product for the benefit of one flow. */
+
+.onb-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-inline-size: 720px;
+}
+
+.onb-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+
+.onb-field label,
+.onb-field legend {
+  font-size: var(--text-sm);
+  color: var(--text);
+  font-weight: 500;
+  padding: 0;
+}
+
+.onb-field input[type='text'],
+.onb-field input[type='email'],
+.onb-field input[type='tel'],
+.onb-field select {
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-base);
+  transition: border-color var(--duration-fast) var(--easing);
+}
+
+.onb-field input:focus-visible,
+.onb-field select:focus-visible {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: var(--shadow-focus);
+}
+
+.onb-hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  line-height: var(--leading-normal);
+}
+
+.onb-hint--attention {
+  color: var(--warning);
+}
+
+.onb-field-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+}
+
+.onb-subhead {
+  font-size: var(--text-md);
+  color: var(--white);
+  margin: var(--space-5) 0 0;
+}
+
+.onb-empty {
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+  margin: 0;
+}
+
+/* --- choice cards ----------------------------------------------------- */
+.onb-card-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.onb-choice {
+  min-block-size: var(--tap);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-base);
+  cursor: pointer;
+  text-align: start;
+  transition:
+    border-color var(--duration-fast) var(--easing),
+    background-color var(--duration-fast) var(--easing),
+    transform var(--duration-fast) var(--ease-spring);
+}
+
+.onb-choice:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+}
+
+.onb-choice:active {
+  transform: translateY(1px);
+}
+
+.onb-choice--selected {
+  border-color: var(--brand);
+  background: var(--brand-muted);
+  color: var(--white);
+}
+
+.onb-choice--wide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1 1 220px;
+}
+
+.onb-choice-title {
+  font-weight: 600;
+}
+
+.onb-choice-detail {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+}
+
+/* --- editable rows ---------------------------------------------------- */
+.onb-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.onb-field--grow {
+  flex: 1 1 180px;
+}
+
+.onb-field--code {
+  flex: 0 0 110px;
+}
+
+.onb-field--price {
+  flex: 0 0 160px;
+}
+
+.onb-row-remove {
+  min-block-size: var(--tap);
+  padding-inline: var(--space-3);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.onb-row-remove:hover {
+  color: var(--danger-strong);
+  border-color: var(--danger);
+}
+
+.onb-add {
+  min-block-size: var(--tap);
+  padding-inline: var(--space-4);
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.onb-add:hover {
+  color: var(--text);
+  border-color: var(--brand);
+}
+
+.onb-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+
+.onb-checkbox input {
+  margin-block-start: 3px;
+  inline-size: 18px;
+  block-size: 18px;
+  accent-color: var(--brand);
+}
+
+.onb-checkbox strong {
+  display: block;
+  color: var(--text);
+  font-weight: 600;
+  margin-block-end: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-choice,
+  .onb-field input,
+  .onb-field select {
+    transition-duration: 0.01ms;
+  }
+}
+
+.onb-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+
+.onb-plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  text-align: start;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--easing),
+    background-color var(--duration-fast) var(--easing);
+}
+
+.onb-plan:hover {
+  background: var(--surface-raised);
+}
+
+.onb-plan--selected {
+  border-color: var(--brand);
+  background: var(--brand-muted);
+}
+
+.onb-plan-name {
+  color: var(--white);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.onb-plan-price {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+}
+
+.onb-plan-limits {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-plan {
+    transition-duration: 0.01ms;
+  }
+}

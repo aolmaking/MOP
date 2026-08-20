@@ -1,0 +1,75 @@
+@if (questions().length === 0) {
+  <p class="onb-empty">
+    This workshop's capabilities raise no responsibility questions — every part of it is operated by a role that is
+    already the natural holder.
+  </p>
+} @else {
+  <p class="onb-hint">
+    Every capability is gated behind permissions only certain roles hold. Turning one on without anyone able to operate
+    it produces a system nobody in the building can use.
+  </p>
+
+  @for (question of questions(); track question.capability) {
+    <fieldset class="onb-resp">
+      <legend class="onb-resp-question">{{ question.question }}</legend>
+      <p class="onb-resp-why">{{ question.why }}</p>
+
+      <div class="onb-resp-options">
+        <label
+          class="onb-resp-option"
+          [class.onb-resp-option--selected]="answerFor(question) === 'DEDICATED'"
+        >
+          <input
+            type="radio"
+            [name]="'resp-' + question.capability"
+            value="DEDICATED"
+            [checked]="answerFor(question) === 'DEDICATED'"
+            (change)="choose(question, 'DEDICATED')"
+          />
+          <span class="onb-resp-option-body">
+            <span class="onb-resp-option-label">
+              We will hire a {{ humanRole(question.dedicatedRole) }}
+              <span class="onb-resp-badge">Usual</span>
+            </span>
+            <span class="onb-resp-option-meaning">
+              Nothing is granted. The role's own permissions are already seeded and correct the moment someone holds it.
+            </span>
+          </span>
+        </label>
+
+        @for (role of question.fallbackRoles; track role) {
+          <label class="onb-resp-option" [class.onb-resp-option--selected]="answerFor(question) === role">
+            <input
+              type="radio"
+              [name]="'resp-' + question.capability"
+              [value]="role"
+              [checked]="answerFor(question) === role"
+              (change)="choose(question, role)"
+            />
+            <span class="onb-resp-option-body">
+              <span class="onb-resp-option-label">The {{ humanRole(role) }} covers it</span>
+              <span class="onb-resp-option-meaning">
+                Grants the {{ humanRole(role) }} the {{ grantsFor(question, role) }} permission(s) this work needs, at
+                creation. A permission the {{ humanRole(question.dedicatedRole) }} is explicitly denied stays denied.
+              </span>
+            </span>
+          </label>
+        }
+      </div>
+    </fieldset>
+  }
+
+  @if (grants().length > 0) {
+    <section class="onb-resp-summary">
+      <h3>What will be granted</h3>
+      <ul class="onb-resp-grant-list">
+        @for (grant of grants(); track grant.role + grant.permissionKey) {
+          <li>
+            <code>{{ grant.permissionKey }}</code>
+            <span>to the {{ humanRole(grant.role) }}, because of {{ titleOf(grant.becauseOf) }}</span>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+}

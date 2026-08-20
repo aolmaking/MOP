@@ -1,0 +1,100 @@
+<fieldset class="onb-field onb-field--cards">
+  <legend>Plan</legend>
+  <p class="onb-hint">Its ceilings bound how many branches, stores and people this workshop may have.</p>
+  <div class="onb-plan-grid">
+    @for (plan of blueprint().plans; track plan.id) {
+      <button
+        type="button"
+        class="onb-plan"
+        [class.onb-plan--selected]="store.draft().plan.planId === plan.id"
+        [attr.aria-pressed]="store.draft().plan.planId === plan.id"
+        (click)="choosePlan(plan.id)"
+      >
+        <span class="onb-plan-name">{{ plan.name }}</span>
+        <span class="onb-plan-price">{{ plan.monthlyPrice }} / month</span>
+        <span class="onb-plan-limits">
+          {{ plan.maxBranches }} branch(es) &middot; {{ plan.maxUsers }} user(s) &middot; {{ plan.maxWarehouses }} store(s)
+        </span>
+      </button>
+    }
+  </div>
+</fieldset>
+
+<div class="onb-form">
+  <h3 class="onb-subhead">The owner</h3>
+  <p class="onb-hint">
+    No password is set here. The account is created invited, and the owner chooses their own through a one-time link —
+    so nobody on the platform side ever knows a customer's password.
+  </p>
+
+  <div class="onb-field">
+    <label for="owner-name">Full name</label>
+    <input
+      id="owner-name"
+      type="text"
+      autocomplete="off"
+      [value]="store.draft().owner.ownerFullName"
+      (input)="store.patchOwner({ ownerFullName: $any($event.target).value })"
+    />
+    <p class="onb-hint">Who the audit trail attributes this workshop's first actions to.</p>
+  </div>
+
+  <div class="onb-field-pair">
+    <div class="onb-field">
+      <label for="owner-email">Email</label>
+      <input
+        id="owner-email"
+        type="email"
+        autocomplete="off"
+        [value]="store.draft().owner.ownerEmail"
+        (input)="store.patchOwner({ ownerEmail: $any($event.target).value })"
+      />
+      <p class="onb-hint">The invite link is the only way into this workshop.</p>
+    </div>
+
+    <div class="onb-field">
+      <label for="owner-phone">Phone</label>
+      <input
+        id="owner-phone"
+        type="tel"
+        autocomplete="off"
+        placeholder="+201234567890"
+        [value]="store.draft().owner.ownerPhone"
+        (input)="store.patchOwner({ ownerPhone: $any($event.target).value })"
+      />
+      <p class="onb-hint">International format, starting with + and the country code.</p>
+    </div>
+  </div>
+
+  <fieldset class="onb-field onb-field--cards">
+    <legend>Can the owner log in yet?</legend>
+    <div class="onb-card-row">
+      @for (status of blueprint().initialStatuses; track status.key) {
+        <button
+          type="button"
+          class="onb-choice onb-choice--wide"
+          [class.onb-choice--selected]="store.draft().plan.initialStatus === status.key"
+          [attr.aria-pressed]="store.draft().plan.initialStatus === status.key"
+          (click)="store.patchPlan({ initialStatus: status.key })"
+        >
+          <span class="onb-choice-title">{{ status.key }}</span>
+          <span class="onb-choice-detail">{{ status.help }}</span>
+        </button>
+      }
+    </div>
+  </fieldset>
+
+  <div class="onb-field">
+    <label class="onb-checkbox">
+      <input
+        type="checkbox"
+        [checked]="store.draft().plan.enableDemoData"
+        (change)="store.patchPlan({ enableDemoData: $any($event.target).checked })"
+      />
+      <span>
+        <strong>Add demo data</strong>
+        <span class="onb-hint">Sample customers, staff and a few work orders, so the owner can explore before entering anything real.</span>
+      </span>
+    </label>
+  </div>
+</div>
