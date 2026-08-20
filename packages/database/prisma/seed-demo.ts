@@ -399,15 +399,6 @@ async function ensureInventoryManager(tenantId: string): Promise<void> {
 const TECHNICIAN_EMAIL = "tech@apex-motors.local";
 const TECHNICIAN_PASSWORD = "ChangeMe-Tech-123";
 
-/** Defaults already grant the rest; these are the ones the pages read. */
-const TECHNICIAN_PERMISSIONS = [
-  "task.view_assigned",
-  "task.complete",
-  "task.finish_attempt",
-  "blocker.report",
-  "inspection.full.create",
-];
-
 async function ensureTechnician(tenantId: string): Promise<{ staffUserId: string }> {
   const existing = await prisma.account.findFirst({ where: { tenantId, email: TECHNICIAN_EMAIL } });
 
@@ -437,11 +428,22 @@ async function ensureTechnician(tenantId: string): Promise<{ staffUserId: string
       },
     }));
 
-  for (const permissionKey of TECHNICIAN_PERMISSIONS) {
+  // The real defaults, not a hand-curated subset -- the same fix already
+  // applied to TEAM_LEADER above, for the same reason. The old
+  // TECHNICIAN_PERMISSIONS array named five keys "the pages read" and
+  // silently missed two more the platform's own defaults had granted
+  // since before this comment was written (customer_decision.create/
+  // .send): a technician could log in, but "Ask the customer" -- the
+  // permission scaffolding for which existed in default-role-permissions.ts
+  // with no caller until this session -- came back 403 in a real demo
+  // walkthrough because this seed had drifted from the map it was meant
+  // to mirror.
+  const technicianPermissions = DEFAULT_ROLE_PERMISSIONS.TECHNICIAN ?? {};
+  for (const [permissionKey, allowed] of Object.entries(technicianPermissions)) {
     await prisma.rolePermission.upsert({
       where: { tenantId_role_permissionKey: { tenantId, role: "TECHNICIAN", permissionKey } },
-      create: { tenantId, role: "TECHNICIAN", permissionKey, allowed: true },
-      update: { allowed: true },
+      create: { tenantId, role: "TECHNICIAN", permissionKey, allowed: allowed! },
+      update: { allowed: allowed! },
     });
   }
 

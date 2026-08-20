@@ -1554,12 +1554,25 @@ model RunningInvoiceLine {
   laborPrice       Decimal  @default(0) @db.Decimal(12, 2)
   total            Decimal  @db.Decimal(12, 2)
   isFinalized      Boolean  @default(false)
+  // Where this line came from in Operations, matching ChargeableWorkItem's
+  // sourceType/sourceId in packages/shared/src/contracts/cross-system.ts.
+  // Null for a line somebody typed in by hand, which is most of them.
+  //
+  // This exists so Finance can fold an operational fact (a part left the
+  // store for this job) into the running total EXACTLY ONCE, without
+  // reaching into Inventory's tables to ask what it already billed.
+  sourceType       String?
+  sourceId         String?
   addedById        String
   createdAt        DateTime @default(now())
 
   runningInvoice RunningInvoice @relation(fields: [runningInvoiceId], references: [id], onDelete: Cascade)
 
   @@index([runningInvoiceId])
+  // One line per operational source, per running invoice. The uniqueness
+  // is what makes the reconciliation idempotent rather than additive --
+  // without it, every call to jobTotal() would bill the part again.
+  @@unique([runningInvoiceId, sourceType, sourceId])
   @@map("running_invoice_lines")
 }
 

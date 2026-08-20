@@ -4,6 +4,7 @@ import { AuthModule } from "../auth/auth.module";
 import { AccessModule } from "../access/access.module";
 import { CapabilitiesModule } from "../capabilities/capabilities.module";
 import { OperationEventsModule } from "../operations/operation-events.module";
+import { OperationsModule } from "../operations/operations.module";
 import { AuditModule } from "../audit/audit.module";
 import { BillingModule } from "../billing/billing.module";
 import { FinanceController } from "./finance.controller";
@@ -24,7 +25,19 @@ import { PriceCatalogService } from "./price-catalog.service";
  * Finance's.
  */
 @Module({
-  imports: [DatabaseModule, AuthModule, AccessModule, CapabilitiesModule, OperationEventsModule, BillingModule, AuditModule],
+  imports: [
+    DatabaseModule,
+    AuthModule,
+    AccessModule,
+    CapabilitiesModule,
+    OperationEventsModule,
+    // Finance PULLS what Operations says is billable, through the
+    // ChargeableWorkItem contract. The reverse direction stays closed:
+    // Operations and Inventory never import Finance.
+    OperationsModule,
+    BillingModule,
+    AuditModule,
+  ],
   controllers: [FinanceController, FinanceConfigurationController],
   providers: [FinanceService, FinanceConfigurationService, PriceCatalogService],
   exports: [FinanceService],

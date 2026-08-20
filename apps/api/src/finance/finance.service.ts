@@ -20,6 +20,7 @@ import { CapabilityResolutionService } from "../capabilities/capability-resoluti
 import { OperationEventsService } from "../operations/operation-events.service";
 import { BillingService } from "../billing/billing.service";
 import type { LifecycleActor } from "../operations/work-order-lifecycle.service";
+import { ChargeableItemsService } from "../operations/chargeable-items.service";
 import { PriceCatalogService } from "./price-catalog.service";
 
 export interface AddLineInput {
@@ -92,6 +93,7 @@ export class FinanceService {
     private readonly events: OperationEventsService,
     private readonly billing: BillingService,
     private readonly priceCatalog: PriceCatalogService,
+    private readonly chargeable: ChargeableItemsService,
   ) {}
 
   /**
@@ -183,6 +185,10 @@ export class FinanceService {
    * add up to its printed total.
    */
   async jobTotal(tenantId: string, workOrderId: string): Promise<JobTotal> {
+    // Parts fitted by the shop floor are folded in before the total is
+    // read, so "what does this job cost" answers with the parts on it.
+    await this.absorbOperationalItems(tenantId, workOrderId);
+
     const running = await this.prisma.runningInvoice.findUnique({
       where: { workOrderId },
       select: {
@@ -229,6 +235,10 @@ export class FinanceService {
     if (existing) {
       throw new ConflictException({ code: "invoice_already_issued", message: "This job already has an invoice." });
     }
+
+    // Last chance to pick up a part issued after the counter last looked
+    // at the total. After this line the invoice is fixed forever.
+    await this.absorbOperationalItems(tenantId, workOrderId);
 
     const running = await this.prisma.runningInvoice.findUnique({
       where: { workOrderId },
@@ -641,6 +651,121 @@ export class FinanceService {
    * columns, so a bug here shows up as a stale report rather than as a
    * customer being told the wrong thing.
    */
+  /**
+   * Folds Operations' chargeable items into the running total.
+   *
+   * The direction matters. Inventory never calls Finance -- Billing is
+   * downstream, never upstream, and the same rule keeps Inventory from
+   * pricing anything. So Finance PULLS, through the typed
+   * `ChargeableWorkItem` contract, and never reads a part table itself.
+   *
+   * Idempotent by database constraint, not by hope: the unique index on
+   * `(runningInvoiceId, sourceType, sourceId)` is what stops a job being
+   * billed for the same part twice, and `skipDuplicates` leans on it
+   * rather than on a read-then-write that two concurrent callers would
+   * both pass. Quantity changes -- a partial issue topped up later, or a
+   * part partly returned -- are applied to the line that already exists.
+   *
+   * Does nothing at all when the workshop has no running invoice yet AND
+   * no parts: a job that charges nothing should not acquire an empty
+   * invoice just because somebody opened it.
+   */
+  private async absorbOperationalItems(tenantId: string, workOrderId: string): Promise<void> {
+    // A workshop without FINANCE has no running invoice to absorb into,
+    // and creating one here would resurrect a disabled capability from
+    // the side -- the exact thing the capability engine sits above role
+    // and permission to prevent.
+    if (!(await this.hasFinance(tenantId))) return;
+
+    // An issued invoice is immutable; a part fitted afterwards is a
+    // credit-note conversation, not a silent edit to a closed document.
+    const issued = await this.prisma.invoice.findUnique({ where: { workOrderId }, select: { id: true } });
+    if (issued) return;
+
+    const items = await this.chargeable.partItems(tenantId, workOrderId);
+
+    // Nothing to bill AND nothing previously billed: leave without
+    // creating an empty running invoice for a job that charges nothing.
+    // Note this is NOT an early return when items is empty -- a part
+    // that was billed and then fully returned has no chargeable item
+    // left, and its line still has to be taken off. Returning here on
+    // `items.length === 0` alone was a real bug: the customer kept
+    // paying for a part that was back on the shelf.
+    const existingRunning = await this.prisma.runningInvoice.findUnique({
+      where: { workOrderId },
+      select: { id: true },
+    });
+    if (items.length === 0 && !existingRunning) return;
+
+    await this.prisma.$transaction(async (tx) => {
+      const running = await tx.runningInvoice.upsert({
+        where: { workOrderId },
+        create: { tenantId, workOrderId },
+        update: {},
+        select: { id: true },
+      });
+
+      const already = await tx.runningInvoiceLine.findMany({
+        where: { runningInvoiceId: running.id, sourceType: { not: null } },
+        select: { id: true, sourceType: true, sourceId: true, quantity: true, unitPrice: true, laborPrice: true },
+      });
+      const bySource = new Map(already.map((line) => [`${line.sourceType}:${line.sourceId}`, line]));
+
+      for (const item of items) {
+        const key = `${item.sourceType}:${item.sourceId}`;
+        const existing = bySource.get(key);
+        // The contract guarantees a price on an approved item; a part
+        // line always carries the one snapshotted at issue.
+        const unitPrice = item.approvedUnitPrice ?? "0.00";
+        const labour = item.approvedLabourPrice ?? ZERO;
+        const computed = invoiceTotal([{ unitPrice, quantity: item.quantity, labour }]);
+
+        if (!existing) {
+          await tx.runningInvoiceLine.create({
+            data: {
+              tenantId,
+              runningInvoiceId: running.id,
+              name: item.itemName,
+              itemType: item.itemType,
+              quantity: item.quantity,
+              unitPrice,
+              laborPrice: labour,
+              total: computed.total,
+              sourceType: item.sourceType,
+              sourceId: item.sourceId,
+              // Attributed to whoever Operations recorded as adding it,
+              // which for a part is the storekeeper who issued it.
+              addedById: "system:operations",
+            },
+          });
+          continue;
+        }
+
+        // Quantity moved (a top-up issue, or a partial return). The
+        // agreed unit price is deliberately NOT refreshed -- it was
+        // fixed when the part left the store.
+        if (existing.quantity !== item.quantity) {
+          const recomputed = invoiceTotal([
+            { unitPrice: existing.unitPrice.toFixed(2), quantity: item.quantity, labour: existing.laborPrice.toFixed(2) },
+          ]);
+          await tx.runningInvoiceLine.update({
+            where: { id: existing.id },
+            data: { quantity: item.quantity, total: recomputed.total },
+          });
+        }
+      }
+
+      // A part fully returned leaves no chargeable item behind it, so its
+      // line must go too -- otherwise the customer keeps paying for a
+      // part that is back on the shelf.
+      const live = new Set(items.map((item) => `${item.sourceType}:${item.sourceId}`));
+      const stale = already.filter((line) => !live.has(`${line.sourceType}:${line.sourceId}`));
+      if (stale.length > 0) {
+        await tx.runningInvoiceLine.deleteMany({ where: { id: { in: stale.map((line) => line.id) } } });
+      }
+    });
+  }
+
   private async refreshCachedTotals(invoiceId: string): Promise<void> {
     const current = await this.settlement(invoiceId);
 
@@ -682,6 +807,18 @@ export class FinanceService {
       RETURNING "lastNumber"
     `);
     return `INV-${String(row.lastNumber).padStart(6, "0")}`;
+  }
+
+  /**
+   * The same question `requireFinance` asks, without the throw.
+   *
+   * Used where the absence of finance is a reason to do nothing rather
+   * than a reason to refuse a caller -- reconciling parts into a running
+   * total, which is a side effect of reading, not a request to bill.
+   */
+  private async hasFinance(tenantId: string): Promise<boolean> {
+    const profile = await this.capabilities.resolveCurrent(tenantId);
+    return isCapabilityActive(profile, "FINANCE_CORE");
   }
 
   private async requireFinance(tenantId: string): Promise<void> {

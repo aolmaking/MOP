@@ -140,6 +140,47 @@
         </ul>
       </section>
 
+      @if (openParts().length > 0) {
+        <!-- Above the "something's wrong" tools on purpose: when a car is
+             WAITING_PARTS this is the reason, and a technician should not
+             have to open a panel to find out what is holding their job. -->
+        <section class="tools">
+          <h2 class="tools-title">Parts</h2>
+
+          <ul class="part-requests">
+            @for (part of openParts(); track part.partRequestId) {
+              <li class="part-request" [class.part-request--mine]="part.waitingOn === 'YOU'">
+                <span class="part-request-main">
+                  <span class="part-request-name">
+                    {{ part.name }}
+                    @if (part.quantity > 1) {
+                      <span class="part-request-qty">×{{ part.quantity }}</span>
+                    }
+                  </span>
+                  <span class="part-request-status">{{ part.statusText }}</span>
+                  @if (part.issued > 0 && part.issued < part.quantity) {
+                    <span class="part-request-partial">
+                      {{ part.issued }} of {{ part.quantity }} handed over so far.
+                    </span>
+                  }
+                </span>
+
+                @if (part.action) {
+                  <button
+                    class="tap tap--primary"
+                    type="button"
+                    [disabled]="busy() !== null"
+                    (click)="actOnPart(part)"
+                  >
+                    {{ busy() === 'part-' + part.partRequestId ? '…' : partActionLabel(part) }}
+                  </button>
+                }
+              </li>
+            }
+          </ul>
+        </section>
+      }
+
       <!-- ── group 2: tell someone something ────────────────────────── -->
       <!-- Costs someone else's time, so each needs a reason. -->
 
@@ -147,6 +188,7 @@
         <h2 class="tools-title">Something's wrong</h2>
 
         <div class="tool-row">
+          <button class="tap" type="button" (click)="togglePartsPanel()">Need a part</button>
           <button class="tap" type="button" (click)="panel.set(panel() === 'blocker' ? 'none' : 'blocker')">
             I'm blocked
           </button>
@@ -154,6 +196,117 @@
             Found a fault
           </button>
         </div>
+
+        @if (panel() === 'parts') {
+          <!-- Cards, not a SKU box. The technician knows the part by
+               sight and by price; typing an identifier one-handed at a
+               car is how the wrong part gets requested. Price and stock
+               come from the workshop's own catalogue -- nothing here is
+               hardcoded. -->
+          <div class="parts">
+            @if (partsLoading()) {
+              <p class="parts-loading" aria-busy="true">Loading parts…</p>
+            } @else if ((partsCatalog() ?? []).length === 0) {
+              <p class="parts-empty">
+                This workshop has no parts catalogued for work orders yet.
+              </p>
+              <button class="tap tap--wide" type="button" (click)="blockOnUncataloguedPart()">
+                Tell the branch I'm waiting on a part
+              </button>
+            } @else {
+              <label class="parts-search">
+                <span class="visually-hidden">Search parts</span>
+                <input
+                  type="search"
+                  placeholder="Search parts"
+                  [value]="partsQuery()"
+                  (input)="partsQuery.set($any($event.target).value)"
+                />
+              </label>
+
+              @if (visibleParts().length === 0) {
+                <p class="parts-empty">Nothing matches “{{ partsQuery() }}”.</p>
+              }
+
+              <ul class="part-grid">
+                @for (part of visibleParts(); track part.id) {
+                  <li>
+                    <button
+                      class="part-card"
+                      type="button"
+                      [class.part-card--chosen]="chosenPart()?.id === part.id"
+                      [attr.aria-pressed]="chosenPart()?.id === part.id"
+                      (click)="choosePart(part)"
+                    >
+                      <span class="part-name">{{ part.name }}</span>
+                      <span class="part-price">{{ part.sellingPrice }}</span>
+                      <span
+                        class="part-stock"
+                        [class.part-stock--out]="part.stockTracked && part.onHand === 0"
+                      >
+                        @if (!part.stockTracked) {
+                          Not stock-tracked
+                        } @else if (part.onHand === 0) {
+                          None on the shelf
+                        } @else {
+                          {{ part.onHand }} on the shelf
+                        }
+                      </span>
+                    </button>
+                  </li>
+                }
+              </ul>
+
+              @if (chosenPart(); as chosen) {
+                <div class="part-confirm">
+                  <p class="part-confirm-name">{{ chosen.name }}</p>
+
+                  <div class="quantity">
+                    <button
+                      class="tap tap--quantity"
+                      type="button"
+                      aria-label="One fewer"
+                      [disabled]="partQuantity() <= 1"
+                      (click)="adjustQuantity(-1)"
+                    >
+                      −
+                    </button>
+                    <span class="quantity-value" aria-live="polite">{{ partQuantity() }}</span>
+                    <button
+                      class="tap tap--quantity"
+                      type="button"
+                      aria-label="One more"
+                      (click)="adjustQuantity(1)"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  @if (chosen.stockTracked && chosen.onHand < partQuantity()) {
+                    <!-- Not a block: the store decides, and may order it
+                         in. Said plainly so nobody is surprised later. -->
+                    <p class="part-warn">
+                      Only {{ chosen.onHand }} on the shelf. The store will have to order the rest.
+                    </p>
+                  }
+
+                  <button
+                    class="tap tap--primary tap--wide"
+                    type="button"
+                    [disabled]="busy() !== null"
+                    (click)="requestPart()"
+                  >
+                    {{ busy() === 'part' ? '…' : 'Ask the store for this' }}
+                  </button>
+                </div>
+              }
+
+              <button class="parts-fallback" type="button" (click)="blockOnUncataloguedPart()">
+                Not in the catalogue?
+              </button>
+            }
+          </div>
+        }
 
         @if (panel() === 'blocker') {
           <!-- Reasons, not a text box. A technician with one free hand
@@ -193,7 +346,51 @@
               }
             </div>
 
-            <button class="tap tap--primary tap--wide" type="button" (click)="logFault()">Log it</button>
+            <label class="ask-toggle">
+              <input
+                type="checkbox"
+                [checked]="askCustomer()"
+                (change)="askCustomer.set($any($event.target).checked)"
+              />
+              Ask the customer to approve this
+            </label>
+
+            @if (askCustomer()) {
+              <div class="ask-price">
+                <label class="ask-price-field">
+                  <span>Price</span>
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="0.00"
+                    [value]="faultPrice()"
+                    (input)="faultPrice.set($any($event.target).value)"
+                  />
+                </label>
+                <label class="ask-price-field">
+                  <span>Labour (optional)</span>
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="0.00"
+                    [value]="faultLaborPrice()"
+                    (input)="faultLaborPrice.set($any($event.target).value)"
+                  />
+                </label>
+                @if (!priceValid()) {
+                  <p class="ask-price-hint">Enter the price you'd charge for this, e.g. 450 or 450.00.</p>
+                }
+              </div>
+            }
+
+            <button
+              class="tap tap--primary tap--wide"
+              type="button"
+              [disabled]="busy() !== null || (askCustomer() && !priceValid())"
+              (click)="logFault()"
+            >
+              {{ busy() === 'fault' ? '…' : askCustomer() ? 'Log it and ask the customer' : 'Log it' }}
+            </button>
           </div>
         }
       </section>
@@ -215,7 +412,14 @@
           </ul>
 
           @if (c.finish.passed) {
-            <button class="tap tap--primary tap--wide" type="button">Ready to finish</button>
+            <button
+              class="tap tap--primary tap--wide"
+              type="button"
+              [disabled]="busy() !== null"
+              (click)="finish()"
+            >
+              {{ busy() === 'finish' ? '…' : 'Ready to finish' }}
+            </button>
           } @else {
             <p class="checks-note">Clear the items above before this job can finish.</p>
           }

@@ -29,6 +29,18 @@ export interface FinishCheck {
   readonly conditions: readonly { satisfied: boolean; text: string }[];
 }
 
+export interface WorkCardPart {
+  readonly partRequestId: string;
+  readonly name: string;
+  readonly sku: string;
+  readonly quantity: number;
+  readonly issued: number;
+  readonly status: string;
+  readonly statusText: string;
+  readonly waitingOn: 'STORE' | 'YOU' | 'NOBODY';
+  readonly action: 'RECEIVE' | 'MARK_USED' | null;
+}
+
 export interface WorkCard {
   readonly workOrderId: string;
   readonly identifier: string | null;
@@ -37,6 +49,7 @@ export interface WorkCard {
   readonly complaint: string | null;
   readonly inspectionDeclined: boolean;
   readonly tasks: readonly TechnicianTask[];
+  readonly parts: readonly WorkCardPart[];
   readonly finish: FinishCheck;
 }
 
@@ -56,6 +69,22 @@ export interface AssetHistoryVisit {
   readonly partsUsed: readonly { readonly name: string; readonly quantity: number }[];
   readonly decisions: readonly { readonly name: string; readonly decision: string }[];
   readonly sameOwnerAsCurrent: boolean;
+}
+
+/**
+ * One card in the parts picker. Shaped by `CatalogService.toItem` --
+ * `cost` is deliberately absent from this interface, not merely unread:
+ * the technician endpoint never asks for it.
+ */
+export interface PartCard {
+  readonly id: string;
+  readonly sku: string;
+  readonly name: string;
+  readonly category: string | null;
+  /** Money as a string, always. */
+  readonly sellingPrice: string;
+  readonly stockTracked: boolean;
+  readonly onHand: number;
 }
 
 export interface AssetHistorySummary {
@@ -100,5 +129,44 @@ export class TechnicianApi {
 
   createFault(workOrderId: string, description: string, severity: string): Observable<unknown> {
     return this.http.post(`/api/v1/technician/work-orders/${workOrderId}/faults`, { description, severity });
+  }
+
+  finishWorkOrder(workOrderId: string): Observable<unknown> {
+    return this.http.post(`/api/v1/technician/work-orders/${workOrderId}/finish`, {});
+  }
+
+  /** The workshop's own catalog, filtered to what a work order can use. */
+  partsCatalog(query?: string): Observable<{ items: PartCard[]; total: number; categories: string[] }> {
+    const suffix = query?.trim() ? `?q=${encodeURIComponent(query.trim())}` : '';
+    return this.http.get<{ items: PartCard[]; total: number; categories: string[] }>(
+      `/api/v1/technician/parts-catalog${suffix}`,
+    );
+  }
+
+  requestPart(workOrderId: string, inventoryItemId: string, quantity: number, reason?: string): Observable<unknown> {
+    return this.http.post(`/api/v1/technician/work-orders/${workOrderId}/parts`, {
+      inventoryItemId,
+      quantity,
+      reason,
+    });
+  }
+
+  receivePart(partRequestId: string): Observable<unknown> {
+    return this.http.post(`/api/v1/technician/parts/${partRequestId}/receive`, {});
+  }
+
+  usePart(partRequestId: string): Observable<unknown> {
+    return this.http.post(`/api/v1/technician/parts/${partRequestId}/used`, {});
+  }
+
+  /** "Ask the customer" -- creates the decision request and sends it in one call. */
+  raiseDecision(
+    workOrderId: string,
+    item: { name: string; explanation: string; importance: string; price: string; laborPrice?: string },
+  ): Observable<{ requestId: string; secureToken: string }> {
+    return this.http.post<{ requestId: string; secureToken: string }>(
+      `/api/v1/technician/work-orders/${workOrderId}/decisions`,
+      item,
+    );
   }
 }

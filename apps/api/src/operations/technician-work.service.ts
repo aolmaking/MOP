@@ -206,6 +206,21 @@ export class TechnicianWorkService {
   }
 
   /**
+   * The technician's own press of "Ready to finish" -- the FINISH intent,
+   * asked for real rather than only previewed.
+   *
+   * `finishCheck` (technician-work-view.service.ts) shows the same gates
+   * beforehand so a refusal here should never surprise anyone, but the
+   * check is a preview and this is the write: the lifecycle service
+   * re-evaluates the gates itself and throws if anything closed between
+   * the preview and the press, which is the only way this stays correct
+   * under a technician who leaves the tablet open.
+   */
+  async finishWorkOrder(workOrderId: string, actor: LifecycleActor) {
+    return this.lifecycle.apply(workOrderId, "FINISH", actor);
+  }
+
+  /**
    * Which catalogued services were actually performed on this job, and by
    * whom.
    *

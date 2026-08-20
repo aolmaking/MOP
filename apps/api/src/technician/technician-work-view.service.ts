@@ -33,6 +33,28 @@ export interface FinishCheck {
   readonly conditions: readonly { satisfied: boolean; text: string }[];
 }
 
+/**
+ * A part this technician asked for, and what they can do about it now.
+ *
+ * `waitingOn` names who currently owes the move -- the single thing a
+ * technician standing at a car actually wants to know. It is derived
+ * from the request's own status rather than stored, because the status
+ * is the fact and a second column would be a second truth.
+ */
+export interface WorkCardPart {
+  readonly partRequestId: string;
+  readonly name: string;
+  readonly sku: string;
+  readonly quantity: number;
+  readonly issued: number;
+  readonly status: string;
+  /** Human words for the state, never the enum. */
+  readonly statusText: string;
+  readonly waitingOn: "STORE" | "YOU" | "NOBODY";
+  /** The one action available to the technician right now, if any. */
+  readonly action: "RECEIVE" | "MARK_USED" | null;
+}
+
 export interface WorkCard {
   readonly workOrderId: string;
   readonly identifier: string | null;
@@ -41,8 +63,41 @@ export interface WorkCard {
   readonly complaint: string | null;
   readonly inspectionDeclined: boolean;
   readonly tasks: readonly TechnicianTask[];
+  readonly parts: readonly WorkCardPart[];
   readonly finish: FinishCheck;
 }
+
+/**
+ * The words a technician reads, and whose move it is, per request state.
+ *
+ * Pinned per status deliberately: a new `PartRequestStatus` member must
+ * fail a test here rather than reach a technician as a lowercased enum.
+ * Same rule the gate registry and the customer status map already follow.
+ */
+const PART_STATE: Record<
+  string,
+  { text: string; waitingOn: WorkCardPart["waitingOn"]; action: WorkCardPart["action"] }
+> = {
+  DRAFT: { text: "Not sent to the store yet.", waitingOn: "YOU", action: null },
+  REQUESTED: { text: "Asked. The store hasn't answered yet.", waitingOn: "STORE", action: null },
+  WAREHOUSE_REVIEWING: { text: "The store is looking at it.", waitingOn: "STORE", action: null },
+  APPROVED: { text: "Approved. Waiting to be handed over.", waitingOn: "STORE", action: null },
+  ISSUED: { text: "Handed over by the store.", waitingOn: "YOU", action: "RECEIVE" },
+  IN_TRANSIT: { text: "On its way from another branch.", waitingOn: "STORE", action: null },
+  ARRIVED: { text: "Arrived at the store. Collect it.", waitingOn: "YOU", action: "RECEIVE" },
+  RECEIVED_BY_TECHNICIAN: { text: "You have it. Fit it, then mark it used.", waitingOn: "YOU", action: "MARK_USED" },
+  USED: { text: "Fitted to this vehicle.", waitingOn: "NOBODY", action: null },
+  REJECTED: { text: "The store refused this request.", waitingOn: "NOBODY", action: null },
+  UNAVAILABLE: { text: "The store doesn't have it.", waitingOn: "NOBODY", action: null },
+  WAITING_TRANSFER: { text: "Coming from another branch.", waitingOn: "STORE", action: null },
+  WAITING_SUPPLIER: { text: "On order from a supplier.", waitingOn: "STORE", action: null },
+  RETURN_REQUESTED: { text: "You sent it back. Waiting on the store.", waitingOn: "STORE", action: null },
+  RETURN_ACCEPTED: { text: "Your return was accepted.", waitingOn: "NOBODY", action: null },
+  RETURNED_TO_STOCK: { text: "Back on the shelf.", waitingOn: "NOBODY", action: null },
+  RETURN_REJECTED: { text: "The store refused the return. Fit it or speak to them.", waitingOn: "YOU", action: "MARK_USED" },
+  RETURN_CLARIFICATION_REQUESTED: { text: "The store asked you a question about the return.", waitingOn: "YOU", action: null },
+  CANCELLED: { text: "Cancelled.", waitingOn: "NOBODY", action: null },
+};
 
 /**
  * What one technician can see.
@@ -172,6 +227,22 @@ export class TechnicianWorkViewService {
 
     const complaints = await this.assetHistory.complaintText(tenantId, [workOrder.id]);
 
+    // Every part request on the job, not only this technician's own:
+    // a second technician's request is still what is holding the car,
+    // and hiding it would leave the first one staring at WAITING_PARTS
+    // with nothing on screen to explain it.
+    const partRequests = await this.prisma.partRequest.findMany({
+      where: { workOrderId: workOrder.id, tenantId },
+      select: {
+        id: true,
+        quantity: true,
+        status: true,
+        inventoryItem: { select: { name: true, sku: true } },
+        issuedItems: { select: { quantity: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
     return {
       workOrderId: workOrder.id,
       identifier: workOrder.asset.plateNumber ?? workOrder.asset.serialNumber,
@@ -185,6 +256,26 @@ export class TechnicianWorkViewService {
         status: task.status,
         blockedReason: task.blockers[0]?.note ?? task.blockers[0]?.reason ?? null,
       })),
+      parts: partRequests.map((request) => {
+        const state = PART_STATE[request.status];
+        if (!state) {
+          // Deliberately loud rather than a lowercased enum: an unmapped
+          // status is a missing product decision, not a display detail.
+          throw new Error(`No technician-facing wording for part request status ${request.status}`);
+        }
+        return {
+          partRequestId: request.id,
+          name: request.inventoryItem.name,
+          sku: request.inventoryItem.sku,
+          quantity: request.quantity,
+          // money-lint-ok: a count of physical objects, not a currency amount.
+          issued: request.issuedItems.reduce((sum, issue) => sum + issue.quantity, 0),
+          status: request.status,
+          statusText: state.text,
+          waitingOn: state.waitingOn,
+          action: state.action,
+        };
+      }),
       finish: await this.finishCheck(workOrderId),
     };
   }

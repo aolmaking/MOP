@@ -100,6 +100,9 @@ const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   // Inventory
   { key: "inventory.home.view", module: "INVENTORY" },
   { key: "inventory.requests.view", module: "INVENTORY" },
+  // Distinct from .approve/.issue/.reject: the technician who asks for a
+  // part is never the one who decides whether the shelf gives it up.
+  { key: "inventory.request.create", module: "INVENTORY" },
   { key: "inventory.request.approve", module: "INVENTORY" },
   { key: "inventory.request.issue", module: "INVENTORY" },
   { key: "inventory.request.reject", module: "INVENTORY" },

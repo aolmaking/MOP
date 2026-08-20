@@ -14,6 +14,7 @@ function card(overrides: Partial<WorkCard> = {}): WorkCard {
     complaint: null,
     inspectionDeclined: false,
     tasks: [],
+    parts: [],
     finish: { available: false, passed: false, conditions: [] },
     ...overrides,
   };
@@ -26,6 +27,13 @@ async function render(result: WorkCard | { error: unknown }) {
     completeTask: vi.fn(() => of({})),
     reportBlocker: vi.fn(() => of({})),
     createFault: vi.fn(() => of({})),
+    partsCatalog: vi.fn(() => of({ items: [], total: 0, categories: [] })),
+    requestPart: vi.fn(() => of({})),
+    receivePart: vi.fn(() => of({})),
+    usePart: vi.fn(() => of({})),
+    finishWorkOrder: vi.fn(() => of({})),
+    raiseDecision: vi.fn(() => of({ requestId: 'r1', secureToken: 't1' })),
+    vehicleHistory: vi.fn(() => of({ assetId: 'a1', identifier: null, totalPriorVisits: 0, hasPriorOwnerHistory: false, visits: [] })),
   };
   TestBed.configureTestingModule({
     providers: [provideRouter([]), { provide: TechnicianApi, useValue: api }],

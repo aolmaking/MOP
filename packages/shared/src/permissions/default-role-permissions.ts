@@ -98,10 +98,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "customer_decision.send": true,
     // Explicitly not automatic -- see technician.md's Services/POS tool.
     "finance.running_invoice.add_line": false,
+    "inventory.request.create": true,
   },
   INVENTORY_MANAGER: {
     "inventory.home.view": true,
     "inventory.requests.view": true,
+    "inventory.request.create": true,
     "inventory.request.approve": true,
     "inventory.request.issue": true,
     "inventory.request.reject": true,

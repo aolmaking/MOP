@@ -4,7 +4,7 @@ import type { Prisma, PartRequestStatus } from "@mop/database";
 import { PrismaService } from "../database/prisma.service";
 import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 import { OperationEventsService } from "../operations/operation-events.service";
-import type { LifecycleActor } from "../operations/work-order-lifecycle.service";
+import { WorkOrderLifecycleService, type LifecycleActor } from "../operations/work-order-lifecycle.service";
 import { StockService } from "./stock.service";
 
 export interface RequestPartInput {
@@ -54,6 +54,7 @@ export class PartRequestService {
     private readonly capabilities: CapabilityResolutionService,
     private readonly stock: StockService,
     private readonly events: OperationEventsService,
+    private readonly lifecycle: WorkOrderLifecycleService,
   ) {}
 
   /**
@@ -94,6 +95,12 @@ export class PartRequestService {
         inventoryItemId: input.inventoryItemId,
         quantity: input.quantity,
       });
+
+      // Same transaction as the create. A work order already WAITING_PARTS
+      // from a different task's request simply refuses the move -- this
+      // request still stands on its own, same shape as
+      // TechnicianWorkService.moveIfPossible for blockers.
+      await this.moveIfPossible(input.workOrderId, "REQUEST_PART", actor, tx);
 
       return request;
     });
@@ -176,18 +183,55 @@ export class PartRequestService {
       );
 
       const nowIssued = before.issued + input.quantity;
-      if (nowIssued >= before.requested && request.status !== "ISSUED") {
+      const fullyIssued = nowIssued >= before.requested;
+
+      // The part is now the customer's problem to pay for. Written HERE,
+      // in the same transaction the shelf moves in, because a part that
+      // left the store and never reached a bill is the workshop paying
+      // for the customer's repair -- and until this existed, nothing in
+      // production wrote a WorkOrderPartLine at all: the model was read
+      // by the dossier, the finish gate and the profitability report,
+      // and written only by the demo seed.
+      await this.recordBillableLine(tx, request, nowIssued, actor);
+      if (fullyIssued && request.status !== "ISSUED") {
         await this.transition(tx, request, "ISSUED", actor);
       }
 
       await this.emit(tx, request.tenantId, "part_request.issued", input.partRequestId, actor, {
         quantity: input.quantity,
         warehouseId: input.warehouseId,
-        fullyIssued: nowIssued >= before.requested,
+        fullyIssued,
       });
+
+      // The technician's own blocker was "I don't have the part" -- once
+      // the store has fully handed it over, that stops being true. Same
+      // swallow-if-refused shape as everywhere else this asks the graph
+      // rather than assuming.
+      if (fullyIssued) {
+        await this.moveIfPossible(request.workOrderId, "PART_RECEIVED", actor, tx);
+      }
     });
 
     return this.fulfilment(input.partRequestId);
+  }
+
+  /**
+   * Which work order a request belongs to, scoped to the tenant.
+   *
+   * Exists so a caller can run its own ownership check against the work
+   * order without reaching into `partRequest` itself -- the same reason
+   * every other cross-system read here goes through a method rather
+   * than a foreign query.
+   */
+  async workOrderOf(partRequestId: string, tenantId: string): Promise<string> {
+    const request = await this.prisma.partRequest.findFirst({
+      where: { id: partRequestId, tenantId },
+      select: { workOrderId: true },
+    });
+    if (!request) {
+      throw new NotFoundException({ code: "part_request_not_found", message: "Request not found." });
+    }
+    return request.workOrderId;
   }
 
   async markArrived(partRequestId: string, actor: LifecycleActor) {
@@ -500,6 +544,12 @@ export class PartRequestService {
         data: { resolvedAt: new Date(), resolvedById: actor.accountId, clarificationQuestion: null },
       });
 
+      // A part that came back is a part the customer does not pay for.
+      // Same transaction as the shelf movement, for the same reason the
+      // line was written in the same transaction as the issue: a bill
+      // that disagrees with the shelf is the bug this pairing prevents.
+      await this.unbillReturnedQuantity(tx, partRequestId, quantity);
+
       await this.transition(tx, request, "RETURNED_TO_STOCK", actor);
 
       await this.emit(tx, request.tenantId, "part_request.returned", partRequestId, actor, {
@@ -571,6 +621,105 @@ export class PartRequestService {
   }
 
   // --- internals -----------------------------------------------------
+
+  /**
+   * The billable line for an issued part.
+   *
+   * **Prices are snapshotted, never referenced.** `sellingPrice` and
+   * `cost` are copied off the catalogue row at the moment the part is
+   * handed over, so an Owner editing the catalogue next month reprices
+   * future work and leaves this job's bill exactly as it was agreed.
+   * Reading the catalogue live at invoice time would silently rewrite
+   * history, which is the one thing a finished invoice may never do.
+   *
+   * Upserted rather than created per issue: `partRequestId` is unique,
+   * and a request filled across two partial hand-overs is still one part
+   * on one bill. The quantity is the running issued total, passed in by
+   * the caller which already computed it inside the same transaction.
+   */
+  private async recordBillableLine(
+    tx: Prisma.TransactionClient,
+    request: { id: string; tenantId: string; workOrderId: string; inventoryItemId: string },
+    issuedQuantity: number,
+    actor: LifecycleActor,
+  ): Promise<void> {
+    const item = await tx.inventoryItem.findUnique({
+      where: { id: request.inventoryItemId },
+      select: { name: true, sellingPrice: true, cost: true },
+    });
+    if (!item) return;
+
+    await tx.workOrderPartLine.upsert({
+      where: { partRequestId: request.id },
+      create: {
+        tenantId: request.tenantId,
+        workOrderId: request.workOrderId,
+        // It came off this workshop's own shelf, which is what decides
+        // both who warrants it and whether a cost exists at all.
+        provenance: "INVENTORY",
+        inventoryItemId: request.inventoryItemId,
+        name: item.name,
+        quantity: issuedQuantity,
+        sellingPrice: item.sellingPrice,
+        cost: item.cost,
+        partRequestId: request.id,
+        addedById: actor.accountId,
+      },
+      // Only the quantity moves on a second partial issue. The prices
+      // stay at what they were when the first of this part was handed
+      // over -- the same snapshot rule, applied within one request.
+      update: { quantity: issuedQuantity },
+    });
+  }
+
+  /**
+   * Takes a returned quantity back off the bill.
+   *
+   * The line is deleted outright when nothing is left rather than kept
+   * at quantity zero, because a zero-quantity line still prints on an
+   * invoice and a customer reading "Alternator ×0" reasonably asks what
+   * it means. The `PartRequest` itself keeps the whole story either way
+   * -- the line is the charge, not the history.
+   */
+  private async unbillReturnedQuantity(
+    tx: Prisma.TransactionClient,
+    partRequestId: string,
+    returnedQuantity: number,
+  ): Promise<void> {
+    const line = await tx.workOrderPartLine.findUnique({
+      where: { partRequestId },
+      select: { id: true, quantity: true },
+    });
+    if (!line) return;
+
+    const remaining = line.quantity - returnedQuantity;
+    if (remaining > 0) {
+      await tx.workOrderPartLine.update({ where: { id: line.id }, data: { quantity: remaining } });
+    } else {
+      await tx.workOrderPartLine.delete({ where: { id: line.id } });
+    }
+  }
+
+  /**
+   * Applies a work-order lifecycle intent where the graph allows it, and
+   * stays quiet where it does not -- same pattern as
+   * TechnicianWorkService.moveIfPossible. A part request stands on its
+   * own record either way; only the work order's position in the graph
+   * is opportunistic.
+   */
+  private async moveIfPossible(
+    workOrderId: string,
+    intent: "REQUEST_PART" | "PART_RECEIVED",
+    actor: LifecycleActor,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    try {
+      await this.lifecycle.apply(workOrderId, intent, actor, { tx });
+    } catch {
+      // Not available from the work order's current state; the part
+      // request record stands on its own.
+    }
+  }
 
   private async load(id: string) {
     const request = await this.prisma.partRequest.findUnique({

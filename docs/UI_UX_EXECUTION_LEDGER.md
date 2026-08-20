@@ -739,3 +739,144 @@ before anyone starts.**
 
 Reports default to a narrow date range; widen it to 2025-01-01 → 2026-12-31
 to see the ten weeks of seeded financial history.
+
+---
+
+## Session 6 — the core demo journey, and a capability that never existed
+
+Directive this session: stop auditing subsystems in isolation and prove
+the single core journey a real customer would be judged on --
+Owner/Manager -> Customer -> Technician -> Customer -> Payment -- actually
+works, browser-verified, not just "backend exists" or "tests pass."
+
+### 1. The technician could never finish a job
+
+`tech-work-card.html`'s "Ready to finish" button had **no `(click)`
+handler at all** -- it rendered once every gate passed and did nothing.
+There was also no backend route: `technician-work.service.ts` had no
+method that ever called `lifecycle.apply(id, "FINISH", ...)`, only
+`finish-check`, a preview. A technician could clear every condition on
+the Finish Gate and the job would simply never move.
+
+Fixed as a full vertical slice: `TechnicianWorkService.finishWorkOrder()`
+-> `POST /technician/work-orders/:id/finish` (ownership-checked exactly
+like `finish-check`) -> Angular `finishWorkOrder()` -> the button. The
+lifecycle service re-evaluates every gate itself on the real write, so a
+stale preview can never push a job past a condition that closed in the
+meantime. One new integration test proves the gate refuses the real
+write the same way it refused the preview, not just that the route
+exists.
+
+### 2. Customer approval: the request side never existed
+
+The deeper finding. `customer_decisions_resolved` (the finish gate) reads
+
+```
+count(CustomerDecisionRequest where workOrderId = X and status not in [RESOLVED, EXPIRED, CANCELLED])
+```
+
+and grep across all of `apps/api/src` for `customerDecisionRequest.create(`
+turned up **zero production call sites** -- only tests and the demo seed
+insert rows directly. A fault found with `customerApprovalRequired: true`
+(the schema default) produced nothing a customer could ever see or
+answer. Because `count() === 0` when no request exists, the gate read as
+**vacuously satisfied** -- a workshop could finish and bill a job with an
+unacknowledged safety-critical fault sitting in it, and nothing anywhere
+would say so. `apps/web/.../customer/current-service.html`'s "Needs you"
+flag has no click-through either -- the only way to answer today is a
+WhatsApp-style token link a customer must already have.
+
+The permission scaffolding for the fix already existed and was unused:
+`customer_decision.create` / `customer_decision.send` have been `true`
+for TECHNICIAN in `default-role-permissions.ts`, and
+`customer_decision.requested` already had a canned customer-timeline
+message ("We've sent you a decision to review.") in
+`customer-safe-projection.service.ts` -- somebody designed this feature
+down to the words and nothing ever called it.
+
+Built `CustomerDecisionService.raiseAndSend()`: one call, create + send,
+matching the Work Card's own rule that anything costing somebody else's
+time needs a reason, not a multi-step form. Reuses the existing public
+token machinery exactly -- the same link the customer would get back from
+`raiseAndSend` is read and answered by the same `/decide/:token` page
+that already existed, proven by test and by hand in the browser, not by
+reading code. `POST /technician/work-orders/:id/decisions` (ownership +
+both permissions checked), wired into the "Found a fault" panel: a
+`customerApprovalRequired` fault now optionally carries a price and,
+in one press, becomes a real request the finish gate actually reacts to.
+Money computed with `@mop/shared`'s `add()`, never a float; three new
+integration tests including one that proves `0.10 + 0.20` lands on
+exactly `0.30`.
+
+**Browser-verified, full loop, real dev database:** logged a fault as
+the technician with a price -> finish gate flipped from "✓ answered"
+(vacuous) to "✗ not answered yet" (real) -> opened the actual secure
+link as the customer -> approved it -> gate flipped back to "✓" on the
+technician's own screen. `CustomerTimelineEvent` row confirmed with the
+canned message. This is the first time this exact loop has been driven
+end to end through the running app rather than asserted at one layer.
+
+**Found and fixed while making this work, not by design:** the demo
+seed (`seed-demo.ts`) had drifted from the same defaults map it was
+meant to mirror. `TECHNICIAN_PERMISSIONS` was a hand-maintained array of
+five keys with a comment claiming "defaults already grant the rest" --
+untrue, because `RolePermissionTemplateLayer` reads seeded
+`RolePermission` **rows**, not the static map, and nothing had re-synced
+this tenant's rows since `customer_decision.create`/`.send` were added
+to the map. First browser attempt at the new feature failed with a real
+403 because of this. Rewritten to loop over
+`DEFAULT_ROLE_PERMISSIONS.TECHNICIAN` like `TEAM_LEADER`'s block already
+does (a prior session hit and fixed the identical bug there — same
+pattern, same fix). `MANAGER_PERMISSIONS` has the same hand-curated
+shape and was **not** touched this session -- it also carries a
+deliberate demo-only override (`finance.running_invoice.add_line: true`
+on top of a `false` default) that a blind loop would silently drop, so
+it needs a merge, not a replace, and nothing this session confirmed it
+broken in practice. Worth checking next time a Branch Manager permission
+looks unexpectedly denied in the demo.
+
+**Not done this session, found by the same audit, real and still open:**
+
+- **Counter-approval has no UI.** `CustomerDecisionService.recordOnBehalf()`
+  and `POST /branch-manager/approvals/:requestId/record` are fully built
+  and tested (P-18, `PORTAL_COUNTER_APPROVAL` policy respected) but
+  nothing in `apps/web/src` ever calls the route. A branch manager who
+  takes a verbal approval per policy has no way to record it.
+- **A technician cannot request a part from the UI at all.**
+  `PartRequestService.request()` (apps/api/src/inventory/part-request.service.ts)
+  is fully built, transactional, capability-gated -- and reachable only
+  from an integration test. "I'm blocked" -> "Need a part" writes a
+  `TaskBlocker` with `reason: "WAITING_PART"` and nothing else; it never
+  calls `PartRequestService.request()`, never creates a `PartRequest`
+  row, and never moves the work order through the `REQUEST_PART` /
+  `WAITING_PARTS` graph edge (`packages/shared/.../workflow-graphs.ts`) --
+  a second dead graph edge, same shape as the FINISH-button bug this
+  session opened with. The Inventory Manager's Requests queue is
+  correctly built end-to-end (approve/issue really move stock) but can
+  never receive a row from this path. `parts.received_used_or_returned`
+  (a finish gate) can therefore never observe a technician-requested
+  part either.
+- **`current-service.html`'s "Needs you" items have no click-through**
+  in the authenticated Customer Portal -- a logged-in customer sees the
+  flag but cannot act on it without a separate WhatsApp-style link. Not
+  fixed this session; `raiseAndSend` closes the origination side, this is
+  the portal-side read/act gap on the other end of the same feature.
+
+### Resume here
+
+1. **Parts**: give the technician a real "request a part" action
+   (needs a catalog picker, matching the POS-card direction already
+   named for services) that calls the existing, already-correct
+   `PartRequestService.request()`, and route the work order through
+   `REQUEST_PART`/`PART_RECEIVED` for real.
+2. **Counter-approval UI**: a small form on the work order workspace or
+   approvals page calling the existing `recordOnBehalf` endpoint.
+3. **Customer Portal decision list**: an authenticated way to see and
+   answer a pending decision from `current-service`/`portal-home` without
+   needing the token link separately.
+4. Continue the page-by-page real-data audit queue from session 5
+   (team-leader, branch work-order detail, analyst, owner, customer
+   portal) -- unstarted, same pattern that found four bugs in Inventory.
+
+**Gate at end of this session's work so far:** API 698/698 across 90
+suites (+6 new) · web 255/255 · 6/6 linters · typecheck clean.

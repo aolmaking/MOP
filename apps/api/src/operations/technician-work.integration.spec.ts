@@ -20,6 +20,7 @@ import { CapabilityResolutionService } from "../capabilities/capability-resoluti
 import { AuditService } from "../audit/audit.service";
 import { PriceCatalogService } from "../finance/price-catalog.service";
 import { FinanceService } from "../finance/finance.service";
+import { ChargeableItemsService } from "./chargeable-items.service";
 import { BillingService } from "../billing/billing.service";
 import { GenericBillingAdapter } from "../billing/generic-billing-adapter.service";
 import type { PrismaService } from "../database/prisma.service";
@@ -43,6 +44,7 @@ const finance = new FinanceService(
   events,
   new BillingService(asService, new GenericBillingAdapter()),
   priceCatalog,
+  new ChargeableItemsService(asService),
 );
 
 const ACTOR = { accountId: "tech-1", displayName: "Technician", actorType: "TENANT_STAFF" as const };

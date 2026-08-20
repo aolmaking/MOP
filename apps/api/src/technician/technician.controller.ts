@@ -1,11 +1,15 @@
-import { Body, Controller, ForbiddenException, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, ForbiddenException, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
 import { SessionGuard } from "../auth/session.guard";
 import { CurrentSession } from "../auth/current-session.decorator";
 import { EffectiveAccessService } from "../access/effective-access.service";
 import { TechnicianWorkService } from "../operations/technician-work.service";
 import { TechnicianWorkViewService } from "./technician-work-view.service";
-import { ReportBlockerDto, CreateFaultDto } from "./technician.dto";
+import { CustomerDecisionService } from "../customer/decision.service";
+import { PartRequestService } from "../inventory/part-request.service";
+import { CatalogService } from "../inventory/catalog.service";
+import { ReportBlockerDto, CreateFaultDto, RequestPartDto } from "./technician.dto";
+import { RaiseDecisionDto } from "../customer/decision.dto";
 
 /**
  * The technician's three pages, plus the writes they make from them.
@@ -21,6 +25,9 @@ export class TechnicianController {
     private readonly view: TechnicianWorkViewService,
     private readonly work: TechnicianWorkService,
     private readonly access: EffectiveAccessService,
+    private readonly decisions: CustomerDecisionService,
+    private readonly partRequests: PartRequestService,
+    private readonly catalog: CatalogService,
   ) {}
 
   /** Home: the car in front of them, if there is one. */
@@ -87,6 +94,88 @@ export class TechnicianController {
     );
   }
 
+  /**
+   * "Ask the customer" -- create and send in one press. Requires both
+   * `customer_decision.create` and `customer_decision.send`, which
+   * `default-role-permissions.ts` has granted TECHNICIAN since before
+   * this endpoint existed; nothing ever called them until now.
+   */
+  @Post("work-orders/:id/decisions")
+  async raiseDecision(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: RaiseDecisionDto,
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "customer_decision.create");
+    await this.requireTechnician(session, "customer_decision.send");
+    // Ownership before anything else -- a technician may only ask a
+    // customer about a job assigned to them, same rule as every other
+    // write in this controller.
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.decisions.raiseAndSend(
+      tenantId,
+      id,
+      { name: dto.name, explanation: dto.explanation, importance: dto.importance, price: dto.price, laborPrice: dto.laborPrice },
+      { accountId: session.accountId, displayName: session.displayName },
+    );
+  }
+
+  /**
+   * The parts a technician may put on a job, POS-card style -- the same
+   * catalog Catalog Control writes, filtered to what a work order can
+   * use and never carrying cost (a technician has no reason to see
+   * margin). No ownership check: this is workshop-wide reference data,
+   * not this technician's own record.
+   */
+  @Get("parts-catalog")
+  async partsCatalog(@CurrentSession() session: SessionContext, @Query("q") q?: string) {
+    const { tenantId } = await this.requireTechnician(session, "inventory.request.create");
+    return this.catalog.list(tenantId, { query: q, workOrderUsable: true, pageSize: 50 }, false);
+  }
+
+  /**
+   * "I need this part" -- creates the real `PartRequest` the Inventory
+   * Manager's queue already reads, and moves the work order onto
+   * WAITING_PARTS where the graph allows it
+   * (`PartRequestService.request()` asks the graph itself; a job already
+   * blocked some other way simply keeps the request without forcing a
+   * second, contradictory move).
+   */
+  @Post("work-orders/:id/parts")
+  async requestPart(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: RequestPartDto,
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "inventory.request.create");
+    // Ownership before anything else, same rule as every other write here.
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.partRequests.request(
+      { tenantId, workOrderId: id, inventoryItemId: dto.inventoryItemId, quantity: dto.quantity, reason: dto.reason },
+      this.actor(session),
+    );
+  }
+
+  /**
+   * "I've got it" and "it's fitted" -- the technician's own two moves on
+   * a part, and the two the finish gate
+   * (`parts.received_used_or_returned`) is actually watching for. Both
+   * check the work order the request belongs to is this technician's,
+   * so a request id from another bay is refused the same way a work
+   * order id would be.
+   */
+  @Post("parts/:id/receive")
+  async receivePart(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    await this.requirePartOnMyJob(session, id);
+    return this.partRequests.receive(id, this.actor(session));
+  }
+
+  @Post("parts/:id/used")
+  async usePart(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    await this.requirePartOnMyJob(session, id);
+    return this.partRequests.markUsed(id, this.actor(session));
+  }
+
   /** What the Finish Gate would say, asked before anything is pressed. */
   @Get("work-orders/:id/finish-check")
   async finishCheck(@CurrentSession() session: SessionContext, @Param("id") id: string) {
@@ -97,12 +186,38 @@ export class TechnicianController {
     return this.view.finishCheck(id);
   }
 
+  /**
+   * The actual press. Same permission and ownership check as the
+   * preview above -- `finish-check` only ever told the technician what
+   * this would say; this is what moves the job. `WorkOrderLifecycleService`
+   * re-evaluates every gate itself, so a stale preview can never push a
+   * job past a condition that closed in the meantime.
+   */
+  @Post("work-orders/:id/finish")
+  async finish(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.finish_attempt");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.work.finishWorkOrder(id, this.actor(session));
+  }
+
   private actor(session: SessionContext) {
     return {
       accountId: session.accountId,
       displayName: session.displayName,
       actorType: "TENANT_STAFF" as const,
     };
+  }
+
+  /**
+   * Resolves a part request to the work order it sits on, then runs the
+   * same ownership check every other write here runs. Reached through
+   * the view service rather than a second hand-written query, so there
+   * is exactly one definition of "this job is mine".
+   */
+  private async requirePartOnMyJob(session: SessionContext, partRequestId: string): Promise<void> {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    const workOrderId = await this.partRequests.workOrderOf(partRequestId, tenantId);
+    await this.view.workCard(staffUserId, tenantId, workOrderId);
   }
 
   private async requireTechnician(

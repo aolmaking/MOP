@@ -15,6 +15,8 @@ import { StockService } from "./stock.service";
 import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../operations/customer-safe-projection.service";
+import { GateEvaluatorService } from "../operations/gate-evaluator.service";
+import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
 import { AuditService } from "../audit/audit.service";
 import type { PrismaService } from "../database/prisma.service";
 
@@ -24,7 +26,8 @@ const asService = prisma as unknown as PrismaService;
 const stock = new StockService(asService);
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
 const capabilities = new CapabilityResolutionService(asService);
-const parts = new PartRequestService(asService, capabilities, stock, events);
+const lifecycle = new WorkOrderLifecycleService(asService, capabilities, events, new GateEvaluatorService(asService));
+const parts = new PartRequestService(asService, capabilities, stock, events, lifecycle);
 
 const ACTOR = { accountId: "store-1", displayName: "Storekeeper", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `pr-${Date.now()}`;
@@ -591,5 +594,213 @@ describe("Returns/Movements: Accept Return to Stock reverses RETURN_PENDING", ()
 
     const queue = await parts.openReturns(full.tenantId);
     expect(queue.map((entry) => entry.partRequestId)).not.toContain(request.id);
+  });
+});
+
+/**
+ * The part request and the work order are one journey, not two.
+ *
+ * Before this, `PartRequestService.request()` wrote a row and the work
+ * order never moved -- the REQUEST_PART/PART_RECEIVED edges existed in
+ * WORK_ORDER_GRAPH and nothing in production ever asked for them. These
+ * pin the coupling in both directions, including the case where the
+ * graph is right to refuse.
+ */
+describe("part requests move the work order they belong to", () => {
+  /** A fresh job per test: status is what these assert on. */
+  async function freshJob(shop: Workshop): Promise<string> {
+    const existing = await prisma.workOrder.findFirst({
+      where: { tenantId: shop.tenantId },
+      select: { branchId: true, assetId: true, customerId: true },
+    });
+    const created = await prisma.workOrder.create({
+      data: {
+        tenantId: shop.tenantId,
+        branchId: existing!.branchId,
+        assetId: existing!.assetId,
+        customerId: existing!.customerId,
+        status: "IN_PROGRESS",
+      },
+    });
+    return created.id;
+  }
+
+  it("asking for a part puts the job on WAITING_PARTS", async () => {
+    const workOrderId = await freshJob(full);
+
+    await parts.request(
+      { tenantId: full.tenantId, workOrderId, inventoryItemId: full.itemId, quantity: 2 },
+      ACTOR,
+    );
+
+    const after = await prisma.workOrder.findUnique({ where: { id: workOrderId }, select: { status: true } });
+    expect(after?.status).toBe("WAITING_PARTS");
+  });
+
+  it("issuing the last of it puts the job back to IN_PROGRESS", async () => {
+    const workOrderId = await freshJob(full);
+    const request = await parts.request(
+      { tenantId: full.tenantId, workOrderId, inventoryItemId: full.itemId, quantity: 2 },
+      ACTOR,
+    );
+    await parts.approve(request.id, ACTOR);
+
+    // A partial hand-over is not a hand-over: the job stays waiting.
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, ACTOR);
+    const midway = await prisma.workOrder.findUnique({ where: { id: workOrderId }, select: { status: true } });
+    expect(midway?.status).toBe("WAITING_PARTS");
+
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, ACTOR);
+    const after = await prisma.workOrder.findUnique({ where: { id: workOrderId }, select: { status: true } });
+    expect(after?.status).toBe("IN_PROGRESS");
+  });
+
+  it("a second request on an already-waiting job still records, and does not error", async () => {
+    const workOrderId = await freshJob(full);
+    await parts.request(
+      { tenantId: full.tenantId, workOrderId, inventoryItemId: full.itemId, quantity: 1 },
+      ACTOR,
+    );
+
+    // The graph has no WAITING_PARTS -> WAITING_PARTS edge. The request
+    // is still legitimate; only the move is unavailable.
+    const second = await parts.request(
+      { tenantId: full.tenantId, workOrderId, inventoryItemId: full.itemId, quantity: 1 },
+      ACTOR,
+    );
+
+    expect(second.status).toBe("REQUESTED");
+    const after = await prisma.workOrder.findUnique({ where: { id: workOrderId }, select: { status: true } });
+    expect(after?.status).toBe("WAITING_PARTS");
+  });
+
+  it("workOrderOf refuses a request belonging to another tenant", async () => {
+    const workOrderId = await freshJob(full);
+    const request = await parts.request(
+      { tenantId: full.tenantId, workOrderId, inventoryItemId: full.itemId, quantity: 1 },
+      ACTOR,
+    );
+
+    await expect(parts.workOrderOf(request.id, noReturns.tenantId)).rejects.toThrow();
+    await expect(parts.workOrderOf(request.id, full.tenantId)).resolves.toBe(workOrderId);
+  });
+});
+
+/**
+ * The part reaches the bill.
+ *
+ * Until this existed, `WorkOrderPartLine` was written only by the demo
+ * seed: a technician could request a part, the store could issue it, the
+ * technician could fit it, and the customer was never charged. The
+ * dossier, the finish gate and the profitability report all read this
+ * model; nothing in production wrote it.
+ */
+describe("issuing a part puts it on the bill", () => {
+  async function freshJob(shop: Workshop): Promise<string> {
+    const existing = await prisma.workOrder.findFirst({
+      where: { tenantId: shop.tenantId },
+      select: { branchId: true, assetId: true, customerId: true },
+    });
+    const created = await prisma.workOrder.create({
+      data: {
+        tenantId: shop.tenantId,
+        branchId: existing!.branchId,
+        assetId: existing!.assetId,
+        customerId: existing!.customerId,
+        status: "IN_PROGRESS",
+      },
+    });
+    return created.id;
+  }
+
+  it("writes one line, priced from the catalogue, linked to the request", async () => {
+    const workOrderId = await freshJob(full);
+    const request = await parts.request(
+      { tenantId: full.tenantId, workOrderId, inventoryItemId: full.itemId, quantity: 2 },
+      ACTOR,
+    );
+    await parts.approve(request.id, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 2 }, ACTOR);
+
+    const line = await prisma.workOrderPartLine.findUnique({ where: { partRequestId: request.id } });
+    expect(line).not.toBeNull();
+    expect(line!.workOrderId).toBe(workOrderId);
+    expect(line!.provenance).toBe("INVENTORY");
+    expect(line!.quantity).toBe(2);
+    // The catalogue price, exactly -- compared as a string, never a float.
+    expect(line!.sellingPrice.toFixed(2)).toBe("250.00");
+    expect(line!.inventoryItemId).toBe(full.itemId);
+  });
+
+  it("a second partial issue grows the same line rather than adding another", async () => {
+    const workOrderId = await freshJob(full);
+    const request = await parts.request(
+      { tenantId: full.tenantId, workOrderId, inventoryItemId: full.itemId, quantity: 3 },
+      ACTOR,
+    );
+    await parts.approve(request.id, ACTOR);
+
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 2 }, ACTOR);
+
+    const lines = await prisma.workOrderPartLine.findMany({ where: { workOrderId } });
+    expect(lines).toHaveLength(1);
+    expect(lines[0].quantity).toBe(3);
+  });
+
+  it("keeps the price it was issued at when the catalogue is repriced afterwards", async () => {
+    const workOrderId = await freshJob(full);
+    const request = await parts.request(
+      { tenantId: full.tenantId, workOrderId, inventoryItemId: full.itemId, quantity: 1 },
+      ACTOR,
+    );
+    await parts.approve(request.id, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, ACTOR);
+
+    // The Owner puts the price up. An agreed bill may not move under a
+    // customer who already had the work done.
+    await prisma.inventoryItem.update({ where: { id: full.itemId }, data: { sellingPrice: "999.00" } });
+
+    const line = await prisma.workOrderPartLine.findUnique({ where: { partRequestId: request.id } });
+    expect(line!.sellingPrice.toFixed(2)).toBe("250.00");
+
+    await prisma.inventoryItem.update({ where: { id: full.itemId }, data: { sellingPrice: "250.00" } });
+  });
+
+  it("returning the part takes it back off the bill", async () => {
+    const workOrderId = await freshJob(full);
+    const request = await parts.request(
+      { tenantId: full.tenantId, workOrderId, inventoryItemId: full.itemId, quantity: 2 },
+      ACTOR,
+    );
+    await parts.approve(request.id, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 2 }, ACTOR);
+    await parts.receive(request.id, ACTOR);
+
+    // One of the two comes back.
+    await parts.requestReturn(request.id, 1, ACTOR);
+    await parts.acceptReturn(request.id, ACTOR);
+    await parts.completeReturn(request.id, full.warehouseId, 1, ACTOR);
+
+    const line = await prisma.workOrderPartLine.findUnique({ where: { partRequestId: request.id } });
+    expect(line!.quantity).toBe(1);
+  });
+
+  it("returning all of it removes the line entirely, not a zero-quantity one", async () => {
+    const workOrderId = await freshJob(full);
+    const request = await parts.request(
+      { tenantId: full.tenantId, workOrderId, inventoryItemId: full.itemId, quantity: 1 },
+      ACTOR,
+    );
+    await parts.approve(request.id, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, ACTOR);
+    await parts.receive(request.id, ACTOR);
+
+    await parts.requestReturn(request.id, 1, ACTOR);
+    await parts.acceptReturn(request.id, ACTOR);
+    await parts.completeReturn(request.id, full.warehouseId, 1, ACTOR);
+
+    const line = await prisma.workOrderPartLine.findUnique({ where: { partRequestId: request.id } });
+    expect(line).toBeNull();
   });
 });

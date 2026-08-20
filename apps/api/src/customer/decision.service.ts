@@ -1,6 +1,7 @@
+import { randomBytes } from "node:crypto";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import type { Prisma } from "@mop/database";
-import { WORK_ORDER_GRAPH } from "@mop/shared";
+import type { Prisma, SeverityLevel } from "@mop/database";
+import { WORK_ORDER_GRAPH, add } from "@mop/shared";
 import { PrismaService } from "../database/prisma.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { PolicyResolutionService } from "../policies/policy-resolution.service";
@@ -133,6 +134,94 @@ export class CustomerDecisionService {
       actorType: "CUSTOMER",
     });
     return this.read(token);
+  }
+
+  /**
+   * A technician (or anyone else holding both `customer_decision.create`
+   * and `customer_decision.send`) asks the customer something, and the
+   * link goes out in the same action -- one tap, matching the Work Card's
+   * own rule that anything costing somebody else's time needs a reason,
+   * not a multi-step form (PHASE_6.md §4).
+   *
+   * A fresh `CustomerDecisionRequest` every time, deliberately not
+   * batched onto an existing unsent one: the `customer_decisions_resolved`
+   * gate already counts every open request for the work order, so two
+   * separate asks are exactly as correct as one request with two items,
+   * and not batching avoids a second technician's press racing the first
+   * request's own send. Drafting-then-batching-then-sending later is a
+   * real, different feature (the Approvals page's "Not sent yet" band
+   * already has a reader for it) -- this is the technician's own path,
+   * not that one.
+   */
+  async raiseAndSend(
+    tenantId: string,
+    workOrderId: string,
+    item: { readonly name: string; readonly explanation: string; readonly importance: string; readonly price: string; readonly laborPrice?: string },
+    actor: StaffActor,
+  ): Promise<{ readonly requestId: string; readonly secureToken: string }> {
+    const workOrder = await this.prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      select: { id: true, tenantId: true, customerId: true, status: true },
+    });
+    if (!workOrder || workOrder.tenantId !== tenantId) {
+      throw new NotFoundException({ code: "work_order_not_found", message: "Work order not found." });
+    }
+    if (WORK_ORDER_GRAPH.terminal.includes(workOrder.status)) {
+      throw new ConflictException({
+        code: "work_order_already_closed",
+        message: "This job has already been completed or cancelled.",
+      });
+    }
+
+    const laborPrice = item.laborPrice ?? "0.00";
+    const total = add(item.price, laborPrice);
+    const secureToken = randomBytes(24).toString("hex");
+
+    return this.prisma.$transaction(async (tx) => {
+      const request = await tx.customerDecisionRequest.create({
+        data: {
+          tenantId,
+          workOrderId,
+          customerId: workOrder.customerId,
+          secureToken,
+          createdById: actor.accountId,
+          status: "SENT",
+          sentAt: new Date(),
+        },
+        select: { id: true, secureToken: true },
+      });
+
+      await tx.customerDecisionItem.create({
+        data: {
+          tenantId,
+          decisionRequestId: request.id,
+          name: item.name,
+          explanation: item.explanation,
+          importance: item.importance as SeverityLevel,
+          price: item.price,
+          laborPrice,
+          total,
+        },
+      });
+
+      await this.events.emit(
+        {
+          tenantId,
+          eventKey: "customer_decision.requested",
+          actorId: actor.accountId,
+          actorName: actor.displayName,
+          actorType: "TENANT_STAFF",
+          targetType: "CustomerDecisionRequest",
+          targetId: request.id,
+          riskLevel: "MEDIUM",
+          payload: { workOrderId, name: item.name, total },
+          customer: { customerId: workOrder.customerId, workOrderId },
+        },
+        tx,
+      );
+
+      return { requestId: request.id, secureToken: request.secureToken };
+    });
   }
 
   /**

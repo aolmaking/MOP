@@ -138,6 +138,16 @@ export const PART_REQUEST_GRAPH: WorkflowGraph = {
     { from: "REQUESTED", to: "REJECTED" },
     { from: "REQUESTED", to: "UNAVAILABLE" },
     { from: "APPROVED", to: "ISSUED" },
+    // The counter hand-over. A part issued from the branch's own store
+    // does not "arrive" anywhere -- the technician is standing at the
+    // hatch. Without this edge the only route to RECEIVED_BY_TECHNICIAN
+    // ran through ARRIVED, so an in-house issue could never be received
+    // and `parts.received_used_or_returned` could never observe it;
+    // the alternative, writing an ARRIVED nobody witnessed, would put a
+    // transit event in the ledger that never happened.
+    { from: "ISSUED", to: "RECEIVED_BY_TECHNICIAN" },
+    // ARRIVED stays for the part that genuinely travelled -- a branch
+    // transfer or a supplier delivery.
     { from: "ISSUED", to: "ARRIVED" },
     { from: "ARRIVED", to: "RECEIVED_BY_TECHNICIAN" },
     { from: "RECEIVED_BY_TECHNICIAN", to: "USED" },

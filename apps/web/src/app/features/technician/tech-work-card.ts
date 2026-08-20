@@ -3,13 +3,27 @@ import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Identifier } from '../../shared/identifier/identifier';
 import type { PresentedError } from '../../core/api/error.interceptor';
-import { TechnicianApi, type AssetHistorySummary, type TechnicianTask, type WorkCard } from './technician.api';
+import {
+  TechnicianApi,
+  type AssetHistorySummary,
+  type PartCard,
+  type TechnicianTask,
+  type WorkCard,
+  type WorkCardPart,
+} from './technician.api';
 
 type State = 'loading' | 'ready' | 'not-mine' | 'forbidden' | 'error';
 
-/** What a technician can report, in the words they would use out loud. */
+/**
+ * What a technician can report, in the words they would use out loud.
+ *
+ * `WAITING_PART` is deliberately absent: needing a part has a real path
+ * now (the parts picker writes a `PartRequest` the store actually
+ * receives), and leaving it here as a blocker would offer a dead end
+ * beside the working door. The picker itself still falls back to this
+ * blocker for a part the catalogue does not carry.
+ */
 const BLOCKER_REASONS = [
-  { key: 'WAITING_PART', label: 'Need a part' },
   { key: 'TOOL_MISSING', label: 'Missing a tool' },
   { key: 'NEED_TEAM_LEADER', label: 'Need the team leader' },
   { key: 'UNCLEAR_DIAGNOSIS', label: "Don't know what's wrong" },
@@ -43,11 +57,107 @@ export class TechWorkCard {
   protected readonly actionError = signal<string | null>(null);
 
   /** Which panel is open. Only one at a time -- this is a small screen. */
-  protected readonly panel = signal<'none' | 'blocker' | 'fault'>('none');
+  protected readonly panel = signal<'none' | 'blocker' | 'fault' | 'parts'>('none');
   protected readonly faultText = signal('');
   protected readonly faultSeverity = signal('MEDIUM');
 
+  /**
+   * "Ask the customer" -- folded into the same panel as logging the
+   * fault, rather than a second screen, because a fault that needs
+   * approval and its price are one decision in the technician's head,
+   * not two.
+   */
+  protected readonly askCustomer = signal(false);
+  protected readonly faultPrice = signal('');
+  protected readonly faultLaborPrice = signal('');
+  private static readonly MONEY = /^\d+(\.\d{1,2})?$/;
+
   protected readonly reasons = BLOCKER_REASONS;
+
+  /**
+   * The parts picker. Cards, not a text box: a technician knows the part
+   * by sight and by price, and typing a SKU one-handed at a car is how
+   * the wrong part gets requested. Loaded on first open only -- the
+   * catalog does not change while somebody stands at a vehicle.
+   */
+  protected readonly partsCatalog = signal<readonly PartCard[] | null>(null);
+  protected readonly partsLoading = signal(false);
+  protected readonly partsQuery = signal('');
+  protected readonly chosenPart = signal<PartCard | null>(null);
+  protected readonly partQuantity = signal(1);
+
+  protected readonly visibleParts = computed(() => {
+    const all = this.partsCatalog() ?? [];
+    const q = this.partsQuery().trim().toLowerCase();
+    if (!q) return all;
+    return all.filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
+  });
+
+  protected togglePartsPanel(): void {
+    const opening = this.panel() !== 'parts';
+    this.panel.set(opening ? 'parts' : 'none');
+    if (opening && this.partsCatalog() === null) {
+      this.partsLoading.set(true);
+      this.api.partsCatalog().subscribe({
+        next: (page) => {
+          this.partsLoading.set(false);
+          this.partsCatalog.set(page.items);
+        },
+        error: (err: PresentedError) => {
+          this.partsLoading.set(false);
+          this.partsCatalog.set([]);
+          this.actionError.set(err.message ?? "Couldn't load the parts catalogue.");
+        },
+      });
+    }
+  }
+
+  protected choosePart(part: PartCard): void {
+    // Tapping the chosen card again clears it, so a mis-tap costs one tap.
+    this.chosenPart.set(this.chosenPart()?.id === part.id ? null : part);
+    this.partQuantity.set(1);
+  }
+
+  protected adjustQuantity(delta: number): void {
+    this.partQuantity.set(Math.max(1, this.partQuantity() + delta));
+  }
+
+  protected requestPart(): void {
+    const part = this.chosenPart();
+    if (!part) return;
+    const quantity = this.partQuantity();
+    this.panel.set('none');
+    this.chosenPart.set(null);
+    this.partQuantity.set(1);
+    this.run('part', this.api.requestPart(this.id(), part.id, quantity));
+  }
+
+  /** Only the parts still needing somebody -- settled ones are history. */
+  protected readonly openParts = computed(
+    () => this.card()?.parts.filter((part) => part.waitingOn !== 'NOBODY') ?? [],
+  );
+
+  protected actOnPart(part: WorkCardPart): void {
+    if (part.action === 'RECEIVE') {
+      this.run(`part-${part.partRequestId}`, this.api.receivePart(part.partRequestId));
+    } else if (part.action === 'MARK_USED') {
+      this.run(`part-${part.partRequestId}`, this.api.usePart(part.partRequestId));
+    }
+  }
+
+  protected partActionLabel(part: WorkCardPart): string {
+    return part.action === 'RECEIVE' ? "I've got it" : "It's fitted";
+  }
+
+  /**
+   * The part isn't in the catalogue. Falls back to the blocker, which is
+   * what this whole panel replaced for catalogued parts -- a technician
+   * still has to be able to say "I'm stuck without a part" for one the
+   * workshop has never stocked.
+   */
+  protected blockOnUncataloguedPart(): void {
+    this.reportBlocker('WAITING_PART');
+  }
 
   /** Loaded lazily, on request -- not every job has history, and most visits are a single one. */
   protected readonly vehicleHistory = signal<AssetHistorySummary | null>(null);
@@ -98,12 +208,65 @@ export class TechWorkCard {
     this.run('blocker', this.api.reportBlocker(task.id, reason));
   }
 
+  protected finish(): void {
+    this.run('finish', this.api.finishWorkOrder(this.id()));
+  }
+
+  protected readonly priceValid = computed(() => TechWorkCard.MONEY.test(this.faultPrice().trim()));
+
   protected logFault(): void {
     const text = this.faultText().trim();
     if (text.length < 3) return;
+    if (this.askCustomer() && !this.priceValid()) return;
+
     this.panel.set('none');
-    this.run('fault', this.api.createFault(this.id(), text, this.faultSeverity()));
-    this.faultText.set('');
+    const description = text;
+    const severity = this.faultSeverity();
+    const askCustomer = this.askCustomer();
+    const price = this.faultPrice().trim();
+    const laborPrice = this.faultLaborPrice().trim();
+
+    this.busy.set('fault');
+    this.actionError.set(null);
+
+    this.api.createFault(this.id(), description, severity).subscribe({
+      next: () => {
+        this.faultText.set('');
+        if (!askCustomer) {
+          this.busy.set(null);
+          this.load();
+          return;
+        }
+
+        this.api
+          .raiseDecision(this.id(), {
+            name: description.slice(0, 200),
+            explanation: description,
+            importance: severity,
+            price,
+            laborPrice: laborPrice || undefined,
+          })
+          .subscribe({
+            next: () => {
+              this.busy.set(null);
+              this.askCustomer.set(false);
+              this.faultPrice.set('');
+              this.faultLaborPrice.set('');
+              this.load();
+            },
+            error: (err: PresentedError) => {
+              this.busy.set(null);
+              // The fault is already logged -- only the ask failed.
+              this.actionError.set(err.message ?? 'Logged, but asking the customer did not go through.');
+              this.load();
+            },
+          });
+      },
+      error: (err: PresentedError) => {
+        this.busy.set(null);
+        this.actionError.set(err.message ?? 'That did not work.');
+      },
+    });
   }
 
   /**

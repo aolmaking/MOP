@@ -532,3 +532,92 @@ describe("P-18 -- recordOnBehalf, staff recording a verbal decision", () => {
     ).rejects.toMatchObject({ status: 409, response: { code: "work_order_already_closed" } });
   });
 });
+
+/**
+ * `raiseAndSend` -- the piece that was missing before this session:
+ * nothing in production code ever created a `CustomerDecisionRequest`.
+ * `customer_decision.create`/`.send` were declared true for TECHNICIAN in
+ * `default-role-permissions.ts` and the `customer_decision.requested`
+ * event already had a customer-safe projection message, but no service
+ * method and no route ever used either. This proves the whole seam: a
+ * technician's "ask the customer" press produces a request the SAME
+ * public token link can read and answer, and the customer's own
+ * timeline picks it up -- not just that a row appears in the table.
+ */
+describe("raiseAndSend -- a technician actually asking the customer something", () => {
+  const STAFF = { accountId: "tech-1", displayName: "Hassan Fathy" };
+
+  it("creates a request the public token link can read, sent immediately", async () => {
+    const workOrder = await prisma.workOrder.create({
+      data: { tenantId, branchId, assetId, customerId, status: "IN_PROGRESS" as never },
+    });
+
+    const result = await decisions.raiseAndSend(
+      tenantId,
+      workOrder.id,
+      { name: "Replace rear shock absorbers", explanation: "Leaking, failed the bounce test.", importance: "HIGH", price: "1200.00", laborPrice: "300.00" },
+      STAFF,
+    );
+
+    // The exact object a `customer_decision_request` row should look like
+    // -- SENT, not a draft nobody sent.
+    const row = await prisma.customerDecisionRequest.findUniqueOrThrow({
+      where: { id: result.requestId },
+      include: { items: true },
+    });
+    expect(row.status).toBe("SENT");
+    expect(row.sentAt).not.toBeNull();
+    expect(row.customerId).toBe(customerId);
+    expect(row.items).toHaveLength(1);
+    expect(row.items[0].total.toFixed(2)).toBe("1500.00");
+
+    // The same token the public page would be sent resolves to the same
+    // item -- proving this is not a parallel, disconnected record.
+    const publicView = await decisions.read(result.secureToken);
+    expect(publicView.state).toBe("OPEN");
+    expect(publicView.items).toHaveLength(1);
+    expect(publicView.items[0].name).toBe("Replace rear shock absorbers");
+    expect(publicView.items[0].total).toBe("1500.00");
+
+    // And the event fan-out actually happened: the customer's own
+    // timeline (what Portal Home's "recent activity" reads) has an entry,
+    // using the canned safe message for this event key.
+    const timelineEntry = await prisma.customerTimelineEvent.findFirst({
+      where: { tenantId, customerId, workOrderId: workOrder.id, eventKey: "customer_decision.requested" },
+    });
+    expect(timelineEntry?.message).toBe("We've sent you a decision to review.");
+  });
+
+  it("refuses to ask about a job that has already closed", async () => {
+    const workOrder = await prisma.workOrder.create({
+      data: { tenantId, branchId, assetId, customerId, status: "CLOSED" as never },
+    });
+
+    await expect(
+      decisions.raiseAndSend(
+        tenantId,
+        workOrder.id,
+        { name: "Late finding", explanation: "Found after the fact.", importance: "LOW", price: "100.00" },
+        STAFF,
+      ),
+    ).rejects.toMatchObject({ status: 409, response: { code: "work_order_already_closed" } });
+  });
+
+  it("computes the total itself rather than trusting a client-sent number", async () => {
+    const workOrder = await prisma.workOrder.create({
+      data: { tenantId, branchId, assetId, customerId, status: "IN_PROGRESS" as never },
+    });
+
+    const result = await decisions.raiseAndSend(
+      tenantId,
+      workOrder.id,
+      { name: "Alignment", explanation: "Pulling right.", importance: "LOW", price: "0.10", laborPrice: "0.20" },
+      STAFF,
+    );
+
+    const item = await prisma.customerDecisionItem.findFirstOrThrow({ where: { decisionRequestId: result.requestId } });
+    // Exact decimal arithmetic -- 0.10 + 0.20, not the float that famously
+    // is not 0.30.
+    expect(item.total.toFixed(2)).toBe("0.30");
+  });
+});

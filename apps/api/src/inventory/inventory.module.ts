@@ -4,6 +4,7 @@ import { AuthModule } from "../auth/auth.module";
 import { AccessModule } from "../access/access.module";
 import { CapabilitiesModule } from "../capabilities/capabilities.module";
 import { OperationEventsModule } from "../operations/operation-events.module";
+import { OperationsModule } from "../operations/operations.module";
 import { AuditModule } from "../audit/audit.module";
 import { InventoryController } from "./inventory.controller";
 import { InventoryViewService } from "./inventory-view.service";
@@ -23,7 +24,7 @@ import { WarehouseService } from "./warehouse.service";
  * the sole writer of work-order status.
  */
 @Module({
-  imports: [DatabaseModule, AuthModule, AccessModule, CapabilitiesModule, OperationEventsModule, AuditModule],
+  imports: [DatabaseModule, AuthModule, AccessModule, CapabilitiesModule, OperationEventsModule, OperationsModule, AuditModule],
   controllers: [InventoryController],
   providers: [
     StockService,
@@ -34,6 +35,6 @@ import { WarehouseService } from "./warehouse.service";
     InventoryReportsService,
     WarehouseService,
   ],
-  exports: [StockService, PartRequestService, InventoryReportsService],
+  exports: [StockService, PartRequestService, InventoryReportsService, CatalogService],
 })
 export class InventoryModule {}

@@ -36,6 +36,7 @@ export interface CatalogFilters {
   readonly query?: string;
   readonly category?: string;
   readonly stockTracked?: boolean;
+  readonly workOrderUsable?: boolean;
   readonly page?: number;
   readonly pageSize?: number;
 }
@@ -95,6 +96,7 @@ export class CatalogService {
       tenantId,
       ...(filters.category ? { category: filters.category } : {}),
       ...(filters.stockTracked !== undefined ? { stockTracked: filters.stockTracked } : {}),
+      ...(filters.workOrderUsable !== undefined ? { workOrderUsable: filters.workOrderUsable } : {}),
       ...(query
         ? {
             OR: [

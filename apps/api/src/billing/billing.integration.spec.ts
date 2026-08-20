@@ -32,6 +32,7 @@ import type {
   QrPayload,
 } from "@mop/shared";
 import { FinanceService } from "../finance/finance.service";
+import { ChargeableItemsService } from "../operations/chargeable-items.service";
 import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../operations/customer-safe-projection.service";
@@ -48,7 +49,8 @@ const priceCatalog = new PriceCatalogService(asService, new AuditService(asServi
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
 const capabilities = new CapabilityResolutionService(asService);
 const genericBilling = new BillingService(asService, new GenericBillingAdapter());
-const financeWithGeneric = new FinanceService(asService, capabilities, events, genericBilling, priceCatalog);
+const chargeable = new ChargeableItemsService(asService);
+const financeWithGeneric = new FinanceService(asService, capabilities, events, genericBilling, priceCatalog, chargeable);
 
 const ACTOR = { accountId: "cashier-1", displayName: "Cashier", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `bill-${Date.now()}`;
@@ -272,7 +274,7 @@ class TestOnlyAdapter implements BillingCountryAdapter {
 describe("the adapter seam is provably swappable", () => {
   it("produces a differently-shaped document from a different adapter, without the amount changing", async () => {
     const testBilling = new BillingService(asService, new GenericBillingAdapter(), new TestOnlyAdapter());
-    const financeWithTestAdapter = new FinanceService(asService, capabilities, events, testBilling, priceCatalog);
+    const financeWithTestAdapter = new FinanceService(asService, capabilities, events, testBilling, priceCatalog, chargeable);
 
     const job = await makeJob(shop);
     await financeWithTestAdapter.addLine(

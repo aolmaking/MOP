@@ -14,6 +14,7 @@ process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { FinanceService } from "./finance.service";
+import { ChargeableItemsService } from "../operations/chargeable-items.service";
 import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../operations/customer-safe-projection.service";
@@ -29,7 +30,14 @@ const priceCatalog = new PriceCatalogService(asService, new AuditService(asServi
 
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
 const billing = new BillingService(asService, new GenericBillingAdapter());
-const finance = new FinanceService(asService, new CapabilityResolutionService(asService), events, billing, priceCatalog);
+const finance = new FinanceService(
+  asService,
+  new CapabilityResolutionService(asService),
+  events,
+  billing,
+  priceCatalog,
+  new ChargeableItemsService(asService),
+);
 
 const ACTOR = { accountId: "cashier-1", displayName: "Cashier", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `fin-${Date.now()}`;
@@ -141,6 +149,7 @@ afterAll(async () => {
     await prisma.financeConfiguration.deleteMany({ where: { tenantId: shop.tenantId } });
     await prisma.runningInvoiceLine.deleteMany({ where });
     await prisma.runningInvoice.deleteMany({ where });
+    await prisma.workOrderPartLine.deleteMany({ where });
     await prisma.operationEvent.deleteMany({ where });
     await prisma.auditLog.deleteMany({ where });
     await prisma.customerTimelineEvent.deleteMany({ where });
@@ -148,6 +157,7 @@ afterAll(async () => {
     await prisma.assetOwnershipHistory.deleteMany({ where });
     await prisma.asset.deleteMany({ where });
     await prisma.customer.deleteMany({ where });
+    await prisma.inventoryItem.deleteMany({ where });
     await prisma.branch.deleteMany({ where });
     await prisma.tenantCapability.deleteMany({ where });
     await prisma.tenant.deleteMany({ where: { id: shop.tenantId } });
@@ -712,5 +722,136 @@ describe("the Service Catalog is the source of truth for a line's price", () => 
         ACTOR,
       ),
     ).rejects.toThrow();
+  });
+});
+
+/**
+ * A part fitted on the shop floor reaches the bill.
+ *
+ * The hole this closes: `WorkOrderPartLine` was read by three subsystems
+ * and written by none, and even once written it was invisible to
+ * Finance, whose totals come from `RunningInvoiceLine`. A workshop could
+ * issue a part, fit it, invoice the job and charge the customer nothing
+ * for the part.
+ *
+ * Finance pulls these through the `ChargeableWorkItem` contract; it
+ * never reads a part table itself, and Inventory never calls Finance.
+ */
+describe("parts fitted on the job are billed", () => {
+  async function partOnJob(
+    shop: Shop,
+    workOrderId: string,
+    price: string,
+    quantity = 1,
+  ): Promise<{ itemId: string; partRequestId: string }> {
+    const item = await prisma.inventoryItem.create({
+      data: {
+        tenantId: shop.tenantId,
+        sku: `BILL-${Math.random().toString(36).slice(2, 10)}`,
+        name: "Alternator",
+        itemType: "PART",
+        sellingPrice: price,
+      },
+    });
+    const request = await prisma.partRequest.create({
+      data: {
+        tenantId: shop.tenantId,
+        workOrderId,
+        inventoryItemId: item.id,
+        requestedById: ACTOR.accountId,
+        quantity,
+        status: "ISSUED",
+      },
+    });
+    await prisma.workOrderPartLine.create({
+      data: {
+        tenantId: shop.tenantId,
+        workOrderId,
+        provenance: "INVENTORY",
+        inventoryItemId: item.id,
+        name: item.name,
+        quantity,
+        sellingPrice: price,
+        partRequestId: request.id,
+        addedById: ACTOR.accountId,
+      },
+    });
+    return { itemId: item.id, partRequestId: request.id };
+  }
+
+  it("appears on the running total without anyone adding a line by hand", async () => {
+    const job = await makeJob(paid);
+    await partOnJob(paid, job, "2200.00");
+
+    const total = await finance.jobTotal(paid.tenantId, job);
+
+    expect(total.lines).toHaveLength(1);
+    expect(total.lines[0].name).toBe("Alternator");
+    expect(total.total).toBe("2200.00");
+  });
+
+  it("is billed exactly once no matter how often the total is read", async () => {
+    const job = await makeJob(paid);
+    await partOnJob(paid, job, "500.00");
+
+    await finance.jobTotal(paid.tenantId, job);
+    await finance.jobTotal(paid.tenantId, job);
+    const total = await finance.jobTotal(paid.tenantId, job);
+
+    expect(total.lines).toHaveLength(1);
+    expect(total.total).toBe("500.00");
+  });
+
+  it("sits alongside hand-entered labour rather than replacing it", async () => {
+    const job = await makeJob(paid);
+    await partOnJob(paid, job, "300.00");
+    await finance.addLine(
+      { tenantId: paid.tenantId, workOrderId: job, name: "Fitting", itemType: "LABOUR", quantity: 1, unitPrice: "150.00" },
+      ACTOR,
+    );
+
+    const total = await finance.jobTotal(paid.tenantId, job);
+
+    expect(total.lines).toHaveLength(2);
+    expect(total.total).toBe("450.00");
+  });
+
+  it("carries onto the issued invoice, and stays there when the catalogue is repriced", async () => {
+    const job = await makeJob(paid);
+    const { itemId } = await partOnJob(paid, job, "1000.00");
+
+    const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR);
+    expect(settlement.total).toBe("1000.00");
+
+    // The Owner puts the price up afterwards. An issued invoice is
+    // immutable, and the snapshot is what defends that.
+    await prisma.inventoryItem.update({ where: { id: itemId }, data: { sellingPrice: "9999.00" } });
+
+    const line = await prisma.invoiceLine.findFirstOrThrow({ where: { invoice: { workOrderId: job } } });
+    expect(line.lockedUnitPrice.toFixed(2)).toBe("1000.00");
+  });
+
+  it("drops off the total when the part is returned and its line goes", async () => {
+    const job = await makeJob(paid);
+    const { partRequestId } = await partOnJob(paid, job, "800.00");
+
+    expect((await finance.jobTotal(paid.tenantId, job)).total).toBe("800.00");
+
+    // What PartRequestService.completeReturn does once nothing is left.
+    await prisma.workOrderPartLine.delete({ where: { partRequestId } });
+
+    const after = await finance.jobTotal(paid.tenantId, job);
+    expect(after.lines).toHaveLength(0);
+    expect(after.total).toBe("0.00");
+  });
+
+  it("a workshop with no finance capability never absorbs anything", async () => {
+    const job = await makeJob(free);
+    await partOnJob(free, job, "400.00");
+
+    // requireFinance refuses before any of this is reached.
+    await expect(finance.jobTotal(free.tenantId, job)).resolves.toBeDefined();
+    const lines = await prisma.runningInvoiceLine.findMany({ where: { tenantId: free.tenantId } });
+    expect(lines).toHaveLength(0);
   });
 });

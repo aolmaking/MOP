@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString, Length } from "class-validator";
+import { IsEnum, IsInt, IsOptional, IsString, Length, Min } from "class-validator";
 import { BlockerReason, SeverityLevel } from "@mop/database";
 
 export class ReportBlockerDto {
@@ -14,6 +14,20 @@ export class ReportBlockerDto {
   @IsString()
   @Length(1, 1000)
   note?: string;
+}
+
+export class RequestPartDto {
+  @IsString()
+  inventoryItemId!: string;
+
+  @IsInt()
+  @Min(1)
+  quantity!: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 500)
+  reason?: string;
 }
 
 export class CreateFaultDto {

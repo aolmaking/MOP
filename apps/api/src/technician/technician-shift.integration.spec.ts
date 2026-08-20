@@ -286,4 +286,18 @@ describe("a technician's shift", () => {
     // And it stops being "on now", so the next pick-up shows the truth.
     await expect(techView.activeJob(mineStaffId, tenantId)).resolves.toBeNull();
   });
+
+  it("refuses the actual finish press while the fault's customer decision is still open", async () => {
+    // The fault recorded above defaulted customerApprovalRequired to
+    // true and nobody has decided it, so the same gate the preview
+    // showed as unsatisfied must also refuse the real write -- proving
+    // `finishWorkOrder` is wired to the same lifecycle gate, not a
+    // second, looser check.
+    const before = await prisma.workOrder.findUniqueOrThrow({ where: { id: myJobId }, select: { status: true } });
+
+    await expect(techWork.finishWorkOrder(myJobId, ACTOR)).rejects.toMatchObject({ status: 409 });
+
+    const after = await prisma.workOrder.findUniqueOrThrow({ where: { id: myJobId }, select: { status: true } });
+    expect(after.status).toBe(before.status);
+  });
 });

@@ -24,6 +24,7 @@ import { CapabilityResolutionService } from "../capabilities/capability-resoluti
 import { OperationEventsService } from "../operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../operations/customer-safe-projection.service";
 import { GateEvaluatorService } from "../operations/gate-evaluator.service";
+import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
 import { AuditService } from "../audit/audit.service";
 import type { PrismaService } from "../database/prisma.service";
 
@@ -33,9 +34,10 @@ const asService = prisma as unknown as PrismaService;
 const stock = new StockService(asService);
 const capabilities = new CapabilityResolutionService(asService);
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
-const parts = new PartRequestService(asService, capabilities, stock, events);
-const view = new InventoryViewService(asService, parts);
 const gates = new GateEvaluatorService(asService);
+const lifecycle = new WorkOrderLifecycleService(asService, capabilities, events, gates);
+const parts = new PartRequestService(asService, capabilities, stock, events, lifecycle);
+const view = new InventoryViewService(asService, parts);
 
 const ACTOR = { accountId: "store-1", displayName: "Storekeeper", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `walk7-${Date.now()}`;
