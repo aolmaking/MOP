@@ -172,20 +172,38 @@ export class WorkflowJourneyService {
       skipAhead: this.optionalStagesThisJobDoesNotNeed(facts, approvalScope),
     });
 
-    const stages = journey.stages
-      .map((stage) => this.correctForOpenWork(stage, facts))
+    const corrected = journey.stages.map((stage) => this.correctForOpenWork(stage, facts));
+
+    // A blocker is held on the TASK, and the work order may legitimately
+    // still read IN_PROGRESS while one is open -- the seed's own blocked
+    // job does exactly that. Left alone the strip said "Moving normally"
+    // over a job nobody could move, so the blocker is applied to
+    // whichever stage is current.
+    const blockedByTask = !journey.finished && facts.blockers.length > 0;
+    const stages = corrected
+      .map((stage) =>
+        blockedByTask && (stage.state === "CURRENT" || stage.state === "WAITING")
+          ? { ...stage, state: "BLOCKED" as const }
+          : stage,
+      )
       .map((stage) => this.present(stage, audience, facts));
+
     const status = workOrder.status;
+    const blocked = journey.blocked || blockedByTask;
 
     return {
       stages,
       finished: journey.finished,
-      waiting: journey.waiting,
-      blocked: journey.blocked,
-      headline: this.headline(status, audience, facts) ?? this.movingHeadline(audience, facts),
+      waiting: journey.waiting && !blockedByTask,
+      blocked,
+      headline: blockedByTask
+        ? this.blockerHeadline(audience, facts)
+        : (this.headline(status, audience, facts) ?? this.movingHeadline(audience, facts)),
       happened: this.happened(journey.stages, audience, facts),
       next: journey.finished ? null : this.next(journey.stages, status, audience, facts),
-      waitingOn: this.waitingOn(status, audience, facts),
+      waitingOn: blockedByTask
+        ? { who: OWNER.BLOCKED[audience], since: facts.blockers[0].since }
+        : this.waitingOn(status, audience, facts),
       history: await this.safeHistory(tenantId, workOrderId, audience),
     };
   }
@@ -243,6 +261,17 @@ export class WorkflowJourneyService {
   }
 
   private detail(stage: JourneyStage, audience: JourneyAudience, facts: JourneyFacts): string | null {
+    // A blocker lives on the TASK, so the stage wearing BLOCKED may well
+    // be IN_PROGRESS. The reason belongs to whichever stage is actually
+    // blocked, not to the status that happens to be named "BLOCKED".
+    if (stage.state === "BLOCKED" && facts.blockers.length > 0) {
+      const first = facts.blockers[0];
+      // A customer is told there IS a hold, never the shop-floor reason.
+      return audience === "CUSTOMER"
+        ? "We've paused work while we sort something out."
+        : (first.note ?? first.reason.toLowerCase().replace(/_/g, " "));
+    }
+
     switch (stage.status) {
       case "UNDER_INSPECTION":
         if (facts.inspectionCount === 0) return null;
@@ -327,6 +356,14 @@ export class WorkflowJourneyService {
   private stageFacts(stage: JourneyStage, audience: JourneyAudience, facts: JourneyFacts): readonly StageFact[] {
     const out: StageFact[] = [];
 
+    // Blockers hang off whichever stage is blocked, for the same reason
+    // as `detail` above. Never shown to the customer.
+    if (stage.state === "BLOCKED" && audience !== "CUSTOMER") {
+      for (const blocker of facts.blockers) {
+        out.push({ label: blocker.reason.toLowerCase().replace(/_/g, " "), value: blocker.note ?? "no note" });
+      }
+    }
+
     switch (stage.status) {
       case "UNDER_INSPECTION":
         if (facts.inspectionCount > 0) out.push({ label: "Inspections recorded", value: String(facts.inspectionCount) });
@@ -365,10 +402,6 @@ export class WorkflowJourneyService {
         break;
 
       case "BLOCKED":
-        for (const blocker of facts.blockers) {
-          if (audience === "CUSTOMER") continue;
-          out.push({ label: blocker.reason.toLowerCase().replace(/_/g, " "), value: blocker.note ?? "no note" });
-        }
         break;
 
       case "PAYMENT_PENDING":
@@ -392,6 +425,24 @@ export class WorkflowJourneyService {
    * not moving normally, and saying so is the difference between a
    * status label and a useful one.
    */
+  /**
+   * What a task-level blocker means to each reader.
+   *
+   * The customer is told there IS a hold and never the shop-floor reason
+   * for it -- "torque wrench on loan" is our problem, not theirs.
+   */
+  private blockerHeadline(audience: JourneyAudience, facts: JourneyFacts): string {
+    if (audience === "CUSTOMER") return "Your job is on hold while we sort something out.";
+
+    const first = facts.blockers[0];
+    // A technician's note is free text and often already ends in a full
+    // stop, so appending one produced "on loan to the other bay..".
+    const reason = (first.note ?? first.reason.toLowerCase().replace(/_/g, " ")).replace(/\s*\.\s*$/, "");
+    return audience === "TECHNICIAN"
+      ? `Blocked: ${reason}. Your branch manager has to clear it.`
+      : `Blocked: ${reason}.`;
+  }
+
   private movingHeadline(audience: JourneyAudience, facts: JourneyFacts): string {
     if (facts.decisionsOpen === 0) return MOVING[audience];
     return audience === "CUSTOMER"

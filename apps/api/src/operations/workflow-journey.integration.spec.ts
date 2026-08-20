@@ -495,3 +495,81 @@ describe("a stage the job moved past is not called done if it is not", () => {
     expect(journey.stages.find((stage) => stage.status === "AWAITING_CUSTOMER_APPROVAL")?.state).toBe("DONE");
   });
 });
+
+describe("a blocker on the task blocks the journey, whatever the work order says", () => {
+  async function blockedTask(workOrderId: string, note: string): Promise<void> {
+    const task = await prisma.task.create({
+      data: { tenantId: full.tenantId, workOrderId, title: "Fit alternator", status: "BLOCKED" },
+    });
+    await prisma.taskBlocker.create({
+      data: {
+        tenantId: full.tenantId,
+        taskId: task.id,
+        reason: "TOOL_MISSING",
+        note,
+        status: "OPEN",
+        reportedBy: "tech-1",
+      },
+    });
+  }
+
+  it("does not say a job is moving normally while a blocker is open on it", async () => {
+    // The work order legitimately stays IN_PROGRESS: a blocker lives on
+    // the TASK. The demo workshop's own blocked job is exactly this
+    // shape, and the strip used to say "Moving normally" over it.
+    const job = await makeJob(full, "IN_PROGRESS");
+    await blockedTask(job, "Torque wrench is on loan to the other bay.");
+
+    const journey = await journeys.forWorkOrder(full.tenantId, job, "MANAGER");
+
+    expect(journey.blocked).toBe(true);
+    expect(journey.headline).toContain("Torque wrench");
+    expect(journey.headline).not.toContain("Moving normally");
+  });
+
+  it("marks the CURRENT stage blocked, not a stage called BLOCKED", async () => {
+    const job = await makeJob(full, "IN_PROGRESS");
+    await blockedTask(job, "Bay hoist is down.");
+
+    const journey = await journeys.forWorkOrder(full.tenantId, job, "TECHNICIAN");
+    const inProgress = journey.stages.find((stage) => stage.status === "IN_PROGRESS");
+
+    expect(inProgress?.state).toBe("BLOCKED");
+    expect(inProgress?.detail).toContain("Bay hoist");
+  });
+
+  it("names who has to clear it, per role", async () => {
+    const job = await makeJob(full, "IN_PROGRESS");
+    await blockedTask(job, "Bay hoist is down.");
+
+    const tech = await journeys.forWorkOrder(full.tenantId, job, "TECHNICIAN");
+    expect(tech.waitingOn?.who).toBe("your branch manager");
+
+    const manager = await journeys.forWorkOrder(full.tenantId, job, "MANAGER");
+    expect(manager.waitingOn?.who).toBe("you");
+  });
+
+  it("never tells the customer WHY, only that there is a hold", async () => {
+    const job = await makeJob(full, "IN_PROGRESS");
+    await blockedTask(job, "Torque wrench is on loan to the other bay.");
+
+    const customer = await journeys.forWorkOrder(full.tenantId, job, "CUSTOMER");
+
+    expect(customer.blocked).toBe(true);
+    // Absent from the response, not hidden client-side.
+    expect(JSON.stringify(customer)).not.toContain("Torque wrench");
+    expect(JSON.stringify(customer)).not.toContain("tool missing");
+  });
+
+  it("leaves a finished job alone even if a stale blocker row survives", async () => {
+    const job = await makeJob(full, "CLOSED");
+    await blockedTask(job, "Something old.");
+
+    const journey = await journeys.forWorkOrder(full.tenantId, job, "MANAGER");
+
+    // A closed job is closed. Re-opening it in the UI because a blocker
+    // row was never tidied would be the strip inventing a state.
+    expect(journey.finished).toBe(true);
+    expect(journey.blocked).toBe(false);
+  });
+});
