@@ -880,3 +880,121 @@ looks unexpectedly denied in the demo.
 
 **Gate at end of this session's work so far:** API 698/698 across 90
 suites (+6 new) · web 255/255 · 6/6 linters · typecheck clean.
+
+---
+
+## Session 7 — the core journey, walked until it worked
+
+Directive: make the core product journey genuinely usable and
+demonstrable end to end, browser-verified, before anything else.
+
+The method that found everything below: **walk the journey as a real
+user and stop at the first thing that does not work.** Every defect here
+was found by doing, not by reading. The pattern they share is worth
+naming, because it recurs across the whole codebase:
+
+> A service is built, tested and correct. A graph edge or permission key
+> exists for it. **Nothing calls it.** The feature reads as finished at
+> every layer except the one where a person touches it.
+
+Seven instances, all in the core path:
+
+| Dead thing | Consequence |
+|---|---|
+| `PartRequestService.request()` | a technician could not ask for a part at all |
+| `REQUEST_PART` / `PART_RECEIVED` edges | asking never moved the job |
+| `ISSUED → RECEIVED_BY_TECHNICIAN` (missing) | a counter hand-over could never be received |
+| `WorkOrderPartLine` (no writer) | fitted parts were never charged |
+| `SETTLE_PAYMENT` edge | a fully paid car sat in PAYMENT_PENDING forever |
+| `DELIVER` edge + `workorders.branch.release_delivery` | no job could reach CLOSED |
+| `REVIEW_PASSED` / `QC_PASSED` edges | review/QC workshops stranded every job |
+| `TechnicianWorkService.recordInspection` | the inspection gate could never be cleared |
+| Task `serviceKey` → bill | labour-only jobs had "nothing to invoice" |
+
+### What now works, proven end to end
+
+Technician records an inspection → does the work → requests a part from
+a POS-style catalogue picker → store approves and issues it (stock moves
+21→19 with a movement carrying before/after, job returns to IN_PROGRESS)
+→ technician receives and fits it → customer answers their decision from
+the authenticated portal → finish gate goes green on real work →
+technician finishes → manager passes team review then QC → owner
+invoices, priced from the Service Catalog → payment settles and the job
+moves ITSELF to READY_FOR_DELIVERY → manager hands over → CLOSED.
+
+### The workflow strip (§11/§12)
+
+`workflowJourney()` in `@mop/shared` generates the stages from the
+graph, the capability profile and the real transition history. Disabling
+QC removes the QC stage from every strip — verified live by toggling the
+capability and back.
+
+**It follows the router, not the shortest path.** The first
+implementation was breadth-first and was wrong in a way only a
+capability change exposed: with QC off it routed IN_PROGRESS →
+PAYMENT_PENDING, skipping the team review the router would really have
+chosen. Declaration order is precedence; the projection walks the graph
+the way `resolveIntent` does.
+
+One state, three vocabularies (customer / technician / manager), with a
+test that fails if a graph state gains no words. The enum-in-disguise
+rule is applied to customer and technician but **not** to manager — "In
+progress" is simply correct English for IN_PROGRESS on an ops board.
+
+### Seed and data bugs found by using it
+
+- Lifecycle history was written with `AWAITING_APPROVAL` / `APPROVED`,
+  which are **not** `WorkOrderStatus` members. Nothing caught it because
+  history is JSON payload, not an enum column. Now checked at seed time
+  against `WORK_ORDER_GRAPH.states`.
+- `clearDemoWork` deleted invoices without removing `BillingDocument`
+  rows first — only surfaced once the demo could issue a real invoice.
+- `MANAGER_PERMISSIONS` had drifted from
+  `DEFAULT_ROLE_PERMISSIONS.BRANCH_MANAGER`. Now a **merge** (defaults
+  first, demo delegations on top), not a hand-kept list and not a blind
+  replace — that array carries deliberate overrides of `false` defaults.
+- Demo customers had no accounts at all, so the Customer Portal could
+  not be opened as anybody with a car in the workshop. Each now has one
+  (`first.last@customer.local` / `ChangeMe-Customer-123`).
+- The two handover-stage jobs had no charges, so only the gate REFUSING
+  a car was demonstrable. DEMO-6621 now carries catalogued work;
+  DEMO-5510 deliberately still does not, because a gate holding a car is
+  worth seeing.
+- `CustomerPortalService.home()` counted `status: "PENDING"` decisions —
+  drafted-but-unsent, the one set a customer must never see — so the
+  count was structurally zero for every decision actually sent.
+
+### Two bugs in my own work, found by its own tests
+
+Both worth recording because the tests earned their place:
+
+- `absorbOperationalItems` returned early on "no chargeable items",
+  skipping the stale-line cleanup — so a **fully returned part kept
+  being charged**, the exact bug the code's own comment claimed to
+  prevent.
+- The same method ran without checking FINANCE, which would have
+  resurrected a disabled capability from the side.
+
+And two tests that were wrong, not the product: a capability-profile
+helper that listed what was ON (absent means active, so it disabled
+nothing and every assertion passed vacuously), and a "label must not be
+the enum" rule applied to the manager, whose vocabulary legitimately
+matches it.
+
+**Gate: API 777/777 across 92 suites · web 255/255 · shared 212/212 ·
+7/7 linters · typecheck clean.**
+
+### Resume here
+
+1. **Approved customer-decision items do not become charges.** A
+   customer approving "Front brake discs 2800.00" creates no invoice
+   line — only tasks and parts bill. `ChargeableWorkItem` already
+   carries `approvalStatus`/`approvedUnitPrice` for exactly this; it
+   needs a third producer alongside `serviceItems`/`partItems`.
+2. **Counter-approval still has no UI.** `recordOnBehalf` and its route
+   are built and tested; nothing calls them.
+3. **Team Leader has no review screen.** `workorders.review.decide` is
+   granted to the role and only the branch manager's workspace offers
+   the action.
+4. Page-by-page real-data audit of the remaining shells (team-leader,
+   analyst, owner) — unstarted.
