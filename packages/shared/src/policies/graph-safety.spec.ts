@@ -29,7 +29,7 @@ describe("no policy answer can strand a work order", () => {
   it("only policies that genuinely touch routing appear on edges", () => {
     // If this list grows, the combination space in the safety walk grows
     // with it -- so growth should be deliberate, not incidental.
-    expect(policiesAppearingOnEdges()).toEqual(["APPROVAL_REQUIRED_SCOPE", "TECHNICIAN_DIRECT_SEND"]);
+    expect(policiesAppearingOnEdges()).toEqual(["APPROVAL_REQUIRED_SCOPE", "INSPECTION_REQUIRED", "TECHNICIAN_DIRECT_SEND"]);
   });
 });
 

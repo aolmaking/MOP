@@ -738,6 +738,7 @@ export class PlatformService {
 
     const deliveryRule = this.effectivePolicy(dto, "DELIVERY_BLOCKED_UNTIL_PAID");
     const partialRule = this.effectivePolicy(dto, "PARTIAL_PAYMENT");
+    const invoiceVisibilityRule = this.effectivePolicy(dto, "CUSTOMER_INVOICE_VISIBILITY");
 
     await tx.financeConfiguration.create({
       data: {
@@ -750,6 +751,10 @@ export class PlatformService {
         // rather than this column pretending the difference exists.
         allowUnpaidDelivery: deliveryRule === "NEVER",
         allowPartialPaidDelivery: deliveryRule === "NEVER" && partialRule === "ALLOWED",
+        // Read by CustomerDecisionService.pricingVisible on every decision
+        // request; before this the column only ever held its Prisma
+        // default, whatever the workshop actually answered.
+        customerInvoiceVisible: invoiceVisibilityRule !== "WITHHELD",
       },
     });
     return true;

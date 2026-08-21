@@ -41,7 +41,15 @@ export const WORK_ORDER_GRAPH: WorkflowGraph = {
     { from: "REGISTERED", to: "UNDER_INSPECTION", intent: "START_INSPECTION", label: "technician starts inspection" },
     // A customer who declines inspection and asks for one named service
     // goes straight to approval -- see SCENARIOS.md "intake refusals".
-    { from: "REGISTERED", to: "AWAITING_CUSTOMER_APPROVAL", intent: "REQUEST_APPROVAL", label: "inspection declined, service requested" },
+    // ALWAYS_INSPECT removes the skip; START_INSPECTION above is
+    // unconditional, so no option of this policy can strand REGISTERED.
+    {
+      from: "REGISTERED",
+      to: "AWAITING_CUSTOMER_APPROVAL",
+      intent: "REQUEST_APPROVAL",
+      requiresPolicy: [{ policyKey: "INSPECTION_REQUIRED", oneOf: ["CUSTOMER_MAY_DECLINE"] }],
+      label: "inspection declined, service requested",
+    },
 
     { from: "UNDER_INSPECTION", to: "AWAITING_CUSTOMER_APPROVAL", intent: "REQUEST_APPROVAL", label: "findings need approval" },
     // The edge this label always claimed. Until policies could reach the

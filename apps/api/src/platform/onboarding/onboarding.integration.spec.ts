@@ -350,6 +350,14 @@ describe("Workshop onboarding (integration, real HTTP, real Postgres)", () => {
       expect(finance?.allowUnpaidDelivery).toBe(true);
     });
 
+    it("shows the customer prices by default, having answered nothing on the question", async () => {
+      const finance = await prisma.financeConfiguration.findUnique({
+        where: { tenantId },
+        select: { customerInvoiceVisible: true },
+      });
+      expect(finance?.customerInvoiceVisible).toBe(true);
+    });
+
     it("snapshots what was decided, so a year from now it is still readable", async () => {
       const version = await prisma.tenantConfigurationVersion.findFirst({
         where: { tenantId, version: 1 },
@@ -397,6 +405,7 @@ describe("Workshop onboarding (integration, real HTTP, real Postgres)", () => {
           DELIVERY_BLOCKED_UNTIL_PAID: "ALWAYS",
           PARTS_SEPARATION_OF_DUTIES: "DIFFERENT_PERSON",
           RETURN_UNUSED_BEFORE_FINISH: "REQUIRED",
+          CUSTOMER_INVOICE_VISIBILITY: "WITHHELD",
         },
         responsibilities: { INVENTORY: "DEDICATED", TEAMS: "DEDICATED", MULTI_BRANCH: "DEDICATED" },
         specializationPacks: ["BRAKES_AND_SUSPENSION", "DIAGNOSTICS"],
@@ -461,6 +470,14 @@ describe("Workshop onboarding (integration, real HTTP, real Postgres)", () => {
       });
       expect(finance?.allowUnpaidDelivery).toBe(false);
       expect(finance?.allowPartialPaidDelivery).toBe(false);
+    });
+
+    it("withholds prices from the customer decision page, because it asked to", async () => {
+      const finance = await prisma.financeConfiguration.findUnique({
+        where: { tenantId },
+        select: { customerInvoiceVisible: true },
+      });
+      expect(finance?.customerInvoiceVisible).toBe(false);
     });
 
     it("grants no extra permissions, because every role will be staffed", async () => {

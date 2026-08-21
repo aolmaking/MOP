@@ -783,6 +783,121 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
       summary: "Whether every finished job waits for a quality check, or only some of them.",
     },
   },
+
+  // -------------------------------------------------------------------
+  // P-72 -- May a customer decline inspection and go straight to a
+  //         named service?
+  //
+  // The edge WORK_ORDER_GRAPH already ships (REGISTERED ->
+  // AWAITING_CUSTOMER_APPROVAL, "inspection declined, service requested")
+  // was unconditional -- every workshop allowed the skip, whether or not
+  // it wanted to. Registering the question makes that an answer rather
+  // than an accident of what the graph happened to contain.
+  // -------------------------------------------------------------------
+  {
+    key: "INSPECTION_REQUIRED",
+    question: "May a customer decline inspection and request one named service directly?",
+    options: [
+      {
+        key: "CUSTOMER_MAY_DECLINE",
+        label: "Customer may decline",
+        meaning: "A customer who names what they want skips straight to approval; the finish gate never demands the inspection they refused.",
+      },
+      {
+        key: "ALWAYS_INSPECT",
+        label: "Every job is inspected",
+        meaning: "There is no walk-in-and-name-it route. Every job passes through UNDER_INSPECTION before approval.",
+      },
+    ],
+    default: "CUSTOMER_MAY_DECLINE",
+    defaultReason:
+      "It is what already ships, and SCENARIOS.md's intake-refusals case is a real, recurring situation: a " +
+      "customer who wants one named service and nothing else should not be made to sit through a diagnostic " +
+      "they did not ask for. ALWAYS_INSPECT is a legitimate choice for a workshop whose liability policy " +
+      "requires it, not a safer default for every workshop.",
+    relevantWhen: () => true,
+    mutability: "GOVERNED",
+    buildPosture: "POLICY_CONTROLLED",
+    dependsOnCapabilities: [],
+    dependsOnPolicies: [],
+    enforcement: {
+      status: "ENFORCED",
+      where:
+        "WORK_ORDER_GRAPH narrows REGISTERED -> AWAITING_CUSTOMER_APPROVAL to CUSTOMER_MAY_DECLINE; under " +
+        "ALWAYS_INSPECT that edge is dark and every job must pass START_INSPECTION -> UNDER_INSPECTION first. " +
+        "graph-safety.spec.ts proves both options reach a terminal under every shipped profile.",
+      consumers: [
+        "WORK_ORDER_GRAPH (REGISTERED -> AWAITING_CUSTOMER_APPROVAL)",
+        "WorkOrderLifecycleService.routingContext",
+      ],
+    },
+    impact: {
+      capabilities: [],
+      roles: ["TECHNICIAN", "BRANCH_MANAGER"],
+      workflowStates: ["REGISTERED", "UNDER_INSPECTION", "AWAITING_CUSTOMER_APPROVAL"],
+      permissions: ["customer.intake.create", "inspection.quick.create", "inspection.full.create"],
+      pages: ["technician.work-card", "branch_manager.work-orders-board"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Whether a customer who names one service can skip the inspection step entirely.",
+    },
+  },
+
+  // -------------------------------------------------------------------
+  // P-73 -- May a customer see prices on a decision request?
+  //
+  // FinanceConfiguration.customerInvoiceVisible already exists and is
+  // already read by CustomerDecisionService.pricingVisible -- but until
+  // now nothing ever wrote it from an answer. Every workshop silently
+  // got the Prisma column default, whatever it actually wanted.
+  // -------------------------------------------------------------------
+  {
+    key: "CUSTOMER_INVOICE_VISIBILITY",
+    question: "May a customer see prices when deciding on a repair?",
+    options: [
+      {
+        key: "VISIBLE",
+        label: "Visible",
+        meaning: "Each decision item shows its price, so the customer can weigh cost against the finding.",
+      },
+      {
+        key: "WITHHELD",
+        label: "Withheld",
+        meaning: "The item still appears, without numbers; pricing is discussed by phone or at the counter instead.",
+      },
+    ],
+    default: "VISIBLE",
+    defaultReason:
+      "A customer asked to approve or decline work without knowing what it costs is being asked to sign a " +
+      "blank cheque, and WITHHELD is a real choice only for a workshop that has a reason to negotiate off-portal " +
+      "-- not the safer default for everyone.",
+    relevantWhen: () => true,
+    mutability: "GOVERNED",
+    buildPosture: "POLICY_CONTROLLED",
+    dependsOnCapabilities: ["FINANCE_CORE"],
+    dependsOnPolicies: [],
+    enforcement: {
+      status: "ENFORCED",
+      where:
+        "CustomerDecisionService.pricingVisible reads FinanceConfiguration.customerInvoiceVisible on every " +
+        "decision-request read, and PlatformService.writeFinanceConfiguration now sets that column from this " +
+        "policy's answer at creation instead of leaving it on the Prisma column default for every tenant.",
+      consumers: [
+        "CustomerDecisionService.pricingVisible",
+        "PlatformService.writeFinanceConfiguration",
+      ],
+    },
+    impact: {
+      capabilities: ["FINANCE_CORE", "CUSTOMER_PORTAL"],
+      roles: ["TECHNICIAN", "BRANCH_MANAGER"],
+      workflowStates: ["AWAITING_CUSTOMER_APPROVAL", "WAITING_CUSTOMER"],
+      permissions: ["customer.invoice.view_own"],
+      pages: ["customer.decision", "branch_manager.approvals-customer-decisions"],
+      changesVisibility: true,
+      changesBilling: false,
+      summary: "Whether a customer sees a price next to a finding, or only the finding itself.",
+    },
+  },
 ];
 
 export const POLICY_REGISTRY: ReadonlyMap<string, PolicyDefinition> = new Map(

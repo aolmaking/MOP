@@ -280,6 +280,40 @@ describe("the lifecycle refuses what the graph does not allow", () => {
   }, 120_000);
 });
 
+describe("a policy narrows the graph, for real, against Postgres", () => {
+  // Not the pure-function proof graph-safety.spec.ts already gives every
+  // shipped profile x option combination -- this is the other half:
+  // that a WorkshopPolicy row a real workshop wrote actually reaches
+  // WorkOrderLifecycleService.routingContext and changes what the real
+  // router allows, through the real service and the real database.
+  it("REGISTERED skips inspection under the default answer, and cannot once the workshop requires it", async () => {
+    const fixture = await createWorkshop(`inspect-${SUFFIX}`, {});
+    fixtures.push(fixture);
+
+    const skipped = await newWorkOrder(fixture, true);
+    const path = await drive(skipped.id, ["REGISTER", "REQUEST_APPROVAL"]);
+    expect(path).toEqual(["REGISTERED", "AWAITING_CUSTOMER_APPROVAL"]);
+
+    await policiesForTest.set(
+      fixture.tenantId,
+      "INSPECTION_REQUIRED",
+      "ALWAYS_INSPECT",
+      ACTOR,
+      "PLATFORM",
+      "Integration test: every job must be inspected.",
+    );
+
+    const mustInspect = await newWorkOrder(fixture, true);
+    await lifecycle.apply(mustInspect.id, "REGISTER", ACTOR);
+    await expect(lifecycle.apply(mustInspect.id, "REQUEST_APPROVAL", ACTOR)).rejects.toThrow(/not available/i);
+
+    // The unconditional route stays open: it is what the policy's own
+    // registry entry promises can never be stranded.
+    const stillReachable = await drive(mustInspect.id, ["START_INSPECTION", "REQUEST_APPROVAL"]);
+    expect(stillReachable).toEqual(["UNDER_INSPECTION", "AWAITING_CUSTOMER_APPROVAL"]);
+  }, 120_000);
+});
+
 describe("gates block, with a message a person can act on", () => {
   it("blocks finish while a task is unfinished", async () => {
     const fixture = await createWorkshop(`gate-${SUFFIX}`, { TEAM_REVIEW: "DISABLED", TEAMS: "DISABLED", QC: "DISABLED" });
