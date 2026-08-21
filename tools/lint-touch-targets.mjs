@@ -10,8 +10,8 @@
  * 40px looks completely fine on a developer's monitor and is unusable in
  * a bay. Nobody catches that by reading a diff.
  *
- * The rule: inside apps/web/src/app/features/technician/** and the
- * technician shell, any rule whose selector styles something interactive
+ * The rule: inside apps/web/src/app/experiences/technician/** (which
+ * now holds the technician shell too), any rule whose selector styles something interactive
  * must declare `min-block-size: var(--tap)`.
  *
  * `--tap` itself is defined once, on .tech in technician-shell.css, so
@@ -22,8 +22,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOTS = [
-  "apps/web/src/app/features/technician",
-  "apps/web/src/app/core/layout/technician-shell",
+  "apps/web/src/app/experiences/technician",
 ];
 
 /**

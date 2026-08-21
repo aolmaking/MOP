@@ -271,7 +271,7 @@ except this demo manager holds `workorders.branch.view` — without
 | File | Why |
 |---|---|
 | `apps/api/src/platform/reports/*` | Platform Reports — Level 1 + Usage Overview, closed this run |
-| `apps/web/src/app/features/platform/reports/*` | Same, web side |
+| `apps/web/src/app/experiences/platform/reports/*` | Same, web side |
 | `apps/api/src/finance/finance.service.ts` | H5 fix — payment idempotency check-then-insert race |
 | `apps/api/src/inventory/part-request.service.ts` | H2 fix — part-request check-then-write gap |
 | `docs/archive/discovery/scenarios3/EDGE_CASE_REGISTER.md` | Both fixes recorded there, with the concurrency tests that prove them |

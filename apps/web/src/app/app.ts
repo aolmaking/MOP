@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { LocaleService } from './core/i18n/locale.service';
+import { LocaleService } from './runtime/i18n/locale.service';
 
 /**
  * Root shell: all real layout/content lives in routed components (see
