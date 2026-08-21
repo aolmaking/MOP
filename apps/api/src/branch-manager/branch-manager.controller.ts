@@ -5,18 +5,18 @@ import { CurrentSession } from "../identity/auth/current-session.decorator";
 import { EffectiveAccessService } from "../identity/access/effective-access.service";
 import { AttentionQueueService, type AttentionItem } from "./attention-queue.service";
 import { IntakeLookupService, type IntakeLookupResult } from "./intake-lookup.service";
-import { IntakeService, type IntakeResult } from "../operations/intake.service";
+import { IntakeService, type IntakeResult } from "../systems/operations/intake.service";
 import { IntakeDto } from "./intake.dto";
 import { PrismaService } from "../runtime/database/prisma.service";
 import { WorkOrderBoardService, type BoardResult } from "./work-order-board.service";
 import { ApprovalsService, type ApprovalsResult } from "./approvals.service";
 import { DeliveryService, type DeliveryBoard } from "./delivery.service";
-import { CustomerDecisionService } from "../customer/decision.service";
+import { CustomerDecisionService } from "../systems/customer/decision.service";
 import { RecordDecisionDto } from "./record-decision.dto";
 import { AdvanceWorkOrderDto } from "./advance-work-order.dto";
-import { WorkOrderDossierService } from "../operations/work-order-dossier.service";
-import { WorkflowJourneyService } from "../operations/workflow-journey.service";
-import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
+import { WorkOrderDossierService } from "../systems/operations/work-order-dossier.service";
+import { WorkflowJourneyService } from "../systems/operations/workflow-journey.service";
+import { WorkOrderLifecycleService } from "../systems/operations/work-order-lifecycle.service";
 
 export interface AttentionCenterResponse {
   /** Ranked most urgent first. Empty is a valid and desirable state. */

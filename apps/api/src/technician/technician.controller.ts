@@ -3,14 +3,14 @@ import type { SessionContext } from "@mop/shared";
 import { SessionGuard } from "../identity/auth/session.guard";
 import { CurrentSession } from "../identity/auth/current-session.decorator";
 import { EffectiveAccessService } from "../identity/access/effective-access.service";
-import { TechnicianWorkService } from "../operations/technician-work.service";
-import { WorkflowJourneyService } from "../operations/workflow-journey.service";
+import { TechnicianWorkService } from "../systems/operations/technician-work.service";
+import { WorkflowJourneyService } from "../systems/operations/workflow-journey.service";
 import { TechnicianWorkViewService } from "./technician-work-view.service";
-import { CustomerDecisionService } from "../customer/decision.service";
-import { PartRequestService } from "../inventory/part-request.service";
-import { CatalogService } from "../inventory/catalog.service";
+import { CustomerDecisionService } from "../systems/customer/decision.service";
+import { PartRequestService } from "../systems/inventory/part-request.service";
+import { CatalogService } from "../systems/inventory/catalog.service";
 import { ReportBlockerDto, CreateFaultDto, RequestPartDto, RecordInspectionDto } from "./technician.dto";
-import { RaiseDecisionDto } from "../customer/decision.dto";
+import { RaiseDecisionDto } from "../systems/customer/decision.dto";
 
 /**
  * The technician's three pages, plus the writes they make from them.

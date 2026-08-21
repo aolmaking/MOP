@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { gateDefinition, type GateEvaluation, type GateKey } from "@mop/shared";
 import { PrismaService } from "../runtime/database/prisma.service";
-import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
-import { AssetHistoryService } from "../vehicle-history/asset-history.service";
+import { WorkOrderLifecycleService } from "../systems/operations/work-order-lifecycle.service";
+import { AssetHistoryService } from "../systems/operations/vehicle-history/asset-history.service";
 
 export interface TechnicianJob {
   readonly workOrderId: string;

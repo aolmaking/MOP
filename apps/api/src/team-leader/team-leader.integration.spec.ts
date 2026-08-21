@@ -14,7 +14,7 @@ import { ForbiddenException } from "@nestjs/common";
 import { PrismaClient } from "@mop/database";
 import { DEFAULT_ROLE_PERMISSIONS } from "@mop/shared";
 import { TeamLeaderService } from "./team-leader.service";
-import { AssetHistoryService } from "../vehicle-history/asset-history.service";
+import { AssetHistoryService } from "../systems/operations/vehicle-history/asset-history.service";
 import type { PrismaService } from "../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();

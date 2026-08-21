@@ -17,7 +17,7 @@ import type { StaffRole } from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { AuditService } from "../../audit/audit.service";
 import { sha256 } from "../../identity/auth/token.util";
-import { SpecializationService } from "../../specialization/specialization.service";
+import { SpecializationService } from "../../systems/people/specialization/specialization.service";
 import { KNOWN_CAPABILITY_KEYS, KNOWN_CAPABILITY_STATUSES, type CreateWorkshopDto } from "./create-workshop.dto";
 import { draftFromDto } from "./workshop-draft.mapper";
 

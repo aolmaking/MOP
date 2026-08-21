@@ -2,7 +2,7 @@ import { Module } from "@nestjs/common";
 import { DatabaseModule } from "../runtime/database/database.module";
 import { AuthModule } from "../identity/auth/auth.module";
 import { AccessModule } from "../identity/access/access.module";
-import { InventoryModule } from "../inventory/inventory.module";
+import { InventoryModule } from "../systems/inventory/inventory.module";
 import { ReportsController } from "./reports.controller";
 import { ReportsOverviewService } from "./reports-overview.service";
 import { ReportsOperationsService } from "./reports-operations.service";

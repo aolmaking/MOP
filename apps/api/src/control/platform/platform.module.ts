@@ -9,7 +9,7 @@ import { CapabilitiesController } from "./workshops/capabilities.controller";
 import { CapabilitiesModule } from "../capabilities/capabilities.module";
 import { WorkshopsService } from "./workshops/workshops.service";
 import { WorkshopHealthService } from "./workshops/workshop-health.service";
-import { SpecializationModule } from "../../specialization/specialization.module";
+import { SpecializationModule } from "../../systems/people/specialization/specialization.module";
 import { PlatformReportsController } from "./reports/platform-reports.controller";
 import { PlatformReportsService } from "./reports/platform-reports.service";
 import { LiveViewController } from "./live-view.controller";

@@ -2,7 +2,7 @@ import { ConflictException } from "@nestjs/common";
 import { PlatformService } from "./platform.service";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { AuditService } from "../../audit/audit.service";
-import { SpecializationService } from "../../specialization/specialization.service";
+import { SpecializationService } from "../../systems/people/specialization/specialization.service";
 import type { CreateWorkshopDto } from "./create-workshop.dto";
 
 describe("PlatformService", () => {

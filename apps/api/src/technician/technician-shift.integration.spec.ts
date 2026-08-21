@@ -17,17 +17,17 @@ process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432
 
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
-import { IntakeService } from "../operations/intake.service";
-import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
-import { GateEvaluatorService } from "../operations/gate-evaluator.service";
-import { OperationEventsService } from "../operations/operation-events.service";
-import { CustomerSafeProjectionService } from "../operations/customer-safe-projection.service";
-import { TechnicianWorkService } from "../operations/technician-work.service";
+import { IntakeService } from "../systems/operations/intake.service";
+import { WorkOrderLifecycleService } from "../systems/operations/work-order-lifecycle.service";
+import { GateEvaluatorService } from "../systems/operations/gate-evaluator.service";
+import { OperationEventsService } from "../systems/operations/operation-events.service";
+import { CustomerSafeProjectionService } from "../systems/operations/customer-safe-projection.service";
+import { TechnicianWorkService } from "../systems/operations/technician-work.service";
 import { CapabilityResolutionService } from "../control/capabilities/capability-resolution.service";
 import { AuditService } from "../audit/audit.service";
 import { AttentionQueueService } from "../branch-manager/attention-queue.service";
 import { TechnicianWorkViewService } from "./technician-work-view.service";
-import { AssetHistoryService } from "../vehicle-history/asset-history.service";
+import { AssetHistoryService } from "../systems/operations/vehicle-history/asset-history.service";
 import type { PrismaService } from "../runtime/database/prisma.service";
 import { PolicyResolutionService } from "../control/policies/policy-resolution.service";
 

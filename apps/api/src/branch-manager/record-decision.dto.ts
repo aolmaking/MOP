@@ -1,6 +1,6 @@
 import { Type } from "class-transformer";
 import { ArrayMaxSize, ArrayMinSize, IsOptional, IsString, Length, ValidateNested } from "class-validator";
-import { DecisionAnswerDto } from "../customer/decision.dto";
+import { DecisionAnswerDto } from "../systems/customer/decision.dto";
 
 /** P-18: a staff member recording a decision the customer gave verbally. */
 export class RecordDecisionDto {

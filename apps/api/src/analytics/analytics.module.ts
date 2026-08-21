@@ -2,7 +2,7 @@ import { Module } from "@nestjs/common";
 import { DatabaseModule } from "../runtime/database/database.module";
 import { AuthModule } from "../identity/auth/auth.module";
 import { AccessModule } from "../identity/access/access.module";
-import { InventoryModule } from "../inventory/inventory.module";
+import { InventoryModule } from "../systems/inventory/inventory.module";
 import { AnalyticsController } from "./analytics.controller";
 import { AnalyticsHomeService } from "./analytics-home.service";
 import { OperationsAnalyticsService } from "./operations-analytics.service";
