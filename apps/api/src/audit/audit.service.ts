@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 import { AuditActorType, AuditRiskLevel, Prisma } from "@mop/database";
 
 export interface RecordAuditEntryInput {

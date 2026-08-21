@@ -10,7 +10,7 @@ import { AuditService } from "./audit.service";
  * permission check -- and AccessModule imports CapabilitiesModule, which
  * imports AuditModule. Nest refused to start.
  *
- * The reader lives in `owner/` instead. That is also what
+ * The reader lives in `experiences/owner/` instead. That is also what
  * tools/lint-audit-boundary.mjs already assumes: it guards writes only,
  * and says in its own comment that reading for the Owner's History page
  * is fine anywhere.

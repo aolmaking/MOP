@@ -7,11 +7,11 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import type { NextFunction, Request, Response } from "express";
 import { AppModule } from "./app.module";
-import { ApiExceptionFilter } from "./common/filters/api-exception.filter";
-import { validationExceptionFactory } from "./common/validation/validation-exception-factory";
-import { EnvironmentValidationError, loadEnvironment } from "./config/environment";
-import { REQUEST_ID_HEADER } from "./common/request-id";
-import { MoneySerializationInterceptor } from "./common/money-serialization.interceptor";
+import { ApiExceptionFilter } from "./runtime/http/filters/api-exception.filter";
+import { validationExceptionFactory } from "./runtime/http/validation/validation-exception-factory";
+import { EnvironmentValidationError, loadEnvironment } from "./runtime/config/environment";
+import { REQUEST_ID_HEADER } from "./runtime/http/request-id";
+import { MoneySerializationInterceptor } from "./runtime/http/money-serialization.interceptor";
 
 async function bootstrap() {
   // Validated before the app is even constructed: a misconfiguration must
