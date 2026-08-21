@@ -49,6 +49,23 @@ export interface ResponsibilityQuestion {
   readonly fallbackRoles: readonly StaffRole[];
   /** The default answer: staff the dedicated role. */
   readonly defaultAnswer: ResponsibilityAnswer;
+  /**
+   * True for a question that stands whether or not `capability` itself
+   * is active -- `capability` still names the role's origin for
+   * `becauseOf` and the review screen, but is not the trigger.
+   *
+   * Exists for exactly one case today: BRANCH_MANAGER work (booking a
+   * vehicle in, recording a decision on the customer's behalf,
+   * reassigning a technician, releasing a delivery) is not multi-branch
+   * work -- it is what running the one branch every tenant has means.
+   * Gating the question on MULTI_BRANCH left every single-branch
+   * workshop asked nothing and TENANT_OWNER holding none of it, which
+   * `owner-operational-visibility.spec.ts` (apps/api/src/access) proves
+   * is deliberately denied by default -- the same silent hole this file
+   * exists to close for INVENTORY, reproduced for the role every shop
+   * actually depends on.
+   */
+  readonly always?: true;
 }
 
 /**
@@ -84,12 +101,17 @@ const QUESTIONS: readonly ResponsibilityQuestion[] = [
   {
     capability: "MULTI_BRANCH",
     dedicatedRole: "BRANCH_MANAGER",
-    question: "Who runs each branch day to day?",
+    question: "Who runs the branch day to day?",
     why:
-      "Booking a vehicle in, reassigning a technician, clearing blockers and releasing a delivery are branch-manager " +
-      "work. In a single-operator workshop the owner does all of it.",
+      "Booking a vehicle in, recording a customer's decision on their behalf, reassigning a technician, clearing " +
+      "blockers and releasing a delivery are branch-manager work -- every workshop's, not only one running more " +
+      "than one branch. In a single-operator workshop the owner does all of it, and has to be granted it " +
+      "explicitly: TENANT_OWNER holds none of this by default.",
     fallbackRoles: ["TENANT_OWNER"],
     defaultAnswer: "DEDICATED",
+    // Every tenant has at least one branch the moment it exists, so this
+    // is not conditional on MULTI_BRANCH -- see the field's own doc.
+    always: true,
   },
 ];
 
@@ -102,6 +124,7 @@ const QUESTIONS: readonly ResponsibilityQuestion[] = [
  */
 export function applicableResponsibilities(profile: CapabilityProfile): readonly ResponsibilityQuestion[] {
   return QUESTIONS.filter((question) => {
+    if (question.always) return true;
     if (!isCapabilityActive(profile, question.capability)) return false;
     // Belt and braces against the registry and this list drifting apart:
     // the question only stands while the capability really does name
