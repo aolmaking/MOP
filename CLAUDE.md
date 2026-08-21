@@ -77,6 +77,22 @@ tools/            doctor, pnpm shim, env loader, two custom linters
 docs/             Spec, charters, phase plan
 ```
 
+Inside `apps/api/src`, the layout names the boundary rather than the file
+kind. Full rationale and migration table in [`REORGANIZATION_REPORT.md`](./REORGANIZATION_REPORT.md).
+
+```
+audit/         the AuditLog WRITE boundary — stays top-level, the lint rule matches this literal path
+runtime/       config, database, http, health, scheduler — framework plumbing, no business meaning
+identity/      auth/ (sessions, guards) and access/ (permission resolver + its 11 layers)
+control/       capabilities, policies, governance, tenant-relationships, platform — the plane that shapes tenants
+systems/       operations, inventory, finance, billing, people, customer, forms — the six bounded systems
+experiences/   branch-manager, technician, team-leader, owner — per-role surfaces composed over systems
+insights/      analytics, analyst-reporting, owner-reports, workflow-health — read-only derived views
+```
+
+`experiences/` never writes directly: a role surface calls the owning
+system's service. `systems/` never imports `experiences/`.
+
 ### The capability engine — the heart of the product
 
 Platform Super Admin shapes each workshop by removing what it does not need. **Removal is workflow rewiring, not feature hiding.** The guarantee:
