@@ -8,7 +8,7 @@
 
 | | Version | Notes |
 |---|---|---|
-| Node | 20.x (see `.nvmrc`) | CI runs 20. Newer majors usually work, but only 20 is verified |
+| Node | 24.x (see `.nvmrc`) | CI runs 24 (`.github/workflows/ci.yml`); `package.json` requires `>=22.22.3` |
 | pnpm | 9.15.0 | Via corepack — do **not** `npm i -g pnpm` |
 | Docker | any recent | For local Postgres |
 | Git | any recent | |
@@ -34,8 +34,26 @@ docker compose up -d
 ```
 
 ```bash
-corepack pnpm db:generate && corepack pnpm db:migrate && corepack pnpm db:seed
+corepack pnpm db:generate && corepack pnpm db:migrate
 ```
+
+```bash
+corepack pnpm run build:shared
+```
+
+`packages/database`'s seed scripts import `@mop/shared` at runtime (via `tsx`, not through the TypeScript compiler), so they resolve the package's compiled `dist/`, not its source. Skip this step and `db:seed:demo` fails immediately with `Cannot find module '.../@mop/shared/dist/index.js'` — the plain `db:seed` below doesn't happen to import `@mop/shared`, so it will misleadingly succeed even without this step.
+
+```bash
+corepack pnpm db:seed
+```
+
+Seeds plans, the platform admin, and two structurally-different tenants (empty shells — no work orders, no logins beyond the owner). For a workshop with real jobs, customers, and a login per role to actually browse, also run:
+
+```bash
+corepack pnpm db:seed:demo
+```
+
+This is idempotent and safe to re-run; it prints every seeded login (owner, manager, technician, inventory, customer, etc.) at the end.
 
 ```bash
 corepack pnpm run doctor
