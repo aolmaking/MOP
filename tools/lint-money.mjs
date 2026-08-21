@@ -36,7 +36,7 @@ import { join, relative } from "node:path";
 const ROOTS = [
   "apps/api/src/systems/finance",
   "apps/api/src/systems/inventory",
-  "apps/api/src/branch-manager",
+  "apps/api/src/experiences/branch-manager",
   // Operations composes the work-order dossier, which reports what a
   // customer was charged. It handled money while sitting outside this
   // rule, and a float sum over invoice lines survived there unnoticed

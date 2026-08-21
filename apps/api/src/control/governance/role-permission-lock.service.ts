@@ -19,7 +19,7 @@ const LOCK_TYPE = "role_permission_lock";
 /**
  * The missing writer for `role_permission_lock`.
  *
- * `PermissionContextService` and `PlatformControlLayer` (apps/api/src/access/)
+ * `PermissionContextService` and `PlatformControlLayer` (apps/api/src/identity/access/)
  * have read this ControlSetting shape since Phase 3 -- key
  * `${role}:${permissionKey}`, `value: { allowed: boolean }`, scope
  * `PLATFORM`, type `role_permission_lock`, filtered `active: true` -- but

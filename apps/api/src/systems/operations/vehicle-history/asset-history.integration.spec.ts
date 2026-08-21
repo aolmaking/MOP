@@ -8,7 +8,7 @@ process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { AssetHistoryService } from "./asset-history.service";
-import { TechnicianWorkViewService } from "../../../technician/technician-work-view.service";
+import { TechnicianWorkViewService } from "../../../experiences/technician/technician-work-view.service";
 import { WorkOrderLifecycleService } from "../work-order-lifecycle.service";
 import { CapabilityResolutionService } from "../../../control/capabilities/capability-resolution.service";
 import { GateEvaluatorService } from "../gate-evaluator.service";

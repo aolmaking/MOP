@@ -13,7 +13,7 @@ export interface RestrictionSummary {
  * Phase 19.D -- the narrower lever Workshop 5 scenario 24 found missing:
  * curtailing one account under investigation without the platform-wide
  * tenant freeze, and without declaring guilt. `restrict()`/`lift()` only
- * set the status; `StaffRestrictionLayer` (apps/api/src/access/layers/)
+ * set the status; `StaffRestrictionLayer` (apps/api/src/identity/access/layers/)
  * is what actually enforces it on every request.
  *
  * Every call writes an independently-witnessed, HIGH-risk audit row --

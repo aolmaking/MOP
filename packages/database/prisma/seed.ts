@@ -32,7 +32,7 @@ import { randomBytes, scryptSync } from "node:crypto";
 const prisma = new PrismaClient();
 
 // --- password hashing -------------------------------------------------
-// Duplicated from apps/api/src/auth/password.util.ts on purpose, not by
+// Duplicated from apps/api/src/identity/auth/password.util.ts on purpose, not by
 // oversight: this script runs standalone via `tsx`, and packages/database
 // cannot depend on apps/api (that dependency would point the wrong way --
 // apps depend on packages, not the reverse). @mop/shared can't take it

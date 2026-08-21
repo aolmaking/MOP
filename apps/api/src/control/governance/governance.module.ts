@@ -14,7 +14,7 @@ import { PlatformGuard } from "../../identity/auth/platform.guard";
  * Phase 19's governance-depth primitives (19.B dispute state, 19.D
  * restricted-account state), plus the `role_permission_lock` write path
  * (the 53-page audit's highest-leverage missing subsystem): the read
- * side has existed in `apps/api/src/access/` since Phase 3, this module
+ * side has existed in `apps/api/src/identity/access/` since Phase 3, this module
  * is the writer.
  */
 @Module({
