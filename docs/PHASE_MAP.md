@@ -1,14 +1,14 @@
 # MOP Phase Map
 
 > **What this is:** the single, linear plan for all remaining work. One numbering scheme, one order, one place.
-> **Companion:** [`docs/PAGE_INVENTORY.md`](./PAGE_INVENTORY.md) tracks the 53 spec'd pages against what's built — the definition of "done" for Phases 5–12. [`docs/archive/discovery/scenarios/`](./archive/discovery/scenarios/) and [`docs/archive/discovery/scenarios2/`](./archive/discovery/scenarios2/) are the two discovery passes that produced Phases 15–20. [`docs/archive/discovery/scenarios3/`](./archive/discovery/scenarios3/) is a third pass — 20 edge cases, not persona-driven — that did not earn new phases but is attributed against the phases above; see rule 8 below.
-> **Date:** 2026-08-12, after the 40-scenario platform-layer discovery pass, its synthesis, and a 20-item edge-case hardening pass.
+> **Companion:** [`docs/PAGE_INVENTORY.md`](./PAGE_INVENTORY.md) is the **single canonical source for the page-completion count** — the definition of "done" for Phases 5–12. This file cites its total rather than maintaining a separate one, after the two were previously found to disagree (this file self-contradicted at 23/53 vs. 34/53 in two different sections; `PAGE_INVENTORY.md` independently read 48/53). [`docs/archive/discovery/scenarios/`](./archive/discovery/scenarios/) and [`docs/archive/discovery/scenarios2/`](./archive/discovery/scenarios2/) are the two discovery passes that produced Phases 15–20 (archived — their findings are already absorbed into those phases). [`docs/archive/discovery/scenarios3/`](./archive/discovery/scenarios3/) is a third pass — 20 edge cases, not persona-driven — that did not earn new phases but is attributed against the phases above; see rule 8 below.
+> **Date:** 2026-08-21, after a code-verified audit (every route and controller read directly) reconciled this file, `PROJECT_STATE.md`, and `PAGE_INVENTORY.md`, which had drifted from each other and, in two cases, from the actual code.
 
 ---
 
 ## Where the project stands
 
-**Built and verified** (377 tests passing across shared/API/web, typecheck clean, all four custom lint rules passing, full build green):
+**Built and verified** (see `docs/PAGE_INVENTORY.md` for the current page count and `PROJECT_STATE.md` §2 for the current phase-by-phase state; test counts below are from the last full run recorded in `PROJECT_STATE.md` and should be re-confirmed with `corepack pnpm test` rather than trusted as current):
 
 | Area | State |
 |---|---|
@@ -19,10 +19,11 @@
 | Operations engine | `WorkOrderLifecycleService` sole writer of status, capability-aware from its first line |
 | Auth | 4 account types, DB-backed sessions, refresh rotation, lockout, rate limiting |
 | Money | `Decimal` in DB, `string` across API, dedicated `lint-money.mjs` guarding it |
-| Pages | **23 of 53 spec'd pages built** — see `PAGE_INVENTORY.md` for the full per-role breakdown |
-| Discovery | Three discovery passes complete: 20 workshop-floor scenarios (`docs/archive/discovery/scenarios/`), 40 platform-layer scenarios (`docs/archive/discovery/scenarios2/`), 20 edge cases (`docs/archive/discovery/scenarios3/`) |
+| Pages | **44 complete + 6 partial + 3 not built, of 53 spec'd** — see `PAGE_INVENTORY.md` for the full per-role breakdown; that document is the only place this count is tracked |
+| Test coverage | Business logic is real everywhere (no stubs, no hardcoded fake returns found anywhere in `apps/api/src`), but only Auth, Access/Permissions, and Platform/Super-Admin have tests that exercise a real HTTP request through the session guard — every other subsystem is tested at the service layer only, which proves the logic but not the route wiring |
+| Discovery | Three discovery passes complete and archived: 20 workshop-floor scenarios (`docs/archive/discovery/scenarios/`), 40 platform-layer scenarios (`docs/archive/discovery/scenarios2/`), 20 edge cases (`docs/archive/discovery/scenarios3/`) |
 
-**Not yet true:** Phases 9–14 (Billing, People, Customer Portal, Reporting, Automation, i18n release) have not started. Phases 18–20, named by this session's platform-layer discovery pass, did not exist before today.
+**Not yet true:** no country-specific billing/invoicing adapter exists (Egypt ETA, Saudi ZATCA) — `GenericBillingAdapter` is the only one, so every real country is currently compliance-blocked. Phases 15–20's specialization/tenant-relationship/governance/resilience work is real but partially shipped — see the phase table below for exactly how much of each. Phase 21 (Policy & Decision Architecture) is documents-only, by design, awaiting an owner decision before any implementation.
 
 ## The rules that set the order
 
@@ -46,15 +47,15 @@
 | 3 — Governance Runtime | ✅ complete |
 | 4 — Operations Spine | ✅ complete |
 | 5 — Branch Manager | ✅ complete — 7/7 pages |
-| 6 — Technician | ✅ complete — 3/3 pages |
-| 7 — Inventory | 🟢 5/6 pages — Returns/Movements actions owed |
-| 8 — Finance Core | 🟠 engine done; Owner Money page owed (Phase 10) |
-| 9 — Billing / Invoicing | ✅ complete — GenericBillingAdapter, BillingDocument, credit notes, refund workflow, compliantBlocked all built and tested |
+| 6 — Technician | ✅ complete — 3/3 pages, including a real part-request/return lifecycle reachable from the technician's own endpoints |
+| 7 — Inventory | ✅ complete — 6/6 pages |
+| 8 — Finance Core | 🟢 engine complete; Owner-facing Pricing page shipped |
+| 9 — Billing / Invoicing | 🟠 engine, refund workflow, and credit notes complete and tested; **no country-specific legal invoicing adapter exists** — every real country is compliance-blocked until one ships |
 | 10 — Team Leader & People/Performance | ✅ complete (narrowed) — API and all 5 web pages (4 Team Leader + Owner Home) built and reachable; see `PHASE_10.md` §6 |
-| 11 — Customer Portal | ✅ complete — API + all 5 web pages, see `PHASE_11.md` §5 |
-| 12 — Reporting & Data Analyst | ✅ complete (live-only) — company report; exports/saved views/snapshots owed |
+| 11 — Customer Portal | ✅ complete — API + all 6 web pages |
+| 12 — Reporting & Data Analyst | 🟢 6/7 Data Analyst pages complete; Saved Views/Exports has zero implementation |
 | 13 — System Automation | ✅ complete (lock, not a separate worker) — `SchedulerLockService` advisory lock |
-| 14 — Internationalization & Release Readiness | 🟠 permission-key lint + a perf fix shipped; translation pass owed |
+| 14 — Internationalization & Release Readiness | 🟠 permission-key lint + a perf fix shipped; the translation pass itself was never done |
 | 15 — Specialization Discovery | ✅ schema settled, 3/5 primitives proven end-to-end |
 | 16 — Specialization Structure | ✅ minimum bar met (16.A/E/H); 16.I design spike written |
 | 17 — Specialization at Creation | 🟠 17.A backend seam shipped; wizard UI and 17.B–E owed |
@@ -62,9 +63,9 @@
 | **19 — Governance Depth** | 🟠 19.B/C/D shipped; 19.A data-only (enforcement reverted); 19.E/F/G deferred |
 | **20 — Operational Resilience at Scale** | 🟠 20.B shipped; 20.E design decision written; 20.A/C/D/F deferred |
 | **21 — Policy & Decision Architecture** | 🟠 **architectural resolution pass complete** — relevance graph built and proven acyclic (4 cycles found+fixed), S-01 resolved into 3 sub-questions, QC decomposed (new P-71), owner/Super-Admin money authority recorded as an open conflict rather than assumed; awaiting owner review; no implementation, by design |
-| Platform Super Admin (cross-cutting) | 🟠 4/6 pages — Governance Controls, Live View owed (**Governance Controls now gated behind Phase 21** — it is the page that surfaces policies) |
+| Platform Super Admin (cross-cutting) | 🟢 5/6 pages complete, 1 partial — **Governance Controls and Workshop Live View are both built and working**, correcting an earlier claim in this table (and in two of this project's own now-archived audits) that they were unblocked-but-unbuilt. Only Builder Control's broader scope (theme/layout/workflow-policy editors, config version rollback) remains unbuilt beyond the capability-shaping page that exists today |
 
-Total page inventory: **34 of 53** spec'd pages built (Platform Reports — Level 1 + Usage Overview — closed this pass; other phases' page counts may have moved further and not yet be reflected here). See `PAGE_INVENTORY.md` for the per-role table.
+**Total page inventory: see `docs/PAGE_INVENTORY.md`** — the only place this count is tracked, currently 44 complete + 6 partial + 3 not built, of 53. This file previously carried its own count and self-contradicted (23/53 in one section, 34/53 in another); both were wrong and neither is repeated here.
 
 ## The phases
 

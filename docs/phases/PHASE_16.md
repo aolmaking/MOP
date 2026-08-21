@@ -2,7 +2,7 @@
 
 > **Status:** ✅ minimum bar met (16.A, 16.E, 16.H shipped; 16.I has a
 > written recommendation) — see "What actually shipped" below.
-> **Source:** [`docs/scenarios/FINDINGS_SYNTHESIS.md`](../archive/discovery/scenarios/FINDINGS_SYNTHESIS.md),
+> **Source:** [`docs/archive/discovery/scenarios/FINDINGS_SYNTHESIS.md`](../archive/discovery/scenarios/FINDINGS_SYNTHESIS.md),
 > Shape 2 and Shape 3 findings.
 
 ## Why this phase exists

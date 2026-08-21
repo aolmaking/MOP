@@ -7,9 +7,9 @@
 
 ---
 
-## 0. CHECKPOINT — documentation consolidation paused mid-task (2026-08-21)
+## 0. Documentation consolidation — complete (2026-08-21)
 
-**Status:** paused at the user's explicit request before the project directory is moved to a new location. Not abandoned — resume with the exact next action below once told to continue.
+**Status:** complete. This section was originally written mid-task as a checkpoint before a pause; the user said `continue` and every item originally listed below as "not done yet" has since been finished. Left in place, corrected, as the record of what changed and why — a future session should not re-open this as pending work.
 
 **Why this pass started:** a code-verified build-status audit (see the session's chat transcript — every page route and API controller was read directly, not inferred from docs) found that this project's own tracking documents had drifted from each other and from the real code. Concretely: `PROJECT_STATE.md` (this file) claimed 23/53 pages built; `docs/PHASE_MAP.md` contradicted itself internally (23/53 at one line, 34/53 at another); `docs/PAGE_INVENTORY.md` claimed 48/53; and two of the project's own prior audits (`docs/archive/audits/IMPLEMENTATION_AUDIT.md`, `docs/archive/audits/PHASE_COMPLETION_AUDIT.md`) claimed Platform Super Admin's Governance Controls and Workshop Live View pages were unbuilt — when a direct read of the actual frontend/backend code this session found both are real, complete, and wired to working endpoints. The session's own live code audit is therefore the most current ground truth available, ahead of every existing doc including the two audits named above.
 
@@ -20,18 +20,19 @@
 4. Fixed every cross-reference to the moved files/directories across `docs/phases/PHASE_9.md` and `PHASE_15.md`–`PHASE_21.md`, `docs/PHASE_MAP.md`, `docs/POLICY_DECISION_INVENTORY.md`, `docs/README.md`, and this file, so no link points at a path that no longer exists.
 5. Fixed a stray machine-specific local file path (`C:\Users\Stanikzai\...`) left in `docs/detailed-specs/README.md`, pointing it at `REBUILD_PLAN.md` instead, which is what it actually meant.
 
-**Explicitly NOT done yet — this is the real remaining work, not yet started:**
-- `PROJECT_STATE.md` (this file, below §0) still states the **stale 23/53 page count** and the stale Phase 9-in-progress narrative. It has not yet been rewritten against the verified reality (essentially every role's pages are real; the actual gaps are 4 specific named pages — Access Denied, Password Reset, Data-Analyst Saved Views/Exports, a standalone Builder Control page — plus a real HTTP-level test-coverage gap across most subsystems, plus zero country-specific billing/invoicing adapters).
-- `docs/PHASE_MAP.md` still has its internal 23-vs-34 self-contradiction and needs its Progress table and per-phase status lines corrected against the same verified reality, with Governance Controls and Workshop Live View marked resolved.
-- `docs/PAGE_INVENTORY.md` has not been touched yet — it should become the **single canonical page-count source**, rewritten against the verified route/component audit, with `PROJECT_STATE.md` and `PHASE_MAP.md` referencing its count rather than each maintaining their own.
-- Root `README.md`'s status line ("early construction... Operational role pages are not built yet") is still stale and needs rewriting.
-- `docs/README.md`'s index needs a final pass to list the new `docs/archive/` structure and drop pointers to files that moved (most link targets were already fixed in this pass, but the reading-order guidance itself hasn't been reviewed).
-- The phase debt register (D1–D21) inside the now-archived `PHASE_COMPLETION_AUDIT.md` needs reconciling into whichever document becomes its permanent home (`PROJECT_STATE.md` is the natural candidate) — several of its items are now confirmed resolved (Governance Controls, Workshop Live View, the technician part-request/return lifecycle, the `role_permission_lock` writer) and should not be carried forward as open debt.
-- The 21 individual `docs/phases/PHASE_*.md` files' own status headers were not rewritten in this pass (only their cross-reference links were fixed) — they may still disagree with the verified reality in their prose, same as the trackers above did.
+**Completed after the pause, once told to continue:**
+- `docs/PAGE_INVENTORY.md` rewritten and made the single canonical page-count source (44 complete + 6 partial + 3 missing, of 53), with corrected per-role headers that no longer claim "X/X ✅" when some rows are 🟡.
+- `PROJECT_STATE.md` (this file) — §1 and §2 rewritten against the verified reality, with the stale paragraphs kept below marked superseded rather than deleted, and the final "what's next" priority list (previously in §13) corrected.
+- `docs/PHASE_MAP.md` — its internal 23-vs-34 self-contradiction fixed, Progress table corrected role-by-role, Governance Controls and Workshop Live View marked resolved, and it now cites `PAGE_INVENTORY.md`'s total instead of keeping its own.
+- Root `README.md`'s status line and documentation table rewritten.
+- `docs/README.md`'s index fully rebuilt: lists `PAGE_INVENTORY.md`, separates "archived discovery passes" from "archived audits" with an explicit staleness warning on the latter, and fixes several relative-path links (`./scenarios/` style) that an earlier repo-wide sed pass had missed because it only matched `docs/scenarios/`-style absolute paths.
+- One remaining broken link (`PROJECT_STATE.md`'s own historical §1 narrative, pointing at a since-moved `FINDINGS_SYNTHESIS.md`) and three cosmetic stale-label mismatches in `PHASE_15/16/17/21.md` (link target was already correct, only the visible backticked text still showed the old path) were found in a final link-sweep and fixed.
 
-**Exact next action on resume:** rewrite `docs/PAGE_INVENTORY.md` first (it becomes the anchor everything else cites), then `PROJECT_STATE.md`, then `docs/PHASE_MAP.md`, then the root `README.md` and `docs/README.md`, using the verified findings already gathered this session (the code-level route and controller audit, not any prior doc's claims) as ground truth.
+**Deliberately NOT done, and not part of this consolidation's scope:** the phase debt register (D1–D21) from the now-archived `PHASE_COMPLETION_AUDIT.md` was not reconciled item-by-item into a living document — most of it (translation pass, exports, several Phase 16–20 deferrals) is still open and already correctly reflected in `PAGE_INVENTORY.md`/`PHASE_MAP.md`'s per-item notes; only the items this session's code audit specifically re-verified (Governance Controls, Workshop Live View, the technician part-request/return lifecycle) were corrected. A full line-by-line reconciliation of the rest of that register was out of scope for a documentation-consistency pass and would need its own code-verification effort, the same way this one did. The 21 individual `docs/phases/PHASE_*.md` files' own prose status headers were also not rewritten — only their cross-reference links were fixed — so their prose may still disagree with the corrected trackers above in isolated spots; treat `PAGE_INVENTORY.md` and `PHASE_MAP.md` as authoritative over any individual phase doc's own header.
 
 **Known issue/blocker:** the deleted `MOP/` directory left one empty, OS-locked top-level folder behind (`rmdir` reported "Device or resource busy" — a transient handle from an indexer or file watcher, not a real block). Its contents are already gone; the empty folder itself can be removed with a plain `rmdir MOP` once nothing has it open, or ignored — it is gitignored either way and carries zero content.
+
+**Important caveat discovered when resuming after the pause:** between the checkpoint commit and resuming, other work landed on `main` from elsewhere — including a large reorganization of `apps/api/src` and `apps/web/src` into the layered structure (`audit/`, `runtime/`, `identity/`, `control/`, `systems/`, `experiences/`, `insights/` on the API side; `runtime/`, `ui/`, `domain/`, `experiences/` on the web side) that `CLAUDE.md` already describes. This is exactly the concurrent-session collision risk this file's own §7 item 8 warned about from an earlier incident. Nothing from this documentation pass was lost or overwritten — `git reflog` confirms the checkpoint commit is a clean ancestor of the current `HEAD`, and this second pass's edits applied without conflict. But it does mean: **specific file paths cited in this session's code audit (in the chat transcript this pass is based on, and possibly echoed in `docs/PAGE_INVENTORY.md`'s notes) may now point at pre-reorganization locations.** The *findings* (which pages are real, which subsystems have real business logic, where the HTTP-test-coverage gap is) were verified functionally and almost certainly still hold, since a reorganization moves files without rewriting behavior — but nobody should treat a specific `apps/api/src/<old-path>/foo.service.ts`-style reference in this consolidation pass as a currently-accurate path without checking it against `CODE_MAP.md` (new this pass, from the reorganization work, not from this documentation task) first.
 
 **Unrelated, pre-existing uncommitted work left untouched by this pass, on purpose:** at session start there was already-uncommitted work in the working tree — modifications to `apps/api/src/branch-manager/branch-manager.controller.ts`, `apps/api/src/customer/decision.service.ts` and its integration spec, several `apps/web/.../approvals/*` files, `apps/web/.../customer/decision-answer.*`, and three new untracked `record-approval-drawer.*` files. None of that belongs to this documentation task — it was not staged, not committed, and not modified by this pass, and remains exactly as it was found.
 
@@ -39,12 +40,16 @@
 
 ## 1. Current objective
 
-**Three tracks are now open at once.** Continue closing the remaining
-page gap toward Phase 9; carry forward the drafted Phases 15–17
-(specialization); carry forward the newly-drafted Phases 18–20 (tenant
-relationships, governance depth, operational resilience at scale). None
-of the three has started as code. All three are planning output — real,
-detailed, and waiting.
+> **Superseded 2026-08-21** — the paragraphs immediately below (the "23 of 53" narrative) are kept as historical record of what this file said before a code-verified audit corrected it; they were true at the time they were written but are not the current state. **The current, verified state and the current objective are in the box right after this note.** See §0 above for the full account of what changed and why.
+
+**Current objective, as of the 2026-08-21 audit:** the original 9-role product is essentially built — `docs/PAGE_INVENTORY.md` reads 44 complete + 6 partial + 3 fully-missing, out of 53 spec'd pages (up from the 23/53 this section originally reported). The active frontier is no longer "build more pages." Four things now matter more than any remaining page:
+
+1. **Close the HTTP-level test-coverage gap** on the highest-risk subsystems (Finance, Billing, Inventory) — most of the API is proven only at the service layer, never through an actual guarded HTTP request. This is the single most likely source of an undetected regression as more people touch the codebase.
+2. **Ship at least one real country's billing/invoicing adapter** (Egypt ETA or Saudi ZATCA) — `GenericBillingAdapter` is the only one that exists, so every real country is currently compliance-blocked. This blocks onboarding a real paying customer in most markets, which is a business blocker, not a technical nice-to-have.
+3. **Build the 3 pages with zero implementation**: Access Denied (small — centralize the existing per-page inline forbidden-state convention, or make a deliberate decision not to), Password Reset (needs an email/SMS provider decision first — there is no delivery infrastructure at all today), and Data-Analyst Saved Views/Exports (needs a `Plan.allowedExports` field before the export half can be gated correctly).
+4. **Get an explicit owner decision on Phase 21's Policy & Decision Architecture direction** before investing further in Phases 15–20 (specialization, tenant relationships, governance depth, resilience) — Phase 21 is deliberately paused at documents-only, by design, awaiting exactly this review.
+
+Phases 15–17 (specialization) and 18–20 (tenant relationships, governance depth, operational resilience) remain real, valuable, partially-shipped tracks — see the corrected phase table in §2 for exactly how much of each is built versus still design-only. Below is the original historical narrative, kept for the audit trail:
 
 The page-gap audit against `detailed-specs/` originally found the spec
 requires **53 pages** against **15 built**. [`PAGE_INVENTORY.md`](docs/PAGE_INVENTORY.md)
@@ -62,7 +67,7 @@ walkthroughs across four deliberately different workshop shapes
 (1-branch single-operator, 4-branch dealership network, field-service
 heavy-equipment, 6-branch quick-lube chain), written to discover what
 MOP is missing for real, differently-specialized workshops — not what's
-missing from the page count. [`FINDINGS_SYNTHESIS.md`](docs/scenarios/FINDINGS_SYNTHESIS.md)
+missing from the page count. [`FINDINGS_SYNTHESIS.md`](docs/archive/discovery/scenarios/FINDINGS_SYNTHESIS.md)
 consolidates 78 findings into **three new phases, 15–17**, added to
 `PHASE_MAP.md` and detailed in `docs/phases/PHASE_15.md`–`PHASE_17.md`.
 They are drafted, not started — no code yet.
@@ -105,33 +110,37 @@ Three doors closed earlier this arc, from the original audit:
 
 ## 2. Where we are
 
+> **This table was rewritten 2026-08-21 after a code-verified audit** (every route file and controller read directly, not inferred from any prior doc — see §0 above and `docs/PAGE_INVENTORY.md`, now the canonical page tracker). It corrects two real errors found in this project's own history: the previous version of this table listed Platform Super Admin at "4 of 6 pages, Governance Controls and Workshop Live View still owed" — both are in fact built and working; that claim traced back through two of this project's own prior audits (now in `docs/archive/audits/`) that had themselves gone stale without anyone noticing. That is exactly the failure mode this file exists to prevent, so it's recorded here rather than silently corrected.
+
 | Phase | State |
 |---|---|
-| 1 — Runnable and Provable | 🟢 7 of 7. CI cause found and fixed; awaiting a green run to confirm |
+| 1 — Runnable and Provable | ✅ complete |
 | 2 — Design Completeness | ✅ complete |
-| 3 — Governance Runtime | 🟢 4 of 5. Capability UI moved to Phase 5 (5.F) |
+| 3 — Governance Runtime | ✅ complete |
 | 4 — Operations Spine | ✅ complete |
-| 5 — Branch Manager | ✅ **complete — 7 of 7 pages**, Team Setup closed |
-| 6 — Technician | ✅ complete — 6.A–6.G |
-| 7 — Inventory | ✅ **complete — 6 of 6 pages**, Returns/Movements closed |
-| 8 — Finance Core | 🟠 engine done; Owner "Money" page owed (Phase 10) |
-| **9 — Billing / Invoicing** | ✅ **complete** — refund workflow + compliantBlocked closed |
-| **10 — Team Leader & People/Performance** | ✅ **complete (narrowed)** — all 4 Team Leader pages and Owner Home now have both API and a real, reachable web page, closed across three passes on the same working tree. Money page and staff exit-reason/rehire-eligibility re-planned out. See `docs/phases/PHASE_10.md` sections 6–7 for the correction history. |
-| **11 — Customer Portal** | ✅ **complete** — 5 authenticated surfaces + pre-existing decision link, all with real web pages now (`customer-shell`, bottom-nav like the technician shell); permission-engine gap still documented and owed, see `docs/phases/PHASE_11.md` §5 |
-| **12 — Reporting & Data Analyst** | ✅ **complete (live-only)** — company report (technician performance, throughput, finance); exports/saved views/point-in-time snapshots owed, see `docs/phases/PHASE_12.md` |
-| **13 — System Automation** | ✅ **complete (lock, not a separate worker)** — `SchedulerLockService` (Postgres advisory lock) stops double-firing across replicas; a real separate deployable owed once a real recurring job exists, see `docs/phases/PHASE_13.md` |
-| **14 — Internationalization & Release Readiness** | 🟠 **partial** — permission-key assertion check (`tools/lint-permission-keys.mjs`, five custom lint rules now) + a real `WorkOrder.customerId` index fix + a clean security review of the diff; translation pass and summary tables owed, see `docs/phases/PHASE_14.md` |
-| **15 — Specialization Discovery** | ✅ **schema settled, 3/5 primitives proven end-to-end** — service card, measurement form, credential proven; position taxonomy schema+read-path only; blocker reason schema only — `docs/phases/PHASE_15.md` |
-| **16 — Specialization Structure** | ✅ **minimum bar met** — promised time + SLA overrun (Attention Center, proven by test) + generic Attachment table; 16.I design spike written; 16.B/C/D/F/G deferred with reasons — `docs/phases/PHASE_16.md` |
-| **17 — Specialization at Creation** | 🟠 **17.A backend seam shipped** — starter-profile seeding (Nafath oil-change / Delta hydraulic form) atomic in workshop creation; wizard UI, 17.B–17.E owed — `docs/phases/PHASE_17.md` |
-| **18 — Tenant Relationships** | 🟠 **18.A/D/E shipped** — `TenantStakeholder`, archive lifecycle (two clocks) + a real `TenantStatusLayer` READ_ONLY fix, summary-only `TenantGroup`; 18.F merge/split design decision written (no first-class support); 18.B/C deferred — `docs/phases/PHASE_18.md` |
-| **19 — Governance Depth** | 🟠 **19.B/C/D shipped** — `WorkOrderDispute`, refund `reasonCategory`, `StaffRestrictionService` + a new `StaffRestrictionLayer` fully wired into the permission resolver; 19.A's enforcement built then reverted (broke 22 existing tests modeling a legitimate single-storekeeper shop — needs a per-workshop policy, not a global rule); 19.E/F/G deferred — `docs/phases/PHASE_19.md` |
-| **20 — Operational Resilience at Scale** | 🟠 **20.B shipped** — `PermissionContextService.load()` now runs inside one REPEATABLE READ transaction, closing the mid-flight capability-change race; 20.E's written decision: no offline-capable clients, connectivity is a stated requirement; 20.A/C/D/F deferred with reasons — `docs/phases/PHASE_20.md` |
+| 5 — Branch Manager | ✅ complete — 7 of 7 pages |
+| 6 — Technician | ✅ complete — 3 of 3 pages, including a real technician-facing part-request/return lifecycle (request → approve → issue → receive → use → return) — a prior "missing entirely" note in this file's history was verified false this pass |
+| 7 — Inventory | ✅ complete — 6 of 6 pages |
+| 8 — Finance Core | 🟢 engine complete; Owner-facing Pricing page shipped in Phase 10's later passes |
+| 9 — Billing / Invoicing | 🟠 engine and refund/credit-note workflow complete and tested; **zero country-specific legal invoicing adapters exist** (no Egypt ETA, no Saudi ZATCA) — every real country is currently compliance-blocked by design, a real go-to-market blocker, not a cosmetic gap |
+| 10 — Team Leader & People/Performance | ✅ complete (narrowed) — all 4 Team Leader pages and Owner Home built, tested, reachable |
+| 11 — Customer Portal | ✅ complete — 6 pages, all real; customer sessions still bypass the main permission resolver by design (documented, not a silent gap) |
+| 12 — Reporting & Data Analyst | 🟢 6 of 7 Data Analyst pages complete; **Saved Views / Exports (1 page) has zero implementation** — no CSV/export mechanism exists anywhere in the product |
+| 13 — System Automation | ✅ complete (lock, not a separate worker) |
+| 14 — Internationalization & Release Readiness | 🟠 partial — permission-key lint + a real perf fix shipped; the translation pass itself was never done despite the phase's own title |
+| 15 — Specialization Discovery | ✅ schema settled, 3 of 5 primitives proven end-to-end |
+| 16 — Specialization Structure | ✅ minimum bar met; several sub-items deferred with reasons |
+| 17 — Specialization at Creation | 🟠 backend seam shipped; no authoring UI at workshop-creation time |
+| 18 — Tenant Relationships | 🟠 stakeholder access, archive lifecycle, and read-only tenant grouping shipped; no merge/split support (deliberate) |
+| 19 — Governance Depth | 🟠 dispute records, refund-reason taxonomy, account restriction shipped; a second-approver separation-of-duties rule was built, broke 22 tests for legitimate single-storekeeper shops, and was reverted — needs a fresh per-workshop-opt-in design, not a retry |
+| 20 — Operational Resilience at Scale | 🟠 one real concurrency race fixed and proven; "no offline mode" decided and documented; no real load testing has been done; bulk onboarding not built |
+| 21 — Policy & Decision Architecture | 🟠 documents only, by design — ~70 policy decisions cataloged with defaults and build-posture verdicts; zero implementation; explicitly paused awaiting an owner decision before continuing |
 
-Platform Super Admin: 4 of 6 pages (Add Workshop Owner, Workshops,
-Builder Control partial, **Platform Reports**). Governance Controls and
-Workshop Live View still owed — their rail links have been dead since
-Phase 2.
+**Platform Super Admin — 5 of 6 pages complete, 1 partial (not 4 of 6):** Add Workshop Owner, Workshops, **Control Center — Governance Controls**, and **Workshop Live View** are all real and working — both confirmed built by direct code read this pass, correcting the stale claim above. Only Control Center's Builder Control facet remains narrow (capability shaping only; the spec's broader theme/layout/workflow-policy/permission-matrix scope is unbuilt), and Platform Reports covers only its first two sections of six. See `docs/PAGE_INVENTORY.md` for the full breakdown.
+
+**The 3 pages in the entire 53-page spec with zero implementation at all:** Access Denied (Shared), Password Reset (Shared, blocked on missing email/SMS infrastructure), and Saved Views/Exports (Data Analyst). Every other page has at least a real, working surface. See `docs/PAGE_INVENTORY.md` for the complete, current, canonical count (44 complete + 6 partial + 3 missing = 53) — this file and `docs/PHASE_MAP.md` now cite that document's total rather than each keeping a separate one.
+
+**The other real, non-cosmetic gap found this pass:** automated test coverage. Only Auth, Access/Permissions, and Platform/Super-Admin have tests that exercise a real HTTP request through the session guard and DTO validation. Every other subsystem — Technician, Inventory, Finance, Billing, Customer Portal, Team Leader, Branch Manager, Governance/Audit, Organization — is tested only by calling the service layer directly against a real database, which proves the business logic but never proves the actual route wiring, guard behavior, or request validation. Business logic itself is consistently real everywhere: no stub services, no hardcoded fake returns, no leftover TODOs were found anywhere in `apps/api/src`.
 
 **Platform Reports (closed this session, 2026-08-13).** Found already
 implemented and uncommitted on this working tree at session start
@@ -340,9 +349,11 @@ The owner sent a detailed, structured follow-up closing out everything above had
 
 **Next: owner review of the complete pass**, before anything is implemented.
 
-**What's next, in priority order:**
+**What's next, in priority order — corrected 2026-08-21 (see §0 and §2 above; the list this replaced was stale and named as unbuilt two pages that a direct code audit confirmed are real):**
 
-- **The 7 remaining edge cases are no longer bug-fix-shaped** — every item left is either a genuinely new feature (H7: warehouse deactivation with nonzero stock; E18: password lazy-rehash), a policy decision that has to be written down before code (E11: leap-year warranty rule; E13: capability-rollback design spike), an infrastructure/ops concern with no application code to change (E12: replica clock skew; E20: failover runbook), or a data-reconciliation policy for a feature that's itself still mostly unbuilt (E17: dormant-tenant migrations, blocked on Phase 18's archive lifecycle maturing further). None of these are a quick, well-scoped "read the code, find the gap, fix it, test it" pass the way H1/H2/H4/H5/H8/H9/H10/E14/E19 were — each needs its own short design note (in the relevant phase doc, per this project's own re-planning rule) before code, not a chunk like the ones above.
-- **Platform Super Admin still has 2 of 6 pages owed**: Governance Controls and Workshop Live View. Read `docs/detailed-specs/platform-super-admin.md`'s sections for both before starting — both are large specs. Platform Reports' own precedent is the model: ship a real, honestly-scoped first slice (Tenant Status control alone is a defensible first cut of Governance Controls, since Freeze/Reactivate already exists) and name the rest as owed in `PAGE_INVENTORY.md`.
-- **Phase 15/18 continuation** (directions B/C in §4) remain open and untouched this session.
-- **Owner pages are still 2/8** — Organization & Access, Forms & Fields, Messages & Templates, Pricing & Financial Configuration, Reports & Analytics, Workflow Health are all unbuilt, and Organization & Access in particular is the page that would give Governance Controls' role-state work somewhere real to be exercised from the tenant side.
+- **Close the HTTP-level test-coverage gap** on Finance, Billing, and Inventory first — every one of their endpoints is proven only at the service layer today, never through an actual guarded HTTP request. Highest leverage, since it protects money- and stock-correctness code from a future silent regression.
+- **Ship one real country's billing/invoicing adapter** (Egypt ETA or Saudi ZATCA) against the existing `GenericBillingAdapter` seam — this is what actually unblocks onboarding a paying customer in a real market, not any remaining page.
+- **The 3 pages with zero implementation**: Access Denied, Password Reset (needs an email/SMS provider decision first), and Data-Analyst Saved Views/Exports (needs `Plan.allowedExports` added to the schema before the export half can be correctly gated).
+- **Get an explicit owner decision on Phase 21** before investing further in Phases 15–20 — it is deliberately paused at documents-only, awaiting exactly this review, per its own stop boundary above.
+- **The remaining edge cases** (see `docs/archive/discovery/scenarios3/EDGE_CASE_REGISTER.md`) are no longer bug-fix-shaped — each needs its own short design note before code, not a quick fix.
+- **Platform Super Admin, Owner, and every other role's page count** is no longer the active frontier — see the corrected count in §2 and the canonical breakdown in `docs/PAGE_INVENTORY.md`. Do not re-open "build the remaining pages" as a track without first checking that document; most of what earlier entries in this file called "owed" is already built.

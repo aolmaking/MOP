@@ -2,7 +2,7 @@
 
 A multi-tenant SaaS platform for running maintenance and service workshops. One codebase serves many workshops, each with its own staff, customers, branches, warehouses, inventory, pricing, and — critically — its own **shape**: a one-bay quick-service shop and a twelve-branch dealership network run the same code with different capabilities switched on.
 
-> **Status:** early construction. The foundation (data model, permissions, capability engine, auth, platform administration) is built and tested. Operational role pages are not built yet. See [`docs/PHASE_MAP.md`](docs/PHASE_MAP.md) for exactly where the project is.
+> **Status (2026-08-21, code-verified):** the foundation (data model, permissions, capability engine, auth, platform administration) and all 9 role-specific workspaces are built and largely real — 44 of 53 specified pages are complete, 6 are partial, and 3 have no implementation yet (a dedicated Access Denied page, Password Reset, and Data-Analyst exports). See [`docs/PAGE_INVENTORY.md`](docs/PAGE_INVENTORY.md) for the exact per-page state and [`docs/PHASE_MAP.md`](docs/PHASE_MAP.md) for the phase plan. Two things matter more than any remaining page right now: most of the API is tested only at the service layer, not through a real guarded HTTP request; and no country-specific billing/invoicing adapter exists yet, so no tenant can legally invoice in a real market today.
 
 ---
 
@@ -89,7 +89,8 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for conventions and [`docs/README.md`](
 | Start here | |
 |---|---|
 | [`docs/VISION.md`](docs/VISION.md) | What MOP is, the architectural ideas, the hard problems |
-| [`docs/PHASE_MAP.md`](docs/PHASE_MAP.md) | The 14-phase plan and where the project currently is |
+| [`docs/PHASE_MAP.md`](docs/PHASE_MAP.md) | The 21-phase plan and where the project currently is |
+| [`docs/PAGE_INVENTORY.md`](docs/PAGE_INVENTORY.md) | The canonical, current, per-page build status — the definition of "done" |
 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Setup, commands, troubleshooting |
 | [`docs/SYSTEMS.md`](docs/SYSTEMS.md) · [`docs/CAPABILITY_MODEL.md`](docs/CAPABILITY_MODEL.md) | System boundaries; the capability engine |
 | [`docs/DATABASE_STRATEGY.md`](docs/DATABASE_STRATEGY.md) · [`docs/INFRASTRUCTURE.md`](docs/INFRASTRUCTURE.md) · [`docs/UX_PRINCIPLES.md`](docs/UX_PRINCIPLES.md) | Engineering charters, each item marked `DONE` / `PARTIAL` / `TODO` |

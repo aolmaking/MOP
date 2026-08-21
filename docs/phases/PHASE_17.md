@@ -3,7 +3,7 @@
 > **Status:** 🟠 17.A's backend seam shipped (starter-profile seeding at
 > creation time); the full multi-shape wizard and 17.B–17.E are owed —
 > see "What actually shipped" below.
-> **Source:** [`docs/scenarios/FINDINGS_SYNTHESIS.md`](../archive/discovery/scenarios/FINDINGS_SYNTHESIS.md),
+> **Source:** [`docs/archive/discovery/scenarios/FINDINGS_SYNTHESIS.md`](../archive/discovery/scenarios/FINDINGS_SYNTHESIS.md),
 > the user's core framing: *"the details of the card will be detected
 > — the fields he will fill — while making a new workshop account, from
 > the super admin."*

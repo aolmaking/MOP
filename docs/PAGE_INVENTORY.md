@@ -7,6 +7,8 @@
 > grep -c "^## PAGE:" docs/detailed-specs/*.md
 > ```
 > **Rule:** a phase may not be marked complete while any page it owns is ⬜.
+>
+> **Canonical status document.** As of 2026-08-21, this is the *only* place the project's page-completion count is tracked. `PROJECT_STATE.md` and `docs/PHASE_MAP.md` cite this file's totals rather than maintaining their own — the three trackers previously disagreed with each other (23/53, 34/53, 48/53) because each kept its own count. This file's numbers below were re-verified line-by-line against the live route files (`apps/web/src/app/app.routes.ts`) and controller/service source (`apps/api/src/**`) directly, not against any other document's claim, including two of this project's own prior audits that were themselves found to be stale (see `docs/archive/audits/`).
 
 ---
 
@@ -15,25 +17,29 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| Built | **48** |
-| Remaining | **5** |
+| ✅ Complete (real page, real backend, no named gap) | **44** |
+| 🟡 Partial (real page and backend, but a named piece of the spec is missing) | **6** |
+| ⬜ Not built at all (no route, no component, no controller) | **3** |
+| **Complete + Partial (has a real, working page today)** | **50** |
 
-Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built
+Legend: ✅ complete · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built at all
+
+**The 3 pages with zero implementation, full stop:** Access Denied (Shared), Password Reset (Shared), Saved Views/Exports (Data Analyst). Nothing else in the 53-page spec is completely absent — every other row has at least a real page wired to a real backend, even where it's 🟡.
 
 ---
 
-## Platform Super Admin — 6 / 6 ✅
+## Platform Super Admin — 5 ✅, 1 🟡 (6 pages)
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
-| Add Workshop Owner | ✅ | `/platform/workshops/new` | Phase 2 |
-| Workshops | ✅ | `/platform/workshops` | Server-side paged/sorted/filtered, details drawer, freeze/reactivate with impact preview. The API existed since Phase 2 with no UI |
-| Control Center — Governance Controls | ✅ | `/platform/control-center` | Per-role permission locks (set/remove, both audited, both require a written reason) and tenant archive/reactivate. Rail link had been dead since Phase 2; the backend (`RoleLock`, tenant archive lifecycle) predated the page |
-| Control Center — Builder Control | 🟡 | `/platform/workshops/:id/capabilities` | Capability shaping is built (5.F). The spec's Builder Control is broader |
-| Platform Reports | ✅ | `/platform/reports`, `/platform/reports/:id` | Level 1 (aggregate totals + per-workshop card grid) and Level 2's Usage Overview section only. Feature Usage, Builder Adoption, Operational Activity, Commercial Snapshot, and Health & Risk are named as owed, not built as empty tabs |
-| Workshop Live View | ✅ | `/platform/live-view` | `GET /platform/live-view` -- the only cross-tenant read in the product, deliberately confined to counts and event-key summaries (never payload) so nothing tenant-private crosses the boundary. Quiet-with-open-work sorts to the top. Rail link had been dead since Phase 2 |
+| Add Workshop Owner | ✅ | `/platform/workshops/new` | Multi-step onboarding wizard; creates the workshop's owner account atomically with the workshop itself |
+| Workshops | ✅ | `/platform/workshops` | Server-side paged/sorted/filtered, details drawer, freeze/reactivate with impact preview |
+| Control Center — Governance Controls | ✅ | `/platform/control-center` | Per-role permission locks (set/remove, both audited, both require a written reason) and tenant archive/reactivate, backed by real endpoints (`governance/role-permission-lock.controller.ts`, `governance/tenant-lifecycle.controller.ts`). Two of this project's own prior audits (now archived) claimed this page was unbuilt — a direct code read confirms it is real and working; those audits were stale |
+| Control Center — Builder Control | 🟡 | `/platform/workshops/:id/capabilities` | No page named "Builder Control" exists as such — the Capabilities page covers capability shaping only (turn subsystems on/off with a preview step). The spec's Builder Control is broader (theme, page layouts, role experience, workflow policy, permission matrix, config version rollback) and none of that broader scope is built |
+| Platform Reports | 🟡 | `/platform/reports`, `/platform/reports/:id` | Level 1 (aggregate totals + per-workshop card grid) and Level 2's Usage Overview section only. Feature Usage, Builder Adoption, Operational Activity, Commercial Snapshot, and Health & Risk are named as owed, not built as empty tabs |
+| Workshop Live View | ✅ | `/platform/live-view` | Real endpoint (`platform/live-view.controller.ts` → `LiveViewService.build()`), auto-refreshing, the only cross-tenant read in the product, deliberately confined to counts and event-key summaries (never payload). Same as Governance Controls above — a prior archived audit claimed this was unbuilt; it is real |
 
-## Branch Manager — 7 / 7 ✅
+## Branch Manager — 7 ✅ (7 pages)
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
@@ -64,7 +70,9 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Returns / Movements | ✅ | `/inventory/returns` | Queue (accept/reject/clarify, with the clarify↔reply loop) + tenant-wide filterable ledger. Two real backend bugs found and fixed while building this: RETURN_REJECTED and RETURN_CLARIFICATION_REQUESTED existed in the enum with no workflow-graph edge reaching them, and PartReturnRequest was never written by requestReturn |
 | Reports & Stock Insights | ✅ | `/inventory/reports` | Stock risk is velocity-based, per warehouse. Comparison section absent (not empty) for a single-warehouse scope |
 
-## Tenant Owner — 8 / 8 (Organization & Access, Messages & Templates, Workflow Health complete; Home and Audit also built; Forms & Fields, Pricing, and Reports & Analytics partial — every Owner page now has at least a real, working surface)
+## Tenant Owner — 4 ✅, 4 🟡 (8 pages)
+
+Every Owner page has at least a real, working surface — none are ⬜. Home, Organization & Access, Messages & Templates, and Workflow Health are complete; Forms & Fields, Pricing, Reports & Analytics, and Audit & Change History are each real but missing one named piece.
 
 | Page | State | Notes |
 |---|:--:|---|
@@ -86,7 +94,7 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Vehicles / Work Orders View | ✅ | `/team-leader/work-orders` | No price/cost/payment field anywhere in the response shape |
 | Technician Performance Reports | ✅ | `/team-leader/reports` | Managed-scope only; company-wide version is Phase 12 |
 
-## Data Analyst — 6 / 7
+## Data Analyst — 6 ✅, 1 ⬜ (7 pages)
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
@@ -109,7 +117,7 @@ Legend: ✅ built · 🟡 partial (exists but does not cover the spec's content)
 | Invoice & Payment Status | ✅ | `/customer/invoices` | `total`/`paid`/`balance` rendered as the exact strings the server sends |
 | Safe Technical History | ✅ | `/customer/history` | Entries labelled by plate/VIN cross-referenced from the customer's own asset list, never a raw asset id |
 
-## Shared System Pages — 4 / 6
+## Shared System Pages — 4 ✅, 2 ⬜ (6 pages)
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|

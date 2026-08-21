@@ -2,7 +2,7 @@
 
 > **Status:** ✅ schema settled and three of five primitives proven end-to-end;
 > see "What actually shipped" below for the precise split.
-> **Source:** [`docs/scenarios/FINDINGS_SYNTHESIS.md`](../archive/discovery/scenarios/FINDINGS_SYNTHESIS.md),
+> **Source:** [`docs/archive/discovery/scenarios/FINDINGS_SYNTHESIS.md`](../archive/discovery/scenarios/FINDINGS_SYNTHESIS.md),
 > Shape 1 findings across all 20 scenarios.
 
 ## Why this phase exists
