@@ -1,6 +1,6 @@
 import { ALL_GRAPHS } from "../capabilities/workflow-graphs";
 import { SHIPPED_PROFILES } from "../capabilities/profiles";
-import { effectiveGraph, type PolicyAnswers } from "../capabilities/workflow-router";
+import { effectiveGraph, type PolicyAnswers, type WorkOrderFacts } from "../capabilities/workflow-router";
 import { isCapabilityActive, type CapabilityProfile, type WorkflowGraph } from "../capabilities/types";
 import { POLICY_DEFINITIONS } from "./registry";
 import { isPolicyRelevant, policyCapabilityKey } from "./types";
@@ -85,6 +85,34 @@ export function policiesAppearingOnEdges(graphs: readonly WorkflowGraph[] = ALL_
   return [...keys].sort();
 }
 
+/** Fact keys that actually appear as a condition on some edge (see WorkflowTransition.requiresFact). */
+export function factsAppearingOnEdges(graphs: readonly WorkflowGraph[] = ALL_GRAPHS): readonly string[] {
+  const keys = new Set<string>();
+  for (const graph of graphs) {
+    for (const transition of graph.transitions) {
+      for (const fact of transition.requiresFact ?? []) keys.add(fact);
+    }
+  }
+  return [...keys].sort();
+}
+
+/**
+ * Every subset of the fact keys that appear on an edge -- a work order
+ * either has a given fact or it does not, so this is a plain powerset
+ * rather than the per-policy option expansion `answerCombinations` does.
+ */
+function factCombinations(keys: readonly string[]): readonly WorkOrderFacts[] {
+  let combos: ReadonlySet<string>[] = [new Set()];
+  for (const key of keys) {
+    const next: ReadonlySet<string>[] = [];
+    for (const combo of combos) {
+      next.push(combo, new Set([...combo, key]));
+    }
+    combos = next;
+  }
+  return combos;
+}
+
 /**
  * Every combination of options for the policies that appear on an edge.
  *
@@ -111,8 +139,13 @@ function answerCombinations(keys: readonly string[]): readonly Readonly<Record<s
 }
 
 /** States reachable from the initial state, and which of those cannot reach a terminal. */
-function strandedStates(graph: WorkflowGraph, profile: CapabilityProfile, answers: PolicyAnswers): readonly string[] {
-  const effective = effectiveGraph(graph, profile, answers);
+function strandedStates(
+  graph: WorkflowGraph,
+  profile: CapabilityProfile,
+  answers: PolicyAnswers,
+  facts: WorkOrderFacts,
+): readonly string[] {
+  const effective = effectiveGraph(graph, profile, answers, facts);
   const out = new Map<string, string[]>();
   for (const transition of effective.transitions) {
     if (!out.has(transition.from)) out.set(transition.from, []);
@@ -162,30 +195,34 @@ export function validatePolicyGraphSafety(
   const issues: GraphSafetyIssue[] = [];
   const keys = policiesAppearingOnEdges(graphs);
   const combos = answerCombinations(keys);
+  const factKeys = factsAppearingOnEdges(graphs);
+  const factCombos = factCombinations(factKeys);
   let casesChecked = 0;
 
   for (const [profileName, profile] of Object.entries(profiles)) {
     for (const combo of combos) {
       const answers = relevantPolicyAnswers(profile, new Map(Object.entries(combo)));
-      for (const graph of graphs) {
-        // A graph whose own required capabilities are gone is not part of
-        // this workshop at all -- "this never happens here" is not the
-        // same defect as "this happens and then gets stuck".
-        if ((graph.requires ?? []).some((key) => !isCapabilityActive(profile, key))) continue;
+      for (const facts of factCombos) {
+        for (const graph of graphs) {
+          // A graph whose own required capabilities are gone is not part of
+          // this workshop at all -- "this never happens here" is not the
+          // same defect as "this happens and then gets stuck".
+          if ((graph.requires ?? []).some((key) => !isCapabilityActive(profile, key))) continue;
 
-        casesChecked += 1;
-        const stranded = strandedStates(graph, profile, answers);
-        if (stranded.length === 0) continue;
+          casesChecked += 1;
+          const stranded = strandedStates(graph, profile, answers, facts);
+          if (stranded.length === 0) continue;
 
-        issues.push({
-          entity: graph.entity,
-          profileName,
-          answers: combo,
-          strandedStates: stranded,
-          message:
-            `Under ${profileName}, with ${JSON.stringify(combo)}, ${graph.entity} states ` +
-            `${stranded.join(", ")} are reachable but cannot reach a terminal state.`,
-        });
+          issues.push({
+            entity: graph.entity,
+            profileName,
+            answers: combo,
+            strandedStates: stranded,
+            message:
+              `Under ${profileName}, with ${JSON.stringify(combo)} and facts [${[...facts].join(", ")}], ` +
+              `${graph.entity} states ${stranded.join(", ")} are reachable but cannot reach a terminal state.`,
+          });
+        }
       }
     }
   }

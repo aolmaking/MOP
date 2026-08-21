@@ -45,6 +45,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "finance.payment.record": true,
     "finance.refund.request": true,
     "finance.refund.decide": true,
+    "finance.discount.request": true,
+    "finance.discount.decide": true,
     "reports.owner.view": true,
     "reports.company.view": true,
     "audit.own_tenant.view": true,
@@ -80,6 +82,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     // separation as issuing an invoice in the first place.
     "finance.refund.request": true,
     "finance.refund.decide": false,
+    // Same separation as refunds -- a branch manager can request a
+    // discount above the workshop's threshold, but deciding it stays
+    // with the owner by default.
+    "finance.discount.request": true,
+    "finance.discount.decide": false,
     // True in the template, and still denied until the owner delegates.
     // The template says "this role would do this if allowed to"; the
     // delegation layer says whether anyone but the owner may at all.
@@ -98,6 +105,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "customer_decision.send": true,
     // Explicitly not automatic -- see technician.md's Services/POS tool.
     "finance.running_invoice.add_line": false,
+    // A technician proposing a goodwill discount is not automatic either
+    // -- the same delegation discipline as adding a line.
+    "finance.discount.request": false,
   },
   INVENTORY_MANAGER: {
     "inventory.home.view": true,

@@ -5,6 +5,7 @@ import {
   compare,
   invoiceTotal,
   isCapabilityActive,
+  isZero,
   outstanding,
   overpaid,
   subtract,
@@ -269,6 +270,8 @@ export class FinanceService {
         taxPercent: options.taxPercent,
       })),
     );
+
+    await this.enforceDiscountAuthority(tenantId, workOrderId, options.discountPercent ?? 0, computed.discount);
 
     const invoiceId = await this.prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.create({
@@ -648,6 +651,165 @@ export class FinanceService {
     return { id: refundRequestId, status: "REJECTED" };
   }
 
+  // --- discounts -------------------------------------------------------
+  //
+  // DISCOUNT_AUTHORITY (packages/shared/src/policies/registry.ts) is the
+  // policy this section makes real. `FinanceConfiguration` has carried
+  // `discountApprovalThreshold`/`maxDiscountPercent` since Phase 8; until
+  // now nothing ever read them, so any amount of discount at issue time
+  // was unrestricted for anyone holding `finance.invoice.issue`. That is
+  // the exact gap the policy exists to close.
+
+  /**
+   * Asks for a discount above the workshop's threshold. Sits at PENDING
+   * until someone else decides -- the same request/decide separation as
+   * a refund, and for the same reason: a role that can ask should not
+   * automatically be able to grant its own ask.
+   */
+  async requestDiscount(
+    tenantId: string,
+    workOrderId: string,
+    amount: Money,
+    reason: string,
+    actor: LifecycleActor,
+  ): Promise<{ id: string; status: "PENDING" }> {
+    await this.requireFinance(tenantId);
+
+    const authority = await this.policies.resolveValue(tenantId, "DISCOUNT_AUTHORITY");
+    if (authority === "NONE") {
+      throw new ForbiddenException({
+        code: "discounts_not_offered",
+        message: "This workshop does not offer discounts.",
+      });
+    }
+
+    const requestId = await this.prisma.$transaction(async (tx) => {
+      const request = await tx.discountRequest.create({
+        data: { tenantId, workOrderId, amount, reason, requestedById: actor.accountId },
+        select: { id: true },
+      });
+      await this.emit(tx, tenantId, "finance.discount_requested", request.id, actor, { workOrderId, amount, reason }, "WorkOrder");
+      return request.id;
+    });
+
+    return { id: requestId, status: "PENDING" };
+  }
+
+  async approveDiscount(discountRequestId: string, actor: LifecycleActor): Promise<{ id: string; status: "APPROVED" }> {
+    const discount = await this.prisma.discountRequest.findUnique({ where: { id: discountRequestId } });
+    if (!discount) throw new NotFoundException({ code: "discount_not_found", message: "Discount request not found." });
+    if (discount.status !== "PENDING") {
+      throw new ConflictException({
+        code: "discount_not_pending",
+        message: `This discount request is already ${discount.status.toLowerCase()}.`,
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.discountRequest.update({
+        where: { id: discountRequestId },
+        data: { status: "APPROVED", decidedById: actor.accountId, decidedAt: new Date() },
+      });
+      await this.emit(
+        tx,
+        discount.tenantId,
+        "finance.discount_approved",
+        discountRequestId,
+        actor,
+        { workOrderId: discount.workOrderId, amount: discount.amount.toFixed(2) },
+        "WorkOrder",
+      );
+    });
+
+    return { id: discountRequestId, status: "APPROVED" };
+  }
+
+  async rejectDiscount(discountRequestId: string, actor: LifecycleActor, reason?: string): Promise<{ id: string; status: "REJECTED" }> {
+    const discount = await this.prisma.discountRequest.findUnique({ where: { id: discountRequestId } });
+    if (!discount) throw new NotFoundException({ code: "discount_not_found", message: "Discount request not found." });
+    if (discount.status !== "PENDING") {
+      throw new ConflictException({
+        code: "discount_not_pending",
+        message: `This discount request is already ${discount.status.toLowerCase()}.`,
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.discountRequest.update({
+        where: { id: discountRequestId },
+        data: { status: "REJECTED", decidedById: actor.accountId, decidedAt: new Date() },
+      });
+      await this.emit(tx, discount.tenantId, "finance.discount_rejected", discountRequestId, actor, { reason }, "WorkOrder");
+    });
+
+    return { id: discountRequestId, status: "REJECTED" };
+  }
+
+  /**
+   * Refuses to issue an invoice carrying a discount this workshop's
+   * DISCOUNT_AUTHORITY answer has not actually authorised.
+   *
+   * `NONE` refuses any discount outright. `ANY_STAFF_UNLIMITED` is the
+   * pre-existing, unrestricted behaviour -- whoever holds
+   * `finance.invoice.issue` decides. `THRESHOLD_THEN_APPROVAL` and
+   * `ALWAYS_APPROVAL` both require a matching `DiscountRequest` in
+   * `APPROVED` status for this exact work order and amount; because a
+   * work order can only ever carry one invoice (`invoice_already_issued`
+   * above), an approved request can only ever be spent once, with no
+   * separate "consumed" flag needed.
+   */
+  private async enforceDiscountAuthority(
+    tenantId: string,
+    workOrderId: string,
+    discountPercent: number,
+    discountAmount: Money,
+  ): Promise<void> {
+    if (discountPercent <= 0 || isZero(discountAmount)) return;
+
+    const authority = await this.policies.resolveValue(tenantId, "DISCOUNT_AUTHORITY");
+    if (authority === "ANY_STAFF_UNLIMITED") return;
+
+    if (authority === "NONE") {
+      throw new ForbiddenException({
+        code: "discounts_not_offered",
+        message: "This workshop does not offer discounts.",
+      });
+    }
+
+    let needsApproval = authority === "ALWAYS_APPROVAL";
+    if (authority === "THRESHOLD_THEN_APPROVAL") {
+      const config = await this.prisma.financeConfiguration.findUnique({
+        where: { tenantId },
+        select: { discountApprovalThreshold: true, maxDiscountPercent: true },
+      });
+      const threshold = config?.discountApprovalThreshold.toFixed(2) ?? "0.00";
+      // money-lint-ok: a percentage (0-100), not currency -- compared
+      // directly against discountPercent, which the API boundary itself
+      // already types as a JS number (IssueInvoiceDto).
+      const maxPercent = config ? Number(config.maxDiscountPercent) : 0;
+      needsApproval = compare(discountAmount, threshold) > 0 || discountPercent > maxPercent;
+    }
+    if (!needsApproval) return;
+
+    const approved = await this.prisma.discountRequest.findFirst({
+      where: { tenantId, workOrderId, status: "APPROVED" },
+      orderBy: { decidedAt: "desc" },
+    });
+
+    if (!approved) {
+      throw new ForbiddenException({
+        code: "discount_approval_required",
+        message: "This discount needs an approved request before the invoice can be issued.",
+      });
+    }
+    if (compare(approved.amount.toFixed(2), discountAmount) !== 0) {
+      throw new ForbiddenException({
+        code: "discount_approval_mismatch",
+        message: `The approved discount (${approved.amount.toFixed(2)}) does not match what is being invoiced (${discountAmount}).`,
+      });
+    }
+  }
+
   // --- internals -----------------------------------------------------
 
   /**
@@ -718,6 +880,7 @@ export class FinanceService {
     targetId: string,
     actor: LifecycleActor,
     payload: Record<string, unknown>,
+    targetType: string = "Invoice",
   ): Promise<void> {
     await this.events.emit(
       {
@@ -726,7 +889,7 @@ export class FinanceService {
         actorId: actor.accountId,
         actorName: actor.displayName,
         actorType: actor.actorType,
-        targetType: "Invoice",
+        targetType,
         targetId,
         riskLevel: "MEDIUM",
         payload,

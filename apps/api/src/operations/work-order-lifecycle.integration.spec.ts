@@ -312,6 +312,54 @@ describe("a policy narrows the graph, for real, against Postgres", () => {
     const stillReachable = await drive(mustInspect.id, ["START_INSPECTION", "REQUEST_APPROVAL"]);
     expect(stillReachable).toEqual(["UNDER_INSPECTION", "AWAITING_CUSTOMER_APPROVAL"]);
   }, 120_000);
+
+  it("QC_MANDATORY=RISK_FLAGGED_ONLY skips QC for a clean job and routes a CRITICAL fault through it", async () => {
+    const fixture = await createWorkshop(`qcrisk-${SUFFIX}`, { TEAM_REVIEW: "DISABLED", TEAMS: "DISABLED" });
+    fixtures.push(fixture);
+
+    await policiesForTest.set(
+      fixture.tenantId,
+      "QC_MANDATORY",
+      "RISK_FLAGGED_ONLY",
+      ACTOR,
+      "PLATFORM",
+      "Integration test: only a critical fault needs QC.",
+    );
+
+    // Clean job -- no faults at all -- finishes straight to invoicing.
+    const clean = await newWorkOrder(fixture);
+    await drive(clean.id, ["REGISTER", "START_INSPECTION", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
+    await prisma.inspection.create({
+      data: { tenantId: fixture.tenantId, workOrderId: clean.id, technicianId: "tech-1", type: "QUICK", fields: {} },
+    });
+    const cleanPath = await drive(clean.id, ["FINISH"]);
+    expect(cleanPath).toEqual(["PAYMENT_PENDING"]);
+
+    // Same shape, but this job carries a CRITICAL fault -- QC is not optional.
+    const risky = await newWorkOrder(fixture);
+    await drive(risky.id, ["REGISTER", "START_INSPECTION", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
+    await prisma.inspection.create({
+      data: { tenantId: fixture.tenantId, workOrderId: risky.id, technicianId: "tech-1", type: "QUICK", fields: {} },
+    });
+    await prisma.fault.create({
+      data: { tenantId: fixture.tenantId, workOrderId: risky.id, description: "Brake line leak", severity: "CRITICAL" },
+    });
+    const riskyPath = await drive(risky.id, ["FINISH"]);
+    expect(riskyPath).toEqual(["READY_FOR_QC"]);
+
+    // A HIGH-severity fault, one notch below CRITICAL, still does not
+    // trip it -- the fact is specifically about CRITICAL, not "any fault".
+    const moderate = await newWorkOrder(fixture);
+    await drive(moderate.id, ["REGISTER", "START_INSPECTION", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
+    await prisma.inspection.create({
+      data: { tenantId: fixture.tenantId, workOrderId: moderate.id, technicianId: "tech-1", type: "QUICK", fields: {} },
+    });
+    await prisma.fault.create({
+      data: { tenantId: fixture.tenantId, workOrderId: moderate.id, description: "Worn pad", severity: "HIGH" },
+    });
+    const moderatePath = await drive(moderate.id, ["FINISH"]);
+    expect(moderatePath).toEqual(["PAYMENT_PENDING"]);
+  }, 120_000);
 });
 
 describe("gates block, with a message a person can act on", () => {

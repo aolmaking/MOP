@@ -96,6 +96,11 @@ const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   // separation-of-duties work for where this gets enforced structurally;
   // for now the two permissions can simply be granted to different roles.
   { key: "finance.refund.decide", module: "FINANCE" },
+  // Same separation, for the same reason, on the DISCOUNT_AUTHORITY path:
+  // requesting a discount above the workshop's threshold and approving it
+  // are different acts.
+  { key: "finance.discount.request", module: "FINANCE" },
+  { key: "finance.discount.decide", module: "FINANCE" },
 
   // Inventory
   { key: "inventory.home.view", module: "INVENTORY" },

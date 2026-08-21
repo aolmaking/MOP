@@ -131,6 +131,22 @@ export interface WorkflowTransition {
    */
   readonly requiresPolicy?: readonly PolicyCondition[];
   /**
+   * Facts about THIS work order under which this edge is live -- all
+   * named facts must be true. Unlike `requires`/`requiresPolicy`, which
+   * are true or false for the whole tenant, a fact is computed per work
+   * order (e.g. "this job has a critical-severity fault") and can only
+   * be evaluated once a specific work order is in hand, which is why the
+   * router takes it as a third, separate input rather than folding it
+   * into `PolicyAnswers`.
+   *
+   * Exists for exactly the case that needed it: QC_MANDATORY's
+   * RISK_FLAGGED_ONLY option, where whether QC is required depends on
+   * this job's own faults, not on anything true of the workshop as a
+   * whole. A missing fact is treated as false (conservative: a job is
+   * never assumed risk-flagged, or exempt, on data nobody computed).
+   */
+  readonly requiresFact?: readonly string[];
+  /**
    * The action a person takes, as opposed to the states it happens to
    * connect. "Technician finishes" lands on Team Review, QC, invoicing or
    * delivery readiness depending purely on which capabilities the

@@ -4,7 +4,15 @@ import { SessionGuard } from "../auth/session.guard";
 import { CurrentSession } from "../auth/current-session.decorator";
 import { EffectiveAccessService } from "../access/effective-access.service";
 import { FinanceService } from "./finance.service";
-import { AddLineDto, IssueInvoiceDto, RecordPaymentDto, RejectRefundDto, RequestRefundDto } from "./finance.dto";
+import {
+  AddLineDto,
+  IssueInvoiceDto,
+  RecordPaymentDto,
+  RejectDiscountDto,
+  RejectRefundDto,
+  RequestDiscountDto,
+  RequestRefundDto,
+} from "./finance.dto";
 
 @Controller("finance")
 @UseGuards(SessionGuard)
@@ -93,6 +101,28 @@ export class FinanceController {
   async rejectRefund(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: RejectRefundDto) {
     await this.require(session, "finance.refund.decide");
     return this.finance.rejectRefund(id, this.actor(session), dto.reason);
+  }
+
+  /**
+   * Discounts above DISCOUNT_AUTHORITY's threshold. Requesting and
+   * deciding are two different permissions, same reasoning as refunds.
+   */
+  @Post("work-orders/:id/discounts")
+  async requestDiscount(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: RequestDiscountDto) {
+    const tenantId = await this.require(session, "finance.discount.request");
+    return this.finance.requestDiscount(tenantId, id, dto.amount, dto.reason, this.actor(session));
+  }
+
+  @Post("discounts/:id/approve")
+  async approveDiscount(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    await this.require(session, "finance.discount.decide");
+    return this.finance.approveDiscount(id, this.actor(session));
+  }
+
+  @Post("discounts/:id/reject")
+  async rejectDiscount(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: RejectDiscountDto) {
+    await this.require(session, "finance.discount.decide");
+    return this.finance.rejectDiscount(id, this.actor(session), dto.reason);
   }
 
   private actor(session: SessionContext) {

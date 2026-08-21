@@ -114,7 +114,25 @@ export const WORK_ORDER_GRAPH: WorkflowGraph = {
     // does not have. Recorded here rather than faked: under DIRECT,
     // finished work goes onward.
     { from: "IN_PROGRESS", to: "READY_FOR_TEAM_REVIEW", requires: ["TEAM_REVIEW"], intent: "FINISH", requiresPolicy: [{ policyKey: "TECHNICIAN_DIRECT_SEND", oneOf: ["REVIEW_REQUIRED"] }], gates: ["inspection_completed", "approved_work_completed", "customer_decisions_resolved", "critical_warning_acknowledged", "no_open_blocker", "parts.received_used_or_returned", "parts.no_pending_return", "parts.external_resolved"], label: "finish -> team review" },
-    { from: "READY_FOR_TEAM_REVIEW", to: "READY_FOR_QC", requires: ["TEAM_REVIEW", "QC"], intent: "REVIEW_PASSED", label: "review passed -> QC" },
+    // Same QC_MANDATORY split as the IN_PROGRESS -> READY_FOR_QC pair
+    // above, for the job that went through review first.
+    {
+      from: "READY_FOR_TEAM_REVIEW",
+      to: "READY_FOR_QC",
+      requires: ["TEAM_REVIEW", "QC"],
+      intent: "REVIEW_PASSED",
+      requiresPolicy: [{ policyKey: "QC_MANDATORY", oneOf: ["MANDATORY_ALWAYS"] }],
+      label: "review passed -> QC (always)",
+    },
+    {
+      from: "READY_FOR_TEAM_REVIEW",
+      to: "READY_FOR_QC",
+      requires: ["TEAM_REVIEW", "QC"],
+      intent: "REVIEW_PASSED",
+      requiresPolicy: [{ policyKey: "QC_MANDATORY", oneOf: ["RISK_FLAGGED_ONLY"] }],
+      requiresFact: ["work_order.has_critical_fault"],
+      label: "review passed -> QC (risk-flagged)",
+    },
     {
       from: "READY_FOR_TEAM_REVIEW",
       to: "PAYMENT_PENDING",
@@ -124,7 +142,31 @@ export const WORK_ORDER_GRAPH: WorkflowGraph = {
     },
     { from: "READY_FOR_TEAM_REVIEW", to: "IN_PROGRESS", requires: ["TEAM_REVIEW"], intent: "REVIEW_REJECTED", label: "returned for rework" },
 
-    { from: "IN_PROGRESS", to: "READY_FOR_QC", requires: ["QC"], intent: "FINISH", gates: ["inspection_completed", "approved_work_completed", "customer_decisions_resolved", "critical_warning_acknowledged", "no_open_blocker", "parts.received_used_or_returned", "parts.no_pending_return", "parts.external_resolved"], label: "finish -> QC" },
+    // QC_MANDATORY splits what was one unconditional edge into two,
+    // ordered before the FINANCE_CORE fallback below so a job the
+    // workshop does not consider risk-flagged (RISK_FLAGGED_ONLY, no
+    // qualifying fault) falls straight through to invoicing/delivery
+    // rather than waiting on a QC step nobody asked for. MANDATORY_ALWAYS
+    // keeps today's unconditional behaviour exactly.
+    {
+      from: "IN_PROGRESS",
+      to: "READY_FOR_QC",
+      requires: ["QC"],
+      intent: "FINISH",
+      requiresPolicy: [{ policyKey: "QC_MANDATORY", oneOf: ["MANDATORY_ALWAYS"] }],
+      gates: ["inspection_completed", "approved_work_completed", "customer_decisions_resolved", "critical_warning_acknowledged", "no_open_blocker", "parts.received_used_or_returned", "parts.no_pending_return", "parts.external_resolved"],
+      label: "finish -> QC (always)",
+    },
+    {
+      from: "IN_PROGRESS",
+      to: "READY_FOR_QC",
+      requires: ["QC"],
+      intent: "FINISH",
+      requiresPolicy: [{ policyKey: "QC_MANDATORY", oneOf: ["RISK_FLAGGED_ONLY"] }],
+      requiresFact: ["work_order.has_critical_fault"],
+      gates: ["inspection_completed", "approved_work_completed", "customer_decisions_resolved", "critical_warning_acknowledged", "no_open_blocker", "parts.received_used_or_returned", "parts.no_pending_return", "parts.external_resolved"],
+      label: "finish -> QC (risk-flagged)",
+    },
     { from: "READY_FOR_QC", to: "QC_FAILED", requires: ["QC"], intent: "QC_FAILED", label: "QC failed" },
     { from: "QC_FAILED", to: "IN_PROGRESS", requires: ["QC"], intent: "RESOLVE_BLOCKER", label: "rework" },
     { from: "READY_FOR_QC", to: "PAYMENT_PENDING", requires: ["QC", "FINANCE_CORE"], intent: "QC_PASSED", label: "QC passed -> invoice" },

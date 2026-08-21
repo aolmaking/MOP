@@ -5,6 +5,7 @@ import {
   resolveIntent,
   type GateResult,
   type WorkflowIntent,
+  type WorkOrderFacts,
   relevantPolicyAnswers,
 } from "@mop/shared";
 import type { Prisma, WorkOrderStatus } from "@mop/database";
@@ -81,8 +82,8 @@ export class WorkOrderLifecycleService {
       throw new NotFoundException({ code: "work_order_not_found", message: "Work order not found." });
     }
 
-    const { profile, policies } = await this.routingContext(workOrder.tenantId);
-    const routed = resolveIntent(WORK_ORDER_GRAPH, profile, workOrder.status, intent, policies);
+    const { profile, policies, facts } = await this.routingContext(workOrder.tenantId, workOrderId);
+    const routed = resolveIntent(WORK_ORDER_GRAPH, profile, workOrder.status, intent, policies, facts);
 
     if (!routed.ok) {
       throw new ConflictException({
@@ -180,13 +181,33 @@ export class WorkOrderLifecycleService {
    * graph, or a job sticks for a question the workshop is no longer
    * asked. Every routing call in this service goes through this one
    * method so no call site can forget.
+   *
+   * `facts` is this one work order's own data, computed fresh on every
+   * call rather than cached anywhere -- see WorkflowTransition.
+   * requiresFact's own doc for why this is a separate input from the
+   * tenant-wide policy answers.
    */
-  private async routingContext(tenantId: string) {
-    const [profile, stored] = await Promise.all([
+  private async routingContext(tenantId: string, workOrderId: string) {
+    const [profile, stored, facts] = await Promise.all([
       this.capabilities.resolveCurrent(tenantId),
       this.policies.resolveCurrent(tenantId),
+      this.workOrderFacts(workOrderId),
     ]);
-    return { profile, policies: relevantPolicyAnswers(profile, stored) };
+    return { profile, policies: relevantPolicyAnswers(profile, stored), facts };
+  }
+
+  /**
+   * QC_MANDATORY's RISK_FLAGGED_ONLY option reads this: a job carrying a
+   * CRITICAL-severity fault is risk-flagged, whatever else is true of it.
+   */
+  private async workOrderFacts(workOrderId: string): Promise<WorkOrderFacts> {
+    const criticalFault = await this.prisma.fault.findFirst({
+      where: { workOrderId, severity: "CRITICAL" },
+      select: { id: true },
+    });
+    const facts = new Set<string>();
+    if (criticalFault) facts.add("work_order.has_critical_fault");
+    return facts;
   }
 
   async availableIntents(workOrderId: string): Promise<readonly WorkflowIntent[]> {
@@ -196,12 +217,12 @@ export class WorkOrderLifecycleService {
     });
     if (!workOrder) return [];
 
-    const { profile, policies } = await this.routingContext(workOrder.tenantId);
+    const { profile, policies, facts } = await this.routingContext(workOrder.tenantId, workOrderId);
     const intents = new Set<WorkflowIntent>();
 
     for (const transition of WORK_ORDER_GRAPH.transitions) {
       if (transition.from !== workOrder.status || !transition.intent) continue;
-      if (!canTransition(WORK_ORDER_GRAPH, profile, workOrder.status, transition.to, policies)) continue;
+      if (!canTransition(WORK_ORDER_GRAPH, profile, workOrder.status, transition.to, policies, facts)) continue;
       intents.add(transition.intent);
     }
 
@@ -220,8 +241,8 @@ export class WorkOrderLifecycleService {
     });
     if (!workOrder) return null;
 
-    const { profile, policies } = await this.routingContext(workOrder.tenantId);
-    const routed = resolveIntent(WORK_ORDER_GRAPH, profile, workOrder.status, intent, policies);
+    const { profile, policies, facts } = await this.routingContext(workOrder.tenantId, workOrderId);
+    const routed = resolveIntent(WORK_ORDER_GRAPH, profile, workOrder.status, intent, policies, facts);
     if (!routed.ok || !routed.transition.gates?.length) return null;
 
     return this.gates.evaluate(

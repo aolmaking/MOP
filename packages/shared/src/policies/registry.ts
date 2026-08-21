@@ -306,17 +306,24 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     dependsOnCapabilities: ["FINANCE_CORE"],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
+      status: "ENFORCED",
       where:
-        "FinanceConfiguration already carries discountApprovalThreshold and maxDiscountPercent; the approval " +
-        "step itself (a DiscountRequest raised above the threshold) is Phase 8's owed discount path.",
-      consumers: [],
+        "FinanceService.enforceDiscountAuthority runs on every issueInvoice call: NONE refuses any discount " +
+        "outright, ANY_STAFF_UNLIMITED is unrestricted, and THRESHOLD_THEN_APPROVAL/ALWAYS_APPROVAL both require " +
+        "a matching APPROVED DiscountRequest -- raised via FinanceService.requestDiscount, decided via " +
+        "approveDiscount/rejectDiscount -- for this exact work order and amount before the invoice can issue.",
+      consumers: [
+        "FinanceService.enforceDiscountAuthority",
+        "FinanceService.requestDiscount",
+        "FinanceService.approveDiscount",
+        "FinanceService.rejectDiscount",
+      ],
     },
     impact: {
       capabilities: ["FINANCE_CORE"],
       roles: ["BRANCH_MANAGER", "TENANT_OWNER", "TECHNICIAN"],
       workflowStates: [],
-      permissions: ["finance.running_invoice.add_line"],
+      permissions: ["finance.running_invoice.add_line", "finance.discount.request", "finance.discount.decide"],
       pages: ["branch_manager.work-order-workspace", "owner.pricing-financial-configuration"],
       changesVisibility: false,
       changesBilling: true,
@@ -734,53 +741,63 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
 
   // -------------------------------------------------------------------
   // P-71 -- Is QC mandatory for every job, or only above a threshold?
+  //
+  // `ABOVE_VALUE_THRESHOLD` is deliberately absent: it needs a stored
+  // per-workshop threshold value the option model has nowhere to hold
+  // (PolicyOption is an enum key, not a parameter), the same "an option
+  // whose answer cannot be honoured is worse than an option not offered"
+  // discipline P-01/P-05/P-26 already use in this file. RISK_FLAGGED_ONLY
+  // needed no such new storage -- Fault.severity already exists -- so it
+  // is real instead of dropped.
   // -------------------------------------------------------------------
   {
     key: "QC_MANDATORY",
-    question: "Is QC required for every finished job, or only above a value/risk threshold?",
+    question: "Is QC required for every finished job, or only for one flagged safety-critical?",
     options: [
       {
         key: "MANDATORY_ALWAYS",
         label: "Always",
-        meaning: "Every finished job routes through QC. The workflow graph's own current, only behaviour.",
-      },
-      {
-        key: "ABOVE_VALUE_THRESHOLD",
-        label: "Above a value threshold",
-        meaning: "Only jobs over a declared value require QC.",
+        meaning: "Every finished job routes through QC.",
       },
       {
         key: "RISK_FLAGGED_ONLY",
         label: "Risk-flagged only",
-        meaning: "Only jobs flagged risky by their specialization severity require QC.",
+        meaning: "Only a job carrying a CRITICAL-severity fault routes through QC; anything else finishes straight to invoicing or delivery.",
       },
     ],
     default: "MANDATORY_ALWAYS",
     defaultReason:
-      "The only option requiring no new data, and it matches every workshop that has the QC capability " +
-      "enabled today -- the workflow graph currently has no conditional path, so loosening this is real " +
-      "future work (a threshold value, or reading specialization severity), not an assumption to make now.",
+      "It is what already ships, and QC exists precisely to catch what a technician might miss -- exempting " +
+      "most jobs from it by default would be the capability quietly doing less than turning it on promised. " +
+      "RISK_FLAGGED_ONLY is a real choice for a workshop confident its routine jobs do not need a second look.",
     relevantWhen: () => true,
     mutability: "GOVERNED",
     buildPosture: "POLICY_CONTROLLED",
     dependsOnCapabilities: ["QC"],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
+      status: "ENFORCED",
       where:
-        "MANDATORY_ALWAYS is the graph's only behaviour today, so choosing it is honoured. The other two need " +
-        "the conditional QC route their own defaultReason names as real future work.",
-      consumers: [],
+        "WORK_ORDER_GRAPH narrows both routes into READY_FOR_QC (IN_PROGRESS and READY_FOR_TEAM_REVIEW) to " +
+        "RISK_FLAGGED_ONLY plus the work_order.has_critical_fault fact; GateEvaluatorService/WorkOrderLifecycleService " +
+        "compute that fact from this work order's own Fault rows on every routing call, not from anything true " +
+        "of the tenant as a whole. A job with no CRITICAL fault finishes straight to invoicing or delivery, the " +
+        "same fallback route a workshop with QC off already uses.",
+      consumers: [
+        "WORK_ORDER_GRAPH (IN_PROGRESS -> READY_FOR_QC)",
+        "WORK_ORDER_GRAPH (READY_FOR_TEAM_REVIEW -> READY_FOR_QC)",
+        "WorkOrderLifecycleService.routingContext",
+      ],
     },
     impact: {
       capabilities: ["QC"],
       roles: ["TECHNICIAN"],
-      workflowStates: ["READY_FOR_QC", "QC_FAILED"],
+      workflowStates: ["READY_FOR_QC", "QC_FAILED", "PAYMENT_PENDING", "READY_FOR_DELIVERY"],
       permissions: [],
       pages: ["technician.work-card", "branch_manager.work-orders-board"],
       changesVisibility: false,
       changesBilling: false,
-      summary: "Whether every finished job waits for a quality check, or only some of them.",
+      summary: "Whether every finished job waits for a quality check, or only one carrying a critical fault.",
     },
   },
 
