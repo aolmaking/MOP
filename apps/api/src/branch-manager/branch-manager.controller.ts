@@ -11,7 +11,7 @@ import { PrismaService } from "../database/prisma.service";
 import { WorkOrderBoardService, type BoardResult } from "./work-order-board.service";
 import { ApprovalsService, type ApprovalsResult } from "./approvals.service";
 import { DeliveryService, type DeliveryBoard } from "./delivery.service";
-import { CustomerDecisionService } from "../customer/decision.service";
+import { CustomerDecisionService, type PublicDecision } from "../customer/decision.service";
 import { RecordDecisionDto } from "./record-decision.dto";
 import { AdvanceWorkOrderDto } from "./advance-work-order.dto";
 import { WorkOrderDossierService } from "../operations/work-order-dossier.service";
@@ -224,6 +224,22 @@ export class BranchManagerController {
       tenantId: session.tenantId as string,
       branchScope: session.branchScope,
     });
+  }
+
+  /**
+   * One request, read the way the customer would have read it -- same
+   * items, prices and critical warning -- so a manager recording an
+   * answer on their behalf sees exactly what is being agreed to before
+   * they read it down the phone. Requires only branch view; the write
+   * below is the one gated behind the delegated permission.
+   */
+  @Get("approvals/:requestId")
+  async approvalDetail(
+    @CurrentSession() session: SessionContext,
+    @Param("requestId") requestId: string,
+  ): Promise<PublicDecision> {
+    await this.requireBranchView(session);
+    return this.customerDecisions.detailForStaff(session.tenantId as string, session.branchScope, requestId);
   }
 
   /**

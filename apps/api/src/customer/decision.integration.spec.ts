@@ -531,6 +531,24 @@ describe("P-18 -- recordOnBehalf, staff recording a verbal decision", () => {
       ], STAFF),
     ).rejects.toMatchObject({ status: 409, response: { code: "work_order_already_closed" } });
   });
+
+  it("detailForStaff shows the manager exactly what the token link would have shown", async () => {
+    const made = await makeRequest();
+
+    const staffView = await decisions.detailForStaff(tenantId, [branchId], made.requestId);
+    const customerView = await decisions.read(made.token);
+
+    expect(staffView).toEqual(customerView);
+    expect(staffView.items.map((i) => i.id)).toEqual(expect.arrayContaining([made.criticalItemId, made.normalItemId]));
+  });
+
+  it("detailForStaff refuses out-of-scope requests the same way the write does", async () => {
+    const made = await makeRequest();
+
+    await expect(
+      decisions.detailForStaff(tenantId, ["some-other-branch"], made.requestId),
+    ).rejects.toMatchObject({ status: 404, response: { code: "decision_not_found" } });
+  });
 });
 
 /**

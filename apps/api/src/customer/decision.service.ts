@@ -154,6 +154,25 @@ export class CustomerDecisionService {
   }
 
   /**
+   * A staff member's own read of one request, before recording an answer
+   * on the customer's behalf (P-18). Reuses `resolveById` -- the same
+   * branch-scoped lookup `recordOnBehalf` uses -- and `present`, so a
+   * manager sees exactly what the customer would have seen on the token
+   * link: same items, same prices, same critical warning. A second,
+   * looser projection here is exactly how a manager reading the phone
+   * script could end up seeing a different price than the one being
+   * recorded.
+   */
+  async detailForStaff(
+    tenantId: string,
+    branchScope: readonly string[],
+    requestId: string,
+  ): Promise<PublicDecision> {
+    const request = await this.resolveById(tenantId, branchScope, requestId);
+    return this.present(request, await this.pricingVisible(tenantId));
+  }
+
+  /**
    * One resolved request, rendered as what a customer may see.
    *
    * Shared by the token link and the authenticated portal so the two can

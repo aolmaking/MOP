@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import type { Observable } from 'rxjs';
+import type { PublicDecision, SubmittedAnswer } from '../../customer/decision-answer';
 
 export interface ApprovalRow {
   readonly requestId: string;
@@ -57,5 +58,27 @@ export class ApprovalsApi {
 
   delivery(): Observable<DeliveryBoard> {
     return this.http.get<DeliveryBoard>('/api/v1/branch-manager/delivery');
+  }
+
+  /** Read the same way the customer's own token link reads it, before recording an answer on their behalf. */
+  approvalDetail(requestId: string): Observable<PublicDecision> {
+    return this.http.get<PublicDecision>(`/api/v1/branch-manager/approvals/${requestId}`);
+  }
+
+  /**
+   * P-18: record a decision the customer gave verbally rather than
+   * through their portal or link. Refused server-side (409/400) if the
+   * workshop's PORTAL_COUNTER_APPROVAL policy forbids it or demands
+   * evidence this call did not include.
+   */
+  recordDecision(
+    requestId: string,
+    answers: readonly SubmittedAnswer[],
+    evidenceReference?: string,
+  ): Observable<{ ok: true }> {
+    return this.http.post<{ ok: true }>(`/api/v1/branch-manager/approvals/${requestId}/record`, {
+      answers,
+      evidenceReference: evidenceReference?.trim() || undefined,
+    });
   }
 }

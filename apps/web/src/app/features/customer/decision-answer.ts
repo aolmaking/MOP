@@ -53,6 +53,8 @@ export class DecisionAnswer {
   readonly decision = input.required<PublicDecision>();
   readonly submitting = input(false);
   readonly error = input<string | null>(null);
+  /** Overridable for a host where the customer isn't the one pressing it -- e.g. a manager recording an answer on their behalf. */
+  readonly submitLabel = input('Send my answers');
 
   readonly answered = output<readonly SubmittedAnswer[]>();
 

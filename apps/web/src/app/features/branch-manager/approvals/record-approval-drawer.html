@@ -1,0 +1,56 @@
+<div class="scrim" (click)="closed.emit()"></div>
+
+<aside
+  class="record-drawer"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="record-title"
+  appDismissOnEscape
+  (dismissed)="closed.emit()"
+>
+  <header class="head">
+    <h2 class="title" id="record-title">Record what the customer said</h2>
+    <button type="button" class="close" (click)="closed.emit()" aria-label="Close">✕</button>
+  </header>
+
+  <p class="lead">
+    Read each item to the customer exactly as it appears below, then record what they told you. This is recorded
+    against your name, not theirs.
+  </p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state" aria-busy="true">Loading…</p>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="loadError()" />
+        <button type="button" class="secondary" (click)="retry()">Try again</button>
+      </div>
+    }
+
+    @case ('ready') {
+      @if (decision(); as d) {
+        <label class="evidence">
+          <span>Evidence (call note, signature) -- optional unless your workshop requires it</span>
+          <input
+            type="text"
+            maxlength="500"
+            placeholder="e.g. Called customer at 14:20, she confirmed by phone"
+            [ngModel]="evidenceReference()"
+            (ngModelChange)="evidenceReference.set($event)"
+          />
+        </label>
+
+        <app-decision-answer
+          [decision]="d"
+          [submitting]="submitting()"
+          [error]="submitError()"
+          [submitLabel]="'Record decision'"
+          (answered)="submit($event)"
+        />
+      }
+    }
+  }
+</aside>

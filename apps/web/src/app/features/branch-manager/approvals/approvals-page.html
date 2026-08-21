@@ -92,6 +92,15 @@
                       <span class="row-waited">{{ waited(row) }}</span>
                     </span>
                   </a>
+                  <!--
+                    P-18: the customer answered by phone, not through the
+                    link. A sibling of the anchor, not nested in it -- a
+                    button inside an anchor is invalid and unreachable by
+                    keyboard past the link.
+                  -->
+                  <button type="button" class="row-record" (click)="openRecording(row.requestId)">
+                    Record answer
+                  </button>
                 </li>
               }
             </ul>
@@ -101,3 +110,11 @@
     }
   }
 </section>
+
+@if (recording(); as requestId) {
+  <app-record-approval-drawer
+    [requestId]="requestId"
+    (closed)="closeRecording()"
+    (recorded)="recordingDone()"
+  />
+}

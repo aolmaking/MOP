@@ -5,6 +5,7 @@ import { ErrorBanner } from '../../../shared/error-banner/error-banner';
 import { ButtonDirective } from '../../../shared/button/button.directive';
 import type { PresentedError } from '../../../core/api/error.interceptor';
 import { ApprovalsApi, type ApprovalRow, type ApprovalsResult } from './approvals.api';
+import { RecordApprovalDrawer } from './record-approval-drawer';
 
 type State = 'loading' | 'ready' | 'empty' | 'forbidden' | 'error';
 
@@ -20,7 +21,7 @@ type State = 'loading' | 'ready' | 'empty' | 'forbidden' | 'error';
  */
 @Component({
   selector: 'app-approvals-page',
-  imports: [RouterLink, Identifier, ErrorBanner, ButtonDirective],
+  imports: [RouterLink, Identifier, ErrorBanner, ButtonDirective, RecordApprovalDrawer],
   templateUrl: './approvals-page.html',
   styleUrl: './approvals-page.css',
 })
@@ -31,7 +32,24 @@ export class ApprovalsPage {
   protected readonly error = signal<PresentedError | null>(null);
   protected readonly state = signal<State>('loading');
 
+  /** The request currently open in the record-decision drawer, if any. */
+  protected readonly recording = signal<string | null>(null);
+
   constructor() {
+    this.load();
+  }
+
+  protected openRecording(requestId: string): void {
+    this.recording.set(requestId);
+  }
+
+  protected closeRecording(): void {
+    this.recording.set(null);
+  }
+
+  /** A write landed. Refresh the chase list -- it may have just emptied. */
+  protected recordingDone(): void {
+    this.recording.set(null);
     this.load();
   }
 

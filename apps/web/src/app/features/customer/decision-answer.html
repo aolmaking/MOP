@@ -82,7 +82,7 @@
 
     @if (d.state === 'OPEN') {
       <button class="primary" type="button" [disabled]="!canSubmit()" (click)="submit()">
-        {{ submitting() ? 'Sending…' : 'Send my answers' }}
+        {{ submitting() ? 'Sending…' : submitLabel() }}
       </button>
       @if (!allAnswered()) {
         <p class="note">Please choose for every item above.</p>

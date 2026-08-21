@@ -1,0 +1,126 @@
+/*
+ * Recording a decision on the customer's behalf (P-18).
+ *
+ * Same slide-in-panel mechanics as the dossier drawer -- opened from the
+ * middle of chasing a list, must not lose that position by navigating
+ * away.
+ */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: hsl(var(--shadow-color) / 0.6);
+  animation: record-fade var(--duration-base) var(--ease-out);
+}
+
+.record-drawer {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 31;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  inline-size: min(34rem, 100vw);
+  padding: var(--space-5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface-raised);
+  border-inline-start: 1px solid var(--border-strong);
+  border-start-start-radius: var(--radius-lg);
+  border-end-start-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  animation: record-in var(--duration-base) var(--ease-out);
+}
+
+@keyframes record-in {
+  from {
+    transform: translateX(2rem);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes record-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.close {
+  padding: var(--space-2);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--text-md);
+  cursor: pointer;
+}
+
+.lead {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.evidence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.evidence input {
+  min-block-size: 2.75rem;
+  padding: 0 var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.evidence input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.state {
+  padding: var(--space-5) 0;
+  color: var(--text-muted);
+}
+
+.state-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.secondary {
+  min-block-size: 2.75rem;
+  padding: 0 var(--space-4);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+}
