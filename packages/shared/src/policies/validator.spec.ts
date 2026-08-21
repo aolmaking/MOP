@@ -157,6 +157,7 @@ describe("enforcement declarations", () => {
       "QC_MANDATORY",
       "RETURN_UNUSED_BEFORE_FINISH",
       "TECHNICIAN_DIRECT_SEND",
+      "UNCOVERED_COUNTRY_BILLING",
     ]);
   });
 

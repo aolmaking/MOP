@@ -84,6 +84,13 @@ export class BillingService {
     candidate: InvoiceCandidate,
     snapshot: InvoiceSnapshot,
     tx?: Prisma.TransactionClient,
+    // UNCOVERED_COUNTRY_BILLING's resolved value, read by the caller
+    // BEFORE opening its transaction and handed in here rather than
+    // looked up inside it -- ten simultaneously-issuing invoices each
+    // adding one more query to an already-tight interactive transaction
+    // is exactly what pushed a real concurrency test over Prisma's 5s
+    // transaction timeout when this was resolved in here instead.
+    countryBillingRule: string = "WARN_ONLY",
   ): Promise<IssueDocumentResult | null> {
     const client = tx ?? this.prisma;
 
@@ -97,9 +104,27 @@ export class BillingService {
     // exactly the moment this flag needs to be right, and issuing an
     // invoice is the one guaranteed touchpoint that happens regularly
     // enough to keep it from ever going stale.
-    await this.refreshCompliantBlocked(client, candidate.tenantId, candidate.country, configuration?.externalBillingEnabled ?? false);
+    const compliantBlocked = await this.refreshCompliantBlocked(
+      client,
+      candidate.tenantId,
+      candidate.country,
+      configuration?.externalBillingEnabled ?? false,
+    );
 
     if (configuration?.externalBillingEnabled) return null;
+
+    // UNCOVERED_COUNTRY_BILLING: WARN_ONLY is Phase 9's original,
+    // visibility-only behaviour -- the flag is set and nothing is
+    // refused. BLOCK and BLOCK_WITH_OVERRIDE both refuse the invoice
+    // outright; the audited override action BLOCK_WITH_OVERRIDE implies
+    // is Governance Controls' work, the same honest gap
+    // DELIVERY_BLOCKED_UNTIL_PAID's REQUIRES_OVERRIDE already carries.
+    if (compliantBlocked && (countryBillingRule === "BLOCK" || countryBillingRule === "BLOCK_WITH_OVERRIDE")) {
+      throw new BadRequestException({
+        code: "country_not_covered",
+        message: `This workshop's country has no billing adapter yet, and this workshop's policy refuses to issue without one. Enable External Billing Mode, or change the policy answer.`,
+      });
+    }
 
     const validation = this.adapter.validateInvoice(candidate);
     if (!validation.valid) {
@@ -197,18 +222,20 @@ export class BillingService {
    * A tenant is compliant-blocked when its country has no adapter beyond
    * the generic one and it is not in External Billing Mode -- the
    * distinction named in docs/phases/PHASE_9.md section 6: this is a
-   * platform limitation, not a tenant choice, and visibility-only in
-   * this phase (no invoice is ever refused because of it; MOP is not
-   * the tenant's lawyer). Upserts the row, since nothing before this
-   * ever created one -- `FinanceConfiguration` existed in the schema
-   * since Phase 8 with no writer at all.
+   * platform limitation, not a tenant choice. What that means for
+   * issuance is UNCOVERED_COUNTRY_BILLING's own decision, read by the
+   * caller right after this returns -- WARN_ONLY leaves the flag as
+   * visibility only (MOP is not the tenant's lawyer), BLOCK and
+   * BLOCK_WITH_OVERRIDE refuse. Upserts the row, since nothing before
+   * this ever created one -- `FinanceConfiguration` existed in the
+   * schema since Phase 8 with no writer at all.
    */
   private async refreshCompliantBlocked(
     client: PrismaService | Prisma.TransactionClient,
     tenantId: string,
     country: string,
     externalBillingEnabled: boolean,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const compliantBlocked = !externalBillingEnabled && !ADAPTER_COVERED_COUNTRIES.has(country);
 
     await client.financeConfiguration.upsert({
@@ -216,6 +243,8 @@ export class BillingService {
       create: { tenantId, compliantBlocked },
       update: { compliantBlocked },
     });
+
+    return compliantBlocked;
   }
 
   /** Same atomic-upsert pattern as FinanceService.nextInvoiceNumber(). */

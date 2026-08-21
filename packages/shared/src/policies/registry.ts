@@ -566,11 +566,15 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     dependsOnCapabilities: ["BILLING"],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
+      status: "ENFORCED",
       where:
-        "compliantBlocked is computed and stored on every issueDocument call today, visibility-only per " +
-        "PHASE_9.md SS6. BLOCK and BLOCK_WITH_OVERRIDE need the refusal path and the override record.",
-      consumers: [],
+        "FinanceService.issueInvoice resolves this before opening its transaction and hands it to " +
+        "BillingService.issueDocument, which computes compliantBlocked on every call: WARN_ONLY issues anyway " +
+        "(visibility only, per PHASE_9.md S6), BLOCK and BLOCK_WITH_OVERRIDE both refuse -- inside the same " +
+        "transaction the invoice itself is created in, so the whole invoice rolls back, not just the billing " +
+        "document. The audited exception BLOCK_WITH_OVERRIDE names is Governance Controls' work, the same " +
+        "honest gap DELIVERY_BLOCKED_UNTIL_PAID's REQUIRES_OVERRIDE already carries.",
+      consumers: ["BillingService.issueDocument", "FinanceService.issueInvoice"],
     },
     impact: {
       capabilities: ["BILLING"],

@@ -788,6 +788,96 @@ describe("compliantBlocked", () => {
 });
 
 /**
+ * UNCOVERED_COUNTRY_BILLING made real: compliantBlocked was computed and
+ * stored on every issue since Phase 9 (proven above), but nothing ever
+ * read it back to decide whether issuing should actually be refused.
+ */
+describe("UNCOVERED_COUNTRY_BILLING governs whether issuing is refused", () => {
+  afterEach(async () => {
+    await policiesForTest.set(
+      paid.tenantId,
+      "UNCOVERED_COUNTRY_BILLING",
+      "WARN_ONLY",
+      ACTOR,
+      "PLATFORM",
+      "Integration test cleanup: back to the default.",
+    );
+  });
+
+  it("WARN_ONLY (the default) issues anyway, flag set", async () => {
+    const job = await makeJob(paid);
+    await finance.addLine(
+      { tenantId: paid.tenantId, workOrderId: job, name: "Service", itemType: "LABOUR", quantity: 1, unitPrice: "20.00" },
+      ACTOR,
+    );
+    const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR);
+    expect(settlement.invoiceId).toBeTruthy();
+
+    const configuration = await prisma.financeConfiguration.findUnique({ where: { tenantId: paid.tenantId } });
+    expect(configuration?.compliantBlocked).toBe(true);
+  });
+
+  it("BLOCK refuses to issue at all, and rolls back the whole invoice attempt", async () => {
+    await policiesForTest.set(paid.tenantId, "UNCOVERED_COUNTRY_BILLING", "BLOCK", ACTOR, "PLATFORM", "Integration test.");
+
+    const job = await makeJob(paid);
+    await finance.addLine(
+      { tenantId: paid.tenantId, workOrderId: job, name: "Service", itemType: "LABOUR", quantity: 1, unitPrice: "20.00" },
+      ACTOR,
+    );
+
+    await expect(finance.issueInvoice(paid.tenantId, job, ACTOR)).rejects.toMatchObject({
+      response: { code: "country_not_covered" },
+    });
+
+    // Not just the billing document -- no Invoice row exists at all.
+    const invoice = await prisma.invoice.findUnique({ where: { workOrderId: job } });
+    expect(invoice).toBeNull();
+  });
+
+  it("BLOCK_WITH_OVERRIDE also refuses -- the override action itself is not built yet", async () => {
+    await policiesForTest.set(
+      paid.tenantId,
+      "UNCOVERED_COUNTRY_BILLING",
+      "BLOCK_WITH_OVERRIDE",
+      ACTOR,
+      "PLATFORM",
+      "Integration test.",
+    );
+
+    const job = await makeJob(paid);
+    await finance.addLine(
+      { tenantId: paid.tenantId, workOrderId: job, name: "Service", itemType: "LABOUR", quantity: 1, unitPrice: "20.00" },
+      ACTOR,
+    );
+
+    await expect(finance.issueInvoice(paid.tenantId, job, ACTOR)).rejects.toMatchObject({
+      response: { code: "country_not_covered" },
+    });
+  });
+
+  it("BLOCK does not refuse once External Billing Mode is on -- compliantBlocked itself is false", async () => {
+    await policiesForTest.set(paid.tenantId, "UNCOVERED_COUNTRY_BILLING", "BLOCK", ACTOR, "PLATFORM", "Integration test.");
+    await prisma.financeConfiguration.upsert({
+      where: { tenantId: paid.tenantId },
+      create: { tenantId: paid.tenantId, externalBillingEnabled: true },
+      update: { externalBillingEnabled: true },
+    });
+
+    const job = await makeJob(paid);
+    await finance.addLine(
+      { tenantId: paid.tenantId, workOrderId: job, name: "Service", itemType: "LABOUR", quantity: 1, unitPrice: "20.00" },
+      ACTOR,
+    );
+
+    const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR);
+    expect(settlement.invoiceId).toBeTruthy();
+
+    await prisma.financeConfiguration.update({ where: { tenantId: paid.tenantId }, data: { externalBillingEnabled: false } });
+  });
+});
+
+/**
  * The Service Catalog governs money.
  *
  * Before PriceCatalogService.resolve() existed, PriceCatalogEntry was

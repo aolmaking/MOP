@@ -273,6 +273,10 @@ export class FinanceService {
 
     await this.enforceDiscountAuthority(tenantId, workOrderId, options.discountPercent ?? 0, computed.discount);
 
+    // Resolved here, before the transaction, for the same reason as
+    // enforceDiscountAuthority above -- see issueDocument's own doc.
+    const countryBillingRule = await this.policies.resolveValue(tenantId, "UNCOVERED_COUNTRY_BILLING");
+
     const invoiceId = await this.prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.create({
         data: {
@@ -369,7 +373,7 @@ export class FinanceService {
       // Same transaction, deliberately -- an invoice must never exist
       // without its billing document at least attempted, the same
       // discipline StockService uses for a part leaving the shelf.
-      await this.billing.issueDocument(candidate, snapshot, tx);
+      await this.billing.issueDocument(candidate, snapshot, tx, countryBillingRule);
 
       return invoice.id;
     });
