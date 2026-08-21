@@ -192,28 +192,29 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
         label: "Formal for critical, lightweight for routine",
         meaning: "Safety-critical and high-value items use the formal request; low-value routine items use a lighter confirm.",
       },
-      {
-        key: "PER_ITEM_CHOICE",
-        label: "Staff choose per item",
-        meaning: "The person raising the item picks how heavy the request is.",
-      },
     ],
     default: "TWO_TIER",
     defaultReason:
       "A single weight guarantees one of two failures: heavy enough for a safety warning means friction on a " +
       "wiper blade, light enough for a wiper blade means a safety rejection is not properly evidenced. Two " +
-      "tiers is the only option correct at both ends; PER_ITEM_CHOICE moves a safety judgement onto a busy technician.",
+      "tiers is the only option correct at both ends.",
     relevantWhen: () => true,
     mutability: "GOVERNED",
     buildPosture: "POLICY_CONTROLLED",
     dependsOnCapabilities: [],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
+      status: "ENFORCED",
       where:
-        "Read once CustomerDecisionItem carries a weight/tier field and the decision page renders two forms. " +
-        "The critical-rejection acknowledgement gate is an invariant and holds under every option regardless.",
-      consumers: [],
+        "CustomerDecisionService.applyAnswers resolves this before the acknowledgement gate. TWO_TIER requires " +
+        "the formal acknowledgement -- the same modal every CRITICAL rejection already showed -- for HIGH and " +
+        "CRITICAL items only; LOW and MEDIUM record with a single choice, no modal. SINGLE_WEIGHT requires the " +
+        "same acknowledgement for every item regardless of importance, including a routine LOW one. CRITICAL " +
+        "requires it under both options, which is the floor this policy cannot lower. PER_ITEM_CHOICE (staff " +
+        "picking the weight per item) was dropped rather than faked: it needs a real per-item tier chosen when " +
+        "the item is raised, and the backend flow for a technician to raise and send a decision item does not " +
+        "exist yet -- there is nothing for a per-item choice to attach to.",
+      consumers: ["CustomerDecisionService.applyAnswers"],
     },
     impact: {
       capabilities: ["CUSTOMER_PORTAL"],
@@ -223,7 +224,9 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
       pages: ["customer.decision", "branch_manager.approvals-customer-decisions"],
       changesVisibility: false,
       changesBilling: false,
-      summary: "How heavy a decision request is -- one formal mechanism for everything, or a lighter path for routine items.",
+      summary:
+        "Which decision items require an explicit acknowledgement before a rejection is recorded -- only " +
+        "HIGH/CRITICAL, or every item regardless of importance.",
     },
   },
 

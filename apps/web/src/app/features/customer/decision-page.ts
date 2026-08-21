@@ -14,6 +14,7 @@ interface DecisionItem {
   readonly price: string | null;
   readonly labour: string | null;
   readonly total: string | null;
+  readonly requiresAcknowledgement: boolean;
 }
 
 interface PublicDecision {
@@ -89,8 +90,10 @@ export class DecisionPage {
   }
 
   protected choose(item: DecisionItem, verdict: Verdict): void {
-    // A critical rejection is held back until the warning is read.
-    if (verdict === 'REJECTED' && item.importance === 'Critical') {
+    // APPROVAL_WEIGHT decides which items this applies to -- server-side,
+    // per item, in `requiresAcknowledgement`. Under TWO_TIER that is
+    // HIGH/CRITICAL only; under SINGLE_WEIGHT it is every item.
+    if (verdict === 'REJECTED' && item.requiresAcknowledgement) {
       this.acknowledged.set(false);
       this.confirming.set(item);
       return;
@@ -128,9 +131,10 @@ export class DecisionPage {
     const answers = items.map((item) => ({
       itemId: item.id,
       decision: this.chosen(item) as 'APPROVED' | 'REJECTED',
-      // Only ever true for a critical rejection the customer confirmed.
-      // The server re-checks this; sending it is not what makes it valid.
-      warningAcknowledged: item.importance === 'Critical' && this.chosen(item) === 'REJECTED',
+      // Only ever true for a rejection the customer confirmed through the
+      // modal. The server re-checks this against its own live policy
+      // value; sending it is not what makes it valid.
+      warningAcknowledged: item.requiresAcknowledgement && this.chosen(item) === 'REJECTED',
     }));
 
     this.submitting.set(true);

@@ -139,12 +139,23 @@
     <div class="modal-backdrop">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="warn-title">
         <h2 class="modal-title" id="warn-title">Please read this first</h2>
-        <p class="modal-body">{{ decision()?.criticalWarning }}</p>
+        @if (item.importance === 'Critical') {
+          <p class="modal-body">{{ decision()?.criticalWarning }}</p>
+        } @else {
+          <!-- APPROVAL_WEIGHT can require this same acknowledgement for a
+               non-critical item too (SINGLE_WEIGHT), so the wording must
+               not claim a safety risk that may not exist. -->
+          <p class="modal-body">This workshop asks you to confirm before declining this.</p>
+        }
         <p class="modal-item">{{ item.name }}</p>
 
         <label class="ack">
           <input type="checkbox" [checked]="acknowledged()" (change)="acknowledged.set($any($event.target).checked)" />
-          <span>I understand that declining this may affect safety, and that this will be recorded.</span>
+          @if (item.importance === 'Critical') {
+            <span>I understand that declining this may affect safety, and that this will be recorded.</span>
+          } @else {
+            <span>I understand that this will be recorded.</span>
+          }
         </label>
 
         <div class="modal-actions">

@@ -180,10 +180,11 @@ describe("Workshop onboarding (integration, real HTTP, real Postgres)", () => {
       expect(delivery.enforcement.status).toBe("ENFORCED");
       expect(delivery.group).toBe("MONEY");
 
-      // A policy that is recorded but not yet read says so, rather than
-      // implying a stored string is changing behaviour.
+      // Every registered policy is ENFORCED now -- see
+      // packages/shared/src/policies/validator.spec.ts for the exhaustive
+      // list this blueprint's own numbers must agree with.
       const weight = res.body.policies.find((p: { key: string }) => p.key === "APPROVAL_WEIGHT");
-      expect(weight.enforcement.status).toBe("RECORDED");
+      expect(weight.enforcement.status).toBe("ENFORCED");
     });
 
     it("serves real countries with the currency, timezone and weekend each implies", async () => {

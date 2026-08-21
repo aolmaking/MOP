@@ -147,6 +147,7 @@ describe("enforcement declarations", () => {
       .sort();
     expect(enforced).toEqual([
       "APPROVAL_REQUIRED_SCOPE",
+      "APPROVAL_WEIGHT",
       "CUSTOMER_INVOICE_VISIBILITY",
       "DELIVERY_BLOCKED_UNTIL_PAID",
       "DISCOUNT_AUTHORITY",
