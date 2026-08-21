@@ -1,6 +1,7 @@
 import { Component, computed, inject, input } from '@angular/core';
 import { OnboardingStore } from '../onboarding.store';
 import type { OnboardingBlueprint, PolicyBlueprint } from '../onboarding.api';
+import { PolicyImpact } from '../components/policy-impact';
 
 /**
  * The rules the enabled parts of the operation run under.
@@ -21,7 +22,7 @@ import type { OnboardingBlueprint, PolicyBlueprint } from '../onboarding.api';
  */
 @Component({
   selector: 'app-stage-policies',
-  imports: [],
+  imports: [PolicyImpact],
   templateUrl: './stage-policies.html',
   styleUrl: './stage-policies.css',
 })

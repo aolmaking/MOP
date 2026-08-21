@@ -34,6 +34,8 @@
           </p>
         }
 
+        <app-policy-impact [impact]="policy.impact" />
+
         <div class="onb-policy-options">
           @for (option of policy.options; track option.key) {
             <label
