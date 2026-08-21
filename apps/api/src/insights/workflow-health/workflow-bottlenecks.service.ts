@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../../../runtime/database/prisma.service";
-import { resolveDateRange, type ReportQueryParams } from "../../../insights/owner-reports/date-range.util";
-import { averageMsByStatus, computeStatusDurations, type StatusChangeEvent } from "../../../insights/owner-reports/lifecycle-duration.util";
+import { PrismaService } from "../../runtime/database/prisma.service";
+import { resolveDateRange, type ReportQueryParams } from "../owner-reports/date-range.util";
+import { averageMsByStatus, computeStatusDurations, type StatusChangeEvent } from "../owner-reports/lifecycle-duration.util";
 import { detectStatusLoops } from "./loop-detection.util";
 
 export type WaitingCause = "PEOPLE" | "INVENTORY" | "APPROVAL" | "PAYMENT" | "QUALITY" | "OTHER";

@@ -1,4 +1,4 @@
-import type { StatusChangeEvent } from "../../../insights/owner-reports/lifecycle-duration.util";
+import type { StatusChangeEvent } from "../owner-reports/lifecycle-duration.util";
 
 export interface StatusLoop {
   readonly workOrderId: string;

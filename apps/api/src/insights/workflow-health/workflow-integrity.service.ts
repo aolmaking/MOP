@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { DEFAULT_ROLE_PERMISSIONS } from "@mop/shared";
-import { PrismaService } from "../../../runtime/database/prisma.service";
+import { PrismaService } from "../../runtime/database/prisma.service";
 
 export type IntegrityIssueType =
   | "PART_ARRIVAL_UNCONFIRMED"

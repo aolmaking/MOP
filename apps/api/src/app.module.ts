@@ -28,7 +28,7 @@ import { OrganizationModule } from "./systems/people/organization/organization.m
 import { MessagesModule } from "./systems/customer/messages/messages.module";
 import { FormsModule } from "./systems/forms/forms.module";
 import { ReportsModule } from "./insights/owner-reports/reports.module";
-import { WorkflowHealthModule } from "./systems/operations/workflow-health/workflow-health.module";
+import { WorkflowHealthModule } from "./insights/workflow-health/workflow-health.module";
 import { AnalyticsModule } from "./insights/analytics/analytics.module";
 import { HealthController } from "./runtime/health/health.controller";
 
