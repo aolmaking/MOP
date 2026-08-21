@@ -405,7 +405,7 @@ describe("Workshop onboarding (integration, real HTTP, real Postgres)", () => {
           DELIVERY_BLOCKED_UNTIL_PAID: "ALWAYS",
           PARTS_SEPARATION_OF_DUTIES: "DIFFERENT_PERSON",
           RETURN_UNUSED_BEFORE_FINISH: "REQUIRED",
-          CUSTOMER_INVOICE_VISIBILITY: "WITHHELD",
+          CUSTOMER_INVOICE_VISIBILITY: "HIDDEN",
         },
         responsibilities: { INVENTORY: "DEDICATED", TEAMS: "DEDICATED", MULTI_BRANCH: "DEDICATED" },
         specializationPacks: ["BRAKES_AND_SUSPENSION", "DIAGNOSTICS"],

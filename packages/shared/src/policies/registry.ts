@@ -785,10 +785,12 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
   },
 
   // -------------------------------------------------------------------
-  // P-72 -- May a customer decline inspection and go straight to a
-  //         named service?
+  // Not in docs/POLICY_DECISION_INVENTORY.md -- that document's P-numbers
+  // run to P-84 with none of them this question, so this is a genuinely
+  // new entry rather than a numbered one this file is catching up on.
   //
-  // The edge WORK_ORDER_GRAPH already ships (REGISTERED ->
+  // May a customer decline inspection and go straight to a named
+  // service? The edge WORK_ORDER_GRAPH already ships (REGISTERED ->
   // AWAITING_CUSTOMER_APPROVAL, "inspection declined, service requested")
   // was unconditional -- every workshop allowed the skip, whether or not
   // it wanted to. Registering the question makes that an answer rather
@@ -844,33 +846,44 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
   },
 
   // -------------------------------------------------------------------
-  // P-73 -- May a customer see prices on a decision request?
+  // P-26 -- Are prices shown to the customer before approval?
   //
-  // FinanceConfiguration.customerInvoiceVisible already exists and is
-  // already read by CustomerDecisionService.pricingVisible -- but until
-  // now nothing ever wrote it from an answer. Every workshop silently
-  // got the Prisma column default, whatever it actually wanted.
+  // Already catalogued in docs/POLICY_DECISION_INVENTORY.md, and its own
+  // "Why" already named the exact gap this closes: "FinanceConfiguration.
+  // customerInvoiceVisible exists and decision.service.ts already honours
+  // it... The decision was made in code; it was never written down or
+  // surfaced." This is that surfacing. Registered here as GOVERNED per
+  // that entry's own header, though its "Later: freely" free-text field
+  // disagrees with itself -- GOVERNED is kept, since a decision that
+  // silently changes what a customer already saw is exactly the kind of
+  // in-flight consequence the impact-preview pipeline exists to catch.
+  //
+  // The inventory's third option, `TOTAL_ONLY` (one figure, no
+  // breakdown), is deliberately absent: it needs a new projection
+  // CustomerDecisionService does not have, the same "an option whose
+  // answer cannot be honoured is worse than an option not offered"
+  // discipline P-01/P-05 already use elsewhere in this file.
   // -------------------------------------------------------------------
   {
     key: "CUSTOMER_INVOICE_VISIBILITY",
-    question: "May a customer see prices when deciding on a repair?",
+    question: "Are prices shown to the customer before they approve a repair?",
     options: [
       {
-        key: "VISIBLE",
-        label: "Visible",
+        key: "SHOWN",
+        label: "Shown",
         meaning: "Each decision item shows its price, so the customer can weigh cost against the finding.",
       },
       {
-        key: "WITHHELD",
-        label: "Withheld",
+        key: "HIDDEN",
+        label: "Hidden",
         meaning: "The item still appears, without numbers; pricing is discussed by phone or at the counter instead.",
       },
     ],
-    default: "VISIBLE",
+    default: "SHOWN",
     defaultReason:
-      "A customer asked to approve or decline work without knowing what it costs is being asked to sign a " +
-      "blank cheque, and WITHHELD is a real choice only for a workshop that has a reason to negotiate off-portal " +
-      "-- not the safer default for everyone.",
+      "Asking someone to approve work without telling them the price is not informed consent, which is the " +
+      "entire purpose of the decision step. HIDDEN is a real choice only for a workshop that has a reason to " +
+      "negotiate off-portal -- not the safer default for everyone.",
     relevantWhen: () => true,
     mutability: "GOVERNED",
     buildPosture: "POLICY_CONTROLLED",

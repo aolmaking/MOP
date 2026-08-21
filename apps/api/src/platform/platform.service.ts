@@ -754,7 +754,7 @@ export class PlatformService {
         // Read by CustomerDecisionService.pricingVisible on every decision
         // request; before this the column only ever held its Prisma
         // default, whatever the workshop actually answered.
-        customerInvoiceVisible: invoiceVisibilityRule !== "WITHHELD",
+        customerInvoiceVisible: invoiceVisibilityRule !== "HIDDEN",
       },
     });
     return true;
