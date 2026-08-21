@@ -1,41 +1,41 @@
 import { Routes } from '@angular/router';
-import { authGuard } from './core/auth/auth.guard';
-import { TEAM_API_BASE_PATH, TeamApi } from './features/branch-manager/team/team.api';
+import { authGuard } from './identity/auth.guard';
+import { TEAM_API_BASE_PATH, TeamApi } from './experiences/branch-manager/team/team.api';
 
 export const routes: Routes = [
-  { path: 'login', loadComponent: () => import('./features/login/login-page').then((m) => m.LoginPage) },
+  { path: 'login', loadComponent: () => import('./experiences/public/login/login-page').then((m) => m.LoginPage) },
   {
     // Public, and deliberately outside every shell: the person arriving
     // here has no account yet, which is the whole point. The URL shape
     // matches what PlatformService already puts in the invite link.
     path: 'invite/accept',
-    loadComponent: () => import('./features/invite/invite-accept').then((m) => m.InviteAccept),
+    loadComponent: () => import('./experiences/public/invite/invite-accept').then((m) => m.InviteAccept),
   },
   {
     // The only self-registration path in the whole product -- public,
     // same reasoning as invite/accept above. Accepts ?workshop= or
     // ?code= from a branch QR code / invite link.
     path: 'register',
-    loadComponent: () => import('./features/register/register-page').then((m) => m.RegisterPage),
+    loadComponent: () => import('./experiences/public/register/register-page').then((m) => m.RegisterPage),
   },
   {
     // Reached only from Login's tenant_unavailable response -- valid
     // credentials, frozen/suspended/archived tenant. A deliberate dead
     // end, so it needs no guard and no shell of its own.
     path: 'tenant-frozen',
-    loadComponent: () => import('./features/tenant-frozen/tenant-frozen-page').then((m) => m.TenantFrozenPage),
+    loadComponent: () => import('./experiences/public/tenant-frozen/tenant-frozen-page').then((m) => m.TenantFrozenPage),
   },
   {
     // The public decision link -- what a WhatsApp message points at. No
     // guard, deliberately: requiring a login first would break the flow
     // the whole feature exists for. The token scopes it to one request.
     path: 'decide/:token',
-    loadComponent: () => import('./features/customer/decision-page').then((m) => m.DecisionPage),
+    loadComponent: () => import('./experiences/customer/decision-page').then((m) => m.DecisionPage),
   },
   {
     path: 'platform',
     canActivate: [authGuard],
-    loadComponent: () => import('./core/layout/platform-shell/platform-shell').then((m) => m.PlatformShell),
+    loadComponent: () => import('./experiences/platform/shell/platform-shell').then((m) => m.PlatformShell),
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'workshops' },
       {
@@ -43,7 +43,7 @@ export const routes: Routes = [
         // has been pointing at since Phase 2.
         path: 'workshops',
         loadComponent: () =>
-          import('./features/platform/workshops/workshops-page').then((m) => m.WorkshopsPage),
+          import('./experiences/platform/workshops/workshops-page').then((m) => m.WorkshopsPage),
       },
       {
         // Governance Controls. The rail has pointed here since Phase 2
@@ -53,7 +53,7 @@ export const routes: Routes = [
         // and was reachable only by calling the API directly.
         path: 'control-center',
         loadComponent: () =>
-          import('./features/platform/control-center/control-center-page').then((m) => m.ControlCenterPage),
+          import('./experiences/platform/control-center/control-center-page').then((m) => m.ControlCenterPage),
       },
       {
         // The last rail link that pointed at nothing. Backed by a real
@@ -62,7 +62,7 @@ export const routes: Routes = [
         // tenants, which is why it exposes counts and event kinds only.
         path: 'live-view',
         loadComponent: () =>
-          import('./features/platform/live-view/live-view-page').then((m) => m.LiveViewPage),
+          import('./experiences/platform/live-view/live-view-page').then((m) => m.LiveViewPage),
       },
       {
         // The workshop creation journey. Replaces the single-form Add
@@ -71,24 +71,24 @@ export const routes: Routes = [
         // could express none of the capability, policy, responsibility or
         // structure decisions that actually shape one.
         path: 'workshops/new',
-        loadComponent: () => import('./features/platform/onboarding/onboarding-page').then((m) => m.OnboardingPage),
+        loadComponent: () => import('./experiences/platform/onboarding/onboarding-page').then((m) => m.OnboardingPage),
       },
       {
         path: 'workshops/:id/capabilities',
         loadComponent: () =>
-          import('./features/platform/capabilities/capabilities-page').then((m) => m.CapabilitiesPage),
+          import('./experiences/platform/capabilities/capabilities-page').then((m) => m.CapabilitiesPage),
       },
       {
         // Level 1: the aggregated workshop-card view. Level 2 is
         // 'reports/:id' below -- Usage Overview only, see PAGE_INVENTORY.md
         // for the five sections deliberately not built this pass.
         path: 'reports',
-        loadComponent: () => import('./features/platform/reports/reports-page').then((m) => m.ReportsPage),
+        loadComponent: () => import('./experiences/platform/reports/reports-page').then((m) => m.ReportsPage),
       },
       {
         path: 'reports/:id',
         loadComponent: () =>
-          import('./features/platform/reports/workshop-usage-page').then((m) => m.WorkshopUsagePage),
+          import('./experiences/platform/reports/workshop-usage-page').then((m) => m.WorkshopUsagePage),
       },
     ],
   },
@@ -101,7 +101,7 @@ export const routes: Routes = [
     // backtracking out of the fallback shell.
     path: 'branch',
     canActivate: [authGuard],
-    loadComponent: () => import('./core/layout/branch-shell/branch-shell').then((m) => m.BranchShell),
+    loadComponent: () => import('./experiences/branch-manager/shell/branch-shell').then((m) => m.BranchShell),
     children: [
       // The branch manager's landing page: "what needs me?" answered with
       // no click, filter or memory of where they were. Everything else in
@@ -110,44 +110,44 @@ export const routes: Routes = [
       {
         path: 'attention',
         loadComponent: () =>
-          import('./features/branch-manager/attention-center/attention-center').then((m) => m.AttentionCenter),
+          import('./experiences/branch-manager/attention-center/attention-center').then((m) => m.AttentionCenter),
       },
       {
         path: 'intake',
-        loadComponent: () => import('./features/branch-manager/intake/intake-page').then((m) => m.IntakePage),
+        loadComponent: () => import('./experiences/branch-manager/intake/intake-page').then((m) => m.IntakePage),
       },
       {
         path: 'approvals',
         loadComponent: () =>
-          import('./features/branch-manager/approvals/approvals-page').then((m) => m.ApprovalsPage),
+          import('./experiences/branch-manager/approvals/approvals-page').then((m) => m.ApprovalsPage),
       },
       {
         path: 'delivery',
-        loadComponent: () => import('./features/branch-manager/approvals/delivery-page').then((m) => m.DeliveryPage),
+        loadComponent: () => import('./experiences/branch-manager/approvals/delivery-page').then((m) => m.DeliveryPage),
       },
       {
         // Reached from Delivery, where the balance is what holds a car.
         path: 'payments/:id',
-        loadComponent: () => import('./features/finance/take-payment').then((m) => m.TakePayment),
+        loadComponent: () => import('./experiences/finance/take-payment').then((m) => m.TakePayment),
       },
       {
         // Reachable only where the owner has delegated team management.
         // The route always exists; the page itself says so when it has
         // not been, which is better than a 404 that looks like a bug.
         path: 'team',
-        loadComponent: () => import('./features/branch-manager/team/team-setup-page').then((m) => m.TeamSetupPage),
+        loadComponent: () => import('./experiences/branch-manager/team/team-setup-page').then((m) => m.TeamSetupPage),
       },
       {
         path: 'work-orders',
         loadComponent: () =>
-          import('./features/branch-manager/work-orders/work-orders-board').then((m) => m.WorkOrdersBoard),
+          import('./experiences/branch-manager/work-orders/work-orders-board').then((m) => m.WorkOrdersBoard),
       },
       {
         // `id` binds to the component's input of the same name --
         // withComponentInputBinding() is on in app.config.
         path: 'work-orders/:id',
         loadComponent: () =>
-          import('./features/branch-manager/work-orders/work-order-workspace').then((m) => m.WorkOrderWorkspace),
+          import('./experiences/branch-manager/work-orders/work-order-workspace').then((m) => m.WorkOrderWorkspace),
       },
     ],
   },
@@ -158,22 +158,22 @@ export const routes: Routes = [
     // pages remain owed -- see PAGE_INVENTORY.md.
     path: 'owner',
     canActivate: [authGuard],
-    loadComponent: () => import('./core/layout/owner-shell/owner-shell').then((m) => m.OwnerShell),
+    loadComponent: () => import('./experiences/owner/shell/owner-shell').then((m) => m.OwnerShell),
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'home' },
       {
         path: 'home',
-        loadComponent: () => import('./features/owner/owner-home-page').then((m) => m.OwnerHomePage),
+        loadComponent: () => import('./experiences/owner/owner-home-page').then((m) => m.OwnerHomePage),
       },
       {
         path: 'audit',
-        loadComponent: () => import('./features/owner/audit-page').then((m) => m.AuditPage),
+        loadComponent: () => import('./experiences/owner/audit-page').then((m) => m.AuditPage),
       },
       {
         // Staff / Branches / Warehouses tabs.
         path: 'organization',
         loadComponent: () =>
-          import('./features/owner/organization/organization-page').then((m) => m.OrganizationPage),
+          import('./experiences/owner/organization/organization-page').then((m) => m.OrganizationPage),
       },
       {
         // The Teams tab reuses Branch Manager's TeamSetupPage verbatim,
@@ -184,7 +184,7 @@ export const routes: Routes = [
         // copy differences (this route has no delegation to explain).
         path: 'organization/teams',
         loadComponent: () =>
-          import('./features/branch-manager/team/team-setup-page').then((m) => m.TeamSetupPage),
+          import('./experiences/branch-manager/team/team-setup-page').then((m) => m.TeamSetupPage),
         data: { teamsForOwner: true },
         // Re-providing TeamApi itself (not just the token) forces a fresh
         // instance scoped to this route, so it actually picks up the
@@ -194,24 +194,24 @@ export const routes: Routes = [
       },
       {
         path: 'messages',
-        loadComponent: () => import('./features/owner/messages/messages-page').then((m) => m.MessagesPage),
+        loadComponent: () => import('./experiences/owner/messages/messages-page').then((m) => m.MessagesPage),
       },
       {
         path: 'forms',
-        loadComponent: () => import('./features/owner/forms/forms-page').then((m) => m.FormsPage),
+        loadComponent: () => import('./experiences/owner/forms/forms-page').then((m) => m.FormsPage),
       },
       {
         path: 'pricing',
-        loadComponent: () => import('./features/owner/pricing/pricing-page').then((m) => m.PricingPage),
+        loadComponent: () => import('./experiences/owner/pricing/pricing-page').then((m) => m.PricingPage),
       },
       {
         path: 'reports',
-        loadComponent: () => import('./features/owner/reports/reports-page').then((m) => m.ReportsPage),
+        loadComponent: () => import('./experiences/owner/reports/reports-page').then((m) => m.ReportsPage),
       },
       {
         path: 'workflow-health',
         loadComponent: () =>
-          import('./features/owner/workflow-health/workflow-health-page').then((m) => m.WorkflowHealthPage),
+          import('./experiences/owner/workflow-health/workflow-health-page').then((m) => m.WorkflowHealthPage),
       },
     ],
   },
@@ -222,23 +222,23 @@ export const routes: Routes = [
     path: 'team-leader',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./core/layout/team-leader-shell/team-leader-shell').then((m) => m.TeamLeaderShell),
+      import('./experiences/team-leader/shell/team-leader-shell').then((m) => m.TeamLeaderShell),
     children: [
       {
         path: '',
-        loadComponent: () => import('./features/team-leader/team-leader-home').then((m) => m.TeamLeaderHome),
+        loadComponent: () => import('./experiences/team-leader/team-leader-home').then((m) => m.TeamLeaderHome),
       },
       {
         path: 'technicians',
-        loadComponent: () => import('./features/team-leader/technicians-page').then((m) => m.TechniciansPage),
+        loadComponent: () => import('./experiences/team-leader/technicians-page').then((m) => m.TechniciansPage),
       },
       {
         path: 'work-orders',
-        loadComponent: () => import('./features/team-leader/team-work-orders').then((m) => m.TeamWorkOrders),
+        loadComponent: () => import('./experiences/team-leader/team-work-orders').then((m) => m.TeamWorkOrders),
       },
       {
         path: 'reports',
-        loadComponent: () => import('./features/team-leader/team-reports').then((m) => m.TeamReports),
+        loadComponent: () => import('./experiences/team-leader/team-reports').then((m) => m.TeamReports),
       },
     ],
   },
@@ -248,13 +248,13 @@ export const routes: Routes = [
     // personas are otherwise unrelated. See docs/phases/PHASE_11.md.
     path: 'customer',
     canActivate: [authGuard],
-    loadComponent: () => import('./core/layout/customer-shell/customer-shell').then((m) => m.CustomerShell),
+    loadComponent: () => import('./experiences/customer/shell/customer-shell').then((m) => m.CustomerShell),
     children: [
-      { path: '', loadComponent: () => import('./features/customer/portal-home').then((m) => m.PortalHome) },
-      { path: 'assets', loadComponent: () => import('./features/customer/my-assets').then((m) => m.MyAssets) },
+      { path: '', loadComponent: () => import('./experiences/customer/portal-home').then((m) => m.PortalHome) },
+      { path: 'assets', loadComponent: () => import('./experiences/customer/my-assets').then((m) => m.MyAssets) },
       {
         path: 'service',
-        loadComponent: () => import('./features/customer/current-service').then((m) => m.CurrentService),
+        loadComponent: () => import('./experiences/customer/current-service').then((m) => m.CurrentService),
       },
       {
         // The authenticated way to answer what the workshop asked. The
@@ -262,13 +262,13 @@ export const routes: Routes = [
         // this is the other end of the same feature, for a customer who
         // no longer has the message.
         path: 'decisions',
-        loadComponent: () => import('./features/customer/my-decisions').then((m) => m.MyDecisions),
+        loadComponent: () => import('./experiences/customer/my-decisions').then((m) => m.MyDecisions),
       },
       {
         path: 'invoices',
-        loadComponent: () => import('./features/customer/invoice-status').then((m) => m.InvoiceStatus),
+        loadComponent: () => import('./experiences/customer/invoice-status').then((m) => m.InvoiceStatus),
       },
-      { path: 'history', loadComponent: () => import('./features/customer/safe-history').then((m) => m.SafeHistory) },
+      { path: 'history', loadComponent: () => import('./experiences/customer/safe-history').then((m) => m.SafeHistory) },
     ],
   },
   {
@@ -279,38 +279,38 @@ export const routes: Routes = [
     path: 'inventory',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./core/layout/inventory-shell/inventory-shell').then((m) => m.InventoryShell),
+      import('./experiences/inventory/shell/inventory-shell').then((m) => m.InventoryShell),
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'home' },
       {
         // The spec's default landing page for this role: daily triage
         // before anything else, the storekeeper's Attention Center.
         path: 'home',
-        loadComponent: () => import('./features/inventory/inventory-home').then((m) => m.InventoryHomePage),
+        loadComponent: () => import('./experiences/inventory/inventory-home').then((m) => m.InventoryHomePage),
       },
       {
         path: 'catalog',
-        loadComponent: () => import('./features/inventory/inventory-catalog').then((m) => m.InventoryCatalog),
+        loadComponent: () => import('./experiences/inventory/inventory-catalog').then((m) => m.InventoryCatalog),
       },
       {
         path: 'reports',
-        loadComponent: () => import('./features/inventory/inventory-reports').then((m) => m.InventoryReportsPage),
+        loadComponent: () => import('./experiences/inventory/inventory-reports').then((m) => m.InventoryReportsPage),
       },
       {
         path: 'requests',
-        loadComponent: () => import('./features/inventory/inventory-requests').then((m) => m.InventoryRequests),
+        loadComponent: () => import('./experiences/inventory/inventory-requests').then((m) => m.InventoryRequests),
       },
       {
         path: 'stock',
-        loadComponent: () => import('./features/inventory/inventory-stock').then((m) => m.InventoryStock),
+        loadComponent: () => import('./experiences/inventory/inventory-stock').then((m) => m.InventoryStock),
       },
       {
         path: 'items/:id',
-        loadComponent: () => import('./features/inventory/inventory-item').then((m) => m.InventoryItem),
+        loadComponent: () => import('./experiences/inventory/inventory-item').then((m) => m.InventoryItem),
       },
       {
         path: 'returns',
-        loadComponent: () => import('./features/inventory/inventory-returns').then((m) => m.InventoryReturns),
+        loadComponent: () => import('./experiences/inventory/inventory-returns').then((m) => m.InventoryReturns),
       },
     ],
   },
@@ -320,13 +320,13 @@ export const routes: Routes = [
     path: 'tech',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./core/layout/technician-shell/technician-shell').then((m) => m.TechnicianShell),
+      import('./experiences/technician/shell/technician-shell').then((m) => m.TechnicianShell),
     children: [
-      { path: '', loadComponent: () => import('./features/technician/tech-now').then((m) => m.TechNow) },
-      { path: 'work', loadComponent: () => import('./features/technician/tech-my-work').then((m) => m.TechMyWork) },
+      { path: '', loadComponent: () => import('./experiences/technician/tech-now').then((m) => m.TechNow) },
+      { path: 'work', loadComponent: () => import('./experiences/technician/tech-my-work').then((m) => m.TechMyWork) },
       {
         path: 'card/:id',
-        loadComponent: () => import('./features/technician/tech-work-card').then((m) => m.TechWorkCard),
+        loadComponent: () => import('./experiences/technician/tech-work-card').then((m) => m.TechWorkCard),
       },
     ],
   },
@@ -335,36 +335,36 @@ export const routes: Routes = [
     // pages per docs/detailed-specs/data-analyst.md, read-only throughout.
     path: 'analyst',
     canActivate: [authGuard],
-    loadComponent: () => import('./core/layout/analyst-shell/analyst-shell').then((m) => m.AnalystShell),
+    loadComponent: () => import('./experiences/analyst/shell/analyst-shell').then((m) => m.AnalystShell),
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'home' },
       {
         path: 'home',
-        loadComponent: () => import('./features/analyst/analyst-home-page').then((m) => m.AnalystHomePage),
+        loadComponent: () => import('./experiences/analyst/analyst-home-page').then((m) => m.AnalystHomePage),
       },
       {
         path: 'operations',
         loadComponent: () =>
-          import('./features/analyst/analyst-operations-page').then((m) => m.AnalystOperationsPage),
+          import('./experiences/analyst/analyst-operations-page').then((m) => m.AnalystOperationsPage),
       },
       {
         path: 'people',
-        loadComponent: () => import('./features/analyst/analyst-people-page').then((m) => m.AnalystPeoplePage),
+        loadComponent: () => import('./experiences/analyst/analyst-people-page').then((m) => m.AnalystPeoplePage),
       },
       {
         path: 'inventory',
         loadComponent: () =>
-          import('./features/analyst/analyst-inventory-page').then((m) => m.AnalystInventoryPage),
+          import('./experiences/analyst/analyst-inventory-page').then((m) => m.AnalystInventoryPage),
       },
       {
         path: 'decisions',
         loadComponent: () =>
-          import('./features/analyst/analyst-decisions-page').then((m) => m.AnalystDecisionsPage),
+          import('./experiences/analyst/analyst-decisions-page').then((m) => m.AnalystDecisionsPage),
       },
       {
         path: 'feature-adoption',
         loadComponent: () =>
-          import('./features/analyst/analyst-feature-adoption-page').then((m) => m.AnalystFeatureAdoptionPage),
+          import('./experiences/analyst/analyst-feature-adoption-page').then((m) => m.AnalystFeatureAdoptionPage),
       },
     ],
   },
@@ -372,9 +372,9 @@ export const routes: Routes = [
     // The fallback frame, for roles whose own shell is not built yet.
     path: '',
     canActivate: [authGuard],
-    loadComponent: () => import('./core/layout/shell').then((m) => m.Shell),
+    loadComponent: () => import('./experiences/home/shell/shell').then((m) => m.Shell),
     children: [
-      { path: '', loadComponent: () => import('./features/home/placeholder-home').then((m) => m.PlaceholderHome) },
+      { path: '', loadComponent: () => import('./experiences/home/placeholder-home').then((m) => m.PlaceholderHome) },
     ],
   },
   { path: '**', redirectTo: '' },

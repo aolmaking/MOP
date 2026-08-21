@@ -235,3 +235,239 @@ No stale references remain in `apps/api/src`, `tools/`, `packages/`,
   (`reporting.service.ts` still lives in `insights/analyst-reporting/`).
   Renaming classes is a behaviour-adjacent change and was kept out of a
   structural pass.
+
+---
+
+## Phase 2 — `apps/web` (Angular frontend) and `packages/**`
+
+**Scope:** `apps/web/src`, 369 of 377 source files moved. `packages/shared`
+and `packages/database` were audited and **deliberately not moved** — see
+"The packages verdict" below. `packages/database/prisma/migrations/` was
+not touched. No generated code (`packages/database/generated/`, `dist/`)
+was hand-edited.
+
+### The problem
+
+`apps/web/src/app` had three top-level directories — `core/`,
+`features/`, `shared/` — that name the *kind* of file rather than the
+boundary it sits on. Tracing imports and route registrations (not
+directory names) found three concrete consequences:
+
+1. **`core/` was four unrelated things.** Framework plumbing (the HTTP
+   error interceptor, the locale service), the session identity layer
+   (auth store, guard, landing), *and* eight per-role layout shells. A
+   shell is presentation for exactly one route subtree — `branch-shell`
+   is loaded by `/branch` and by nothing else — so it is not "core" in
+   any sense the other three occupants share.
+
+2. **`core/api/` held two feature API clients.**
+   `platform-workshops.api.ts` is imported by `add-workshop-page`,
+   `workshops-page`, `workshop-drawer` and `uniqueness.validator`;
+   `platform-reports.api.ts` by `platform/reports` only. Both are used
+   by nothing outside `features/platform/`. They sat in the app-wide
+   layer purely because they were written early.
+
+3. **`shared/` mixed UI primitives with cross-role domain logic.**
+   `button`, `form-field`, `error-banner`, `toast`, `identifier`,
+   `status-pill`, `dismiss-on-escape` and the four chart components are
+   genuine presentation primitives with no domain knowledge. But
+   `workflow-strip/` (the journey — read by Branch Manager, Customer
+   *and* Technician) and `dossier/` (read by Branch Manager and Owner)
+   are **business concepts**, and `dossier/` even ships its own
+   `dossier.api.ts`. Filing domain logic under "shared UI" is precisely
+   what lets a second copy get written for the next role.
+
+A fourth was found inside `features/`: `branch-manager/approvals`
+imports `features/customer/decision-answer`. The same business concept —
+what the customer was asked and what they answered — presented to two
+roles, reaching across a role boundary to get it.
+
+### The target structure, and why
+
+The vocabulary deliberately mirrors Phase 1's `apps/api/src`, so one
+word means the same thing on both sides of the wire.
+
+```
+apps/web/src/app/
+  app.ts  app.config.ts  app.routes.ts  app.html
+
+  runtime/       framework plumbing, no business meaning
+    http/        error.interceptor -- the ApiError shape every page reads
+    i18n/        locale.service
+
+  identity/      who you are, and what you may do
+    auth.store  auth.guard  landing
+    access.api   "may I?" for the current session (deny-by-default:
+                 a failed check falls back to false)
+
+  ui/            presentation primitives with NO domain knowledge
+    button/  form-field/  error-banner/  toast/  identifier/
+    status-pill/  dismiss-on-escape/
+    charts/      was shared/reports/ -- bar-list, kpi-card,
+                 trend-chart, volume-chart
+
+  domain/        cross-role business concepts: ONE source of truth,
+                 many role presentations
+    journey/     was shared/workflow-strip/ (+ journey-poller)
+    dossier/     drawer + dossier.api
+    decisions/   was features/customer/decision-answer
+
+  experiences/   was features/ -- one directory per role, each now
+                 owning its own shell/
+    analyst/  branch-manager/  customer/  finance/  inventory/
+    owner/  platform/  team-leader/  technician/
+    home/        the fallback frame (shell/) + placeholder-home
+    public/      the four unguarded pages, outside every shell:
+                 login/  register/  invite/  tenant-frozen/
+```
+
+**Dependency direction is now readable off the tree.** `runtime/` and
+`ui/` import nothing above them. `domain/` imports `runtime/` only.
+`experiences/` imports everything below it and — with the shells now
+co-located — nothing sideways. The one former sideways edge
+(`branch-manager` → `customer`) became a `domain/` edge.
+
+**Three decisions worth recording:**
+
+1. **Shells moved *into* their role, not into a `shells/` directory.**
+   Each of the eight is loaded by exactly one route subtree and imports
+   only `auth.store` plus two UI primitives. Grouping them by kind
+   would have re-created the `core/layout/` problem one level down;
+   co-locating means everything the Analyst role *is* lives in
+   `experiences/analyst/`. The generic fallback `shell.*` went to
+   `experiences/home/shell/`, beside `placeholder-home` — the only page
+   it ever renders.
+
+2. **`decision-answer` moved to `domain/`, the two role pages did not.**
+   Per CLAUDE.md's role guidance: one domain source of truth, multiple
+   presentations. `customer/decision-page`, `customer/my-decisions` and
+   `branch-manager/approvals/record-approval-drawer` stay distinct and
+   role-specific; only the shared concept moved. No domain logic was
+   duplicated per role.
+
+3. **`platform/` is an `experiences/` role here, not `control/`.**
+   Phase 1 put the platform console under `control/` because on the
+   server it *is* the control plane. On the web it is a role with a
+   shell, a rail and pages — a surface, not a plane. The divergence is
+   deliberate.
+
+### Migration table (directory level)
+
+| Old path | New path | Reason |
+|---|---|---|
+| `core/api/error.interceptor.*` | `runtime/http/` | Framework plumbing, no business meaning |
+| `core/i18n/` | `runtime/i18n/` | Same |
+| `core/auth/{auth.store,auth.guard,landing}` | `identity/` | Session identity is its own layer, not "core" |
+| `core/api/access.api.ts` | `identity/access.api.ts` | "May I?" is a permission concern, not an API-client concern |
+| `core/api/platform-workshops.api.ts` | `experiences/platform/workshops/` | Imported by nothing outside the platform feature |
+| `core/api/platform-reports.api.ts` | `experiences/platform/reports/` | Same |
+| `core/layout/<role>-shell/` (×8) | `experiences/<role>/shell/` | Each shell serves exactly one route subtree |
+| `core/layout/shell.*` | `experiences/home/shell/` | The fallback frame, beside the only page it renders |
+| `shared/{button,form-field,error-banner,toast,identifier,status-pill,dismiss-on-escape}/` | `ui/` | Genuine primitives — no domain knowledge |
+| `shared/reports/` | `ui/charts/` | Chart components, used by Analyst, Owner Reports and Workflow Health. Renamed: they are not "reports" |
+| `shared/workflow-strip/` | `domain/journey/` | The journey is a business concept read by three roles, not a shared widget |
+| `shared/dossier/` | `domain/dossier/` | Ships its own API client; read by two roles |
+| `features/customer/decision-answer.*` | `domain/decisions/` | Imported by `branch-manager/approvals` — a cross-role concept |
+| `features/{login,register,invite,tenant-frozen}/` | `experiences/public/` | The four routes with no `authGuard` and no shell |
+| `features/home/` | `experiences/home/` | Fallback page, joined by the fallback shell |
+| `features/<role>/` | `experiences/<role>/` | Per-role surfaces, matching Phase 1's word |
+
+Every import specifier, `loadComponent()` string, `templateUrl`,
+`styleUrl` and route registration was rewritten by resolving each
+specifier against its *old* location and re-resolving it from the new
+one — 336 specifiers in total. `app.routes.ts` and `app.config.ts` were
+rewritten by the same pass. **No route path, guard, resolver, provider,
+component selector, template or style value changed.**
+
+Also updated: `tools/lint-touch-targets.mjs` (its two roots collapse to
+one, `apps/web/src/app/experiences/technician`, now that the shell lives
+inside the role), four path comments in `apps/web/src/styles.css`, one
+live path in `PROJECT_STATE.md`, and the stale `apps/api/src/auth`
+comment in `auth.store.ts` that Phase 1 explicitly left for this phase.
+
+`angular.json`, `tsconfig*.json`, `apps/web/package.json` and the vitest
+setup needed **no** changes: the web app declares no path aliases and
+discovers specs by glob, so the moves were invisible to them.
+
+### The packages verdict — audited, deliberately not moved
+
+**`packages/shared/src`**: eleven directories (`capabilities`,
+`contracts`, `errors`, `money`, `onboarding`, `operations`, `pages`,
+`permissions`, `platform`, `policies`, `session`) — every one already a
+coherent domain concept, and several carrying a doc comment that
+*justifies* the placement (`onboarding/presentation.ts` explains it sits
+beside the capability registry so the copy dies with the capability;
+`platform/workshop-options.ts` explains it is shared with the backend
+DTO so the two can never drift). Nothing was found in the wrong
+directory. Everything is re-exported through a single `index.ts` barrel
+and there are **no deep imports** of `@mop/shared/<path>` anywhere in
+`apps/**` (the two grep hits are prose inside comments), so an internal
+reshuffle would have bought no clarity at the cost of churn in the one
+package both apps depend on. Left alone.
+
+**`packages/database`**: five files plus 27 migrations. Nothing to
+reorganize.
+
+**One observation recorded rather than acted on** (out of scope for a
+structural pass): several `packages/shared` exports have no consumer in
+either app — `SHIPPED_PROFILES` and the five capability profiles,
+`GATE_REGISTRY` / `gatesOwnedBy` / `coreGates`, `effectiveGraph`,
+`allowedTransitions`, `CUSTOMER_DECISION_GRAPH`. The engines themselves
+*are* used (`canTransition`, `gateDefinition`, `WORK_ORDER_GRAPH` and
+`PART_REQUEST_GRAPH` all have real call sites), so this is unused
+surface area around live code, not a dead engine. Worth a
+product-completeness pass; deleting exports is a behaviour change and
+was kept out of this one.
+
+### Validation
+
+Run from a clean install (`corepack pnpm install --frozen-lockfile`)
+with the Prisma client generated.
+
+| Command | Result |
+|---|---|
+| `corepack pnpm typecheck` (shared + api) | **PASS** |
+| `corepack pnpm lint` | **PASS** — eslint, audit-boundary, directional-CSS, touch-targets, money, permission-keys, no-hard-delete all clean |
+| `corepack pnpm test` (shared + api + web) | see the run log below |
+| `corepack pnpm build` (shared + api + web) | see the run log below |
+
+**Baseline captured before any file moved:** web build green, 47 test
+files / 255 tests passing. After the move: **identical** — 47 files, 255
+tests, same count, no skips. The directional-CSS linter passing is the
+load-bearing one for this phase: it proves no `margin-left`-class
+physical direction property was introduced while CSS paths were being
+rewritten, which matters because Arabic is a primary market.
+
+**One first-run failure, not caused by this phase:** the initial
+`corepack pnpm typecheck` failed with `Property 'team' does not exist on
+type 'PrismaService'`. The worktree had no generated Prisma client;
+`corepack pnpm db:generate` fixed it and typecheck went green with no
+source change. Recorded because the same trap cost time in Phase 1.
+
+**Not verified in this sandbox:** the app was not driven in a real
+browser. `ng build` plus the 255 vitest specs — which include shell,
+guard, routing and page-render specs — are the evidence offered; a
+click-through of each role's shell is not.
+
+### Stale-reference sweep
+
+`grep` for `src/app/features`, `src/app/core`, `src/app/shared` across
+all source, tooling, config and docs. Zero hits remain in `apps/web`,
+`tools/`, `packages/`, or any build/test configuration. Remaining hits
+are in **historical documents** — `docs/phases/PHASE_10.md`,
+`PHASE_11.md`, `docs/archive/audits/**` — which record where the code
+was when they were written and were left as-is; rewriting them would
+falsify the record. The one live doc reference, in `PROJECT_STATE.md`,
+was corrected.
+
+### Not done in this phase
+
+- File and class names inside moved directories are unchanged. One
+  directory was renamed (`shared/reports` → `ui/charts`) because the old
+  name actively misled; no file or exported symbol was renamed.
+- `experiences/platform/add-workshop/` is **orphaned** — `app.routes.ts`
+  routes `workshops/new` to `onboarding/` instead, and nothing imports
+  `add-workshop-page`. It moved with its role rather than being deleted:
+  removing a page is a product decision, not a structural one.
+- `ui/status-pill/` has no importer either (only its own spec, plus
+  styling in the global `styles.css`). Same reasoning — kept, flagged.
