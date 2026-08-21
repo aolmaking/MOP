@@ -3,7 +3,7 @@
 > **Status:** 🟠 18.A, 18.D, 18.E shipped and proven end-to-end; 18.B,
 > 18.C deferred with reasons; 18.F has its written decision (below), no
 > implementation. See "What actually shipped."
-> **Source:** [`docs/scenarios2/SYNTHESIS.md`](../scenarios2/SYNTHESIS.md),
+> **Source:** [`docs/archive/discovery/scenarios2/SYNTHESIS.md`](../archive/discovery/scenarios2/SYNTHESIS.md),
 > the dominant finding — traced through Workshops 1, 3, 5, 6, 8.
 
 ## Why this phase exists

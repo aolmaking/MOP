@@ -1,7 +1,7 @@
 # MOP Phase Map
 
 > **What this is:** the single, linear plan for all remaining work. One numbering scheme, one order, one place.
-> **Companion:** [`docs/PAGE_INVENTORY.md`](./PAGE_INVENTORY.md) tracks the 53 spec'd pages against what's built — the definition of "done" for Phases 5–12. [`docs/scenarios/`](./scenarios/) and [`docs/scenarios2/`](./scenarios2/) are the two discovery passes that produced Phases 15–20. [`docs/scenarios3/`](./scenarios3/) is a third pass — 20 edge cases, not persona-driven — that did not earn new phases but is attributed against the phases above; see rule 8 below.
+> **Companion:** [`docs/PAGE_INVENTORY.md`](./PAGE_INVENTORY.md) tracks the 53 spec'd pages against what's built — the definition of "done" for Phases 5–12. [`docs/archive/discovery/scenarios/`](./archive/discovery/scenarios/) and [`docs/archive/discovery/scenarios2/`](./archive/discovery/scenarios2/) are the two discovery passes that produced Phases 15–20. [`docs/archive/discovery/scenarios3/`](./archive/discovery/scenarios3/) is a third pass — 20 edge cases, not persona-driven — that did not earn new phases but is attributed against the phases above; see rule 8 below.
 > **Date:** 2026-08-12, after the 40-scenario platform-layer discovery pass, its synthesis, and a 20-item edge-case hardening pass.
 
 ---
@@ -20,7 +20,7 @@
 | Auth | 4 account types, DB-backed sessions, refresh rotation, lockout, rate limiting |
 | Money | `Decimal` in DB, `string` across API, dedicated `lint-money.mjs` guarding it |
 | Pages | **23 of 53 spec'd pages built** — see `PAGE_INVENTORY.md` for the full per-role breakdown |
-| Discovery | Three discovery passes complete: 20 workshop-floor scenarios (`docs/scenarios/`), 40 platform-layer scenarios (`docs/scenarios2/`), 20 edge cases (`docs/scenarios3/`) |
+| Discovery | Three discovery passes complete: 20 workshop-floor scenarios (`docs/archive/discovery/scenarios/`), 40 platform-layer scenarios (`docs/archive/discovery/scenarios2/`), 20 edge cases (`docs/archive/discovery/scenarios3/`) |
 
 **Not yet true:** Phases 9–14 (Billing, People, Customer Portal, Reporting, Automation, i18n release) have not started. Phases 18–20, named by this session's platform-layer discovery pass, did not exist before today.
 
@@ -33,7 +33,7 @@
 5. **Every role phase closes with a cross-system scenario walkthrough**, never a page checklist. This is the specific discipline that would have caught v11.9's disconnected-pages failure.
 6. **A phase may not be marked complete while any page or scenario finding it owns is unaddressed.** `PAGE_INVENTORY.md` and the two scenario syntheses are the definitions of done; measuring "complete" against what was built rather than what was required is the exact mistake Phase 7 was originally marked complete under.
 7. **A discovery pass earns a phase, not a patch.** When a scenario walkthrough finds a gap that is structural — missing vocabulary, missing platform-relationship model, missing resilience story — it gets its own phase with its own exit criteria, not a scattered set of tickets absorbed silently into whichever phase happens to be active.
-8. **A hardening pass earns a register entry, not a phase.** When a discovery pass finds gaps that are *not* structural — a race condition, an unverified claim, an undocumented rule — those attach to the phase that already owns the affected system, tracked in a register, not spun into a new phase number. `docs/scenarios3/EDGE_CASE_REGISTER.md` is this project's first such register; a phase is not done while an edge case attributed to it is neither fixed nor explicitly, reasonedly deferred.
+8. **A hardening pass earns a register entry, not a phase.** When a discovery pass finds gaps that are *not* structural — a race condition, an unverified claim, an undocumented rule — those attach to the phase that already owns the affected system, tracked in a register, not spun into a new phase number. `docs/archive/discovery/scenarios3/EDGE_CASE_REGISTER.md` is this project's first such register; a phase is not done while an edge case attributed to it is neither fixed nor explicitly, reasonedly deferred.
 
 ---
 
@@ -77,7 +77,7 @@ Scenario × capability matrix, typed cross-system contracts, gate registry, sche
 
 ### Phase 3 — Governance Runtime ✅
 `TenantCapability` time-ranged schema, capability resolution in the resolver, change pipeline (draft → validate → live-data preconditions → impact preview → apply → audit → rollback), Super Admin capability-shaping UI, historical interpretation.
-**Edge case owed:** E13 — capability rollback racing an in-flight lifecycle transition; design spike required, see `docs/scenarios3/EDGE_CASE_REGISTER.md`.
+**Edge case owed:** E13 — capability rollback racing an in-flight lifecycle transition; design spike required, see `docs/archive/discovery/scenarios3/EDGE_CASE_REGISTER.md`.
 
 ### Phase 4 — Operations Spine ✅
 `WorkflowRouter` driven by the capability graph, intake, ownership transfer, work order/task lifecycle, inspections/faults/blockers, capability-aware Finish Gate.
@@ -145,7 +145,7 @@ Multi-tenant load/concurrency testing, tenant-configuration-change atomicity, bu
 **Detail:** [`phases/PHASE_20.md`](./phases/PHASE_20.md)
 
 ### Phase 21 — Policy & Decision Architecture 🟠 (documents only, by design — see `phases/PHASE_21.md`)
-The third axis of variation. The capability engine decides *whether a step exists*; the specialization engine decides *what it is called*; nothing decides *under what rule it passes* — so that class of decision keeps getting hardcoded, and Phase 19.A was reverted for exactly this reason. Three independent sources converge on the gap: the canonical spec's own Builder Control describes a **Workflow Policy** tab naming eleven policies, none of which exists as a typed thing; `docs/scenarios/` recorded the delivery gate drawing **opposite complaints** from two workshops; and 19.A's global separation-of-duties rule broke 22 tests modelling a legitimate single-storekeeper shop.
+The third axis of variation. The capability engine decides *whether a step exists*; the specialization engine decides *what it is called*; nothing decides *under what rule it passes* — so that class of decision keeps getting hardcoded, and Phase 19.A was reverted for exactly this reason. Three independent sources converge on the gap: the canonical spec's own Builder Control describes a **Workflow Policy** tab naming eleven policies, none of which exists as a typed thing; `docs/archive/discovery/scenarios/` recorded the delivery gate drawing **opposite complaints** from two workshops; and 19.A's global separation-of-duties rule broke 22 tests modelling a legitimate single-storekeeper shop.
 
 Its load-bearing idea, from the project owner: **decision sets are derived, not enumerated.** Each policy declares a relevance predicate over capabilities, specializations, and prior answers, so one workshop faces 15 questions and another 40 without either being a special case. Its sharpest design decision: **a policy may never change reachability** — anything that could is a mis-classified capability. That keeps the capability engine's proof intact and gives an objective test for a distinction that prose could not settle.
 
@@ -188,8 +188,8 @@ builds the screen that declares one.
 the capability runtime and audit discipline already in place) but
 otherwise independent of both the 5–14 chain and the 15–17 chain. They
 were not discoverable from inside any single workshop's story — every
-scenario in `docs/scenarios/` watched one tenant's whole life; only
-`docs/scenarios2/`'s platform-console vantage point surfaced them. Two
+scenario in `docs/archive/discovery/scenarios/` watched one tenant's whole life; only
+`docs/archive/discovery/scenarios2/`'s platform-console vantage point surfaced them. Two
 explicit couplings exist and are called out inline above: Phase 9's
 country-adapter work should read Phase 20.D before finalizing scope, and
 Phase 12's reporting engine should sequence after Phase 19.G if it is to
@@ -210,6 +210,6 @@ model rather than a narrower one that needs revisiting later.
 1. Its exit criteria are met and demonstrated, not asserted.
 2. Tests exist and run in CI.
 3. Nothing in it is a stub reporting success. A hardcoded `true` in a gate is a defect, not a placeholder.
-4. It closes with a **cross-system scenario walkthrough** — from `SCENARIOS.md` for Phases 1–14, from `docs/scenarios/` for Phases 15–17, from `docs/scenarios2/` for Phases 18–20 — proving the scenarios it touches work end-to-end across every system involved, not that its own pages render.
+4. It closes with a **cross-system scenario walkthrough** — from `SCENARIOS.md` for Phases 1–14, from `docs/archive/discovery/scenarios/` for Phases 15–17, from `docs/archive/discovery/scenarios2/` for Phases 18–20 — proving the scenarios it touches work end-to-end across every system involved, not that its own pages render.
 5. Every page it owns, per `PAGE_INVENTORY.md`, is ✅, or the phase is not marked complete.
 6. Every finding a discovery pass attributed to it is either shipped or explicitly, reasonedly deferred in this document with the phase that now carries it — never silently dropped.

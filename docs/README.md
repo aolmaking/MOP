@@ -23,7 +23,7 @@ Read in this order the first time through.
 | [`scenarios/`](./scenarios/) | 20 workshop-floor walkthroughs across four differently-shaped tenants, discovering what MOP is missing for real, specialized workshops. Source of Phases 15–17 |
 | [`scenarios2/`](./scenarios2/) | 40 platform-layer walkthroughs across eight tenant profiles, testing super admin control, workshop creation using only the product, and the server under real multi-tenant load. Source of Phases 18–20 |
 | [`scenarios3/`](./scenarios3/) | 20 edge cases (10 hard, 10 extremely hard) — rare conditions a real deployment will eventually hit: races, clock skew, migrations against dormant data. Not persona-driven; attributed to existing phases via `EDGE_CASE_REGISTER.md`, not new phase numbers |
-| [`GAP_ANALYSIS_CANONICAL_SPEC.md`](./GAP_ANALYSIS_CANONICAL_SPEC.md) | Spec vs. the **v11.9** implementation. **Historical** — v11.9 was deleted at commit `b0a4e68`. Read it as the record of *why* the rebuild happened and which mistakes must not recur, not as a description of current code |
+| [`GAP_ANALYSIS_CANONICAL_SPEC.md`](./archive/audits/GAP_ANALYSIS_CANONICAL_SPEC.md) | Spec vs. the **v11.9** implementation. **Historical** — v11.9 was deleted at commit `b0a4e68`. Read it as the record of *why* the rebuild happened and which mistakes must not recur, not as a description of current code |
 
 ## Engineering charters
 

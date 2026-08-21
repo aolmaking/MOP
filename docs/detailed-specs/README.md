@@ -1,6 +1,6 @@
 # Detailed Page Specifications — Index
 
-Full field-level, interaction-level detail for every page in the product, one file per role, matching the build order in the rebuild plan (`C:\Users\Stanikzai\.claude\plans\glowing-drifting-dragon.md`, Phases 2–9). Each file is self-contained but references shared conventions established in earlier files rather than repeating them (server-side pagination, lock-icon-plus-tooltip for restricted controls, the customer-safe "never leaks by construction" rule, etc.) — read them in order the first time through.
+Full field-level, interaction-level detail for every page in the product, one file per role, matching the build order in [`REBUILD_PLAN.md`](../REBUILD_PLAN.md) (Phases 2–9). Each file is self-contained but references shared conventions established in earlier files rather than repeating them (server-side pagination, lock-icon-plus-tooltip for restricted controls, the customer-safe "never leaks by construction" rule, etc.) — read them in order the first time through.
 
 This is the "final vision" layer between `docs/PRODUCT_SPEC_CANONICAL.md` (what the product does and why) and actual code: every field's type/validation/data source, every button's exact effect, every state a page can be in, and the specific cross-system dependencies between pages — so implementation is a translation exercise, not a design exercise.
 

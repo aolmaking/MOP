@@ -2,12 +2,12 @@
 
 > **Status:** ✅ schema settled and three of five primitives proven end-to-end;
 > see "What actually shipped" below for the precise split.
-> **Source:** [`docs/scenarios/FINDINGS_SYNTHESIS.md`](../scenarios/FINDINGS_SYNTHESIS.md),
+> **Source:** [`docs/scenarios/FINDINGS_SYNTHESIS.md`](../archive/discovery/scenarios/FINDINGS_SYNTHESIS.md),
 > Shape 1 findings across all 20 scenarios.
 
 ## Why this phase exists
 
-Every one of the 20 scenarios in `docs/scenarios/` hit the same wall
+Every one of the 20 scenarios in `docs/archive/discovery/scenarios/` hit the same wall
 from a different direction: MOP has one vocabulary — its own — and every
 real workshop needs its own. Nafath needs an oil-change service card
 with viscosity and litres. Delta needs a hydraulic pressure diagnostic

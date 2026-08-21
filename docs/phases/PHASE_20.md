@@ -2,7 +2,7 @@
 
 > **Status:** 🟠 20.B shipped and proven; 20.E has its written decision;
 > 20.A, 20.C, 20.D, 20.F deferred with reasons. See "What actually shipped."
-> **Source:** [`docs/scenarios2/SYNTHESIS.md`](../scenarios2/SYNTHESIS.md),
+> **Source:** [`docs/archive/discovery/scenarios2/SYNTHESIS.md`](../archive/discovery/scenarios2/SYNTHESIS.md),
 > Workshops 2, 4, and 7 in full.
 
 ## Why this phase exists

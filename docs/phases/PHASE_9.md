@@ -1,7 +1,7 @@
 # Phase 9 — Billing / Invoicing
 
 > **Goal:** the legal invoice document, as its own bounded system with a country-adapter seam, plus the refund and credit-note flow Phase 8 deliberately left untouched.
-> **Why it matters:** Phase 8 built the money — running balance, payments, idempotency. This phase builds the *document* — the thing a tax authority, a customer's accountant, or a dispute actually looks at. A total that is arithmetically correct and a document that is legally insufficient are two different failures, and this project has already found, twice this session, that assuming they are the same thing is exactly the gap a second-country tenant exposes (`docs/scenarios2/PLATFORM_02_RIYADH_ALSAFWA.md`, scenario 6).
+> **Why it matters:** Phase 8 built the money — running balance, payments, idempotency. This phase builds the *document* — the thing a tax authority, a customer's accountant, or a dispute actually looks at. A total that is arithmetically correct and a document that is legally insufficient are two different failures, and this project has already found, twice this session, that assuming they are the same thing is exactly the gap a second-country tenant exposes (`docs/archive/discovery/scenarios2/PLATFORM_02_RIYADH_ALSAFWA.md`, scenario 6).
 > **Companions:** [`docs/SYSTEMS.md`](../SYSTEMS.md) §"The Billing country adapter" (the interface is already designed, quoted below), [`PHASE_8.md`](./PHASE_8.md) (money is settled; this phase does not reopen it), `docs/phases/PHASE_20.md` §20.D (country-as-a-real-axis, which this phase's compliant-blocked state depends on).
 
 ---
@@ -35,7 +35,7 @@ So this phase is **not** "build an Invoice model." It is:
 1. Give Billing its own module boundary, consuming Finance's invoice-issued event rather than being called synchronously from inside `FinanceService.issueInvoice()`.
 2. Build `GenericBillingAdapter`, implementing the interface below, doing the minimum a jurisdiction-agnostic invoice needs.
 3. Build the refund and credit-note flow `RefundRequest`/`CreditNote` were created for and never wired.
-4. Add the **compliant-blocked** tenant state named in `docs/scenarios2/PLATFORM_02_RIYADH_ALSAFWA.md` (6.2) and `PHASE_20.md` §20.D: a tenant onboarded into a country with no ready adapter must be flagged, never silently allowed to issue a legally-insufficient document.
+4. Add the **compliant-blocked** tenant state named in `docs/archive/discovery/scenarios2/PLATFORM_02_RIYADH_ALSAFWA.md` (6.2) and `PHASE_20.md` §20.D: a tenant onboarded into a country with no ready adapter must be flagged, never silently allowed to issue a legally-insufficient document.
 
 ---
 
@@ -90,7 +90,7 @@ Already a real capability state per `FinanceConfiguration.externalBillingEnabled
 
 New in this phase, sharpened by this session's platform-layer scenario pass. A tenant can be onboarded (Add Workshop Owner has no country-adapter awareness today) into a country with no ready `BillingCountryAdapter` beyond the generic one. That tenant is **operationally fine** and **legally insufficient** the moment it issues its first invoice, and nothing today tells anyone.
 
-This phase adds a tenant-level flag, distinct from a capability the tenant chose to disable (`docs/scenarios2/PLATFORM_02_RIYADH_ALSAFWA.md`, 6.2, is explicit about this distinction): `compliantBlocked: boolean` on `FinanceConfiguration`, set automatically when a tenant's `country` has no registered adapter beyond generic and the tenant is not in External Billing Mode, surfaced on the Workshops list (a new badge, alongside Builder Status and Health) and checked — not enforced as a hard block in this phase, since MOP is not the tenant's lawyer and a workshop may have its own arrangement — but visible everywhere a super admin or an owner would need to see it before assuming a document is sufficient.
+This phase adds a tenant-level flag, distinct from a capability the tenant chose to disable (`docs/archive/discovery/scenarios2/PLATFORM_02_RIYADH_ALSAFWA.md`, 6.2, is explicit about this distinction): `compliantBlocked: boolean` on `FinanceConfiguration`, set automatically when a tenant's `country` has no registered adapter beyond generic and the tenant is not in External Billing Mode, surfaced on the Workshops list (a new badge, alongside Builder Status and Health) and checked — not enforced as a hard block in this phase, since MOP is not the tenant's lawyer and a workshop may have its own arrangement — but visible everywhere a super admin or an owner would need to see it before assuming a document is sufficient.
 
 ---
 

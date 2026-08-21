@@ -3,7 +3,7 @@
 > **Status:** 🟠 19.B, 19.C, 19.D shipped and proven; 19.A shipped its
 > data foundation only (enforcement reverted, see below); 19.E and 19.F
 > deferred with reasons; 19.G not attempted. See "What actually shipped."
-> **Source:** [`docs/scenarios2/SYNTHESIS.md`](../scenarios2/SYNTHESIS.md),
+> **Source:** [`docs/archive/discovery/scenarios2/SYNTHESIS.md`](../archive/discovery/scenarios2/SYNTHESIS.md),
 > Workshop 5 (fraud investigation) in full, plus Workshop 1 scenario 4
 > and Workshop 8 scenario 38.
 

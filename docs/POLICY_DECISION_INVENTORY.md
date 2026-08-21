@@ -31,9 +31,9 @@ Every entry is classified by Phase 21 §3.1's mechanical test:
 | Source | Decisions found |
 |---|---|
 | Canonical spec's Builder Control → Workflow Policy tab | 11 (named in the spec, none built) |
-| `docs/scenarios/` — 78 findings, 4 workshops | ~18 |
-| `docs/scenarios2/` — 40 scenarios, 8 tenants | ~12 |
-| `docs/scenarios3/` — 20 edge cases | 7 (the remaining register items) |
+| `docs/archive/discovery/scenarios/` — 78 findings, 4 workshops | ~18 |
+| `docs/archive/discovery/scenarios2/` — 40 scenarios, 8 tenants | ~12 |
+| `docs/archive/discovery/scenarios3/` — 20 edge cases | 7 (the remaining register items) |
 | Deferred items across Phases 15–20 | ~14 |
 | `PROJECT_STATE.md` known issues | 4 |
 | Current schema and services (implicit, undocumented rules) | ~9 |
@@ -50,7 +50,7 @@ Every entry is classified by Phase 21 §3.1's mechanical test:
 
 **Type:** POLICY · **Mutability:** GOVERNED · **Relevant when:** `FINANCE_CORE` is active (any status incl. EXTERNAL)
 
-**Why it exists.** The flagship case for this whole layer. `docs/scenarios/` recorded the *same gate* drawing *opposite complaints*: Nafath (A 1.3) wants paid-before-release as a hard rule; Delta (C 15.1) invoices B2B customers net-30 and is blocked by it. `FINDINGS_SYNTHESIS.md` names the resolution explicitly — make it configurable rather than picking a side. Today it is hardcoded.
+**Why it exists.** The flagship case for this whole layer. `docs/archive/discovery/scenarios/` recorded the *same gate* drawing *opposite complaints*: Nafath (A 1.3) wants paid-before-release as a hard rule; Delta (C 15.1) invoices B2B customers net-30 and is blocked by it. `FINDINGS_SYNTHESIS.md` names the resolution explicitly — make it configurable rather than picking a side. Today it is hardcoded.
 
 | Option | What it means | What it changes |
 |---|---|---|

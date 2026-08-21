@@ -7,6 +7,36 @@
 
 ---
 
+## 0. CHECKPOINT — documentation consolidation paused mid-task (2026-08-21)
+
+**Status:** paused at the user's explicit request before the project directory is moved to a new location. Not abandoned — resume with the exact next action below once told to continue.
+
+**Why this pass started:** a code-verified build-status audit (see the session's chat transcript — every page route and API controller was read directly, not inferred from docs) found that this project's own tracking documents had drifted from each other and from the real code. Concretely: `PROJECT_STATE.md` (this file) claimed 23/53 pages built; `docs/PHASE_MAP.md` contradicted itself internally (23/53 at one line, 34/53 at another); `docs/PAGE_INVENTORY.md` claimed 48/53; and two of the project's own prior audits (`docs/archive/audits/IMPLEMENTATION_AUDIT.md`, `docs/archive/audits/PHASE_COMPLETION_AUDIT.md`) claimed Platform Super Admin's Governance Controls and Workshop Live View pages were unbuilt — when a direct read of the actual frontend/backend code this session found both are real, complete, and wired to working endpoints. The session's own live code audit is therefore the most current ground truth available, ahead of every existing doc including the two audits named above.
+
+**Completed in this pass (committed and pushed — see commit SHA below):**
+1. Deleted the stray, gitignored, byte-identical nested duplicate `MOP/` directory (a full extra copy of the repo — not meaningfully separate content).
+2. Archived six one-time, now-superseded "audit the codebase" documents to `docs/archive/audits/`: `GAP_ANALYSIS_CANONICAL_SPEC.md`, `ENGINEERING_KNOWLEDGE_TRANSFER.md`, `IMPLEMENTATION_AUDIT.md`, `PHASE_COMPLETION_AUDIT.md`, `ARCHITECTURE_DECISION_INVENTORY.md`, `UI_UX_EXECUTION_LEDGER.md`. Their unique findings (the D1–D21 debt register, the four-cluster analysis) are preserved on disk, just relocated — nothing was deleted outright except the confirmed duplicate above.
+3. Archived the three consumed discovery-pass directories (`docs/scenarios/`, `docs/scenarios2/`, `docs/scenarios3/`) to `docs/archive/discovery/` — their findings were already synthesized into Phases 15–20 and the edge-case register; the raw walkthroughs are historical input, not living docs.
+4. Fixed every cross-reference to the moved files/directories across `docs/phases/PHASE_9.md` and `PHASE_15.md`–`PHASE_21.md`, `docs/PHASE_MAP.md`, `docs/POLICY_DECISION_INVENTORY.md`, `docs/README.md`, and this file, so no link points at a path that no longer exists.
+5. Fixed a stray machine-specific local file path (`C:\Users\Stanikzai\...`) left in `docs/detailed-specs/README.md`, pointing it at `REBUILD_PLAN.md` instead, which is what it actually meant.
+
+**Explicitly NOT done yet — this is the real remaining work, not yet started:**
+- `PROJECT_STATE.md` (this file, below §0) still states the **stale 23/53 page count** and the stale Phase 9-in-progress narrative. It has not yet been rewritten against the verified reality (essentially every role's pages are real; the actual gaps are 4 specific named pages — Access Denied, Password Reset, Data-Analyst Saved Views/Exports, a standalone Builder Control page — plus a real HTTP-level test-coverage gap across most subsystems, plus zero country-specific billing/invoicing adapters).
+- `docs/PHASE_MAP.md` still has its internal 23-vs-34 self-contradiction and needs its Progress table and per-phase status lines corrected against the same verified reality, with Governance Controls and Workshop Live View marked resolved.
+- `docs/PAGE_INVENTORY.md` has not been touched yet — it should become the **single canonical page-count source**, rewritten against the verified route/component audit, with `PROJECT_STATE.md` and `PHASE_MAP.md` referencing its count rather than each maintaining their own.
+- Root `README.md`'s status line ("early construction... Operational role pages are not built yet") is still stale and needs rewriting.
+- `docs/README.md`'s index needs a final pass to list the new `docs/archive/` structure and drop pointers to files that moved (most link targets were already fixed in this pass, but the reading-order guidance itself hasn't been reviewed).
+- The phase debt register (D1–D21) inside the now-archived `PHASE_COMPLETION_AUDIT.md` needs reconciling into whichever document becomes its permanent home (`PROJECT_STATE.md` is the natural candidate) — several of its items are now confirmed resolved (Governance Controls, Workshop Live View, the technician part-request/return lifecycle, the `role_permission_lock` writer) and should not be carried forward as open debt.
+- The 21 individual `docs/phases/PHASE_*.md` files' own status headers were not rewritten in this pass (only their cross-reference links were fixed) — they may still disagree with the verified reality in their prose, same as the trackers above did.
+
+**Exact next action on resume:** rewrite `docs/PAGE_INVENTORY.md` first (it becomes the anchor everything else cites), then `PROJECT_STATE.md`, then `docs/PHASE_MAP.md`, then the root `README.md` and `docs/README.md`, using the verified findings already gathered this session (the code-level route and controller audit, not any prior doc's claims) as ground truth.
+
+**Known issue/blocker:** the deleted `MOP/` directory left one empty, OS-locked top-level folder behind (`rmdir` reported "Device or resource busy" — a transient handle from an indexer or file watcher, not a real block). Its contents are already gone; the empty folder itself can be removed with a plain `rmdir MOP` once nothing has it open, or ignored — it is gitignored either way and carries zero content.
+
+**Unrelated, pre-existing uncommitted work left untouched by this pass, on purpose:** at session start there was already-uncommitted work in the working tree — modifications to `apps/api/src/branch-manager/branch-manager.controller.ts`, `apps/api/src/customer/decision.service.ts` and its integration spec, several `apps/web/.../approvals/*` files, `apps/web/.../customer/decision-answer.*`, and three new untracked `record-approval-drawer.*` files. None of that belongs to this documentation task — it was not staged, not committed, and not modified by this pass, and remains exactly as it was found.
+
+---
+
 ## 1. Current objective
 
 **Three tracks are now open at once.** Continue closing the remaining
@@ -27,7 +57,7 @@ Workshops list (Platform Super Admin now 3/6 — the fourth "finished
 system with no door": `WorkshopsService`, freeze/reactivate and the
 health service had existed since Phase 2 with no page).
 
-**New:** [`docs/scenarios/`](docs/scenarios/) holds 20 detailed
+**New:** [`docs/archive/discovery/scenarios/`](docs/archive/discovery/scenarios/) holds 20 detailed
 walkthroughs across four deliberately different workshop shapes
 (1-branch single-operator, 4-branch dealership network, field-service
 heavy-equipment, 6-branch quick-lube chain), written to discover what
@@ -37,7 +67,7 @@ consolidates 78 findings into **three new phases, 15–17**, added to
 `PHASE_MAP.md` and detailed in `docs/phases/PHASE_15.md`–`PHASE_17.md`.
 They are drafted, not started — no code yet.
 
-**Newer:** [`docs/scenarios2/`](docs/scenarios2/) holds a second,
+**Newer:** [`docs/archive/discovery/scenarios2/`](docs/archive/discovery/scenarios2/) holds a second,
 harder 40-scenario pass — 8 workshops, 5 scenarios each — this time
 watched from the **super admin's console and the server's own machine
 room**, not the workshop floor. It asks whether a workshop can be stood
@@ -49,7 +79,7 @@ actually requires, what a fraud investigation demands of governance
 that assumed good faith everywhere, what happens when tenants merge,
 split, or are owned by a holding company, and what a low-connectivity
 workshop reveals about an architecture that has always assumed a live
-connection. [`docs/scenarios2/SYNTHESIS.md`](docs/scenarios2/SYNTHESIS.md)
+connection. [`docs/archive/discovery/scenarios2/SYNTHESIS.md`](docs/archive/discovery/scenarios2/SYNTHESIS.md)
 traces one dominant finding through five of the eight workshops —
 `Tenant.id` is treated everywhere as permanent and singular, and real
 businesses are sold, merged, split, invested in, and closed — plus a
@@ -122,7 +152,7 @@ composite" without pinning a formula.
 
 **Phase 9 closed out.** The refund-approval workflow now exists: `requestRefund`/`approveRefund`/`rejectRefund` on `FinanceService`, with `finance.refund.request`/`finance.refund.decide` as two separate permission keys (a branch manager can request, only the owner decides, by default) so the separation-of-duties gap this creates is at least visible until Phase 19 enforces it structurally. `settlement()` nets a COMPLETED refund out of `paid` rather than editing a payment row. `compliantBlocked` is computed and upserted on every `issueDocument()` call (`ADAPTER_COVERED_COUNTRIES` is empty until a real country adapter ships) — visibility only, per the phase doc, and not yet surfaced on the Workshops list drawer (a small remaining UI task, not blocking). `EgyptETAAdapter`/`SaudiZATCAAdapter` remain explicitly out of scope per the phase doc's exit criteria.
 
-**Also fixed this arc, found while reading code for the first time, not by design:** `FinanceService.nextInvoiceNumber()` was `tx.invoice.count()+1` racing a unique-constraint backstop, rewritten to a real atomic upsert against the previously-unused `InvoiceSequence` table, proven by a 10-way concurrent-issuance test. `StockService.record()`'s "locked for the duration" comment was untrue — a plain `findUnique` takes no row lock under Postgres's default `READ COMMITTED`; rewritten to `SELECT ... FOR UPDATE`, proven by a concurrent-issue test. Both are edge cases H3 and H6/E16 in `docs/scenarios3/EDGE_CASE_REGISTER.md`, now marked fixed there.
+**Also fixed this arc, found while reading code for the first time, not by design:** `FinanceService.nextInvoiceNumber()` was `tx.invoice.count()+1` racing a unique-constraint backstop, rewritten to a real atomic upsert against the previously-unused `InvoiceSequence` table, proven by a 10-way concurrent-issuance test. `StockService.record()`'s "locked for the duration" comment was untrue — a plain `findUnique` takes no row lock under Postgres's default `READ COMMITTED`; rewritten to `SELECT ... FOR UPDATE`, proven by a concurrent-issue test. Both are edge cases H3 and H6/E16 in `docs/archive/discovery/scenarios3/EDGE_CASE_REGISTER.md`, now marked fixed there.
 
 ## 3. Completed work
 
@@ -144,11 +174,11 @@ composite" without pinning a formula.
 
 **Page-gap closure (this arc).** Inventory Home (7 triage cards, per-warehouse breakdown), Catalog Control (paginated editor, cost gated behind a new `inventory.cost.view` permission defaulting false), and Reports (velocity-based stock risk per warehouse, warehouse comparison suppressed rather than shown as a one-bar chart) for Inventory Manager. Team Setup for Branch Manager, which required a **new permission-resolver layer** — `DelegationLayer`, position 8 of what is now a 10-layer chain (`permission-resolver.service.ts`) — because team management is owner-delegated per workshop, a decision neither the capability engine nor a role template owns. The Workshops list for Platform Super Admin: server-side paged/sorted/filtered table, a details drawer (its own component, split out after the combined page tripped the CSS budget), and freeze/reactivate with a live-computed impact preview.
 
-**Scenario research (this arc).** 20 scenarios across `docs/scenarios/`, four workshops chosen to be as structurally different as possible, each finding 3–4 core product mistakes by walking the software step by step. Synthesized into `FINDINGS_SYNTHESIS.md` and three new phases (15–17) added to `PHASE_MAP.md`, detailed in their own phase docs. No code from this track yet — it is planning output, matching this project's rule that re-planning at a phase boundary is expected, silent drift is not.
+**Scenario research (this arc).** 20 scenarios across `docs/archive/discovery/scenarios/`, four workshops chosen to be as structurally different as possible, each finding 3–4 core product mistakes by walking the software step by step. Synthesized into `FINDINGS_SYNTHESIS.md` and three new phases (15–17) added to `PHASE_MAP.md`, detailed in their own phase docs. No code from this track yet — it is planning output, matching this project's rule that re-planning at a phase boundary is expected, silent drift is not.
 
-**Second scenario pass (this arc).** 40 scenarios across `docs/scenarios2/`, eight tenant profiles chosen to stress the platform layer specifically — super admin control, workshop creation using only the product, and the server under genuine multi-tenant load — rather than any one workshop's daily operation. Synthesized into `SYNTHESIS.md` with a full cross-reference table, and three more new phases (18–20) added to `PHASE_MAP.md`, detailed in their own phase docs. Also no code yet.
+**Second scenario pass (this arc).** 40 scenarios across `docs/archive/discovery/scenarios2/`, eight tenant profiles chosen to stress the platform layer specifically — super admin control, workshop creation using only the product, and the server under genuine multi-tenant load — rather than any one workshop's daily operation. Synthesized into `SYNTHESIS.md` with a full cross-reference table, and three more new phases (18–20) added to `PHASE_MAP.md`, detailed in their own phase docs. Also no code yet.
 
-**Third scenario pass — edge cases (this arc).** 20 items across `docs/scenarios3/` — 10 hard, 10 extremely hard — not persona-driven, a direct audit for rare conditions a real deployment will eventually hit: concurrent writes racing each other (blockers, team-membership moves, invoice numbering, payment idempotency, freeze/reactivate), clock and calendar edge cases (leap-year warranty dates, replica clock skew, database failover), and data-integrity edge cases (hard-deleting a `ControlSetting` row instead of deactivating it, migrations against a dormant archived tenant). Two real, previously-unverified findings worth flagging specifically: `FinanceService.nextInvoiceNumber()` computes `count()+1` inside a transaction and relies on a unique-constraint backstop, while the schema already has an unused `invoice_sequences` table sitting right next to it (H3); and the stock-never-negative guarantee's actual atomicity (single `UPDATE` vs. read-then-write) was never verified against the generated SQL (H6/E16). None of these earned a new phase — `PHASE_MAP.md` gained rule 8 instead: a hardening pass attaches to the phase that already owns the affected system, via `docs/scenarios3/EDGE_CASE_REGISTER.md`, not a new phase number. Each affected phase (1, 3, 4, 5, 7, 8, 15, 18, 19, 20) now carries an inline "Edge cases owed" note.
+**Third scenario pass — edge cases (this arc).** 20 items across `docs/archive/discovery/scenarios3/` — 10 hard, 10 extremely hard — not persona-driven, a direct audit for rare conditions a real deployment will eventually hit: concurrent writes racing each other (blockers, team-membership moves, invoice numbering, payment idempotency, freeze/reactivate), clock and calendar edge cases (leap-year warranty dates, replica clock skew, database failover), and data-integrity edge cases (hard-deleting a `ControlSetting` row instead of deactivating it, migrations against a dormant archived tenant). Two real, previously-unverified findings worth flagging specifically: `FinanceService.nextInvoiceNumber()` computes `count()+1` inside a transaction and relies on a unique-constraint backstop, while the schema already has an unused `invoice_sequences` table sitting right next to it (H3); and the stock-never-negative guarantee's actual atomicity (single `UPDATE` vs. read-then-write) was never verified against the generated SQL (H6/E16). None of these earned a new phase — `PHASE_MAP.md` gained rule 8 instead: a hardening pass attaches to the phase that already owns the affected system, via `docs/archive/discovery/scenarios3/EDGE_CASE_REGISTER.md`, not a new phase number. Each affected phase (1, 3, 4, 5, 7, 8, 15, 18, 19, 20) now carries an inline "Edge cases owed" note.
 
 ## 4. Current task — what to do next
 
@@ -156,11 +186,11 @@ composite" without pinning a formula.
 
 **A — Continue the page-gap track toward Phase 9.** Remaining: Returns/Movements actions (accept/reject a return, request clarification — Inventory Manager's last owed page), Platform's Governance Controls / Platform Reports / Workshop Live View, then Phase 9 (Billing/Invoicing) as originally planned. Before finalizing Phase 9's scope, read `docs/phases/PHASE_20.md` §20.D — the country-adapter seam is sharper than originally scoped; a tenant onboarded into a country without a ready adapter needs an explicit **compliant-blocked** state, not silent non-compliance. See §1 above.
 
-**B — Start Phase 15.** The scenario research is done; Phase 15 is drafted and ready to build against. Its exit criteria and the primitives it owns (service card, measurement form, position taxonomy, credential, blocker reason) are in `docs/phases/PHASE_15.md`. Do not start Phase 17's creation-time UI before 15 and 16 exist — see that document's closing note, which names Phase 7's own history as the cautionary case. Also note Phase 17's scope was sharpened this session: a fixed starter-profile library under-covers reality on day one (Workshop 1 of `docs/scenarios2/`), so Phase 17 must ship an explicit "start from nothing" authoring path as a first-class option, not a fallback.
+**B — Start Phase 15.** The scenario research is done; Phase 15 is drafted and ready to build against. Its exit criteria and the primitives it owns (service card, measurement form, position taxonomy, credential, blocker reason) are in `docs/phases/PHASE_15.md`. Do not start Phase 17's creation-time UI before 15 and 16 exist — see that document's closing note, which names Phase 7's own history as the cautionary case. Also note Phase 17's scope was sharpened this session: a fixed starter-profile library under-covers reality on day one (Workshop 1 of `docs/archive/discovery/scenarios2/`), so Phase 17 must ship an explicit "start from nothing" authoring path as a first-class option, not a fallback.
 
 **C — Start Phase 18.** Independent of both other tracks, gated only behind Phase 3 (already complete). `docs/phases/PHASE_18.md` names six sub-items (18.A–18.F); 18.A (external stakeholder access) and 18.D (the tenant archive/retention lifecycle) are the two with the clearest, smallest schema surface and are the recommended starting point if this track is picked. 18.F (merge/split) is a design decision, not an implementation, and should be scoped last within this phase.
 
-**D — Work the edge-case register.** Independent of the other three; each item is small and attaches to already-complete phases, so this is the lowest-risk, fastest-to-land track if a quick win is wanted. Start with the two flagged **verify first** in `docs/scenarios3/EDGE_CASE_REGISTER.md` (H6/E16, the stock-decrement atomicity question, and H3, the invoice-numbering race) — both are a few hours of reading generated SQL plus one concurrency-specific integration test each, and both touch money or inventory correctness directly, which the register's own severity note ranks above the more dramatic-sounding items like E20's database failover.
+**D — Work the edge-case register.** Independent of the other three; each item is small and attaches to already-complete phases, so this is the lowest-risk, fastest-to-land track if a quick win is wanted. Start with the two flagged **verify first** in `docs/archive/discovery/scenarios3/EDGE_CASE_REGISTER.md` (H6/E16, the stock-decrement atomicity question, and H3, the invoice-numbering race) — both are a few hours of reading generated SQL plus one concurrency-specific integration test each, and both touch money or inventory correctness directly, which the register's own severity note ranks above the more dramatic-sounding items like E20's database failover.
 
 **Write `docs/phases/PHASE_9.md` first, then build it.** The detail document comes before any code, as in Phases 5–8.
 
@@ -244,7 +274,7 @@ except this demo manager holds `workorders.branch.view` — without
 | `apps/web/src/app/features/platform/reports/*` | Same, web side |
 | `apps/api/src/finance/finance.service.ts` | H5 fix — payment idempotency check-then-insert race |
 | `apps/api/src/inventory/part-request.service.ts` | H2 fix — part-request check-then-write gap |
-| `docs/scenarios3/EDGE_CASE_REGISTER.md` | Both fixes recorded there, with the concurrency tests that prove them |
+| `docs/archive/discovery/scenarios3/EDGE_CASE_REGISTER.md` | Both fixes recorded there, with the concurrency tests that prove them |
 
 ## 10. Immediate next steps (superseded by §11 below — kept for the historical Phase 5 pointer only)
 
@@ -272,7 +302,7 @@ except this demo manager holds `workorders.branch.view` — without
 
 ## 12. Phase 21 opened — Policy & Decision Architecture (documents only)
 
-**A new phase was opened at the project owner's direction, and it changes what happens next.** After reviewing `docs/ARCHITECTURE_DECISION_INVENTORY.md` (which argued against multiple workshop architectures and identified *policy* as the real missing axis), the owner accepted the diagnosis and sharpened it: policy questions should be **contextual and dynamic**, so that a workshop's model and capabilities determine *which* decisions it even faces — 15 questions for one workshop, 40 for another — with a documented **Default** per decision and a `Use Recommended Defaults` path at creation.
+**A new phase was opened at the project owner's direction, and it changes what happens next.** After reviewing `docs/archive/audits/ARCHITECTURE_DECISION_INVENTORY.md` (which argued against multiple workshop architectures and identified *policy* as the real missing axis), the owner accepted the diagnosis and sharpened it: policy questions should be **contextual and dynamic**, so that a workshop's model and capabilities determine *which* decisions it even faces — 15 questions for one workshop, 40 for another — with a documented **Default** per decision and a `Use Recommended Defaults` path at creation.
 
 That refinement is what makes the layer tractable, and it is now the phase's load-bearing idea: **decision sets are derived, not enumerated.**
 
