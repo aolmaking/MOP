@@ -93,6 +93,23 @@ insights/      analytics, analyst-reporting, owner-reports, workflow-health — 
 `experiences/` never writes directly: a role surface calls the owning
 system's service. `systems/` never imports `experiences/`.
 
+`apps/web/src/app` uses the same vocabulary, so one word means one thing
+on both sides of the wire:
+
+```
+runtime/       http/ (error interceptor), i18n/ — framework plumbing
+identity/      auth store, guard, landing, access.api ("may I?")
+ui/            presentation primitives with no domain knowledge, + charts/
+domain/        cross-role business concepts — journey/, dossier/, decisions/
+experiences/   one directory per role, each owning its own shell/;
+               plus public/ (the unguarded pages) and home/ (fallback frame)
+```
+
+Dependency direction: `runtime/` and `ui/` import nothing above them,
+`domain/` imports `runtime/`, `experiences/` imports downward and never
+sideways. A business concept used by two roles belongs in `domain/` —
+one source of truth, one presentation per role.
+
 ### The capability engine — the heart of the product
 
 Platform Super Admin shapes each workshop by removing what it does not need. **Removal is workflow rewiring, not feature hiding.** The guarantee:
