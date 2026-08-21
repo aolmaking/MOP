@@ -154,6 +154,7 @@ describe("enforcement declarations", () => {
       "PARTIAL_PAYMENT",
       "PARTS_SEPARATION_OF_DUTIES",
       "PORTAL_COUNTER_APPROVAL",
+      "POST_CLOSE_ADDENDA",
       "QC_MANDATORY",
       "RETURN_UNUSED_BEFORE_FINISH",
       "TECHNICIAN_DIRECT_SEND",

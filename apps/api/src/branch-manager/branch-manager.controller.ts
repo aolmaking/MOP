@@ -13,6 +13,7 @@ import { ApprovalsService, type ApprovalsResult } from "./approvals.service";
 import { DeliveryService, type DeliveryBoard } from "./delivery.service";
 import { CustomerDecisionService } from "../customer/decision.service";
 import { RecordDecisionDto } from "./record-decision.dto";
+import { AddNoteDto } from "./add-note.dto";
 import { WorkOrderDossierService } from "../operations/work-order-dossier.service";
 
 export interface AttentionCenterResponse {
@@ -190,6 +191,30 @@ export class BranchManagerController {
     return this.dossierService.build(session.tenantId as string, id, {
       branchScope: session.branchScope,
       canViewCost,
+    });
+  }
+
+  /** Same read permission as the dossier itself -- see its own note on why. */
+  @Get("work-orders/:id/notes")
+  async notes(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    await this.requireBranchView(session);
+    return { notes: await this.dossierService.notes(session.tenantId as string, id) };
+  }
+
+  /**
+   * POST_CLOSE_ADDENDA: the service refuses this once the job is CLOSED
+   * and the workshop's policy says nothing may be added -- this endpoint
+   * decides only who may ask, not whether the ask succeeds.
+   */
+  @Post("work-orders/:id/notes")
+  async addNote(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: AddNoteDto) {
+    const allowed = await this.access.can(session, "notes.create");
+    if (!allowed || !session.tenantId) {
+      throw new ForbiddenException({ code: "forbidden", message: "You do not have access to this." });
+    }
+    return this.dossierService.addNote(session.tenantId, id, dto.body, {
+      accountId: session.accountId,
+      displayName: session.displayName,
     });
   }
 

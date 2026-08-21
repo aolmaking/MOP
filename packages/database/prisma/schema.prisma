@@ -608,6 +608,26 @@ model SupervisionNote {
   @@map("supervision_notes")
 }
 
+// POST_CLOSE_ADDENDA (packages/shared/src/policies/registry.ts). Nothing
+// on a closed WorkOrder is ever edited -- this is the real, additive
+// append operation the policy governs: whether one may be added at all
+// once the job is CLOSED. Immutable once written, like every other
+// historical record in this schema; there is no update or delete path.
+model WorkOrderNote {
+  id          String   @id @default(cuid())
+  tenantId    String
+  workOrderId String
+  authorId    String
+  authorName  String
+  body        String
+  createdAt   DateTime @default(now())
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, workOrderId])
+  @@map("work_order_notes")
+}
+
 // ============================================================================
 // SPECIALIZATION PRIMITIVES (Phase 15)
 //
@@ -1062,6 +1082,7 @@ model WorkOrder {
   timelineEvents     CustomerTimelineEvent[]
   safeHistoryEntries SafeTechnicalHistory[]
   disputes           WorkOrderDispute[]
+  notes              WorkOrderNote[]
 
   @@index([tenantId, status])
   @@index([tenantId, branchId, status])

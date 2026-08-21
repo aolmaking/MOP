@@ -47,6 +47,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "finance.refund.decide": true,
     "finance.discount.request": true,
     "finance.discount.decide": true,
+    // POST_CLOSE_ADDENDA: the owner can always close out a closed job's
+    // paperwork, the same as a branch manager.
+    "notes.create": true,
     "reports.owner.view": true,
     "reports.company.view": true,
     "audit.own_tenant.view": true,
@@ -69,6 +72,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "workorders.branch.release_delivery": true,
     "customer.intake.create": true,
     "decisions.branch.view": true,
+    // POST_CLOSE_ADDENDA: closing out the paperwork on a finished job is
+    // branch-manager territory, same as everything else on this list.
+    "notes.create": true,
     // P-18: the branch is where a customer answers verbally in person or
     // by phone when they have no portal, or simply prefer to.
     "customer_decision.record_on_behalf": true,

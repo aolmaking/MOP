@@ -659,8 +659,8 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
       { key: "NOTHING", label: "Closed is closed", meaning: "A closed work order takes no further entries of any kind." },
       {
         key: "APPEND_ONLY_NOTES",
-        label: "Notes and attachments may be appended",
-        meaning: "A note or photo can be added afterwards; nothing already recorded changes.",
+        label: "Notes may be appended",
+        meaning: "A note can be added afterwards; nothing already recorded changes.",
       },
     ],
     default: "APPEND_ONLY_NOTES",
@@ -672,22 +672,31 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     // it makes a terminal state non-terminal, which fails PHASE_21.md
     // SS3.1's test outright. It is a capability, not a policy option.
     // `LINKED_FOLLOW_UP` needs the work-order-to-work-order linkage
-    // (P-40) that does not exist.
+    // (P-40) that does not exist. The option itself no longer promises a
+    // photo alongside the note either: `Attachment` exists in the schema
+    // (targetType/targetId, generic) but nothing anywhere in this
+    // codebase uploads to it or reads from it today -- wiring a photo
+    // upload flow is real, separate future work, not a detail of this
+    // policy's own enforcement.
     relevantWhen: () => true,
     mutability: "GOVERNED",
     buildPosture: "POLICY_CONTROLLED",
     dependsOnCapabilities: [],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
-      where: "Read once an addendum record exists on the work order. Attachment (16.H) is already the store it would use.",
-      consumers: [],
+      status: "ENFORCED",
+      where:
+        "WorkOrderDossierService.addNote refuses on every call once the work order is CLOSED and this policy " +
+        "reads NOTHING; a job still open needs no check, since adding a note before close was never in " +
+        "question. WorkOrderNote is a new, append-only table -- no update or delete path exists, matching every " +
+        "other historical record in this schema.",
+      consumers: ["WorkOrderDossierService.addNote"],
     },
     impact: {
       capabilities: [],
       roles: ["BRANCH_MANAGER", "TENANT_OWNER"],
       workflowStates: ["CLOSED"],
-      permissions: [],
+      permissions: ["notes.create"],
       pages: ["branch_manager.work-order-workspace"],
       changesVisibility: false,
       changesBilling: false,
