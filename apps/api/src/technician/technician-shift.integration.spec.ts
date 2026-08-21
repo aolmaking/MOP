@@ -55,7 +55,7 @@ const lifecycle = new WorkOrderLifecycleService(
   policiesForTest,
 );
 const intake = new IntakeService(asService, events, lifecycle);
-const techWork = new TechnicianWorkService(asService, events, lifecycle);
+const techWork = new TechnicianWorkService(asService, events, lifecycle, policiesForTest);
 const techView = new TechnicianWorkViewService(asService, lifecycle, new AssetHistoryService(asService));
 const attention = new AttentionQueueService(asService);
 

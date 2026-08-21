@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString, Length } from "class-validator";
+import { IsEnum, IsInt, IsOptional, IsString, Length, Min } from "class-validator";
 import { BlockerReason, SeverityLevel } from "@mop/database";
 
 export class ReportBlockerDto {
@@ -14,6 +14,14 @@ export class ReportBlockerDto {
   @IsString()
   @Length(1, 1000)
   note?: string;
+}
+
+export class CompleteTaskDto {
+  /** TIME_TRACKING's own field. Absent under OFF/OPTIONAL is fine; REQUIRED refuses without it. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  minutesSpent?: number;
 }
 
 export class CreateFaultDto {

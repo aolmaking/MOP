@@ -5,7 +5,7 @@ import { CurrentSession } from "../auth/current-session.decorator";
 import { EffectiveAccessService } from "../access/effective-access.service";
 import { TechnicianWorkService } from "../operations/technician-work.service";
 import { TechnicianWorkViewService } from "./technician-work-view.service";
-import { ReportBlockerDto, CreateFaultDto } from "./technician.dto";
+import { ReportBlockerDto, CreateFaultDto, CompleteTaskDto } from "./technician.dto";
 
 /**
  * The technician's three pages, plus the writes they make from them.
@@ -59,9 +59,9 @@ export class TechnicianController {
   }
 
   @Post("tasks/:id/complete")
-  async completeTask(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+  async completeTask(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: CompleteTaskDto) {
     await this.requireTechnician(session, "task.complete");
-    return this.work.completeTask(id, this.actor(session));
+    return this.work.completeTask(id, this.actor(session), dto.minutesSpent);
   }
 
   @Post("tasks/:id/blocker")

@@ -1107,6 +1107,15 @@ model Task {
   // not in its catalogue, and free-text `title` remains the fallback.
   serviceKey  String?
   status      TaskStatus @default(ASSIGNED)
+  // TIME_TRACKING (packages/shared/src/policies/registry.ts). Minutes the
+  // technician reports at completion, whole minutes because that is the
+  // granularity the Work Card's control actually offers -- not derived
+  // from startedAt/updatedAt, since a task blocked and resumed later
+  // would make elapsed wall-clock time overstate time actually worked.
+  // Null under OFF (the field is never written) and under OPTIONAL when
+  // the technician chose not to record it; REQUIRED refuses completion
+  // without it.
+  actualMinutes Int?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 

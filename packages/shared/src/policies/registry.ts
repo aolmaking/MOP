@@ -521,9 +521,14 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     dependsOnCapabilities: [],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
-      where: "Read once the Work Card's finish path checks recorded time. The shift record it would read already exists.",
-      consumers: [],
+      status: "ENFORCED",
+      where:
+        "TechnicianWorkService.completeTask reads this on every call: REQUIRED refuses completion without a " +
+        "minutesSpent value, OFF discards one even if the caller sent it (the control does not exist, so the " +
+        "column never holds a stray value from before the policy changed), OPTIONAL stores whatever was given. " +
+        "Task.actualMinutes is the technician's own reported figure, not derived from start/complete timestamps " +
+        "-- a task blocked and resumed later would make elapsed wall-clock time overstate time actually worked.",
+      consumers: ["TechnicianWorkService.completeTask"],
     },
     impact: {
       capabilities: ["TEAMS"],
