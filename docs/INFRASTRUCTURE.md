@@ -39,7 +39,7 @@ Four, with one non-negotiable property each.
 
 **The API must stay stateless.** Sessions live in Postgres (`DONE`), so any replica can serve any request and a replica can be killed at any moment.
 
-**The worker must be a separate process — and this is an active bug today.** `HeartbeatJob` uses `@Cron` inside the API process (`apps/api/src/scheduler/`). That is correct for one instance and **wrong the moment there are two**: every replica fires every job, so reminders send twice, cleanup races itself, and report snapshots duplicate. Before Phase 10 adds real jobs, one of these must be in place:
+**The worker must be a separate process — and this is an active bug today.** `HeartbeatJob` uses `@Cron` inside the API process (`apps/api/src/runtime/scheduler/`). That is correct for one instance and **wrong the moment there are two**: every replica fires every job, so reminders send twice, cleanup races itself, and report snapshots duplicate. Before Phase 10 adds real jobs, one of these must be in place:
 
 - a dedicated worker deployment where the scheduler module is the only thing enabled (simplest, preferred), or
 - a distributed lock so exactly one replica executes each tick.

@@ -106,11 +106,13 @@ Unbounded growth: `audit_logs`, `operation_events`, `stock_movements`, `customer
 
 ## 9. Query amplification in the permission resolver
 
-**The concrete problem, measured today:** of the eight permission layers, five each issue their own Prisma query — `PlatformControlLayer`, `PlanEntitlementLayer`, `RolePermissionTemplateLayer`, `UserOverrideLayer`, `WorkshopConfigurationLayer`. There is no caching anywhere in `apps/api/src/access/`.
+> **RESOLVED, per `docs/PHASE_MAP.md` and `PROJECT_STATE.md` §5.** This section originally described a `TODO` from before Phase 3 shipped. The resolver is now **10 layers**, not eight (platform → plan → tenant status → capability → module → feature → workshop config → delegation → role template → user override), and per-request context caching landed in Phase 3: permission resolution is constant-cost regardless of how many keys are checked in one request (20 keys costs the same ~6 queries as 1). The problem description below is kept as the historical record of what the fix addressed — do not read it as a current gap.
 
-So a single `can()` call costs up to five round-trips, and a page checking ten permissions costs fifty. This is fine at today's scale and will not be fine later — and it is on the hottest path in the entire system.
+**The concrete problem, as originally measured (now fixed):** of the (then-eight) permission layers, five each issued their own Prisma query — `PlatformControlLayer`, `PlanEntitlementLayer`, `RolePermissionTemplateLayer`, `UserOverrideLayer`, `WorkshopConfigurationLayer`. There was no caching anywhere in the resolver.
 
-**The fix (`TODO`, before Phase 3), which must not weaken the model:**
+So a single `can()` call cost up to five round-trips, and a page checking ten permissions cost fifty. This was fine at the scale of the time and was fixed before it stopped being fine — it sits on the hottest path in the entire system.
+
+**The fix that shipped (originally written here as a `TODO`, before Phase 3), which was applied without weakening the model:**
 
 1. **Per-request resolver context.** Load the tenant's control settings, plan, role permission template, user overrides, and configuration **once per request**, then resolve every permission key against that in-memory snapshot. Layer ordering and the `locked` short-circuit are untouched — only the data source changes.
 2. **Batch the page-load case.** A page needing many keys asks once and receives a map, rather than issuing N sequential resolutions.

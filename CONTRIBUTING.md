@@ -101,7 +101,7 @@ corepack pnpm typecheck && corepack pnpm lint && corepack pnpm test && corepack 
 
 All four must pass. `lint` includes two project-specific rules beyond ESLint:
 
-- **audit boundary** — no `AuditLog` write may occur outside `apps/api/src/audit/**`
+- **audit boundary** — no `AuditLog` write may occur outside `apps/api/src/audit/**` (still a genuine top-level directory after the 2026-08-22 reorganization -- the audit-boundary linter matches this exact path)
 - **directional CSS** — no physical direction properties in `apps/web/src`
 
 Both fail the build deliberately. They exist because the previous implementation of this product failed at exactly these two points, and a rule a reviewer has to remember is a rule that eventually gets forgotten.

@@ -16,6 +16,8 @@ Read in this order the first time through.
 | [`../PROJECT_STATE.md`](../PROJECT_STATE.md) | Where the project is *right now*, session by session — the companion to `CLAUDE.md`'s permanent knowledge |
 | [`phases/PHASE_1.md`](./phases/PHASE_1.md) | Full working detail of the first phase; each phase has its own file under `phases/` |
 | [`REBUILD_PLAN.md`](./REBUILD_PLAN.md) | Decision record — how the rebuild started, what was found broken, and the architectural decisions with their reasoning. Not a task list |
+| [`../CODE_MAP.md`](../CODE_MAP.md) | **"I need to change X, where do I go?"** A directory-by-directory index of the current code layout |
+| [`../REORGANIZATION_REPORT.md`](../REORGANIZATION_REPORT.md) | Why `apps/api/src` and `apps/web/src` are laid out the way `CODE_MAP.md` describes — the reasoning behind the layered structure (`audit/`, `runtime/`, `identity/`, `control/`, `systems/`, `experiences/`, `insights/` on the API side). Structural only; no behaviour changed |
 
 ## Product specification
 

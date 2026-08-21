@@ -41,14 +41,18 @@ That is a graph reachability check, run before a change is applied, covering wor
 
 ```
 apps/
-  api/           NestJS API — auth, access control, platform administration
-  web/           Angular application
+  api/           NestJS API, organized by boundary not file kind:
+                   audit/ · runtime/ · identity/ · control/ · systems/ · experiences/ · insights/
+  web/           Angular application, same vocabulary on the frontend:
+                   runtime/ · identity/ · domain/ · experiences/ · ui/
 packages/
   shared/        Types, permission manifest, capability engine + validator
   database/      Prisma schema, migrations, seed
 tools/           Repo-level checks (doctor, audit boundary, directional CSS)
 docs/            Specification, engineering charters, phase plan
 ```
+
+**"I need to change X, where do I go?"** Start at [`CODE_MAP.md`](CODE_MAP.md) — a directory-by-directory index of what lives where and why. The reasoning behind the current layered structure (it replaced a flat, 31-directory `apps/api/src` where framework plumbing, business systems, and per-role presentation surfaces all sat as unmarked siblings) is in [`REORGANIZATION_REPORT.md`](REORGANIZATION_REPORT.md). That reorganization was structural only — no business behaviour, route, provider, permission, or contract changed.
 
 ## Getting started
 
