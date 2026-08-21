@@ -1,8 +1,11 @@
-import { attentionReason, describeWait, rankAttentionItem, sortByAttention } from "./attention-ranking";
+import { attentionReason, describeWait, rankAttentionItem, sortByAttention, workingHoursBetween } from "./attention-ranking";
 import type { AttentionKind } from "./attention-ranking";
 
+// 2026-08-09T12:00:00Z is a Sunday. Aug 6 is Thursday, Aug 7 Friday, Aug 8
+// Saturday -- used below to walk a wait across a SAT_SUN weekend.
 const NOW = new Date("2026-08-09T12:00:00.000Z");
 const hoursAgo = (hours: number) => new Date(NOW.getTime() - hours * 3_600_000);
+const SAT_SUN = [6, 0];
 
 const rank = (kind: AttentionKind, hours: number) => rankAttentionItem({ kind, waitingSince: hoursAgo(hours) }, NOW);
 
@@ -109,5 +112,63 @@ describe("the row explains itself in words", () => {
     expect(describeWait(5.9)).toBe("5 hours");
     expect(describeWait(25)).toBe("1 day");
     expect(describeWait(73.4)).toBe("3 days");
+  });
+});
+
+/**
+ * WORKING_WEEK made real. "A job has been waiting two days" meant two
+ * calendar days everywhere before this -- silently wrong for a workshop
+ * closed Friday-Saturday or Saturday-Sunday, where a job left Thursday
+ * evening looked exactly as overdue Sunday noon as one left overnight
+ * midweek.
+ */
+describe("workingHoursBetween -- WORKING_WEEK's own arithmetic", () => {
+  it("with no weekend days, equals plain elapsed hours (SEVEN_DAY, and every caller before this policy existed)", () => {
+    const from = hoursAgo(72);
+    expect(workingHoursBetween(from, NOW, [])).toBeCloseTo(72, 6);
+    expect(workingHoursBetween(from, NOW)).toBeCloseTo(72, 6);
+  });
+
+  it("counts a same-day span in full when that day is not a weekend day", () => {
+    const from = new Date("2026-08-06T08:00:00.000Z"); // Thursday
+    const to = new Date("2026-08-06T20:00:00.000Z");
+    expect(workingHoursBetween(from, to, SAT_SUN)).toBeCloseTo(12, 6);
+  });
+
+  it("skips a Saturday-Sunday weekend entirely when a wait spans one", () => {
+    // Thursday 12:00 to Sunday 12:00 (NOW) is 72 raw hours: Thursday
+    // afternoon (12) + all of Friday (24) count; all of Saturday and the
+    // first half of Sunday do not.
+    const from = new Date("2026-08-06T12:00:00.000Z"); // Thursday
+    expect(workingHoursBetween(from, NOW, SAT_SUN)).toBeCloseTo(36, 6);
+  });
+
+  it("returns zero for a span that has not started yet, never a negative", () => {
+    const future = new Date(NOW.getTime() + 3_600_000);
+    expect(workingHoursBetween(future, NOW, SAT_SUN)).toBe(0);
+  });
+});
+
+describe("rankAttentionItem honours WORKING_WEEK when given weekend days", () => {
+  it("a wait spanning the weekend escalates later than the same wait would under SEVEN_DAY", () => {
+    // 24 raw hours before NOW (Sunday) is Saturday noon -- entirely
+    // inside the weekend, so under SAT_SUN this has waited ~0 working
+    // hours and must not have escalated CUSTOMER_APPROVAL_WAITING's
+    // 24-hour threshold yet, unlike the SEVEN_DAY reading of the same span.
+    const waitingSince = hoursAgo(24);
+
+    const sevenDay = rankAttentionItem({ kind: "CUSTOMER_APPROVAL_WAITING", waitingSince }, NOW, []);
+    const workingWeek = rankAttentionItem({ kind: "CUSTOMER_APPROVAL_WAITING", waitingSince }, NOW, SAT_SUN);
+
+    expect(sevenDay.escalated).toBe(true);
+    expect(workingWeek.escalated).toBe(false);
+    expect(workingWeek.waitingHours).toBeLessThan(sevenDay.waitingHours);
+  });
+
+  it("defaults to no weekend when the caller passes none, unchanged from before this policy existed", () => {
+    const waitingSince = hoursAgo(24);
+    const withoutArg = rankAttentionItem({ kind: "CUSTOMER_APPROVAL_WAITING", waitingSince }, NOW);
+    const withEmpty = rankAttentionItem({ kind: "CUSTOMER_APPROVAL_WAITING", waitingSince }, NOW, []);
+    expect(withoutArg).toEqual(withEmpty);
   });
 });

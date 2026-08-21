@@ -57,7 +57,7 @@ const lifecycle = new WorkOrderLifecycleService(
 const intake = new IntakeService(asService, events, lifecycle);
 const techWork = new TechnicianWorkService(asService, events, lifecycle, policiesForTest);
 const techView = new TechnicianWorkViewService(asService, lifecycle, new AssetHistoryService(asService));
-const attention = new AttentionQueueService(asService);
+const attention = new AttentionQueueService(asService, policiesForTest);
 
 const ACTOR = { accountId: "tech-1", displayName: "Hassan Fathy", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `shift-${Date.now()}`;

@@ -3,10 +3,14 @@ import {
   attentionReason,
   rankAttentionItem,
   sortByAttention,
+  workingHoursBetween,
+  WEEKEND_DAYS,
+  country,
   type AttentionKind,
   type AttentionRank,
 } from "@mop/shared";
 import { PrismaService } from "../database/prisma.service";
+import { PolicyResolutionService } from "../policies/policy-resolution.service";
 
 /**
  * A row in the branch manager's queue. One thing that is stuck, why, and
@@ -61,19 +65,23 @@ export interface AttentionQueueScope {
  */
 @Injectable()
 export class AttentionQueueService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly policies: PolicyResolutionService,
+  ) {}
 
   async build(scope: AttentionQueueScope, now: Date = new Date()): Promise<AttentionItem[]> {
     const branchFilter = scope.branchScope.length > 0 ? { in: [...scope.branchScope] } : undefined;
     const workOrderWhere = { tenantId: scope.tenantId, ...(branchFilter ? { branchId: branchFilter } : {}) };
+    const weekendDays = await this.weekendDaysFor(scope.tenantId);
 
     const [criticalRejections, blockers, awaitingCustomer, overruns, readyUnpaid, waitingParts, rework] =
       await Promise.all([
-        this.criticalRejections(workOrderWhere),
-        this.blockedTechnicians(workOrderWhere),
-        this.awaitingCustomer(workOrderWhere),
-        this.slaOverruns(workOrderWhere, now),
-        this.readyButUnpaid(workOrderWhere),
+        this.criticalRejections(workOrderWhere, weekendDays),
+        this.blockedTechnicians(workOrderWhere, weekendDays),
+        this.awaitingCustomer(workOrderWhere, weekendDays),
+        this.slaOverruns(workOrderWhere, now, weekendDays),
+        this.readyButUnpaid(workOrderWhere, weekendDays),
         this.byStatus(workOrderWhere, "WAITING_PARTS"),
         this.byStatus(workOrderWhere, "QC_FAILED"),
       ]);
@@ -84,8 +92,8 @@ export class AttentionQueueService {
       ...awaitingCustomer,
       ...overruns,
       ...readyUnpaid,
-      ...waitingParts.map((row) => this.toItem(row, "WAITING_PARTS", row.waitingSince, "CHECK_PARTS", now)),
-      ...rework.map((row) => this.toItem(row, "REWORK_REQUIRED", row.waitingSince, "REASSIGN", now)),
+      ...waitingParts.map((row) => this.toItem(row, "WAITING_PARTS", row.waitingSince, "CHECK_PARTS", now, weekendDays)),
+      ...rework.map((row) => this.toItem(row, "REWORK_REQUIRED", row.waitingSince, "REASSIGN", now, weekendDays)),
     ];
 
     return sortByAttention(items);
@@ -96,7 +104,7 @@ export class AttentionQueueService {
    * warning. Top of the queue and never decays -- the workshop's liability
    * position does not improve by waiting.
    */
-  private async criticalRejections(workOrderWhere: WorkOrderWhere): Promise<AttentionItem[]> {
+  private async criticalRejections(workOrderWhere: WorkOrderWhere, weekendDays: readonly number[]): Promise<AttentionItem[]> {
     const rows = await this.prisma.customerDecisionItem.findMany({
       where: {
         importance: "CRITICAL",
@@ -117,12 +125,14 @@ export class AttentionQueueService {
         "CRITICAL_REJECTION_UNACKNOWLEDGED",
         row.decidedAt ?? new Date(),
         "ESCALATE_CRITICAL",
+        undefined,
+        weekendDays,
       ),
     );
   }
 
   /** Somebody paid is idle right now. */
-  private async blockedTechnicians(workOrderWhere: WorkOrderWhere): Promise<AttentionItem[]> {
+  private async blockedTechnicians(workOrderWhere: WorkOrderWhere, weekendDays: readonly number[]): Promise<AttentionItem[]> {
     const rows = await this.prisma.taskBlocker.findMany({
       where: { status: { in: ["OPEN", "ESCALATED"] }, task: { workOrder: workOrderWhere } },
       select: { id: true, createdAt: true, task: { select: { workOrder: { select: WORK_ORDER_SUMMARY } } } },
@@ -134,11 +144,13 @@ export class AttentionQueueService {
         "TECHNICIAN_BLOCKED",
         row.createdAt,
         "RESOLVE_BLOCKER",
+        undefined,
+        weekendDays,
       ),
     );
   }
 
-  private async awaitingCustomer(workOrderWhere: WorkOrderWhere): Promise<AttentionItem[]> {
+  private async awaitingCustomer(workOrderWhere: WorkOrderWhere, weekendDays: readonly number[]): Promise<AttentionItem[]> {
     const rows = await this.prisma.customerDecisionRequest.findMany({
       where: {
         status: { in: ["PENDING", "SENT", "VIEWED", "PARTIALLY_RESPONDED"] },
@@ -157,6 +169,8 @@ export class AttentionQueueService {
         "CUSTOMER_APPROVAL_WAITING",
         waitingSince,
         "CHASE_CUSTOMER",
+        undefined,
+        weekendDays,
       );
     });
   }
@@ -170,7 +184,7 @@ export class AttentionQueueService {
    * (`expectedDurationMinutes`), so there is no single interval Postgres
    * can filter by without a generated column.
    */
-  private async slaOverruns(workOrderWhere: WorkOrderWhere, now: Date): Promise<AttentionItem[]> {
+  private async slaOverruns(workOrderWhere: WorkOrderWhere, now: Date, weekendDays: readonly number[]): Promise<AttentionItem[]> {
     const candidates = await this.prisma.workOrder.findMany({
       where: { ...workOrderWhere, status: "IN_PROGRESS", expectedDurationMinutes: { not: null } },
       select: { ...WORK_ORDER_SUMMARY, updatedAt: true, expectedDurationMinutes: true },
@@ -178,7 +192,7 @@ export class AttentionQueueService {
 
     return candidates
       .filter((row) => {
-        const elapsedMinutes = (now.getTime() - row.updatedAt.getTime()) / 60_000;
+        const elapsedMinutes = workingHoursBetween(row.updatedAt, now, weekendDays) * 60;
         return elapsedMinutes > (row.expectedDurationMinutes ?? Infinity);
       })
       .map((row) =>
@@ -188,11 +202,12 @@ export class AttentionQueueService {
           row.updatedAt,
           "REVIEW_OVERRUN",
           now,
+          weekendDays,
         ),
       );
   }
 
-  private async readyButUnpaid(workOrderWhere: WorkOrderWhere): Promise<AttentionItem[]> {
+  private async readyButUnpaid(workOrderWhere: WorkOrderWhere, weekendDays: readonly number[]): Promise<AttentionItem[]> {
     const rows = await this.prisma.invoice.findMany({
       where: { balance: { gt: 0 }, workOrder: { ...workOrderWhere, status: "READY_FOR_DELIVERY" } },
       select: { id: true, issuedAt: true, workOrder: { select: WORK_ORDER_SUMMARY } },
@@ -204,6 +219,8 @@ export class AttentionQueueService {
         "READY_UNPAID",
         row.issuedAt,
         "TAKE_PAYMENT",
+        undefined,
+        weekendDays,
       ),
     );
   }
@@ -220,14 +237,31 @@ export class AttentionQueueService {
     return rows.map((row) => ({ id: row.id, workOrder: row, waitingSince: row.updatedAt }));
   }
 
+  /**
+   * WORKING_WEEK's own resolution: SEVEN_DAY (and the unwritten default
+   * that predates this policy) is `[]` -- nothing skipped. FROM_COUNTRY
+   * reads the tenant's own country. EXPLICIT_DAYS is not offered (see the
+   * registry entry's own comment on why), so an answer of that value,
+   * which the registry no longer declares as an option, cannot occur.
+   */
+  private async weekendDaysFor(tenantId: string): Promise<readonly number[]> {
+    const rule = await this.policies.resolveValue(tenantId, "WORKING_WEEK");
+    if (rule === "SEVEN_DAY") return [];
+
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { country: true } });
+    const entry = tenant ? country(tenant.country) : undefined;
+    return WEEKEND_DAYS[entry?.weekend ?? "SAT_SUN"];
+  }
+
   private toItem(
     source: { id: string; workOrder: WorkOrderSummary; waitingSince: Date },
     kind: AttentionKind,
     waitingSince: Date,
     primaryAction: PrimaryAction,
     now: Date = new Date(),
+    weekendDays: readonly number[] = [],
   ): AttentionItem {
-    const rank = rankAttentionItem({ kind, waitingSince }, now);
+    const rank = rankAttentionItem({ kind, waitingSince }, now, weekendDays);
 
     return {
       id: `${kind}:${source.id}`,

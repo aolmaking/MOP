@@ -605,11 +605,6 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
         label: "Derived from the country",
         meaning: "Ageing and SLA arithmetic uses the standard working week for the country entered above.",
       },
-      {
-        key: "EXPLICIT_DAYS",
-        label: "The workshop names its own days",
-        meaning: "The owner declares which days count; ageing skips the rest.",
-      },
       { key: "SEVEN_DAY", label: "No weekend", meaning: "Ageing is pure elapsed time — every day counts equally." },
     ],
     default: "FROM_COUNTRY",
@@ -617,17 +612,30 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
       "Country is already collected at creation, and this is right without being asked in the overwhelming " +
       "majority of cases. It is also the only option that fixes the bug it was raised for: MOP's ageing " +
       "arithmetic assumes Monday-to-Friday, which is silently wrong for every Gulf tenant.",
+    // `EXPLICIT_DAYS` is deliberately absent: nothing stores a per-workshop
+    // day set, the same "an option whose answer cannot be honoured is
+    // worse than an option not offered" discipline already used for
+    // P-01/P-05/P-26/QC_MANDATORY in this file.
     relevantWhen: () => true,
     mutability: "FREELY",
     buildPosture: "POLICY_CONTROLLED",
     dependsOnCapabilities: [],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
+      status: "ENFORCED",
       where:
-        "Read once attention-ranking and the SLA overrun calculation take a working-week argument instead of " +
-        "counting elapsed hours. Both are pure functions today, which is what makes that change small.",
-      consumers: [],
+        "AttentionQueueService.weekendDaysFor resolves this once per build() call (FROM_COUNTRY reads the " +
+        "tenant's own country via packages/shared/src/platform/countries.ts's WEEKEND_DAYS, SEVEN_DAY skips " +
+        "nothing) and threads it into every attention-ranking and SLA-overrun calculation via " +
+        "workingHoursBetween, replacing the raw elapsed-wall-clock-hours arithmetic every one of them used " +
+        "before. A job left Thursday evening at a Friday-Saturday-weekend workshop no longer ages over the " +
+        "weekend it was never worked.",
+      consumers: [
+        "AttentionQueueService.weekendDaysFor",
+        "AttentionQueueService.slaOverruns",
+        "workingHoursBetween",
+        "rankAttentionItem",
+      ],
     },
     impact: {
       capabilities: [],

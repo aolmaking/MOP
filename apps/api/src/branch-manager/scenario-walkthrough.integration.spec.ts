@@ -57,7 +57,7 @@ const lifecycle = new WorkOrderLifecycleService(
 );
 const intake = new IntakeService(asService, events, lifecycle);
 
-const attention = new AttentionQueueService(asService);
+const attention = new AttentionQueueService(asService, policiesForTest);
 const board = new WorkOrderBoardService(asService);
 const approvals = new ApprovalsService(asService);
 const delivery = new DeliveryService(asService, lifecycle);

@@ -182,8 +182,8 @@ describe("Workshop onboarding (integration, real HTTP, real Postgres)", () => {
 
       // A policy that is recorded but not yet read says so, rather than
       // implying a stored string is changing behaviour.
-      const week = res.body.policies.find((p: { key: string }) => p.key === "WORKING_WEEK");
-      expect(week.enforcement.status).toBe("RECORDED");
+      const weight = res.body.policies.find((p: { key: string }) => p.key === "APPROVAL_WEIGHT");
+      expect(weight.enforcement.status).toBe("RECORDED");
     });
 
     it("serves real countries with the currency, timezone and weekend each implies", async () => {

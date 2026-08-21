@@ -159,6 +159,7 @@ describe("enforcement declarations", () => {
       "TECHNICIAN_DIRECT_SEND",
       "TIME_TRACKING",
       "UNCOVERED_COUNTRY_BILLING",
+      "WORKING_WEEK",
     ]);
   });
 

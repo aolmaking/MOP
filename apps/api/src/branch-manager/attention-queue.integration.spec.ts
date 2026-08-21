@@ -11,10 +11,15 @@ process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { AttentionQueueService } from "./attention-queue.service";
+import { PolicyResolutionService } from "../policies/policy-resolution.service";
+import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
+import { AuditService } from "../audit/audit.service";
 import type { PrismaService } from "../database/prisma.service";
 
 const prisma = new PrismaClient();
-const service = new AttentionQueueService(prisma as unknown as PrismaService);
+const asService = prisma as unknown as PrismaService;
+const policiesForTest = new PolicyResolutionService(asService, new AuditService(asService), new CapabilityResolutionService(asService));
+const service = new AttentionQueueService(asService, policiesForTest);
 
 const SUFFIX = `aq-${Date.now()}`;
 const NOW = new Date();
@@ -106,6 +111,18 @@ beforeAll(async () => {
 
   tenantId = await makeTenant(`aq-main-${SUFFIX}`);
   otherTenantId = await makeTenant(`aq-other-${SUFFIX}`);
+
+  // This file proves ORDER, TIER and SCOPE, all built on `hoursAgo(NOW)`
+  // against the real clock -- deliberately unrelated to WORKING_WEEK,
+  // which has its own dedicated, deterministic-date coverage in
+  // attention-ranking.spec.ts. Left on the FROM_COUNTRY default, this
+  // file's pass/fail would depend on which real weekday it happened to
+  // run on for a Friday-Saturday-weekend country (EG, below) -- so it is
+  // pinned to SEVEN_DAY here to keep those two concerns apart.
+  const setupActor = { accountId: "test-setup", displayName: "Test setup", actorType: "PLATFORM" as const };
+  for (const id of [tenantId, otherTenantId]) {
+    await policiesForTest.set(id, "WORKING_WEEK", "SEVEN_DAY", setupActor, "PLATFORM", "Deterministic test setup.");
+  }
 
   mainBranchId = (await prisma.branch.create({ data: { tenantId, name: "Main", code: "MAIN" } })).id;
   secondBranchId = (await prisma.branch.create({ data: { tenantId, name: "Second", code: "SEC" } })).id;
@@ -345,5 +362,53 @@ describe("scope", () => {
     expect(scoped).toHaveLength(1);
     expect(scoped[0]?.branchId).toBe(mainBranchId);
     expect(all).toHaveLength(2);
+  }, 120_000);
+});
+
+/**
+ * WORKING_WEEK, proved through the real service and real Postgres --
+ * attention-ranking.spec.ts already proves the pure arithmetic
+ * exhaustively; this is the other half, that AttentionQueueService.
+ * weekendDaysFor actually reads the tenant's own country (EG, FRI_SAT)
+ * and the stored policy row, not a value handed to it by a test double.
+ *
+ * Fixed dates, deliberately not `NOW`/`hoursAgo` above (the real clock):
+ * FIXED_THU is a Thursday and FIXED_SUN a Sunday 72 raw hours later, so
+ * the FRI_SAT weekend in between is entirely skipped under FROM_COUNTRY
+ * regardless of which real weekday this suite happens to run on.
+ */
+describe("WORKING_WEEK changes how old a wait is reported to be", () => {
+  const FIXED_THU = new Date("2026-08-06T12:00:00.000Z");
+  const FIXED_SUN = new Date("2026-08-09T12:00:00.000Z");
+
+  afterEach(async () => {
+    const setupActor = { accountId: "test-setup", displayName: "Test setup", actorType: "PLATFORM" as const };
+    await policiesForTest.set(tenantId, "WORKING_WEEK", "SEVEN_DAY", setupActor, "PLATFORM", "Restored after WORKING_WEEK test.");
+  });
+
+  it("FROM_COUNTRY skips the FRI_SAT weekend for an EG tenant: 72 raw hours reads as 1 day, not 3", async () => {
+    const setupActor = { accountId: "test-setup", displayName: "Test setup", actorType: "PLATFORM" as const };
+    await policiesForTest.set(tenantId, "WORKING_WEEK", "FROM_COUNTRY", setupActor, "PLATFORM", "Integration test setup.");
+
+    await makeWorkOrder({ status: "WAITING_PARTS", updatedAt: FIXED_THU });
+
+    const queue = await service.build({ tenantId, branchScope: [] }, FIXED_SUN);
+
+    expect(queue).toHaveLength(1);
+    expect(queue[0]?.rank.waitingHours).toBeCloseTo(24, 6);
+    expect(queue[0]?.reason).toContain("1 day");
+  }, 120_000);
+
+  it("SEVEN_DAY reads the same 72 raw hours as 3 days -- nothing skipped", async () => {
+    const setupActor = { accountId: "test-setup", displayName: "Test setup", actorType: "PLATFORM" as const };
+    await policiesForTest.set(tenantId, "WORKING_WEEK", "SEVEN_DAY", setupActor, "PLATFORM", "Integration test setup.");
+
+    await makeWorkOrder({ status: "WAITING_PARTS", updatedAt: FIXED_THU });
+
+    const queue = await service.build({ tenantId, branchScope: [] }, FIXED_SUN);
+
+    expect(queue).toHaveLength(1);
+    expect(queue[0]?.rank.waitingHours).toBeCloseTo(72, 6);
+    expect(queue[0]?.reason).toContain("3 days");
   }, 120_000);
 });
