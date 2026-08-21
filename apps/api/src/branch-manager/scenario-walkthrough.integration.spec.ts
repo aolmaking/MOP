@@ -53,6 +53,7 @@ const lifecycle = new WorkOrderLifecycleService(
   new CapabilityResolutionService(asService),
   events,
   new GateEvaluatorService(asService, policiesForTest),
+  policiesForTest,
 );
 const intake = new IntakeService(asService, events, lifecycle);
 

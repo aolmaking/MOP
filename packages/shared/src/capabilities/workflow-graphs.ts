@@ -44,7 +44,20 @@ export const WORK_ORDER_GRAPH: WorkflowGraph = {
     { from: "REGISTERED", to: "AWAITING_CUSTOMER_APPROVAL", intent: "REQUEST_APPROVAL", label: "inspection declined, service requested" },
 
     { from: "UNDER_INSPECTION", to: "AWAITING_CUSTOMER_APPROVAL", intent: "REQUEST_APPROVAL", label: "findings need approval" },
-    { from: "UNDER_INSPECTION", to: "APPROVED_FOR_WORK", intent: "APPROVE", label: "no approval required by policy" },
+    // The edge this label always claimed. Until policies could reach the
+    // graph, nothing named here controlled it -- the route was chosen by
+    // whichever intent a service happened to send, and a workshop that
+    // required approval on all work could be walked straight past it.
+    //
+    // ALL_WORK removes the skip. The approval route beside it is
+    // unconditional, so no option of this policy can strand an inspection.
+    {
+      from: "UNDER_INSPECTION",
+      to: "APPROVED_FOR_WORK",
+      intent: "APPROVE",
+      requiresPolicy: [{ policyKey: "APPROVAL_REQUIRED_SCOPE", oneOf: ["BEYOND_INITIAL_SCOPE", "CRITICAL_ONLY"] }],
+      label: "findings within what was agreed -- no approval needed",
+    },
 
     { from: "AWAITING_CUSTOMER_APPROVAL", to: "APPROVED_FOR_WORK", intent: "APPROVE", label: "customer approved" },
     { from: "AWAITING_CUSTOMER_APPROVAL", to: "CANCELLED", label: "customer rejected everything" },
@@ -73,7 +86,26 @@ export const WORK_ORDER_GRAPH: WorkflowGraph = {
     // Every FINISH edge carries the full finish-gate set. Gates whose
     // owning capability is inactive are dropped by the gate registry, so a
     // workshop with no inventory is never asked about parts.
-    { from: "IN_PROGRESS", to: "READY_FOR_TEAM_REVIEW", requires: ["TEAM_REVIEW"], intent: "FINISH", gates: ["inspection_completed", "approved_work_completed", "customer_decisions_resolved", "critical_warning_acknowledged", "no_open_blocker", "parts.received_used_or_returned", "parts.no_pending_return", "parts.external_resolved"], label: "finish -> team review" },
+    // Live only while the workshop makes review compulsory.
+    //
+    // This fixes a real contradiction as well as adding the policy. The
+    // finish edges below are ordered review -> QC -> invoicing, and the
+    // router takes the first live match -- so with TEAM_REVIEW on, review
+    // was unconditionally forced and there was no way to express
+    // TECHNICIAN_DIRECT_SEND's own declared default of DIRECT. The
+    // capability meant "review is compulsory" when the policy said it
+    // should mean "review is available".
+    //
+    // Owning the condition here rather than on the two edges below also
+    // keeps `policiesOnEdgesDeclareTheirCapability` satisfied: the policy
+    // depends on TEAM_REVIEW and so does this edge, so the answer cannot
+    // outlive the capability that gives it meaning.
+    //
+    // Optional review -- a technician choosing to send a particular job
+    // for review under DIRECT -- needs its own intent, which the graph
+    // does not have. Recorded here rather than faked: under DIRECT,
+    // finished work goes onward.
+    { from: "IN_PROGRESS", to: "READY_FOR_TEAM_REVIEW", requires: ["TEAM_REVIEW"], intent: "FINISH", requiresPolicy: [{ policyKey: "TECHNICIAN_DIRECT_SEND", oneOf: ["REVIEW_REQUIRED"] }], gates: ["inspection_completed", "approved_work_completed", "customer_decisions_resolved", "critical_warning_acknowledged", "no_open_blocker", "parts.received_used_or_returned", "parts.no_pending_return", "parts.external_resolved"], label: "finish -> team review" },
     { from: "READY_FOR_TEAM_REVIEW", to: "READY_FOR_QC", requires: ["TEAM_REVIEW", "QC"], intent: "REVIEW_PASSED", label: "review passed -> QC" },
     {
       from: "READY_FOR_TEAM_REVIEW",

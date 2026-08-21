@@ -144,6 +144,52 @@ export interface PolicyEnforcement {
    * RECORDED: what has to exist before it can be read, named honestly.
    */
   readonly where: string;
+  /**
+   * The code paths that really read this value, as `File.method`.
+   *
+   * Required for an ENFORCED policy and asserted against the source tree
+   * in CI (`policy-consumers.spec.ts`) -- a policy cannot claim to be
+   * live while naming a consumer that does not exist, and a consumer
+   * renamed out from under it fails the build rather than quietly
+   * turning the claim into a lie.
+   *
+   * Empty for a RECORDED policy, which is the honest shape: nothing
+   * reads it yet.
+   */
+  readonly consumers: readonly string[];
+}
+
+/**
+ * What a policy actually touches, beyond the value it stores.
+ *
+ * A policy is a cross-system behavioural decision, not a question -- one
+ * answer can move a work order's route, change who may act, alter what a
+ * customer sees and decide whether a car may leave. Recording that here
+ * is what lets the onboarding experience state the consequence, and what
+ * lets an audit ask "is anything left unaccounted for" and get an answer.
+ *
+ * Everything derivable is derived instead: the capabilities a policy
+ * depends on come from `dependsOnCapabilities`, and the states it can
+ * narrow come from the graph itself (`policiesAppearingOnEdges`). Only
+ * what cannot be computed is written down.
+ */
+export interface PolicyImpact {
+  /** Capabilities whose behaviour changes with this answer, beyond the ones it depends on. */
+  readonly capabilities: readonly CapabilityKey[];
+  /** Roles whose day changes. Free strings: platform roles, matched against StaffRole at use. */
+  readonly roles: readonly string[];
+  /** Work-order (or other entity) states this answer can add, remove or redirect. */
+  readonly workflowStates: readonly string[];
+  /** Permission keys granted, denied or newly consulted because of it. */
+  readonly permissions: readonly string[];
+  /** Page ids whose content or actions change. */
+  readonly pages: readonly string[];
+  /** Whether the answer changes what someone is allowed to SEE, not merely do. */
+  readonly changesVisibility: boolean;
+  /** Whether the answer changes money: what is charged, when, or by whom. */
+  readonly changesBilling: boolean;
+  /** One line, in the operator's words, naming what actually differs. */
+  readonly summary: string;
 }
 
 export interface PolicyDefinition {
@@ -179,6 +225,8 @@ export interface PolicyDefinition {
   readonly dependsOnCapabilities: readonly PolicyCapabilityDependency[];
   /** Whether answering this policy changes behaviour today. See `PolicyEnforcement`. */
   readonly enforcement: PolicyEnforcement;
+  /** What this decision touches across the product. See `PolicyImpact`. */
+  readonly impact: PolicyImpact;
   /**
    * Other POLICIES whose existence (not stored value) this policy's
    * option set depends on -- e.g. "this option is only offered if that

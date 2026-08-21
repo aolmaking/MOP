@@ -47,7 +47,7 @@ const capabilities = new CapabilityResolutionService(asService);
 const audit = new AuditService(asService);
 const events = new OperationEventsService(asService, audit, new CustomerSafeProjectionService());
 const gates = new GateEvaluatorService(asService, policiesForTest);
-const lifecycle = new WorkOrderLifecycleService(asService, capabilities, events, gates);
+const lifecycle = new WorkOrderLifecycleService(asService, capabilities, events, gates, policiesForTest);
 
 const ACTOR = { accountId: "tech-1", displayName: "Technician", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `wo-${Date.now()}`;

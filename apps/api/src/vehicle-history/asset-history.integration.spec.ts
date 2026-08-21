@@ -40,6 +40,7 @@ const lifecycle = new WorkOrderLifecycleService(
   new CapabilityResolutionService(asService),
   events,
   new GateEvaluatorService(asService, policiesForTest),
+  policiesForTest,
 );
 const techView = new TechnicianWorkViewService(asService, lifecycle, history);
 

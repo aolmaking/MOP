@@ -5,9 +5,11 @@ import {
   resolveIntent,
   type GateResult,
   type WorkflowIntent,
+  relevantPolicyAnswers,
 } from "@mop/shared";
 import type { Prisma, WorkOrderStatus } from "@mop/database";
 import { PrismaService } from "../database/prisma.service";
+import { PolicyResolutionService } from "../policies/policy-resolution.service";
 import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
 import { OperationEventsService } from "./operation-events.service";
 import { GateEvaluatorService } from "./gate-evaluator.service";
@@ -48,6 +50,7 @@ export class WorkOrderLifecycleService {
     private readonly capabilities: CapabilityResolutionService,
     private readonly events: OperationEventsService,
     private readonly gates: GateEvaluatorService,
+    private readonly policies: PolicyResolutionService,
   ) {}
 
   /**
@@ -78,8 +81,8 @@ export class WorkOrderLifecycleService {
       throw new NotFoundException({ code: "work_order_not_found", message: "Work order not found." });
     }
 
-    const profile = await this.capabilities.resolveCurrent(workOrder.tenantId);
-    const routed = resolveIntent(WORK_ORDER_GRAPH, profile, workOrder.status, intent);
+    const { profile, policies } = await this.routingContext(workOrder.tenantId);
+    const routed = resolveIntent(WORK_ORDER_GRAPH, profile, workOrder.status, intent, policies);
 
     if (!routed.ok) {
       throw new ConflictException({
@@ -169,6 +172,23 @@ export class WorkOrderLifecycleService {
    * What this work order could do next, for building a UI that offers only
    * real options rather than showing buttons that fail on click.
    */
+  /**
+   * The workshop's shape and its rules, together, as the router needs them.
+   *
+   * `relevantPolicyAnswers` is not optional politeness here: a stored
+   * answer whose capability has since been removed must not narrow the
+   * graph, or a job sticks for a question the workshop is no longer
+   * asked. Every routing call in this service goes through this one
+   * method so no call site can forget.
+   */
+  private async routingContext(tenantId: string) {
+    const [profile, stored] = await Promise.all([
+      this.capabilities.resolveCurrent(tenantId),
+      this.policies.resolveCurrent(tenantId),
+    ]);
+    return { profile, policies: relevantPolicyAnswers(profile, stored) };
+  }
+
   async availableIntents(workOrderId: string): Promise<readonly WorkflowIntent[]> {
     const workOrder = await this.prisma.workOrder.findUnique({
       where: { id: workOrderId },
@@ -176,12 +196,12 @@ export class WorkOrderLifecycleService {
     });
     if (!workOrder) return [];
 
-    const profile = await this.capabilities.resolveCurrent(workOrder.tenantId);
+    const { profile, policies } = await this.routingContext(workOrder.tenantId);
     const intents = new Set<WorkflowIntent>();
 
     for (const transition of WORK_ORDER_GRAPH.transitions) {
       if (transition.from !== workOrder.status || !transition.intent) continue;
-      if (!canTransition(WORK_ORDER_GRAPH, profile, workOrder.status, transition.to)) continue;
+      if (!canTransition(WORK_ORDER_GRAPH, profile, workOrder.status, transition.to, policies)) continue;
       intents.add(transition.intent);
     }
 
@@ -200,8 +220,8 @@ export class WorkOrderLifecycleService {
     });
     if (!workOrder) return null;
 
-    const profile = await this.capabilities.resolveCurrent(workOrder.tenantId);
-    const routed = resolveIntent(WORK_ORDER_GRAPH, profile, workOrder.status, intent);
+    const { profile, policies } = await this.routingContext(workOrder.tenantId);
+    const routed = resolveIntent(WORK_ORDER_GRAPH, profile, workOrder.status, intent, policies);
     if (!routed.ok || !routed.transition.gates?.length) return null;
 
     return this.gates.evaluate(

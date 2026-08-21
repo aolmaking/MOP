@@ -102,6 +102,20 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
       where:
         "GateEvaluatorService's payment.settled_or_policy_allows check, via FinanceConfiguration.allowUnpaidDelivery. " +
         "REQUIRES_OVERRIDE blocks like ALWAYS today; the audited release action is Governance Controls' work.",
+      consumers: [
+        "GateEvaluatorService.check (payment.settled_or_policy_allows)",
+        "PlatformService.writeFinanceConfiguration",
+      ],
+    },
+    impact: {
+      capabilities: ["FINANCE_CORE", "BILLING"],
+      roles: ["BRANCH_MANAGER", "TENANT_OWNER"],
+      workflowStates: ["READY_FOR_DELIVERY", "PAYMENT_PENDING"],
+      permissions: ["workorders.branch.release_delivery"],
+      pages: ["branch_manager.delivery-payments-status", "branch_manager.work-order-workspace"],
+      changesVisibility: false,
+      changesBilling: true,
+      summary: "Whether an outstanding balance physically holds a vehicle in the yard.",
     },
   },
 
@@ -137,10 +151,27 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     dependsOnCapabilities: [],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
+      status: "ENFORCED",
       where:
-        "Read once TechnicianWorkService derives decision items from a scope delta rather than from staff choice. " +
-        "The scope-delta comparison does not exist yet.",
+        "WORK_ORDER_GRAPH narrows the UNDER_INSPECTION -> APPROVED_FOR_WORK edge to BEYOND_INITIAL_SCOPE and " +
+        "CRITICAL_ONLY; under ALL_WORK that edge is dark and every inspection must route through customer " +
+        "approval. WorkOrderLifecycleService.routingContext supplies the answer the router reads. What is not " +
+        "yet built is the scope-delta comparison itself -- TechnicianWorkService still lets staff choose which " +
+        "items are decision-worthy rather than deriving that from what the customer actually agreed to at intake.",
+      consumers: [
+        "WORK_ORDER_GRAPH (UNDER_INSPECTION -> APPROVED_FOR_WORK)",
+        "WorkOrderLifecycleService.routingContext",
+      ],
+    },
+    impact: {
+      capabilities: ["CUSTOMER_PORTAL", "FINANCE_CORE"],
+      roles: ["TECHNICIAN", "BRANCH_MANAGER"],
+      workflowStates: ["UNDER_INSPECTION", "AWAITING_CUSTOMER_APPROVAL", "APPROVED_FOR_WORK"],
+      permissions: ["customer_decision.create", "customer_decision.send", "customer_decision.record_on_behalf"],
+      pages: ["technician.work-card", "branch_manager.approvals-customer-decisions", "customer.decision"],
+      changesVisibility: false,
+      changesBilling: true,
+      summary: "Whether an inspection can go straight to work, or has to stop at the customer first.",
     },
   },
 
@@ -182,6 +213,17 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
       where:
         "Read once CustomerDecisionItem carries a weight/tier field and the decision page renders two forms. " +
         "The critical-rejection acknowledgement gate is an invariant and holds under every option regardless.",
+      consumers: [],
+    },
+    impact: {
+      capabilities: ["CUSTOMER_PORTAL"],
+      roles: ["TECHNICIAN", "BRANCH_MANAGER"],
+      workflowStates: [],
+      permissions: [],
+      pages: ["customer.decision", "branch_manager.approvals-customer-decisions"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "How heavy a decision request is -- one formal mechanism for everything, or a lighter path for routine items.",
     },
   },
 
@@ -210,7 +252,23 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     buildPosture: "POLICY_CONTROLLED",
     dependsOnCapabilities: ["FINANCE_CORE"],
     dependsOnPolicies: [],
-    enforcement: { status: "ENFORCED", where: "FinanceService.recordPayment refuses a short amount under FULL_ONLY." },
+    enforcement: {
+      status: "ENFORCED",
+      where: "FinanceService.recordPayment refuses a short amount under FULL_ONLY.",
+      consumers: [
+        "FinanceService.recordPayment",
+      ],
+    },
+    impact: {
+      capabilities: ["FINANCE_CORE"],
+      roles: ["BRANCH_MANAGER", "TENANT_OWNER"],
+      workflowStates: ["PAYMENT_PENDING"],
+      permissions: ["finance.payment.record"],
+      pages: ["branch_manager.delivery-payments-status"],
+      changesVisibility: false,
+      changesBilling: true,
+      summary: "Whether a customer may pay part of the balance, or must settle it in one go.",
+    },
   },
 
   // -------------------------------------------------------------------
@@ -252,6 +310,17 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
       where:
         "FinanceConfiguration already carries discountApprovalThreshold and maxDiscountPercent; the approval " +
         "step itself (a DiscountRequest raised above the threshold) is Phase 8's owed discount path.",
+      consumers: [],
+    },
+    impact: {
+      capabilities: ["FINANCE_CORE"],
+      roles: ["BRANCH_MANAGER", "TENANT_OWNER", "TECHNICIAN"],
+      workflowStates: [],
+      permissions: ["finance.running_invoice.add_line"],
+      pages: ["branch_manager.work-order-workspace", "owner.pricing-financial-configuration"],
+      changesVisibility: false,
+      changesBilling: true,
+      summary: "Who may reduce a price, and above what size a second person has to agree.",
     },
   },
 
@@ -295,7 +364,23 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     buildPosture: "POLICY_CONTROLLED",
     dependsOnCapabilities: ["INVENTORY"],
     dependsOnPolicies: [],
-    enforcement: { status: "ENFORCED", where: "PartRequestService.approve refuses self-approval or a non-manager approver." },
+    enforcement: {
+      status: "ENFORCED",
+      where: "PartRequestService.approve refuses self-approval or a non-manager approver.",
+      consumers: [
+        "PartRequestService.approve",
+      ],
+    },
+    impact: {
+      capabilities: ["INVENTORY"],
+      roles: ["INVENTORY_MANAGER", "TECHNICIAN", "TENANT_OWNER"],
+      workflowStates: [],
+      permissions: ["inventory.request.approve"],
+      pages: ["inventory_manager.technician-requests", "technician.work-card"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Whether the person who asks for a part may also be the person who releases it.",
+    },
   },
 
   // -------------------------------------------------------------------
@@ -330,6 +415,19 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     enforcement: {
       status: "ENFORCED",
       where: "GateEvaluatorService drops or downgrades parts.received_used_or_returned to advisory.",
+      consumers: [
+        "GateEvaluatorService.suppressedByPolicy",
+      ],
+    },
+    impact: {
+      capabilities: ["INVENTORY", "PART_RETURNS"],
+      roles: ["TECHNICIAN", "INVENTORY_MANAGER"],
+      workflowStates: ["IN_PROGRESS"],
+      permissions: [],
+      pages: ["technician.work-card", "inventory_manager.returns-movements"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Whether an unaccounted part stops a job being finished, or is only flagged for reconciliation.",
     },
   },
 
@@ -364,10 +462,25 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     dependsOnCapabilities: ["TEAM_REVIEW"],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
+      status: "ENFORCED",
       where:
-        "Read once WorkflowRouter picks the FINISH edge by policy rather than by declaration order. The " +
-        "reachability test PHASE_21.md flags for REVIEW_REQUIRED must be written before that lands.",
+        "WORK_ORDER_GRAPH narrows IN_PROGRESS -> READY_FOR_TEAM_REVIEW to REVIEW_REQUIRED; under DIRECT that " +
+        "edge is dark and FINISH must reach a terminal without stopping at review. graph-safety.spec.ts proves " +
+        "the reachability guarantee PHASE_21.md S3.1 requires holds across both options and every shipped profile.",
+      consumers: [
+        "WORK_ORDER_GRAPH (IN_PROGRESS -> READY_FOR_TEAM_REVIEW)",
+        "WorkOrderLifecycleService.routingContext",
+      ],
+    },
+    impact: {
+      capabilities: ["TEAMS", "TEAM_REVIEW", "QC", "FINANCE_CORE"],
+      roles: ["TECHNICIAN", "TEAM_LEADER"],
+      workflowStates: ["IN_PROGRESS", "READY_FOR_TEAM_REVIEW", "READY_FOR_QC", "PAYMENT_PENDING"],
+      permissions: [],
+      pages: ["technician.work-card", "team_leader.home", "team_leader.vehicles-work-orders-view"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Where a finished job goes next -- through the team leader, or straight onward.",
     },
   },
 
@@ -403,6 +516,17 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     enforcement: {
       status: "RECORDED",
       where: "Read once the Work Card's finish path checks recorded time. The shift record it would read already exists.",
+      consumers: [],
+    },
+    impact: {
+      capabilities: ["TEAMS"],
+      roles: ["TECHNICIAN", "TEAM_LEADER"],
+      workflowStates: [],
+      permissions: [],
+      pages: ["technician.work-card", "team_leader.technician-performance-reports"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Whether a technician may finish a task without saying how long it took.",
     },
   },
 
@@ -439,6 +563,17 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
       where:
         "compliantBlocked is computed and stored on every issueDocument call today, visibility-only per " +
         "PHASE_9.md SS6. BLOCK and BLOCK_WITH_OVERRIDE need the refusal path and the override record.",
+      consumers: [],
+    },
+    impact: {
+      capabilities: ["BILLING"],
+      roles: ["TENANT_OWNER"],
+      workflowStates: [],
+      permissions: ["finance.invoice.issue"],
+      pages: ["owner.pricing-financial-configuration"],
+      changesVisibility: false,
+      changesBilling: true,
+      summary: "What happens when this country has no billing adapter -- flag it, or refuse to issue.",
     },
   },
 
@@ -476,6 +611,17 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
       where:
         "Read once attention-ranking and the SLA overrun calculation take a working-week argument instead of " +
         "counting elapsed hours. Both are pure functions today, which is what makes that change small.",
+      consumers: [],
+    },
+    impact: {
+      capabilities: [],
+      roles: ["BRANCH_MANAGER", "TEAM_LEADER", "DATA_ANALYST"],
+      workflowStates: [],
+      permissions: [],
+      pages: ["branch_manager.home", "owner.reports-analytics"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Which days count when the product says a job has been waiting two days.",
     },
   },
 
@@ -511,6 +657,17 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     enforcement: {
       status: "RECORDED",
       where: "Read once an addendum record exists on the work order. Attachment (16.H) is already the store it would use.",
+      consumers: [],
+    },
+    impact: {
+      capabilities: [],
+      roles: ["BRANCH_MANAGER", "TENANT_OWNER"],
+      workflowStates: ["CLOSED"],
+      permissions: [],
+      pages: ["branch_manager.work-order-workspace"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Whether a closed job can still take a note two days later, or is sealed.",
     },
   },
 
@@ -554,10 +711,24 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     dependsOnCapabilities: [],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
+      status: "ENFORCED",
       where:
-        "CustomerDecisionService.recordOnBehalf already attributes to staff unconditionally, which is the " +
-        "invariant half. Refusing the call under PORTAL_ONLY is the half that reads this value.",
+        "CustomerDecisionService.recordOnBehalf reads the resolved value on every call: PORTAL_ONLY refuses the " +
+        "request outright, ALLOWED_WITH_EVIDENCE requires a non-empty evidenceReference before the answer is " +
+        "applied, and attribution to staff -- never the customer -- holds unconditionally under all three.",
+      consumers: [
+        "CustomerDecisionService.recordOnBehalf",
+      ],
+    },
+    impact: {
+      capabilities: ["CUSTOMER_PORTAL"],
+      roles: ["BRANCH_MANAGER"],
+      workflowStates: ["AWAITING_CUSTOMER_APPROVAL", "WAITING_CUSTOMER"],
+      permissions: ["customer_decision.record_on_behalf"],
+      pages: ["branch_manager.approvals-customer-decisions", "customer.decision"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Whether staff may record an answer the customer gave on the phone, or only the customer may answer.",
     },
   },
 
@@ -599,6 +770,17 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
       where:
         "MANDATORY_ALWAYS is the graph's only behaviour today, so choosing it is honoured. The other two need " +
         "the conditional QC route their own defaultReason names as real future work.",
+      consumers: [],
+    },
+    impact: {
+      capabilities: ["QC"],
+      roles: ["TECHNICIAN"],
+      workflowStates: ["READY_FOR_QC", "QC_FAILED"],
+      permissions: [],
+      pages: ["technician.work-card", "branch_manager.work-orders-board"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Whether every finished job waits for a quality check, or only some of them.",
     },
   },
 ];
