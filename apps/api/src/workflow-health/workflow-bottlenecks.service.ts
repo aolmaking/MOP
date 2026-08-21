@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 import { resolveDateRange, type ReportQueryParams } from "../reports/date-range.util";
 import { averageMsByStatus, computeStatusDurations, type StatusChangeEvent } from "../reports/lifecycle-duration.util";
 import { detectStatusLoops } from "./loop-detection.util";

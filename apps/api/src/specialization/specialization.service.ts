@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@mop/database";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 
 export type SpecializationKind = "SERVICE_CARD" | "MEASUREMENT_FORM";
 export type SpecializationFieldType = "TEXT" | "DECIMAL" | "ENUM" | "BOOLEAN";

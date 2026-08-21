@@ -11,15 +11,15 @@ process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { PartRequestService } from "./part-request.service";
-import { PolicyResolutionService } from "../policies/policy-resolution.service";
+import { PolicyResolutionService } from "../control/policies/policy-resolution.service";
 import { StockService } from "./stock.service";
-import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
+import { CapabilityResolutionService } from "../control/capabilities/capability-resolution.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../operations/customer-safe-projection.service";
 import { GateEvaluatorService } from "../operations/gate-evaluator.service";
 import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
 import { AuditService } from "../audit/audit.service";
-import type { PrismaService } from "../database/prisma.service";
+import type { PrismaService } from "../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;

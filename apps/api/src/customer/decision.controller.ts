@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, Post } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
-import { readThrottleSettings } from "../config/environment";
+import { readThrottleSettings } from "../runtime/config/environment";
 import { CustomerDecisionService } from "./decision.service";
 import { RespondDto } from "./decision.dto";
 

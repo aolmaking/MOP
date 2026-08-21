@@ -11,7 +11,7 @@ import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { TERMINAL_STATUSES } from "./lifecycle-duration.util";
 import { ReportsOperationsService } from "./reports-operations.service";
-import type { PrismaService } from "../database/prisma.service";
+import type { PrismaService } from "../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;

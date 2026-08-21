@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { DatabaseModule } from "../database/database.module";
+import { DatabaseModule } from "../runtime/database/database.module";
 import { SpecializationService } from "./specialization.service";
 import { CredentialService } from "./credential.service";
 import { PositionTaxonomyService } from "./position-taxonomy.service";

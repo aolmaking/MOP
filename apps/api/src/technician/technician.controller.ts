@@ -1,8 +1,8 @@
 import { Body, Controller, ForbiddenException, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
-import { SessionGuard } from "../auth/session.guard";
-import { CurrentSession } from "../auth/current-session.decorator";
-import { EffectiveAccessService } from "../access/effective-access.service";
+import { SessionGuard } from "../identity/auth/session.guard";
+import { CurrentSession } from "../identity/auth/current-session.decorator";
+import { EffectiveAccessService } from "../identity/access/effective-access.service";
 import { TechnicianWorkService } from "../operations/technician-work.service";
 import { WorkflowJourneyService } from "../operations/workflow-journey.service";
 import { TechnicianWorkViewService } from "./technician-work-view.service";

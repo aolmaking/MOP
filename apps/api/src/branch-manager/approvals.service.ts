@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import type { Prisma } from "@mop/database";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 
 export interface ApprovalRow {
   readonly requestId: string;

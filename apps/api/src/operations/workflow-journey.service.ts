@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { WORK_ORDER_GRAPH, workflowJourney, type JourneyStage } from "@mop/shared";
-import { PrismaService } from "../database/prisma.service";
-import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
-import { PolicyResolutionService } from "../policies/policy-resolution.service";
+import { PrismaService } from "../runtime/database/prisma.service";
+import { CapabilityResolutionService } from "../control/capabilities/capability-resolution.service";
+import { PolicyResolutionService } from "../control/policies/policy-resolution.service";
 import { JourneyFactsService, type JourneyFacts, type StageFact } from "./journey-facts.service";
 
 /** Who is looking. The same journey reads differently to each of them. */

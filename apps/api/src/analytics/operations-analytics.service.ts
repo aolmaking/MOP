@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { Prisma } from "@mop/database";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 import { resolveDateRange, resolveGranularity, type ReportQueryParams } from "../reports/date-range.util";
 import { averageMsByStatus, computeStatusDurations, type StatusChangeEvent, TERMINAL_STATUSES } from "../reports/lifecycle-duration.util";
 import { isMultiBranch, workOrderScopeFilter, type AnalyticsScope } from "./analytics-scope.util";

@@ -15,7 +15,7 @@ import { PrismaClient } from "@mop/database";
 import { DEFAULT_ROLE_PERMISSIONS } from "@mop/shared";
 import { TeamLeaderService } from "./team-leader.service";
 import { AssetHistoryService } from "../vehicle-history/asset-history.service";
-import type { PrismaService } from "../database/prisma.service";
+import type { PrismaService } from "../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;

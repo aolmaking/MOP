@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { outstanding, sum } from "@mop/shared";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 
 /**
  * One fact about a stage, already reduced to words.

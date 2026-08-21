@@ -16,15 +16,15 @@ import { WorkOrderLifecycleService } from "./work-order-lifecycle.service";
 import { GateEvaluatorService } from "./gate-evaluator.service";
 import { OperationEventsService } from "./operation-events.service";
 import { CustomerSafeProjectionService } from "./customer-safe-projection.service";
-import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
+import { CapabilityResolutionService } from "../control/capabilities/capability-resolution.service";
 import { AuditService } from "../audit/audit.service";
 import { PriceCatalogService } from "../finance/price-catalog.service";
 import { FinanceService } from "../finance/finance.service";
 import { ChargeableItemsService } from "./chargeable-items.service";
 import { BillingService } from "../billing/billing.service";
 import { GenericBillingAdapter } from "../billing/generic-billing-adapter.service";
-import type { PrismaService } from "../database/prisma.service";
-import { PolicyResolutionService } from "../policies/policy-resolution.service";
+import type { PrismaService } from "../runtime/database/prisma.service";
+import { PolicyResolutionService } from "../control/policies/policy-resolution.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;

@@ -13,7 +13,7 @@ process.env.DATABASE_URL ??=
 
 import { AuditActorType, AuditRiskLevel, PrismaClient } from "@mop/database";
 import { AuditService } from "../audit/audit.service";
-import type { PrismaService } from "../database/prisma.service";
+import type { PrismaService } from "../runtime/database/prisma.service";
 import { CustomerSafeProjectionService } from "./customer-safe-projection.service";
 import { OperationEventsService } from "./operation-events.service";
 

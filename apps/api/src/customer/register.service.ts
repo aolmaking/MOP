@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { PrismaService } from "../database/prisma.service";
-import { hashPassword } from "../auth/password.util";
+import { PrismaService } from "../runtime/database/prisma.service";
+import { hashPassword } from "../identity/auth/password.util";
 
 export interface WorkshopContext {
   readonly tenantId: string;

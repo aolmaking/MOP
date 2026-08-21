@@ -15,10 +15,10 @@ import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { WorkflowJourneyService } from "./workflow-journey.service";
 import { JourneyFactsService } from "./journey-facts.service";
-import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
-import { PolicyResolutionService } from "../policies/policy-resolution.service";
+import { CapabilityResolutionService } from "../control/capabilities/capability-resolution.service";
+import { PolicyResolutionService } from "../control/policies/policy-resolution.service";
 import { AuditService } from "../audit/audit.service";
-import type { PrismaService } from "../database/prisma.service";
+import type { PrismaService } from "../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;

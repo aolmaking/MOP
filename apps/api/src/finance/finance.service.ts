@@ -15,14 +15,14 @@ import {
   type Money,
 } from "@mop/shared";
 import { Prisma } from "@mop/database";
-import { PrismaService } from "../database/prisma.service";
-import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
+import { PrismaService } from "../runtime/database/prisma.service";
+import { CapabilityResolutionService } from "../control/capabilities/capability-resolution.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { BillingService } from "../billing/billing.service";
 import { WorkOrderLifecycleService, type LifecycleActor } from "../operations/work-order-lifecycle.service";
 import { ChargeableItemsService } from "../operations/chargeable-items.service";
 import { PriceCatalogService } from "./price-catalog.service";
-import { PolicyResolutionService } from "../policies/policy-resolution.service";
+import { PolicyResolutionService } from "../control/policies/policy-resolution.service";
 
 export interface AddLineInput {
   readonly tenantId: string;

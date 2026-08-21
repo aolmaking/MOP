@@ -1,13 +1,13 @@
 import { BadRequestException, Body, Controller, ForbiddenException, Get, HttpCode, Param, Post, Query, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
-import { SessionGuard } from "../auth/session.guard";
-import { CurrentSession } from "../auth/current-session.decorator";
-import { EffectiveAccessService } from "../access/effective-access.service";
+import { SessionGuard } from "../identity/auth/session.guard";
+import { CurrentSession } from "../identity/auth/current-session.decorator";
+import { EffectiveAccessService } from "../identity/access/effective-access.service";
 import { AttentionQueueService, type AttentionItem } from "./attention-queue.service";
 import { IntakeLookupService, type IntakeLookupResult } from "./intake-lookup.service";
 import { IntakeService, type IntakeResult } from "../operations/intake.service";
 import { IntakeDto } from "./intake.dto";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 import { WorkOrderBoardService, type BoardResult } from "./work-order-board.service";
 import { ApprovalsService, type ApprovalsResult } from "./approvals.service";
 import { DeliveryService, type DeliveryBoard } from "./delivery.service";

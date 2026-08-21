@@ -1,8 +1,8 @@
 import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
-import { SessionGuard } from "../auth/session.guard";
-import { CurrentSession } from "../auth/current-session.decorator";
-import { EffectiveAccessService } from "../access/effective-access.service";
+import { SessionGuard } from "../identity/auth/session.guard";
+import { CurrentSession } from "../identity/auth/current-session.decorator";
+import { EffectiveAccessService } from "../identity/access/effective-access.service";
 import { TeamSetupService } from "../team/team-setup.service";
 import { AssignLeaderDto, CreateTeamDto, MoveTechnicianDto } from "../team/team-setup.dto";
 import { InviteStaffDto, UpdateStaffScopeDto } from "./staff.dto";

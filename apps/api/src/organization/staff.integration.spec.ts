@@ -7,7 +7,7 @@ import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { AuditService } from "../audit/audit.service";
 import { StaffService } from "./staff.service";
-import type { PrismaService } from "../database/prisma.service";
+import type { PrismaService } from "../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;

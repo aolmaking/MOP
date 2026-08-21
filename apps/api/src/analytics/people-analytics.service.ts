@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 import { resolveDateRange, safeDivide, type ReportQueryParams } from "../reports/date-range.util";
 import { workOrderScopeFilter, type AnalyticsScope } from "./analytics-scope.util";
 

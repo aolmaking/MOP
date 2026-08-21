@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import type { PaymentMethod } from "@mop/database";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 import { AuditService } from "../audit/audit.service";
 
 export interface FinanceConfigActor {

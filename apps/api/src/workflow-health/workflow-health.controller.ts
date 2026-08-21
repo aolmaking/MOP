@@ -1,9 +1,9 @@
 import { BadRequestException, Body, Controller, ForbiddenException, Get, HttpCode, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { IsIn, IsString, Length } from "class-validator";
 import type { SessionContext } from "@mop/shared";
-import { SessionGuard } from "../auth/session.guard";
-import { CurrentSession } from "../auth/current-session.decorator";
-import { EffectiveAccessService } from "../access/effective-access.service";
+import { SessionGuard } from "../identity/auth/session.guard";
+import { CurrentSession } from "../identity/auth/current-session.decorator";
+import { EffectiveAccessService } from "../identity/access/effective-access.service";
 import { WorkflowIntegrityService, type IntegrityIssueSeverity, type IntegrityReport } from "./workflow-integrity.service";
 import { WorkflowBottlenecksService, type BottlenecksReport } from "./workflow-bottlenecks.service";
 

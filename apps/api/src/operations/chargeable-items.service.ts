@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import type { ChargeableWorkItem } from "@mop/shared";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 
 /**
  * What Operations says is billable on a job.

@@ -1,7 +1,7 @@
 import { Module } from "@nestjs/common";
-import { DatabaseModule } from "../database/database.module";
-import { AuthModule } from "../auth/auth.module";
-import { AccessModule } from "../access/access.module";
+import { DatabaseModule } from "../runtime/database/database.module";
+import { AuthModule } from "../identity/auth/auth.module";
+import { AccessModule } from "../identity/access/access.module";
 import { ReportingController } from "./reporting.controller";
 import { ReportingService } from "./reporting.service";
 

@@ -6,7 +6,7 @@ import {
   type AttentionKind,
   type AttentionRank,
 } from "@mop/shared";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 
 /**
  * A row in the branch manager's queue. One thing that is stuck, why, and

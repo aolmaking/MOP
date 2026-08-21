@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 import { InventoryReportsService, type InventoryReports } from "../inventory/inventory-reports.service";
 import { resolveDateRange, toDecimalNumber, type ReportQueryParams } from "./date-range.util";
 

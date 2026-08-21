@@ -13,7 +13,7 @@ import { PrismaClient } from "@mop/database";
 import { SpecializationService } from "./specialization.service";
 import { CredentialService } from "./credential.service";
 import { PositionTaxonomyService } from "./position-taxonomy.service";
-import type { PrismaService } from "../database/prisma.service";
+import type { PrismaService } from "../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const specialization = new SpecializationService(prisma as unknown as PrismaService);

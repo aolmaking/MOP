@@ -1,9 +1,9 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
 import type { StaffRole } from "@mop/shared";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 import { AuditService } from "../audit/audit.service";
-import { sha256 } from "../auth/token.util";
+import { sha256 } from "../identity/auth/token.util";
 
 export interface StaffActor {
   readonly accountId: string;

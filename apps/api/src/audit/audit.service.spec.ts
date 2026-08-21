@@ -1,5 +1,5 @@
 import { AuditService } from "./audit.service";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 
 describe("AuditService", () => {
   function createPrismaMock() {

@@ -1,12 +1,12 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PART_REQUEST_GRAPH, canTransition, isCapabilityActive } from "@mop/shared";
 import type { Prisma, PartRequestStatus } from "@mop/database";
-import { PrismaService } from "../database/prisma.service";
-import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
+import { PrismaService } from "../runtime/database/prisma.service";
+import { CapabilityResolutionService } from "../control/capabilities/capability-resolution.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { WorkOrderLifecycleService, type LifecycleActor } from "../operations/work-order-lifecycle.service";
 import { StockService } from "./stock.service";
-import { PolicyResolutionService } from "../policies/policy-resolution.service";
+import { PolicyResolutionService } from "../control/policies/policy-resolution.service";
 
 export interface RequestPartInput {
   readonly tenantId: string;

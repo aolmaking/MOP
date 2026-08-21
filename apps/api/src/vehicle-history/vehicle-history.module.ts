@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { DatabaseModule } from "../database/database.module";
+import { DatabaseModule } from "../runtime/database/database.module";
 import { AssetHistoryService } from "./asset-history.service";
 
 /**

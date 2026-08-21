@@ -1,9 +1,9 @@
 import { Module } from "@nestjs/common";
-import { PoliciesModule } from "../policies/policies.module";
-import { DatabaseModule } from "../database/database.module";
-import { AuthModule } from "../auth/auth.module";
-import { AccessModule } from "../access/access.module";
-import { CapabilitiesModule } from "../capabilities/capabilities.module";
+import { PoliciesModule } from "../control/policies/policies.module";
+import { DatabaseModule } from "../runtime/database/database.module";
+import { AuthModule } from "../identity/auth/auth.module";
+import { AccessModule } from "../identity/access/access.module";
+import { CapabilitiesModule } from "../control/capabilities/capabilities.module";
 import { OperationEventsModule } from "../operations/operation-events.module";
 import { OperationsModule } from "../operations/operations.module";
 import { AuditModule } from "../audit/audit.module";

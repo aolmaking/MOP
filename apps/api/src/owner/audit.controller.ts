@@ -1,8 +1,8 @@
 import { Controller, ForbiddenException, Get, Query, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
-import { SessionGuard } from "../auth/session.guard";
-import { CurrentSession } from "../auth/current-session.decorator";
-import { EffectiveAccessService } from "../access/effective-access.service";
+import { SessionGuard } from "../identity/auth/session.guard";
+import { CurrentSession } from "../identity/auth/current-session.decorator";
+import { EffectiveAccessService } from "../identity/access/effective-access.service";
 import { AuditQueryService, type AuditCategory, type AuditPage } from "./audit-query.service";
 
 /**

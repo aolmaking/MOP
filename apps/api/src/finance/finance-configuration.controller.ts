@@ -1,8 +1,8 @@
 import { Body, Controller, ForbiddenException, Get, Post, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
-import { SessionGuard } from "../auth/session.guard";
-import { CurrentSession } from "../auth/current-session.decorator";
-import { EffectiveAccessService } from "../access/effective-access.service";
+import { SessionGuard } from "../identity/auth/session.guard";
+import { CurrentSession } from "../identity/auth/current-session.decorator";
+import { EffectiveAccessService } from "../identity/access/effective-access.service";
 import { FinanceConfigurationService, type FinanceConfigView } from "./finance-configuration.service";
 import { PriceCatalogService, type PriceCatalogItemView } from "./price-catalog.service";
 import { SetPriceDto, UpdateFinanceConfigDto } from "./finance-configuration.dto";

@@ -20,7 +20,7 @@ import { PrismaClient } from "@mop/database";
 import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
 import { TeamSetupService } from "./team-setup.service";
 import { AuditService } from "../audit/audit.service";
-import type { PrismaService } from "../database/prisma.service";
+import type { PrismaService } from "../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;

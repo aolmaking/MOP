@@ -7,8 +7,8 @@ import {
   type GateEvaluation,
   type GateResult,
 } from "@mop/shared";
-import { PrismaService } from "../database/prisma.service";
-import { PolicyResolutionService } from "../policies/policy-resolution.service";
+import { PrismaService } from "../runtime/database/prisma.service";
+import { PolicyResolutionService } from "../control/policies/policy-resolution.service";
 
 /**
  * Evaluates the Finish and Delivery gates for one work order.

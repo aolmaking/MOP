@@ -8,8 +8,8 @@ process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { RegisterCustomerService } from "./register.service";
-import { verifyPassword } from "../auth/password.util";
-import type { PrismaService } from "../database/prisma.service";
+import { verifyPassword } from "../identity/auth/password.util";
+import type { PrismaService } from "../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;

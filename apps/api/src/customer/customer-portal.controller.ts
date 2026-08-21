@@ -1,7 +1,7 @@
 import { Body, Controller, ForbiddenException, Get, Param, Post, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
-import { SessionGuard } from "../auth/session.guard";
-import { CurrentSession } from "../auth/current-session.decorator";
+import { SessionGuard } from "../identity/auth/session.guard";
+import { CurrentSession } from "../identity/auth/current-session.decorator";
 import { CustomerPortalService } from "./customer-portal.service";
 import { CustomerDecisionService } from "./decision.service";
 import { WorkflowJourneyService } from "../operations/workflow-journey.service";

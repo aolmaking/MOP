@@ -6,7 +6,7 @@ import type {
   InvoiceCandidate,
   InvoiceSnapshot,
 } from "@mop/shared";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 import { GenericBillingAdapter } from "./generic-billing-adapter.service";
 
 export interface IssueDocumentResult {

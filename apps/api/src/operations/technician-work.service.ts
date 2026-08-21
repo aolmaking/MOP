@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { routeForBlocker, type BlockerReasonKey } from "@mop/shared";
 import type { InspectionType, Prisma, SeverityLevel } from "@mop/database";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 import { OperationEventsService } from "./operation-events.service";
 import { WorkOrderLifecycleService, type LifecycleActor } from "./work-order-lifecycle.service";
 

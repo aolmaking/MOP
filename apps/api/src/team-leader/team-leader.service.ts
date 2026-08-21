@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 import { AssetHistoryService } from "../vehicle-history/asset-history.service";
 
 export interface TeamLeaderHome {

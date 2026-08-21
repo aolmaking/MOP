@@ -2,9 +2,9 @@ import { randomBytes } from "node:crypto";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma, SeverityLevel } from "@mop/database";
 import { WORK_ORDER_GRAPH, add } from "@mop/shared";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 import { OperationEventsService } from "../operations/operation-events.service";
-import { PolicyResolutionService } from "../policies/policy-resolution.service";
+import { PolicyResolutionService } from "../control/policies/policy-resolution.service";
 
 /** What the public page is allowed to know. Nothing internal appears here. */
 export interface PublicDecisionItem {

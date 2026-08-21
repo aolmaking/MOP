@@ -23,13 +23,13 @@ import { GateEvaluatorService } from "../operations/gate-evaluator.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../operations/customer-safe-projection.service";
 import { TechnicianWorkService } from "../operations/technician-work.service";
-import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
+import { CapabilityResolutionService } from "../control/capabilities/capability-resolution.service";
 import { AuditService } from "../audit/audit.service";
 import { AttentionQueueService } from "../branch-manager/attention-queue.service";
 import { TechnicianWorkViewService } from "./technician-work-view.service";
 import { AssetHistoryService } from "../vehicle-history/asset-history.service";
-import type { PrismaService } from "../database/prisma.service";
-import { PolicyResolutionService } from "../policies/policy-resolution.service";
+import type { PrismaService } from "../runtime/database/prisma.service";
+import { PolicyResolutionService } from "../control/policies/policy-resolution.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;

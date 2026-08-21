@@ -1,8 +1,8 @@
 import { Module } from "@nestjs/common";
-import { DatabaseModule } from "../database/database.module";
+import { DatabaseModule } from "../runtime/database/database.module";
 import { OperationEventsModule } from "../operations/operation-events.module";
-import { AuthModule } from "../auth/auth.module";
-import { PoliciesModule } from "../policies/policies.module";
+import { AuthModule } from "../identity/auth/auth.module";
+import { PoliciesModule } from "../control/policies/policies.module";
 import { OperationsModule } from "../operations/operations.module";
 import { CustomerDecisionController } from "./decision.controller";
 import { CustomerDecisionService } from "./decision.service";

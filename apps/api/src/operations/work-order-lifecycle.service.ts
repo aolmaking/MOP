@@ -7,8 +7,8 @@ import {
   type WorkflowIntent,
 } from "@mop/shared";
 import type { Prisma, WorkOrderStatus } from "@mop/database";
-import { PrismaService } from "../database/prisma.service";
-import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
+import { PrismaService } from "../runtime/database/prisma.service";
+import { CapabilityResolutionService } from "../control/capabilities/capability-resolution.service";
 import { OperationEventsService } from "./operation-events.service";
 import { GateEvaluatorService } from "./gate-evaluator.service";
 

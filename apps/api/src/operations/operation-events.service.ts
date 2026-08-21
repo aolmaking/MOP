@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { AuditActorType, AuditRiskLevel, Prisma } from "@mop/database";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { CustomerSafeProjectionService } from "./customer-safe-projection.service";
 

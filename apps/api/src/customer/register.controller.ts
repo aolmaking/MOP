@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Post, Query } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
-import { readThrottleSettings } from "../config/environment";
+import { readThrottleSettings } from "../runtime/config/environment";
 import { RegisterCustomerService } from "./register.service";
 import { RegisterCustomerDto } from "./register.dto";
 

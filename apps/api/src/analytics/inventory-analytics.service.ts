@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 import { InventoryReportsService, type InventoryReports } from "../inventory/inventory-reports.service";
 import { toDecimalNumber } from "../reports/date-range.util";
 import type { AnalyticsScope } from "./analytics-scope.util";

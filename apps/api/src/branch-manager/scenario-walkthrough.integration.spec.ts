@@ -23,14 +23,14 @@ import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.se
 import { GateEvaluatorService } from "../operations/gate-evaluator.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../operations/customer-safe-projection.service";
-import { CapabilityResolutionService } from "../capabilities/capability-resolution.service";
+import { CapabilityResolutionService } from "../control/capabilities/capability-resolution.service";
 import { AuditService } from "../audit/audit.service";
 import { AttentionQueueService } from "./attention-queue.service";
 import { WorkOrderBoardService } from "./work-order-board.service";
 import { ApprovalsService } from "./approvals.service";
 import { DeliveryService } from "./delivery.service";
-import type { PrismaService } from "../database/prisma.service";
-import { PolicyResolutionService } from "../policies/policy-resolution.service";
+import type { PrismaService } from "../runtime/database/prisma.service";
+import { PolicyResolutionService } from "../control/policies/policy-resolution.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;

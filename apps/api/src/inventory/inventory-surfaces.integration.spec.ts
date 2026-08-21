@@ -21,7 +21,7 @@ import { InventoryHomeService } from "./inventory-home.service";
 import { CatalogService } from "./catalog.service";
 import { InventoryReportsService } from "./inventory-reports.service";
 import { StockService } from "./stock.service";
-import type { PrismaService } from "../database/prisma.service";
+import type { PrismaService } from "../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;

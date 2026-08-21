@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { WORK_ORDER_GRAPH } from "@mop/shared";
 import type { WorkOrderStatus } from "@mop/database";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 import { AuditService } from "../audit/audit.service";
 
 export interface OrgActor {

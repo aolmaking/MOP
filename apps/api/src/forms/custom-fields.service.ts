@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { CategoryCode } from "@mop/database";
-import { PrismaService } from "../database/prisma.service";
+import { PrismaService } from "../runtime/database/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { CUSTOM_FIELD_TYPES, FORM_REGISTRY, slugifyFieldKey, type CustomFieldType, type FormKey } from "./form-registry";
 
