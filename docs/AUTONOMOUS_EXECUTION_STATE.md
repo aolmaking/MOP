@@ -8,7 +8,7 @@ Implementation, after documentation and source audit.
 
 ## Current Subsystem
 
-Auth support pages: Access Denied and Password Reset.
+Data Analyst saved views and exports.
 
 ## Completed Tasks
 
@@ -29,17 +29,19 @@ Auth support pages: Access Denied and Password Reset.
 - Work-order dossier now resolves capability deviations with `CapabilityResolutionService.resolveAsOf()` at the work order's opened-at timestamp.
 - Dossier drawer renders the workshop shape that was in force when the job opened.
 - Backend and frontend focused tests cover the historical dossier capability path.
+- Access Denied is a real routed public support page and unknown post-login landing pages now route to it.
+- Password Reset has dedicated token fields, migration, non-enumerating request endpoint, token validation/completion endpoints, and public reset UI.
+- Backend and frontend focused tests cover the password-reset support path.
 
 ## Current Task
 
-Implement the documented missing Access Denied and Password Reset support surfaces without changing authentication policy semantics.
+Inspect Data Analyst saved-view/export requirements and existing analytics/reporting surfaces, then implement only the documented backed scope.
 
 ## Remaining Tasks
 
-- Inspect current auth routes, guards, login/invite/setup flows, and router fallback behavior.
-- Add the smallest backend/API support needed for password reset if not already present.
-- Add web routes/components for Access Denied and Password Reset using existing design language.
-- Add focused backend/frontend tests.
+- Confirm whether saved views/exports have a documented entitlement model or must remain deferred.
+- If backed, add backend persistence/API before frontend controls.
+- Add focused tests for backend behavior and analyst UI.
 - Run focused verification, then recursive typecheck.
 - Commit and push the completed unit once Git write permissions are available.
 
@@ -56,7 +58,12 @@ Implement the documented missing Access Denied and Password Reset support surfac
 - `corepack pnpm --filter @mop/web test -- --include src/app/experiences/platform/workshops/workshop-drawer.spec.ts --watch=false --isolate=false`
 - `corepack pnpm --filter @mop/api test -- work-order-dossier.service.spec.ts`
 - `corepack pnpm --filter @mop/web test -- --include src/app/domain/dossier/dossier-drawer.spec.ts --watch=false --isolate=false`
+- `corepack pnpm --filter @mop/api test -- password-reset.service.spec.ts`
+- `corepack pnpm --filter @mop/web test -- --include src/app/identity/landing.spec.ts --watch=false --isolate=false`
+- `corepack pnpm --filter @mop/web test -- --include src/app/experiences/public/access-denied/access-denied-page.spec.ts --watch=false --isolate=false`
+- `corepack pnpm --filter @mop/web test -- --include src/app/experiences/public/password-reset/password-reset-page.spec.ts --watch=false --isolate=false`
 - `corepack pnpm -r typecheck`
+- `corepack pnpm --filter @mop/database validate`
 
 ## Known Blockers
 
@@ -71,4 +78,4 @@ Implement the documented missing Access Denied and Password Reset support surfac
 
 ## Exact Next Action
 
-Inspect current auth support routes and password-reset backing.
+Commit and push the verified auth support work, then inspect Data Analyst saved-view/export backing and entitlement scope.

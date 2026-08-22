@@ -6,9 +6,8 @@ import type { EffectiveRole } from '@mop/shared';
  *
  * The server already decides this -- AuthService fills
  * SessionContext.landingPage per role -- so this maps that answer onto a
- * route rather than re-deciding it. Roles whose home is not built yet are
- * absent on purpose and fall through to '/', which says which phase
- * builds theirs instead of pretending to be it.
+ * route rather than re-deciding it. An unknown landing page is an access
+ * boundary, not a guessable role fallback.
  */
 const ROUTE_BY_LANDING_PAGE: Record<string, string> = {
   'platform-workshops': '/platform/workshops',
@@ -23,5 +22,5 @@ const ROUTE_BY_LANDING_PAGE: Record<string, string> = {
 
 export function landingRouteFor(session: { role: EffectiveRole; landingPage: string } | null): string {
   if (!session) return '/';
-  return ROUTE_BY_LANDING_PAGE[session.landingPage] ?? '/';
+  return ROUTE_BY_LANDING_PAGE[session.landingPage] ?? '/access-denied';
 }

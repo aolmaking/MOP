@@ -5,6 +5,14 @@ import { TEAM_API_BASE_PATH, TeamApi } from './experiences/branch-manager/team/t
 export const routes: Routes = [
   { path: 'login', loadComponent: () => import('./experiences/public/login/login-page').then((m) => m.LoginPage) },
   {
+    path: 'password-reset',
+    loadComponent: () => import('./experiences/public/password-reset/password-reset-page').then((m) => m.PasswordResetPage),
+  },
+  {
+    path: 'access-denied',
+    loadComponent: () => import('./experiences/public/access-denied/access-denied-page').then((m) => m.AccessDeniedPage),
+  },
+  {
     // Public, and deliberately outside every shell: the person arriving
     // here has no account yet, which is the whole point. The URL shape
     // matches what PlatformService already puts in the invite link.

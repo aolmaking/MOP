@@ -34,3 +34,25 @@ export class AcceptInviteDto extends InviteTokenDto {
   @Length(12, 200)
   password!: string;
 }
+
+export class PasswordResetRequestDto {
+  /**
+   * Email OR phone, same as LoginDto. The endpoint deliberately returns
+   * one response for found and not-found so it cannot enumerate accounts.
+   */
+  @IsString()
+  @Length(3, 254)
+  identifier!: string;
+}
+
+export class PasswordResetTokenDto {
+  @IsString()
+  @Length(16, 256)
+  token!: string;
+}
+
+export class CompletePasswordResetDto extends PasswordResetTokenDto {
+  @IsString()
+  @Length(12, 200)
+  password!: string;
+}

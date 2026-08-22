@@ -482,6 +482,11 @@ model Account {
   // same pattern session secrets already use (see auth/token.util.ts).
   inviteTokenHash      String?
   inviteTokenExpiresAt DateTime?
+  // Password reset is distinct from invite activation: an invited account
+  // is not active yet, while a reset is recovery for an existing account.
+  // The raw reset token is never stored, only this hash.
+  passwordResetTokenHash      String?
+  passwordResetTokenExpiresAt DateTime?
 
   tenant   Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   staff    StaffUser?
@@ -496,6 +501,7 @@ model Account {
 
   @@unique([tenantId, email])
   @@index([accountType, tenantId])
+  @@index([passwordResetTokenHash])
   @@map("accounts")
 }
 
