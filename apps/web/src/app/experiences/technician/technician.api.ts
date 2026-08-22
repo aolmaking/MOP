@@ -49,6 +49,7 @@ export interface WorkCard {
   readonly status: string;
   readonly complaint: string | null;
   readonly inspectionDeclined: boolean;
+  readonly timeTracking: 'OFF' | 'OPTIONAL' | 'REQUIRED';
   readonly tasks: readonly TechnicianTask[];
   readonly parts: readonly WorkCardPart[];
   readonly finish: FinishCheck;
@@ -120,8 +121,10 @@ export class TechnicianApi {
     return this.http.post(`/api/v1/technician/tasks/${taskId}/start`, {});
   }
 
-  completeTask(taskId: string): Observable<unknown> {
-    return this.http.post(`/api/v1/technician/tasks/${taskId}/complete`, {});
+  completeTask(taskId: string, minutesSpent?: number): Observable<unknown> {
+    return this.http.post(`/api/v1/technician/tasks/${taskId}/complete`, {
+      ...(minutesSpent === undefined ? {} : { minutesSpent }),
+    });
   }
 
   reportBlocker(taskId: string, reason: string, note?: string): Observable<unknown> {

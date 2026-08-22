@@ -6,6 +6,7 @@ import { OperationsModule } from "../../systems/operations/operations.module";
 import { VehicleHistoryModule } from "../../systems/operations/vehicle-history/vehicle-history.module";
 import { CustomerModule } from "../../systems/customer/customer.module";
 import { InventoryModule } from "../../systems/inventory/inventory.module";
+import { PoliciesModule } from "../../control/policies/policies.module";
 import { TechnicianController } from "./technician.controller";
 import { TechnicianWorkViewService } from "./technician-work-view.service";
 
@@ -18,6 +19,7 @@ import { TechnicianWorkViewService } from "./technician-work-view.service";
     VehicleHistoryModule,
     CustomerModule,
     InventoryModule,
+    PoliciesModule,
   ],
   controllers: [TechnicianController],
   providers: [TechnicianWorkViewService],

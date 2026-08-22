@@ -124,6 +124,7 @@ export interface WorkshopRow {
   readonly activeWorkOrderCount: number;
   readonly lastActivityAt: string | null;
   readonly builderStatus: BuilderStatus;
+  readonly compliantBlocked: boolean;
   readonly health: HealthStatus;
 }
 
@@ -187,6 +188,7 @@ export interface WorkshopDetails {
     renewalDate: string | null;
     paidThroughDate: string | null;
   };
+  readonly compliantBlocked: boolean;
   readonly health: { status: HealthStatus; warnings: readonly { code: string; message: string }[] };
 }
 

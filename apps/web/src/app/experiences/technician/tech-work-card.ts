@@ -79,6 +79,7 @@ export class TechWorkCard {
   protected readonly faultText = signal('');
   protected readonly inspectionNote = signal('');
   protected readonly faultSeverity = signal('MEDIUM');
+  protected readonly taskMinutes = signal<Record<string, string>>({});
 
   /**
    * "Ask the customer" -- folded into the same panel as logging the
@@ -194,7 +195,32 @@ export class TechWorkCard {
   }
 
   protected complete(task: TechnicianTask): void {
-    this.run(`done-${task.id}`, this.api.completeTask(task.id));
+    const minutes = this.minutesForCompletion(task);
+    if (minutes === false) {
+      this.actionError.set('Enter whole minutes before marking this task done.');
+      return;
+    }
+    this.run(`done-${task.id}`, this.api.completeTask(task.id, minutes));
+  }
+
+  protected setTaskMinutes(taskId: string, value: string): void {
+    this.taskMinutes.update((current) => ({ ...current, [taskId]: value }));
+  }
+
+  protected canComplete(task: TechnicianTask): boolean {
+    return this.minutesForCompletion(task) !== false;
+  }
+
+  private minutesForCompletion(task: TechnicianTask): number | undefined | false {
+    const rule = this.card()?.timeTracking ?? 'OPTIONAL';
+    if (rule === 'OFF') return undefined;
+
+    const raw = this.taskMinutes()[task.id]?.trim() ?? '';
+    if (raw === '') return rule === 'REQUIRED' ? false : undefined;
+
+    const minutes = Number(raw);
+    if (!Number.isInteger(minutes) || minutes < 0) return false;
+    return minutes;
   }
 
   /**

@@ -42,7 +42,7 @@ const lifecycle = new WorkOrderLifecycleService(
   new GateEvaluatorService(asService, policiesForTest),
   policiesForTest,
 );
-const techView = new TechnicianWorkViewService(asService, lifecycle, history);
+const techView = new TechnicianWorkViewService(asService, lifecycle, history, policiesForTest);
 
 const SUFFIX = `avh-${Date.now()}`;
 let tenantId: string;

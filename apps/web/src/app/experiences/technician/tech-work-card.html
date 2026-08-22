@@ -132,10 +132,23 @@
                   {{ busy() === 'start-' + task.id ? '…' : 'Start' }}
                 </button>
               } @else if (task.status === 'IN_PROGRESS') {
+                @if (c.timeTracking !== 'OFF') {
+                  <label class="time-entry">
+                    <span>Minutes</span>
+                    <input
+                      type="number"
+                      inputmode="numeric"
+                      min="0"
+                      step="1"
+                      [value]="taskMinutes()[task.id] ?? ''"
+                      (input)="setTaskMinutes(task.id, $any($event.target).value)"
+                    />
+                  </label>
+                }
                 <button
                   class="tap tap--primary"
                   type="button"
-                  [disabled]="busy() !== null"
+                  [disabled]="busy() !== null || !canComplete(task)"
                   (click)="complete(task)"
                 >
                   {{ busy() === 'done-' + task.id ? '…' : 'Done' }}

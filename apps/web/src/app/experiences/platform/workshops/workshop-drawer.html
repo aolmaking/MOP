@@ -9,6 +9,16 @@
   </header>
 
   <div class="drawer-body">
+    @if (details().compliantBlocked) {
+      <section class="panel panel-warn">
+        <h3 class="panel-title">Compliance</h3>
+        <p class="warning">
+          Billing documents for this country are not covered by a local adapter. Confirm external billing or local legal
+          handling before treating issued invoices as compliant.
+        </p>
+      </section>
+    }
+
     @if (details().health.warnings.length > 0) {
       <!-- The itemized reasons, never just the badge. A colour with
            no explanation is something to guess at. -->

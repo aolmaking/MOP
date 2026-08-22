@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { gateDefinition, type GateEvaluation, type GateKey } from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
+import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 import { WorkOrderLifecycleService } from "../../systems/operations/work-order-lifecycle.service";
 import { AssetHistoryService } from "../../systems/operations/vehicle-history/asset-history.service";
 
@@ -62,6 +63,7 @@ export interface WorkCard {
   readonly status: string;
   readonly complaint: string | null;
   readonly inspectionDeclined: boolean;
+  readonly timeTracking: "OFF" | "OPTIONAL" | "REQUIRED";
   readonly tasks: readonly TechnicianTask[];
   readonly parts: readonly WorkCardPart[];
   readonly finish: FinishCheck;
@@ -118,6 +120,7 @@ export class TechnicianWorkViewService {
     private readonly prisma: PrismaService,
     private readonly lifecycle: WorkOrderLifecycleService,
     private readonly assetHistory: AssetHistoryService,
+    private readonly policies: PolicyResolutionService,
   ) {}
 
   async myWork(staffUserId: string, tenantId: string): Promise<readonly TechnicianJob[]> {
@@ -225,7 +228,10 @@ export class TechnicianWorkViewService {
       throw new NotFoundException({ code: "work_order_not_found", message: "That job is not assigned to you." });
     }
 
-    const complaints = await this.assetHistory.complaintText(tenantId, [workOrder.id]);
+    const [complaints, timeTracking] = await Promise.all([
+      this.assetHistory.complaintText(tenantId, [workOrder.id]),
+      this.policies.resolveValue(tenantId, "TIME_TRACKING") as Promise<"OFF" | "OPTIONAL" | "REQUIRED">,
+    ]);
 
     // Every part request on the job, not only this technician's own:
     // a second technician's request is still what is holding the car,
@@ -250,6 +256,7 @@ export class TechnicianWorkViewService {
       status: workOrder.status,
       complaint: complaints.get(workOrder.id) ?? null,
       inspectionDeclined: workOrder.inspectionDeclined,
+      timeTracking,
       tasks: workOrder.tasks.map((task) => ({
         id: task.id,
         title: task.title,

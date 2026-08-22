@@ -134,7 +134,7 @@
   outline-offset: 2px;
 }
 
-/* Twelve columns of platform data scroll inside the table, never the
+/* Thirteen columns of platform data scroll inside the table, never the
    page -- a sideways-scrolling page loses the rail and the header. */
 .table-scroll {
   overflow-x: auto;
@@ -287,6 +287,11 @@
 .badge[data-health='AT_RISK'] {
   background: var(--warning-bg);
   color: var(--warning);
+}
+
+.badge[data-compliance='BLOCKED'] {
+  background: var(--danger-bg);
+  color: var(--danger-strong);
 }
 
 .badge[data-builder='DRAFT_PENDING'] {
