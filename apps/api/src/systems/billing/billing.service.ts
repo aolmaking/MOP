@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, Optional } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { Prisma } from "@mop/database";
 import type {
   BillingCountryAdapter,
@@ -92,6 +92,7 @@ export class BillingService {
     // transaction timeout when this was resolved in here instead.
     countryBillingRule: string = "WARN_ONLY",
   ): Promise<IssueDocumentResult | null> {
+    this.assertSameTenant(candidate, snapshot);
     const client = tx ?? this.prisma;
 
     const configuration = await client.financeConfiguration.findUnique({
@@ -173,14 +174,15 @@ export class BillingService {
   async issueCreditNote(input: IssueCreditNoteInput, tx?: Prisma.TransactionClient): Promise<{ creditNoteId: string; creditNoteNumber: string }> {
     const client = tx ?? this.prisma;
 
-    const document = await client.billingDocument.findUnique({
-      where: { invoiceId: input.invoiceId },
+    const document = await client.billingDocument.findFirst({
+      where: { invoiceId: input.invoiceId, tenantId: input.tenantId },
     });
 
-    const invoice = await client.invoice.findUniqueOrThrow({
-      where: { id: input.invoiceId },
+    const invoice = await client.invoice.findFirst({
+      where: { id: input.invoiceId, tenantId: input.tenantId },
       include: { lines: true },
     });
+    if (!invoice) throw new NotFoundException({ code: "invoice_not_found", message: "Invoice not found." });
 
     const snapshot: InvoiceSnapshot = document
       ? (document.snapshot as unknown as InvoiceSnapshot)
@@ -245,6 +247,14 @@ export class BillingService {
     });
 
     return compliantBlocked;
+  }
+
+  private assertSameTenant(candidate: InvoiceCandidate, snapshot: InvoiceSnapshot): void {
+    if (candidate.tenantId === snapshot.tenantId) return;
+    throw new BadRequestException({
+      code: "billing_contract_tenant_mismatch",
+      message: "Billing document input must describe one tenant.",
+    });
   }
 
   /** Same atomic-upsert pattern as FinanceService.nextInvoiceNumber(). */
