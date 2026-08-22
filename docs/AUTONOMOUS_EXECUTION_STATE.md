@@ -47,7 +47,7 @@ Inspect Data Analyst saved-view/export requirements and existing analytics/repor
 
 ## Last Verified Commit
 
-`c14e3f69186efe7eb4db29104cfb0dd0623b63e4`
+`a7ecc90236af8095d31f9098ec0966c21bd3eb95`
 
 ## Last Successful Validation
 
@@ -78,4 +78,4 @@ Inspect Data Analyst saved-view/export requirements and existing analytics/repor
 
 ## Exact Next Action
 
-Commit and push the verified auth support work, then inspect Data Analyst saved-view/export backing and entitlement scope.
+Inspect Data Analyst saved-view/export backing and entitlement scope.
