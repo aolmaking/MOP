@@ -8,7 +8,7 @@
 > ```
 > **Rule:** a phase may not be marked complete while any page it owns is ⬜.
 >
-> **Canonical status document.** As of 2026-08-21, this is the *only* place the project's page-completion count is tracked. `PROJECT_STATE.md` and `docs/PHASE_MAP.md` cite this file's totals rather than maintaining their own — the three trackers previously disagreed with each other (23/53, 34/53, 48/53) because each kept its own count. This file's numbers below were re-verified line-by-line against the live route files (`apps/web/src/app/app.routes.ts`) and controller/service source (`apps/api/src/**`) directly, not against any other document's claim, including two of this project's own prior audits that were themselves found to be stale (see `docs/archive/audits/`).
+> **Canonical status document.** As of 2026-08-22, this is the *only* place the project's page-completion count is tracked. `PROJECT_STATE.md` and `docs/PHASE_MAP.md` cite this file's totals rather than maintaining their own — the three trackers previously disagreed with each other (23/53, 34/53, 48/53) because each kept its own count. This file's numbers below were re-verified line-by-line against the live route files (`apps/web/src/app/app.routes.ts`) and controller/service source (`apps/api/src/**`) directly, not against any other document's claim, including two of this project's own prior audits that were themselves found to be stale (see `docs/archive/audits/`).
 
 ---
 
@@ -17,14 +17,14 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| ✅ Complete (real page, real backend, no named gap) | **46** |
-| 🟡 Partial (real page and backend, but a named piece of the spec is missing) | **7** |
+| ✅ Complete (real page, real backend, no named gap) | **47** |
+| 🟡 Partial (real page and backend, but a named piece of the spec is missing) | **6** |
 | ⬜ Not built at all (no route, no component, no controller) | **0** |
 | **Complete + Partial (has a real, working page today)** | **53** |
 
 Legend: ✅ complete · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built at all
 
-**No page in the 53-page spec is now zero-implementation.** Access Denied and Password Reset are built as real shared public pages, and Data Analyst Saved Views now has its persistence/list/manage surface. Export remains a named 🟡 gap because file generation is not built yet; the plan-level `allowedExports` entitlement and `analytics.export` gate now exist.
+**No page in the 53-page spec is now zero-implementation.** Access Denied and Password Reset are built as real shared public pages, and Data Analyst Saved Views/Exports now has persistence, management, entitlement-gated export actions, and a CSV file endpoint that preserves the current report filters.
 
 ---
 
@@ -94,7 +94,7 @@ Every Owner page has at least a real, working surface — none are ⬜. Home, Or
 | Vehicles / Work Orders View | ✅ | `/team-leader/work-orders` | No price/cost/payment field anywhere in the response shape |
 | Technician Performance Reports | ✅ | `/team-leader/reports` | Managed-scope only; company-wide version is Phase 12 |
 
-## Data Analyst — 6 ✅, 1 🟡 (7 pages)
+## Data Analyst — 7 ✅ (7 pages)
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
@@ -104,7 +104,7 @@ Every Owner page has at least a real, working surface — none are ⬜. Home, Or
 | Inventory Analytics | ✅ | `/analyst/inventory` | Reuses `InventoryReportsService` (Inventory Manager's own page) rather than a second velocity implementation; branch scope resolved to warehouse scope via `BranchWarehouseAccess`; inventory value gated on `inventory.cost.view`, same as the Inventory Manager's own catalog |
 | Customer Decision Analytics | ✅ | `/analyst/decisions` | Approval/rejection rates by importance, response time, overdue rate, critical-rejection follow-up outcome, link-open rate. No customer-identifying field anywhere — enforced by its own test |
 | Feature Adoption Analytics | ✅ | `/analyst/feature-adoption` | Real usage counts for Quick/Full Inspection and Customer Decision Request volume. Custom Fields and Message Templates explicitly reported as **not trackable yet** (no consuming form captures field values; no message-sending code exists anywhere in the product) rather than a fabricated count |
-| Saved Views / Exports | 🟡 | `/analyst/saved-views` | Saved Views persistence is built: per-analyst named configurations, source page, created date, Open/Rename/Delete, plus Save This View actions on the analytical pages. Export is still deferred because no export file endpoint exists yet; `analytics.export` is now gated by Super Admin's Allowed Exports plan entitlement (`Plan.allowedExports`) |
+| Saved Views / Exports | ✅ | `/analyst/saved-views` | Saved Views persistence is built: per-analyst named configurations, source page, created date, Open/Rename/Delete, plus Save This View actions on the analytical pages. Export actions are available from each analytical page when `analytics.export` is allowed; the backend generates CSV for the current page/filter configuration and enforces the plan's Allowed Exports category list (`Plan.allowedExports`) before writing bytes |
 
 ## Customer Portal — 6 / 6 ✅
 

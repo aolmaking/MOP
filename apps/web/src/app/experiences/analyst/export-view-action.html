@@ -1,0 +1,5 @@
+@if (allowed()) {
+  <button appButton variant="secondary" size="small" type="button" [disabled]="exporting()" (click)="exportCsv()">
+    {{ exporting() ? 'Exporting...' : 'Export CSV' }}
+  </button>
+}

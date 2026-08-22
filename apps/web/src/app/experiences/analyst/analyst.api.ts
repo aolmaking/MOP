@@ -130,6 +130,18 @@ export class AnalystApi {
     return this.http.post<AnalystSavedView>('/api/v1/analytics/saved-views', input);
   }
 
+  exportCsv(sourcePage: AnalystSavedViewSourcePage, configuration: Record<string, unknown>): Observable<Blob> {
+    const params: Record<string, string> = { sourcePage };
+    const range = configuration['range'];
+    if (isRange(range)) {
+      params['from'] = range.from;
+      params['to'] = range.to;
+    }
+    const groupBy = configuration['groupBy'];
+    if (typeof groupBy === 'string') params['groupBy'] = groupBy;
+    return this.http.get('/api/v1/analytics/export', { params, responseType: 'blob' });
+  }
+
   renameView(id: string, name: string): Observable<AnalystSavedView> {
     return this.http.patch<AnalystSavedView>(`/api/v1/analytics/saved-views/${id}`, { name });
   }
@@ -137,4 +149,13 @@ export class AnalystApi {
   deleteView(id: string): Observable<{ ok: true }> {
     return this.http.delete<{ ok: true }>(`/api/v1/analytics/saved-views/${id}`);
   }
+}
+
+function isRange(value: unknown): value is { from: string; to: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { from?: unknown }).from === 'string' &&
+    typeof (value as { to?: unknown }).to === 'string'
+  );
 }

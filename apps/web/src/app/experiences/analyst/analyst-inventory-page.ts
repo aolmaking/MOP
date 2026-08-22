@@ -6,13 +6,14 @@ import { BarList, type BarListItem } from '../../ui/charts/bar-list/bar-list';
 import { KpiCard } from '../../ui/charts/kpi-card/kpi-card';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import { AnalystApi, type InventoryAnalyticsReport } from './analyst.api';
+import { ExportViewAction } from './export-view-action';
 import { SavedViewAction } from './saved-view-action';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
 @Component({
   selector: 'app-analyst-inventory-page',
-  imports: [ErrorBanner, ButtonDirective, BarList, KpiCard, SavedViewAction],
+  imports: [ErrorBanner, ButtonDirective, BarList, KpiCard, SavedViewAction, ExportViewAction],
   templateUrl: './analyst-inventory-page.html',
   styleUrl: './analyst-inventory-page.css',
 })

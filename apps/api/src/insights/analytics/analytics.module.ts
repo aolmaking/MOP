@@ -11,6 +11,7 @@ import { InventoryAnalyticsService } from "./inventory-analytics.service";
 import { DecisionsAnalyticsService } from "./decisions-analytics.service";
 import { FeatureAdoptionAnalyticsService } from "./feature-adoption-analytics.service";
 import { AnalystSavedViewsService } from "./saved-views.service";
+import { AnalyticsExportService } from "./analytics-export.service";
 
 @Module({
   imports: [DatabaseModule, AuthModule, AccessModule, InventoryModule],
@@ -23,6 +24,7 @@ import { AnalystSavedViewsService } from "./saved-views.service";
     DecisionsAnalyticsService,
     FeatureAdoptionAnalyticsService,
     AnalystSavedViewsService,
+    AnalyticsExportService,
   ],
 })
 export class AnalyticsModule {}

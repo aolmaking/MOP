@@ -6,6 +6,7 @@ import { BarList, type BarListItem } from '../../ui/charts/bar-list/bar-list';
 import { KpiCard } from '../../ui/charts/kpi-card/kpi-card';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import { AnalystApi, type DecisionsAnalyticsReport } from './analyst.api';
+import { ExportViewAction } from './export-view-action';
 import { SavedViewAction } from './saved-view-action';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
@@ -13,7 +14,7 @@ type State = 'loading' | 'ready' | 'forbidden' | 'error';
 /** No customer name, phone, or identifying detail anywhere -- every row is a decision record, never linked back to who's behind it. */
 @Component({
   selector: 'app-analyst-decisions-page',
-  imports: [ErrorBanner, ButtonDirective, BarList, KpiCard, SavedViewAction],
+  imports: [ErrorBanner, ButtonDirective, BarList, KpiCard, SavedViewAction, ExportViewAction],
   templateUrl: './analyst-decisions-page.html',
   styleUrl: './analyst-decisions-page.css',
 })

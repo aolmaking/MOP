@@ -5,6 +5,7 @@ import { ButtonDirective } from '../../ui/button/button.directive';
 import { BarList, type BarListItem } from '../../ui/charts/bar-list/bar-list';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import { AnalystApi, type PeopleAnalyticsReport } from './analyst.api';
+import { ExportViewAction } from './export-view-action';
 import { SavedViewAction } from './saved-view-action';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
@@ -12,7 +13,7 @@ type State = 'loading' | 'ready' | 'forbidden' | 'error';
 /** Never shows payment or invoice figures tied to a technician -- the same no-finance discipline Team Leader observes. */
 @Component({
   selector: 'app-analyst-people-page',
-  imports: [ErrorBanner, ButtonDirective, BarList, SavedViewAction],
+  imports: [ErrorBanner, ButtonDirective, BarList, SavedViewAction, ExportViewAction],
   templateUrl: './analyst-people-page.html',
   styleUrl: './analyst-people-page.css',
 })

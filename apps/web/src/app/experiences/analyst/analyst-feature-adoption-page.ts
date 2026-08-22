@@ -4,13 +4,14 @@ import { ErrorBanner } from '../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../ui/button/button.directive';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import { AnalystApi, type FeatureAdoptionReport } from './analyst.api';
+import { ExportViewAction } from './export-view-action';
 import { SavedViewAction } from './saved-view-action';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
 @Component({
   selector: 'app-analyst-feature-adoption-page',
-  imports: [ErrorBanner, ButtonDirective, SavedViewAction],
+  imports: [ErrorBanner, ButtonDirective, SavedViewAction, ExportViewAction],
   templateUrl: './analyst-feature-adoption-page.html',
   styleUrl: './analyst-feature-adoption-page.css',
 })

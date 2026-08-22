@@ -1,5 +1,19 @@
-import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
+  UseGuards,
+} from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
+import type { Response } from "express";
 import { SessionGuard } from "../../identity/auth/session.guard";
 import { CurrentSession } from "../../identity/auth/current-session.decorator";
 import { EffectiveAccessService } from "../../identity/access/effective-access.service";
@@ -12,6 +26,8 @@ import { DecisionsAnalyticsService } from "./decisions-analytics.service";
 import { FeatureAdoptionAnalyticsService } from "./feature-adoption-analytics.service";
 import { AnalystSavedViewsService } from "./saved-views.service";
 import { CreateAnalystSavedViewDto, RenameAnalystSavedViewDto } from "./saved-views.dto";
+import { AnalyticsExportService } from "./analytics-export.service";
+import { ANALYST_SAVED_VIEW_SOURCE_PAGES } from "./saved-views.constants";
 
 /**
  * Data Analyst (docs/detailed-specs/data-analyst.md) -- analytical views
@@ -31,6 +47,7 @@ export class AnalyticsController {
     private readonly decisions: DecisionsAnalyticsService,
     private readonly featureAdoption: FeatureAdoptionAnalyticsService,
     private readonly savedViews: AnalystSavedViewsService,
+    private readonly exports: AnalyticsExportService,
     private readonly access: EffectiveAccessService,
   ) {}
 
@@ -118,6 +135,27 @@ export class AnalyticsController {
     return this.savedViews.remove(tenantId, session.accountId, id);
   }
 
+  @Get("export")
+  async exportCsv(
+    @CurrentSession() session: SessionContext,
+    @Res({ passthrough: true }) res: Response,
+    @Query("sourcePage") sourcePage: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("groupBy") groupBy?: string,
+  ): Promise<string> {
+    const tenantId = await this.require(session, "analytics.export");
+    if (!isAnalystExportSource(sourcePage)) {
+      throw new BadRequestException({ code: "invalid_export_source", message: "Choose a valid analytical page to export." });
+    }
+
+    const canViewCost = await this.access.can(session, "inventory.cost.view");
+    const file = await this.wrap(() => this.exports.buildCsv(tenantId, resolveScope(session), sourcePage, { from, to, groupBy }, canViewCost));
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${file.filename}"`);
+    return file.content;
+  }
+
   private async wrap<T>(fn: () => Promise<T>): Promise<T> {
     try {
       return await fn();
@@ -136,4 +174,8 @@ export class AnalyticsController {
     }
     return session.tenantId;
   }
+}
+
+function isAnalystExportSource(value: string): value is (typeof ANALYST_SAVED_VIEW_SOURCE_PAGES)[number] {
+  return (ANALYST_SAVED_VIEW_SOURCE_PAGES as readonly string[]).includes(value);
 }
