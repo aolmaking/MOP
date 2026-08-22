@@ -45,7 +45,7 @@ Implement the documented missing Access Denied and Password Reset support surfac
 
 ## Last Verified Commit
 
-`2eee27abccde3d48a331e43181b3d00fc6bfa6e1`
+`c14e3f69186efe7eb4db29104cfb0dd0623b63e4`
 
 ## Last Successful Validation
 
@@ -71,4 +71,4 @@ Implement the documented missing Access Denied and Password Reset support surfac
 
 ## Exact Next Action
 
-Commit and push the verified historical dossier capability work, then inspect current auth support routes and password-reset backing.
+Inspect current auth support routes and password-reset backing.
