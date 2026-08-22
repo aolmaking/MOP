@@ -8,7 +8,7 @@ Implementation, after documentation and source audit.
 
 ## Current Subsystem
 
-Governance Controls / Limits & Entitlements.
+High-risk HTTP/API coverage after Governance Controls.
 
 ## Completed Tasks
 
@@ -41,20 +41,24 @@ Governance Controls / Limits & Entitlements.
 - The legacy `reports.company.view` backend surface remains live but now applies the current session's assigned branch/category scope to technician metrics, throughput, blockers, and finance totals.
 - `Plan.allowedExports` and `analytics.export` are implemented; the permission resolver locks export permission when a workshop's plan has no allowed export categories.
 - The Saved Views / Exports page now reflects plan entitlement truth, and each analytical page offers a CSV export action when `analytics.export` is allowed.
+- Governance Controls / Limits & Entitlements now supports governed per-workshop overrides for Max Branches, Max Users, Max Warehouses, and Allowed Exports.
+- Entitlement overrides are stored as audited `ControlSetting` rows, preserve plan ceilings, refuse numeric values below active usage, and refuse unsafe clearing when the plan default would fall below current usage.
+- Effective entitlements now feed permission resolution, analytics export authorization, Platform workshop details, Organization user/branch writes, and Inventory warehouse writes.
+- Control Center renders effective entitlement values, shows plan/default and usage context, applies overrides with a written reason, and clears active overrides.
 
 ## Current Task
 
-Continue Governance Controls / Limits & Entitlements by inspecting and implementing per-workshop governed overrides on top of the existing plan entitlement fields.
+Inspect the highest-risk Finance, Billing, and Inventory HTTP/API surfaces and close the next missing coverage or runtime gap without adding new product scope.
 
 ## Remaining Tasks
 
-- Inspect whether per-workshop Limits & Entitlements should be modeled as `ControlSetting` overrides on top of the new plan fields.
-- Implement the smallest backend-first per-workshop override mechanism that preserves plan ceilings, auditability, and existing permission-layer behavior.
-- Continue highest-risk HTTP-level coverage after the current Governance Controls slice, especially Finance, Billing, and Inventory.
+- Add or repair HTTP-level coverage for the riskiest Finance/Billing/Inventory controllers and workflows, starting where existing docs or tests show real behavior but no request-boundary proof.
+- Continue validating country billing adapter/compliant-blocked behavior without silently inventing country-specific adapters.
+- Keep deferred/unbacked Control Center Builder, workflow-policy, full rollback, and country-adapter work out of implementation unless the documented backing model exists.
 
 ## Last Verified Commit
 
-`cc5552acb4815c19ee918f47b9e4b61f89553933`
+`ff26b6e37b1d89786e647a338ca48690b545453a`
 
 ## Last Successful Validation
 
@@ -87,6 +91,10 @@ Continue Governance Controls / Limits & Entitlements by inspecting and implement
 - `corepack pnpm --filter @mop/web test -- --include src/app/experiences/analyst/export-view-action.spec.ts --watch=false --isolate=false`
 - `corepack pnpm --filter @mop/api test -- analytics-export.service.spec.ts plan-entitlement.layer.spec.ts permission-context.service.spec.ts`
 - `corepack pnpm --filter @mop/web test -- --include src/app/experiences/analyst/saved-view-action.spec.ts --include src/app/experiences/analyst/analyst-saved-views-page.spec.ts --include src/app/experiences/analyst/export-view-action.spec.ts --watch=false --isolate=false`
+- `corepack pnpm --filter @mop/api test -- tenant-entitlements.service.spec.ts analytics-export.service.spec.ts permission-context.service.spec.ts workshops.service.spec.ts`
+- `corepack pnpm --filter @mop/web test -- --include src/app/experiences/platform/control-center/control-center-page.spec.ts --watch=false --isolate=false`
+- `corepack pnpm -r typecheck`
+- `corepack pnpm --filter @mop/web build`
 
 ## Known Blockers
 
@@ -99,7 +107,8 @@ Continue Governance Controls / Limits & Entitlements by inspecting and implement
 - Do not treat old audit entries as current unless source confirms them. Role permission locks and technician part requests are implemented now.
 - Keep legacy reporting endpoints only when they preserve current scope/privacy rules; scoped Data Analyst sessions must never receive unscoped tenant reports through an older permission surface.
 - Deferred or missing features remain out of scope until their documented backing model exists: Data Analyst CSV export is now backed by its entitlement gate and endpoint; full country billing adapters still need a country-specific adapter, and audited billing override still needs its own path.
+- Per-workshop Limits & Entitlements overrides are `ControlSetting` deltas on top of `Plan`, not a second plan model. Plan fields remain the ceiling; runtime consumers read the effective entitlement service.
 
 ## Exact Next Action
 
-Inspect per-workshop Limits & Entitlements override requirements against `ControlSetting`, then implement the smallest governed override path that keeps plan ceilings authoritative.
+Inspect Finance, Billing, and Inventory controller/service tests to identify the highest-risk missing HTTP-level coverage, then implement the smallest backend-first fix or coverage slice and verify it.
