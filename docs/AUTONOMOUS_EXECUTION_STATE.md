@@ -41,9 +41,7 @@ Inspect `resolveAsOf`/historical effective-state support and add the smallest pr
 
 ## Last Verified Commit
 
-`9e35f2f89ca50faa60ffcb36a299262558f7e314`
-
-Git checkpoint for the verified TIME_TRACKING and compliantBlocked units is pending because sandboxed Git cannot create `.git/index.lock`, and the escalated `git add` request returned aborted.
+`2eee27abccde3d48a331e43181b3d00fc6bfa6e1`
 
 ## Last Successful Validation
 
@@ -56,7 +54,6 @@ Git checkpoint for the verified TIME_TRACKING and compliantBlocked units is pend
 
 ## Known Blockers
 
-- Git write operations are currently blocked by sandbox permissions; `git add` cannot create `.git/index.lock`, and the escalation request returned aborted.
 - Local Postgres is not listening on `localhost:5432`.
 - `docker compose up -d postgres` and Docker inspection commands hang in this runtime after starting the pull. Database-backed integration tests cannot be run until Docker/Postgres is healthy.
 
@@ -68,4 +65,4 @@ Git checkpoint for the verified TIME_TRACKING and compliantBlocked units is pend
 
 ## Exact Next Action
 
-Retry Git checkpointing for the verified TIME_TRACKING and compliantBlocked work. If Git writes remain unavailable, continue with the historical resolution consumer audit and keep the ledger updated.
+Inspect historical policy/capability resolution helpers and add the smallest production consumer if the documented `resolveAsOf` audit gap still holds.
