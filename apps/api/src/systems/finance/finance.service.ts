@@ -113,6 +113,7 @@ export class FinanceService {
     if (!Number.isInteger(input.quantity) || input.quantity <= 0) {
       throw new BadRequestException({ code: "quantity_invalid", message: "Quantity must be a whole number, at least one." });
     }
+    await this.requireWorkOrderInTenant(input.tenantId, input.workOrderId);
 
     const issued = await this.prisma.invoice.findUnique({ where: { workOrderId: input.workOrderId } });
     if (issued) {
@@ -189,6 +190,8 @@ export class FinanceService {
    * add up to its printed total.
    */
   async jobTotal(tenantId: string, workOrderId: string): Promise<JobTotal> {
+    await this.requireWorkOrderInTenant(tenantId, workOrderId);
+
     // Parts fitted by the shop floor are folded in before the total is
     // read, so "what does this job cost" answers with the parts on it.
     await this.absorbOperationalItems(tenantId, workOrderId);
@@ -234,6 +237,7 @@ export class FinanceService {
     options: { discountPercent?: number; taxPercent?: number } = {},
   ): Promise<Settlement> {
     await this.requireFinance(tenantId);
+    const workOrder = await this.requireWorkOrderInTenant(tenantId, workOrderId);
 
     const existing = await this.prisma.invoice.findUnique({ where: { workOrderId }, select: { id: true } });
     if (existing) {
@@ -264,13 +268,7 @@ export class FinanceService {
     // Everything Billing needs, fetched here rather than left for it to
     // read itself -- Billing must never reach into Operations' or
     // Finance's own tables to decide what to invoice, per SYSTEMS.md.
-    const [workOrder, tenant] = await Promise.all([
-      this.prisma.workOrder.findUniqueOrThrow({
-        where: { id: workOrderId },
-        select: { branchId: true, customerId: true },
-      }),
-      this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { country: true, currency: true } }),
-    ]);
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { country: true, currency: true } });
 
     const computed = invoiceTotal(
       running.lines.map((line) => ({
@@ -394,7 +392,7 @@ export class FinanceService {
       return invoice.id;
     });
 
-    return this.settlement(invoiceId);
+    return this.settlement(invoiceId, tenantId);
   }
 
   /**
@@ -430,19 +428,20 @@ export class FinanceService {
     });
 
     if (existing) {
-      return this.resolveIdempotentReplay(existing, invoiceId, input.amount);
+      return this.resolveIdempotentReplay(existing, invoiceId, input.amount, tenantId);
     }
 
     // Resolved once, up front: the emit below puts "We've recorded your
     // payment" on the customer's own timeline, and it needs the job the
     // invoice belongs to. `recordPayment` is addressed by invoice.
-    const paidInvoice = await this.prisma.invoice.findUnique({
-      where: { id: invoiceId },
+    const paidInvoice = await this.prisma.invoice.findFirst({
+      where: { id: invoiceId, tenantId },
       select: { workOrderId: true },
     });
-    const workOrderId = paidInvoice?.workOrderId;
+    if (!paidInvoice) throw new NotFoundException({ code: "invoice_not_found", message: "Invoice not found." });
+    const workOrderId = paidInvoice.workOrderId;
 
-    const before = await this.settlement(invoiceId);
+    const before = await this.settlement(invoiceId, tenantId);
 
     // P-05. A workshop that has opted into full settlement only refuses a
     // short amount rather than banking it -- checked before the
@@ -467,7 +466,7 @@ export class FinanceService {
         where: { idempotencyKey: input.idempotencyKey },
         select: { id: true, invoiceId: true, amount: true },
       });
-      if (raced) return this.resolveIdempotentReplay(raced, invoiceId, input.amount);
+      if (raced) return this.resolveIdempotentReplay(raced, invoiceId, input.amount, tenantId);
       throw new ConflictException({ code: "already_settled", message: "This invoice is already paid in full." });
     }
 
@@ -509,7 +508,7 @@ export class FinanceService {
     }
 
     await this.refreshCachedTotals(invoiceId);
-    const after = await this.settlement(invoiceId);
+    const after = await this.settlement(invoiceId, tenantId);
 
     // A settled invoice is what turns PAYMENT_PENDING into a car somebody
     // may drive away. `SETTLE_PAYMENT` has existed in WORK_ORDER_GRAPH
@@ -550,13 +549,14 @@ export class FinanceService {
     existing: { invoiceId: string; amount: Prisma.Decimal },
     invoiceId: string,
     amount: Money,
+    tenantId?: string,
   ): Promise<Settlement> {
     const sameInvoice = existing.invoiceId === invoiceId;
     const sameAmount = compare(existing.amount.toFixed(2), amount) === 0;
 
     if (sameInvoice && sameAmount) {
       // A genuine retry. Not a second payment.
-      return this.settlement(invoiceId);
+      return this.settlement(invoiceId, tenantId);
     }
 
     throw new ConflictException({
@@ -581,16 +581,23 @@ export class FinanceService {
    * its own actor. Subtracting it here keeps both facts on the record
    * instead of pretending the original payment was smaller than it was.
    */
-  async settlement(invoiceId: string): Promise<Settlement> {
-    const invoice = await this.prisma.invoice.findUnique({
-      where: { id: invoiceId },
-      select: { id: true, total: true },
-    });
+  async settlement(invoiceId: string, tenantId?: string): Promise<Settlement> {
+    const invoiceSelect = { id: true, total: true } as const;
+    const invoice = tenantId
+      ? await this.prisma.invoice.findFirst({
+          where: { id: invoiceId, tenantId },
+          select: invoiceSelect,
+        })
+      : await this.prisma.invoice.findUnique({
+          where: { id: invoiceId },
+          select: invoiceSelect,
+        });
     if (!invoice) throw new NotFoundException({ code: "invoice_not_found", message: "Invoice not found." });
 
+    const scopedWhere = tenantId ? { invoiceId, tenantId } : { invoiceId };
     const [payments, refunds] = await Promise.all([
-      this.prisma.payment.findMany({ where: { invoiceId, status: "CONFIRMED" }, select: { amount: true } }),
-      this.prisma.refundRequest.findMany({ where: { invoiceId, status: "COMPLETED" }, select: { amount: true } }),
+      this.prisma.payment.findMany({ where: { ...scopedWhere, status: "CONFIRMED" }, select: { amount: true } }),
+      this.prisma.refundRequest.findMany({ where: { ...scopedWhere, status: "COMPLETED" }, select: { amount: true } }),
     ]);
 
     const total = invoice.total.toFixed(2);
@@ -631,7 +638,7 @@ export class FinanceService {
   ): Promise<{ id: string; status: "PENDING" }> {
     await this.requireFinance(tenantId);
 
-    const settlement = await this.settlement(invoiceId);
+    const settlement = await this.settlement(invoiceId, tenantId);
     if (compare(amount, settlement.paid) > 0) {
       throw new BadRequestException({
         code: "over_refund",
@@ -657,8 +664,10 @@ export class FinanceService {
    * because a refund without a document is money leaving with no
    * artifact a customer or a tax authority could ever ask to see.
    */
-  async approveRefund(refundRequestId: string, actor: LifecycleActor): Promise<{ id: string; creditNoteNumber: string }> {
-    const refund = await this.prisma.refundRequest.findUnique({ where: { id: refundRequestId } });
+  async approveRefund(refundRequestId: string, actor: LifecycleActor, tenantId?: string): Promise<{ id: string; creditNoteNumber: string }> {
+    const refund = tenantId
+      ? await this.prisma.refundRequest.findFirst({ where: { id: refundRequestId, tenantId } })
+      : await this.prisma.refundRequest.findUnique({ where: { id: refundRequestId } });
     if (!refund) throw new NotFoundException({ code: "refund_not_found", message: "Refund request not found." });
     if (refund.status !== "PENDING") {
       throw new ConflictException({
@@ -698,8 +707,15 @@ export class FinanceService {
     return { id: refundRequestId, creditNoteNumber: creditNote.creditNoteNumber };
   }
 
-  async rejectRefund(refundRequestId: string, actor: LifecycleActor, reason?: string): Promise<{ id: string; status: "REJECTED" }> {
-    const refund = await this.prisma.refundRequest.findUnique({ where: { id: refundRequestId } });
+  async rejectRefund(
+    refundRequestId: string,
+    actor: LifecycleActor,
+    reason?: string,
+    tenantId?: string,
+  ): Promise<{ id: string; status: "REJECTED" }> {
+    const refund = tenantId
+      ? await this.prisma.refundRequest.findFirst({ where: { id: refundRequestId, tenantId } })
+      : await this.prisma.refundRequest.findUnique({ where: { id: refundRequestId } });
     if (!refund) throw new NotFoundException({ code: "refund_not_found", message: "Refund request not found." });
     if (refund.status !== "PENDING") {
       throw new ConflictException({
@@ -742,6 +758,7 @@ export class FinanceService {
     actor: LifecycleActor,
   ): Promise<{ id: string; status: "PENDING" }> {
     await this.requireFinance(tenantId);
+    await this.requireWorkOrderInTenant(tenantId, workOrderId);
 
     const authority = await this.policies.resolveValue(tenantId, "DISCOUNT_AUTHORITY");
     if (authority === "NONE") {
@@ -763,8 +780,10 @@ export class FinanceService {
     return { id: requestId, status: "PENDING" };
   }
 
-  async approveDiscount(discountRequestId: string, actor: LifecycleActor): Promise<{ id: string; status: "APPROVED" }> {
-    const discount = await this.prisma.discountRequest.findUnique({ where: { id: discountRequestId } });
+  async approveDiscount(discountRequestId: string, actor: LifecycleActor, tenantId?: string): Promise<{ id: string; status: "APPROVED" }> {
+    const discount = tenantId
+      ? await this.prisma.discountRequest.findFirst({ where: { id: discountRequestId, tenantId } })
+      : await this.prisma.discountRequest.findUnique({ where: { id: discountRequestId } });
     if (!discount) throw new NotFoundException({ code: "discount_not_found", message: "Discount request not found." });
     if (discount.status !== "PENDING") {
       throw new ConflictException({
@@ -793,8 +812,15 @@ export class FinanceService {
     return { id: discountRequestId, status: "APPROVED" };
   }
 
-  async rejectDiscount(discountRequestId: string, actor: LifecycleActor, reason?: string): Promise<{ id: string; status: "REJECTED" }> {
-    const discount = await this.prisma.discountRequest.findUnique({ where: { id: discountRequestId } });
+  async rejectDiscount(
+    discountRequestId: string,
+    actor: LifecycleActor,
+    reason?: string,
+    tenantId?: string,
+  ): Promise<{ id: string; status: "REJECTED" }> {
+    const discount = tenantId
+      ? await this.prisma.discountRequest.findFirst({ where: { id: discountRequestId, tenantId } })
+      : await this.prisma.discountRequest.findUnique({ where: { id: discountRequestId } });
     if (!discount) throw new NotFoundException({ code: "discount_not_found", message: "Discount request not found." });
     if (discount.status !== "PENDING") {
       throw new ConflictException({
@@ -1082,6 +1108,15 @@ export class FinanceService {
   private async hasFinance(tenantId: string): Promise<boolean> {
     const profile = await this.capabilities.resolveCurrent(tenantId);
     return isCapabilityActive(profile, "FINANCE_CORE");
+  }
+
+  private async requireWorkOrderInTenant(tenantId: string, workOrderId: string): Promise<{ branchId: string; customerId: string }> {
+    const workOrder = await this.prisma.workOrder.findFirst({
+      where: { id: workOrderId, tenantId },
+      select: { branchId: true, customerId: true },
+    });
+    if (!workOrder) throw new NotFoundException({ code: "work_order_not_found", message: "Work order not found." });
+    return workOrder;
   }
 
   private async requireFinance(tenantId: string): Promise<void> {

@@ -57,8 +57,8 @@ export class FinanceController {
 
   @Get("invoices/:id")
   async settlement(@CurrentSession() session: SessionContext, @Param("id") id: string) {
-    await this.require(session, "finance.payment.record");
-    return this.finance.settlement(id);
+    const tenantId = await this.require(session, "finance.payment.record");
+    return this.finance.settlement(id, tenantId);
   }
 
   /**
@@ -93,14 +93,14 @@ export class FinanceController {
 
   @Post("refunds/:id/approve")
   async approveRefund(@CurrentSession() session: SessionContext, @Param("id") id: string) {
-    await this.require(session, "finance.refund.decide");
-    return this.finance.approveRefund(id, this.actor(session));
+    const tenantId = await this.require(session, "finance.refund.decide");
+    return this.finance.approveRefund(id, this.actor(session), tenantId);
   }
 
   @Post("refunds/:id/reject")
   async rejectRefund(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: RejectRefundDto) {
-    await this.require(session, "finance.refund.decide");
-    return this.finance.rejectRefund(id, this.actor(session), dto.reason);
+    const tenantId = await this.require(session, "finance.refund.decide");
+    return this.finance.rejectRefund(id, this.actor(session), dto.reason, tenantId);
   }
 
   /**
@@ -115,14 +115,14 @@ export class FinanceController {
 
   @Post("discounts/:id/approve")
   async approveDiscount(@CurrentSession() session: SessionContext, @Param("id") id: string) {
-    await this.require(session, "finance.discount.decide");
-    return this.finance.approveDiscount(id, this.actor(session));
+    const tenantId = await this.require(session, "finance.discount.decide");
+    return this.finance.approveDiscount(id, this.actor(session), tenantId);
   }
 
   @Post("discounts/:id/reject")
   async rejectDiscount(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: RejectDiscountDto) {
-    await this.require(session, "finance.discount.decide");
-    return this.finance.rejectDiscount(id, this.actor(session), dto.reason);
+    const tenantId = await this.require(session, "finance.discount.decide");
+    return this.finance.rejectDiscount(id, this.actor(session), dto.reason, tenantId);
   }
 
   private actor(session: SessionContext) {
