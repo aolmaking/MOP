@@ -56,20 +56,24 @@ High-risk HTTP/API coverage after Governance Controls.
 - Finance Configuration now validates discount ceilings against the effective post-update configuration, so updating only the branch ceiling or only the workshop ceiling cannot leave branch authority above the workshop-wide max.
 - Finance Configuration now rejects branch discount and deposit percentages above 100 before writing or auditing.
 - Focused Finance Configuration service specs cover effective ceiling validation and percentage bounds without requiring Postgres.
+- Price Catalog now validates blank item type and invalid unit/labour prices at the service boundary, trims item identity before persistence, and audits the normalized value.
+- Owner Pricing controller specs now prove the session tenant and actor are threaded into Finance Configuration and Price Catalog services, and denied access calls do not reach services.
+- Focused Price Catalog and Owner Pricing controller specs cover validation and request-boundary behavior without requiring Postgres.
 
 ## Current Task
 
-Inspect Price Catalog API/service boundaries for missing request-boundary coverage, tenant isolation, and validation gaps.
+Run cumulative API boundary validation for the recent Finance/Billing/Inventory/Governance slices, then continue the documented gap scan.
 
 ## Remaining Tasks
 
-- Add or repair HTTP-level coverage for the riskiest Price Catalog workflows, starting where existing docs or tests show real behavior but no request-boundary proof.
+- Run a cumulative focused API test set covering the newly added boundary specs and repair any fallout.
+- Continue the documented gap scan after the boundary/security pass, prioritizing remaining partial pages and backend-first runtime gaps over UI polish.
 - Continue validating country billing adapter/compliant-blocked behavior without silently inventing country-specific adapters.
 - Keep deferred/unbacked Control Center Builder, workflow-policy, full rollback, and country-adapter work out of implementation unless the documented backing model exists.
 
 ## Last Verified Commit
 
-`db129f8e5db58903491620e9c917d91424508bc2`
+`46f9d00f225e3d44e3d31ee62fb6ff9a0371eae3`
 
 ## Last Successful Validation
 
@@ -114,6 +118,8 @@ Inspect Price Catalog API/service boundaries for missing request-boundary covera
 - `corepack pnpm --filter @mop/api typecheck`
 - `corepack pnpm --filter @mop/api test -- finance-configuration.service.spec.ts`
 - `corepack pnpm --filter @mop/api typecheck`
+- `corepack pnpm --filter @mop/api test -- price-catalog.service.spec.ts finance-configuration.controller.spec.ts`
+- `corepack pnpm --filter @mop/api typecheck`
 
 ## Known Blockers
 
@@ -131,7 +137,8 @@ Inspect Price Catalog API/service boundaries for missing request-boundary covera
 - Inventory Manager service methods reached from route IDs must prove the target part request belongs to the session tenant; explicit warehouse mutations must respect non-empty `warehouseScope`.
 - Billing is downstream of Finance, but it still enforces tenant consistency on its typed contract and any invoice/document lookup it performs.
 - Finance Configuration validation must compare effective post-update values, not only fields present in the same PATCH/POST body.
+- Price Catalog must normalize and validate item identity at the service boundary, not rely solely on DTO validators.
 
 ## Exact Next Action
 
-Inspect Price Catalog controller/service tests for tenant-boundary, request-boundary, and validation gaps; implement the smallest backend-first fix or coverage slice and verify it.
+Run the cumulative focused API boundary spec set added in this pass, then inspect the authoritative trackers for the next highest-priority documented runtime gap.
