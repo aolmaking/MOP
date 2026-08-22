@@ -8,7 +8,7 @@ Implementation, after documentation and source audit.
 
 ## Current Subsystem
 
-High-risk HTTP/API coverage after Governance Controls.
+High-risk HTTP/API coverage after Platform Reports completion.
 
 ## Completed Tasks
 
@@ -59,20 +59,26 @@ High-risk HTTP/API coverage after Governance Controls.
 - Price Catalog now validates blank item type and invalid unit/labour prices at the service boundary, trims item identity before persistence, and audits the normalized value.
 - Owner Pricing controller specs now prove the session tenant and actor are threaded into Finance Configuration and Price Catalog services, and denied access calls do not reach services.
 - Focused Price Catalog and Owner Pricing controller specs cover validation and request-boundary behavior without requiring Postgres.
+- Platform Reports now implements the full six-section per-workshop detail: Usage Overview, Feature Usage, Builder Adoption, Operational Activity, Commercial Snapshot, and Health & Risk.
+- Platform Reports cards now include active-user, feature-adoption, and builder-adoption signals alongside usage score, health, plan, staff and customer counts.
+- Platform Reports keeps platform subscription money as explicit null placeholders because no platform billing table exists, while all usage/operations/health metrics are derived from existing product rows.
+- `PAGE_INVENTORY.md`, `PHASE_MAP.md`, and `PROJECT_STATE.md` now reflect 48 complete + 5 partial + 0 missing pages.
+- Focused Platform Reports backend/web specs and the web build cover the new detail contract and UI rendering.
 
 ## Current Task
 
-Inspect the authoritative trackers for the next highest-priority documented runtime gap after the Finance/Billing/Inventory/Governance boundary pass.
+Start the documented high-risk HTTP-level coverage gap, beginning with Finance/Billing/Inventory route wiring and guarded request behavior.
 
 ## Remaining Tasks
 
-- Continue the documented gap scan after the boundary/security pass, prioritizing remaining partial pages and backend-first runtime gaps over UI polish.
+- Close the HTTP-level test-coverage gap on Finance, Billing, and Inventory first; service-layer coverage exists, but guarded route wiring and DTO validation are still thin outside platform/auth/access.
+- Continue the documented gap scan after the HTTP coverage pass, prioritizing remaining partial pages and backend-first runtime gaps over UI polish.
 - Continue validating country billing adapter/compliant-blocked behavior without silently inventing country-specific adapters.
 - Keep deferred/unbacked Control Center Builder, workflow-policy, full rollback, and country-adapter work out of implementation unless the documented backing model exists.
 
 ## Last Verified Commit
 
-`cfbe3e614d894f36d3c5de83565996edbb638322`
+`39f5b49b7d5fcb6cb368f42847fa9fb775a96621`
 
 ## Last Successful Validation
 
@@ -121,6 +127,11 @@ Inspect the authoritative trackers for the next highest-priority documented runt
 - `corepack pnpm --filter @mop/api typecheck`
 - `corepack pnpm --filter @mop/api test -- tenant-entitlements.service.spec.ts finance.service.spec.ts finance.controller.spec.ts part-request.service.spec.ts inventory.controller.spec.ts billing.service.spec.ts finance-configuration.service.spec.ts price-catalog.service.spec.ts finance-configuration.controller.spec.ts`
 - `corepack pnpm -r typecheck`
+- `corepack pnpm --filter @mop/api typecheck`
+- `corepack pnpm --filter @mop/api test -- platform-reports.service.spec.ts`
+- `corepack pnpm --filter @mop/web test -- --include src/app/experiences/platform/reports/reports-page.spec.ts --include src/app/experiences/platform/reports/workshop-usage-page.spec.ts --watch=false --isolate=false`
+- `corepack pnpm --filter @mop/web build`
+- `corepack pnpm -r typecheck`
 
 ## Known Blockers
 
@@ -139,7 +150,8 @@ Inspect the authoritative trackers for the next highest-priority documented runt
 - Billing is downstream of Finance, but it still enforces tenant consistency on its typed contract and any invoice/document lookup it performs.
 - Finance Configuration validation must compare effective post-update values, not only fields present in the same PATCH/POST body.
 - Price Catalog must normalize and validate item identity at the service boundary, not rely solely on DTO validators.
+- Platform Reports may aggregate platform-visible staff/workshop metrics, but must not expose customer PII; platform subscription money remains placeholder/null until a real platform billing source exists.
 
 ## Exact Next Action
 
-Inspect `docs/PAGE_INVENTORY.md`, `docs/PHASE_MAP.md`, and `PROJECT_STATE.md` for the next highest-priority documented runtime gap, then implement the smallest backend-first slice that is backed by existing models and requirements.
+Inspect Finance, Billing, and Inventory controller integration/unit-test coverage, then add the smallest HTTP-level tests that prove guarded route wiring, session tenant scoping, and DTO validation for the highest-risk money/stock endpoints.
