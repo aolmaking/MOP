@@ -7,12 +7,14 @@ import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { AuditService } from "../../../audit/audit.service";
 import { StaffService } from "./staff.service";
+import { TenantEntitlementsService } from "../../../control/entitlements/tenant-entitlements.service";
 import type { PrismaService } from "../../../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
 const audit = new AuditService(asService);
-const staff = new StaffService(asService, audit);
+const entitlements = new TenantEntitlementsService(asService, audit);
+const staff = new StaffService(asService, audit, entitlements);
 
 const SUFFIX = `org-${Date.now()}`;
 let tenantId: string;

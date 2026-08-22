@@ -138,6 +138,103 @@
                 </button>
               </section>
 
+              <!-- Limits & Entitlements -->
+              <section class="panel">
+                <h2 class="panel-title">Limits &amp; Entitlements</h2>
+                <p class="panel-hint">
+                  Effective limits start from the assigned plan. A platform override can narrow one field for this
+                  workshop, but cannot exceed the plan ceiling or drop below current active usage.
+                </p>
+
+                @if (entitlements(); as summary) {
+                  <ul class="lock-list entitlement-list">
+                    @for (field of summary.fields; track field.field) {
+                      <li class="lock" [class.entitlement--override]="field.override">
+                        <div class="lock-head">
+                          <span class="lock-role">{{ field.label }}</span>
+                          <span class="badge" [class.badge--on]="field.override">{{ field.override ? 'override' : 'plan' }}</span>
+                        </div>
+                        <p class="lock-reason">Effective: {{ displayEntitlementValue(field.effective) }}</p>
+                        <p class="lock-meta">
+                          <span>
+                            Plan: {{ displayEntitlementValue(field.planDefault) }}
+                            @if (field.usage !== undefined) {
+                              · Used: {{ field.usage }}
+                            }
+                          </span>
+                          @if (field.override) {
+                            <button type="button" class="lock-remove" [disabled]="busy()" (click)="clearEntitlementOverride(field)">
+                              Clear override
+                            </button>
+                          }
+                        </p>
+                      </li>
+                    }
+                  </ul>
+
+                  <div class="form-row">
+                    <label class="field">
+                      <span class="field-label">Field</span>
+                      <select [value]="entitlementField()" (change)="chooseEntitlementField($any($event.target).value)">
+                        @for (field of summary.fields; track field.field) {
+                          <option [value]="field.field">{{ field.label }}</option>
+                        }
+                      </select>
+                    </label>
+
+                    @if (selectedEntitlement(); as field) {
+                      @if (field.kind === 'number') {
+                        <label class="field">
+                          <span class="field-label">Override value</span>
+                          <input
+                            type="number"
+                            min="0"
+                            [value]="entitlementNumber()"
+                            (input)="entitlementNumber.set($any($event.target).valueAsNumber || 0)"
+                          />
+                        </label>
+                      } @else {
+                        <div class="field field--wide">
+                          <span class="field-label">Allowed export categories</span>
+                          @if ((field.options ?? []).length === 0) {
+                            <p class="field-hint">This plan includes no export categories, so this workshop cannot be granted any.</p>
+                          } @else {
+                            <div class="check-list">
+                              @for (option of field.options ?? []; track option) {
+                                <label class="check">
+                                  <input
+                                    type="checkbox"
+                                    [checked]="isExportSelected(option)"
+                                    (change)="toggleExportOption(option, $any($event.target).checked)"
+                                  />
+                                  <span>{{ label(option) }}</span>
+                                </label>
+                              }
+                            </div>
+                          }
+                        </div>
+                      }
+                    }
+                  </div>
+
+                  <label class="field">
+                    <span class="field-label">Reason <span class="required">required</span></span>
+                    <textarea
+                      rows="2"
+                      placeholder="Why should this workshop differ from the plan default?"
+                      [value]="entitlementReason()"
+                      (input)="entitlementReason.set($any($event.target).value)"
+                    ></textarea>
+                  </label>
+
+                  <button appButton variant="danger" [disabled]="busy()" (click)="setEntitlementOverride()">
+                    {{ busy() ? 'Working…' : 'Apply entitlement override' }}
+                  </button>
+                } @else {
+                  <p class="state-body">Loading limits…</p>
+                }
+              </section>
+
               <!-- Lifecycle -->
               <section class="panel">
                 <h2 class="panel-title">Workshop lifecycle</h2>

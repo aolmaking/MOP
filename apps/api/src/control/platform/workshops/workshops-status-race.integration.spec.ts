@@ -16,11 +16,13 @@ import { PrismaClient } from "@mop/database";
 import { WorkshopsService } from "./workshops.service";
 import { WorkshopHealthService } from "./workshop-health.service";
 import { AuditService } from "../../../audit/audit.service";
+import { TenantEntitlementsService } from "../../entitlements/tenant-entitlements.service";
 import type { PrismaService } from "../../../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
-const workshops = new WorkshopsService(asService, new AuditService(asService), new WorkshopHealthService());
+const audit = new AuditService(asService);
+const workshops = new WorkshopsService(asService, audit, new WorkshopHealthService(), new TenantEntitlementsService(asService, audit));
 
 const ACTOR = { accountId: "platform-1", displayName: "Platform Admin" };
 const SUFFIX = `wsrace-${Date.now()}`;

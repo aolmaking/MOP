@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { CapabilitiesModule } from "../../control/capabilities/capabilities.module";
+import { EntitlementsModule } from "../../control/entitlements/entitlements.module";
 import { AccessController } from "./access.controller";
 import { EffectiveAccessService } from "./effective-access.service";
 import { PermissionResolverService } from "./permission-resolver.service";
@@ -19,7 +20,7 @@ import { RolePermissionTemplateLayer } from "./layers/role-permission-template.l
 import { UserOverrideLayer } from "./layers/user-override.layer";
 
 @Module({
-  imports: [AuthModule, CapabilitiesModule],
+  imports: [AuthModule, CapabilitiesModule, EntitlementsModule],
   controllers: [AccessController],
   providers: [
     PlatformControlLayer,

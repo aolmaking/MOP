@@ -1,6 +1,6 @@
-import { ForbiddenException, Injectable } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import type { AnalystSavedViewSourcePage } from "@mop/database";
-import { PrismaService } from "../../runtime/database/prisma.service";
+import { TenantEntitlementsService } from "../../control/entitlements/tenant-entitlements.service";
 import type { ReportQueryParams } from "../owner-reports/date-range.util";
 import type { AnalyticsScope } from "./analytics-scope.util";
 import { DecisionsAnalyticsService } from "./decisions-analytics.service";
@@ -22,7 +22,7 @@ export interface AnalyticsCsvExport {
 @Injectable()
 export class AnalyticsExportService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly entitlements: TenantEntitlementsService,
     private readonly operations: OperationsAnalyticsService,
     private readonly people: PeopleAnalyticsService,
     private readonly inventory: InventoryAnalyticsService,
@@ -37,27 +37,13 @@ export class AnalyticsExportService {
     params: ReportQueryParams,
     canViewCost: boolean,
   ): Promise<AnalyticsCsvExport> {
-    await this.assertAllowedByPlan(tenantId, sourcePage);
+    await this.entitlements.assertExportAllowed(tenantId, sourcePage);
 
     const rows = await this.rows(tenantId, scope, sourcePage, params, canViewCost);
     return {
       filename: `mop-${sourcePage.toLowerCase().replace(/_/g, "-")}-analytics.csv`,
       content: toCsv([["section", "item", "metric", "value"], ...rows]),
     };
-  }
-
-  private async assertAllowedByPlan(tenantId: string, sourcePage: AnalystSavedViewSourcePage): Promise<void> {
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { plan: { select: { allowedExports: true } } },
-    });
-    const allowed = tenant?.plan.allowedExports ?? [];
-    if (!allowed.includes(sourcePage)) {
-      throw new ForbiddenException({
-        code: "export_not_in_plan",
-        message: "This report category is not included in this workshop's Allowed Exports plan entitlement.",
-      });
-    }
   }
 
   private async rows(

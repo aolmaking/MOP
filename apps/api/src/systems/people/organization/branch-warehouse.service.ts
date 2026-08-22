@@ -3,6 +3,7 @@ import { WORK_ORDER_GRAPH } from "@mop/shared";
 import type { WorkOrderStatus } from "@mop/database";
 import { PrismaService } from "../../../runtime/database/prisma.service";
 import { AuditService } from "../../../audit/audit.service";
+import { TenantEntitlementsService } from "../../../control/entitlements/tenant-entitlements.service";
 
 export interface OrgActor {
   readonly accountId: string;
@@ -51,6 +52,7 @@ export class BranchWarehouseService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly entitlements: TenantEntitlementsService,
   ) {}
 
   async page(tenantId: string): Promise<OrganizationInfrastructure> {
@@ -112,25 +114,34 @@ export class BranchWarehouseService {
 
     const code = (input.code?.trim() || this.suggestCode(name)).toUpperCase();
 
-    const clash = await this.prisma.branch.findFirst({ where: { tenantId, code }, select: { id: true } });
-    if (clash) {
-      throw new ConflictException({ code: "branch_code_taken", message: "That branch code is already in use." });
-    }
+    const branch = await this.prisma.$transaction(async (tx) => {
+      await this.entitlements.assertCanAddBranch(tenantId, tx);
 
-    const branch = await this.prisma.branch.create({
-      data: { tenantId, name, code, address: input.address ?? null, city: input.city ?? null },
-    });
+      const clash = await tx.branch.findFirst({ where: { tenantId, code }, select: { id: true } });
+      if (clash) {
+        throw new ConflictException({ code: "branch_code_taken", message: "That branch code is already in use." });
+      }
 
-    await this.audit.record({
-      tenantId,
-      actorId: actor.accountId,
-      actorType: "TENANT_STAFF",
-      actorName: actor.displayName,
-      targetType: "Branch",
-      targetId: branch.id,
-      action: "branch.created",
-      after: { name, code },
-      riskLevel: "MEDIUM",
+      const created = await tx.branch.create({
+        data: { tenantId, name, code, address: input.address ?? null, city: input.city ?? null },
+      });
+
+      await this.audit.record(
+        {
+          tenantId,
+          actorId: actor.accountId,
+          actorType: "TENANT_STAFF",
+          actorName: actor.displayName,
+          targetType: "Branch",
+          targetId: created.id,
+          action: "branch.created",
+          after: { name, code },
+          riskLevel: "MEDIUM",
+        },
+        tx,
+      );
+
+      return created;
     });
 
     return { id: branch.id };
@@ -159,19 +170,28 @@ export class BranchWarehouseService {
       }
     }
 
-    await this.prisma.branch.update({ where: { id: branchId }, data: { isActive } });
+    await this.prisma.$transaction(async (tx) => {
+      if (isActive) {
+        await this.entitlements.assertCanAddBranch(tenantId, tx);
+      }
 
-    await this.audit.record({
-      tenantId,
-      actorId: actor.accountId,
-      actorType: "TENANT_STAFF",
-      actorName: actor.displayName,
-      targetType: "Branch",
-      targetId: branchId,
-      action: isActive ? "branch.activated" : "branch.deactivated",
-      before: { isActive: branch.isActive },
-      after: { isActive },
-      riskLevel: "HIGH",
+      await tx.branch.update({ where: { id: branchId }, data: { isActive } });
+
+      await this.audit.record(
+        {
+          tenantId,
+          actorId: actor.accountId,
+          actorType: "TENANT_STAFF",
+          actorName: actor.displayName,
+          targetType: "Branch",
+          targetId: branchId,
+          action: isActive ? "branch.activated" : "branch.deactivated",
+          before: { isActive: branch.isActive },
+          after: { isActive },
+          riskLevel: "HIGH",
+        },
+        tx,
+      );
     });
   }
 
@@ -180,23 +200,32 @@ export class BranchWarehouseService {
     if (!name) throw new BadRequestException({ code: "name_required", message: "A warehouse needs a name." });
 
     const code = (input.code?.trim() || this.suggestCode(name)).toUpperCase();
-    const clash = await this.prisma.warehouse.findFirst({ where: { tenantId, code }, select: { id: true } });
-    if (clash) {
-      throw new ConflictException({ code: "warehouse_code_taken", message: "That warehouse code is already in use." });
-    }
+    const warehouse = await this.prisma.$transaction(async (tx) => {
+      await this.entitlements.assertCanAddWarehouse(tenantId, tx);
 
-    const warehouse = await this.prisma.warehouse.create({ data: { tenantId, name, code } });
+      const clash = await tx.warehouse.findFirst({ where: { tenantId, code }, select: { id: true } });
+      if (clash) {
+        throw new ConflictException({ code: "warehouse_code_taken", message: "That warehouse code is already in use." });
+      }
 
-    await this.audit.record({
-      tenantId,
-      actorId: actor.accountId,
-      actorType: "TENANT_STAFF",
-      actorName: actor.displayName,
-      targetType: "Warehouse",
-      targetId: warehouse.id,
-      action: "warehouse.created",
-      after: { name, code },
-      riskLevel: "MEDIUM",
+      const created = await tx.warehouse.create({ data: { tenantId, name, code } });
+
+      await this.audit.record(
+        {
+          tenantId,
+          actorId: actor.accountId,
+          actorType: "TENANT_STAFF",
+          actorName: actor.displayName,
+          targetType: "Warehouse",
+          targetId: created.id,
+          action: "warehouse.created",
+          after: { name, code },
+          riskLevel: "MEDIUM",
+        },
+        tx,
+      );
+
+      return created;
     });
 
     return { id: warehouse.id };

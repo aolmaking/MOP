@@ -4,7 +4,15 @@ import { PERMISSION_KEYS, type StaffRole } from '@mop/shared';
 import { ErrorBanner } from '../../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../../ui/button/button.directive';
 import type { PresentedError } from '../../../runtime/http/error.interceptor';
-import { ControlCenterApi, type RoleLock, type RoleLockHistoryEntry, type WorkshopSummary } from './control-center.api';
+import {
+  ControlCenterApi,
+  type EntitlementField,
+  type EntitlementFieldSummary,
+  type RoleLock,
+  type RoleLockHistoryEntry,
+  type TenantEntitlementsSummary,
+  type WorkshopSummary,
+} from './control-center.api';
 
 type State = 'loading' | 'ready' | 'error';
 
@@ -52,6 +60,7 @@ export class ControlCenterPage {
 
   protected readonly locks = signal<readonly RoleLock[]>([]);
   protected readonly history = signal<readonly RoleLockHistoryEntry[]>([]);
+  protected readonly entitlements = signal<TenantEntitlementsSummary | null>(null);
   protected readonly busy = signal(false);
   protected readonly actionError = signal<string | null>(null);
 
@@ -61,11 +70,20 @@ export class ControlCenterPage {
   protected readonly formAllowed = signal(false);
   protected readonly formReason = signal('');
 
+  // -- Limits & Entitlements form
+  protected readonly entitlementField = signal<EntitlementField>('maxBranches');
+  protected readonly entitlementNumber = signal(1);
+  protected readonly entitlementExports = signal<readonly string[]>([]);
+  protected readonly entitlementReason = signal('');
+
   // -- lifecycle form
   protected readonly lifecycleReason = signal('');
 
   protected readonly selected = computed(
     () => this.workshops().find((w) => w.id === this.selectedId()) ?? null,
+  );
+  protected readonly selectedEntitlement = computed(
+    () => this.entitlements()?.fields.find((field) => field.field === this.entitlementField()) ?? null,
   );
 
   constructor() {
@@ -95,6 +113,7 @@ export class ControlCenterPage {
     this.selectedId.set(tenantId);
     this.actionError.set(null);
     this.refreshLocks();
+    this.refreshEntitlements();
   }
 
   private refreshLocks(): void {
@@ -110,6 +129,22 @@ export class ControlCenterPage {
       .lockHistory(id)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({ next: (rows) => this.history.set(rows) });
+  }
+
+  private refreshEntitlements(): void {
+    const id = this.selectedId();
+    if (!id) return;
+
+    this.api
+      .entitlements(id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (summary) => {
+          this.entitlements.set(summary);
+          this.syncEntitlementForm(summary);
+        },
+        error: (err: PresentedError) => this.actionError.set(err.message ?? 'Could not load limits.'),
+      });
   }
 
   protected addLock(): void {
@@ -168,6 +203,68 @@ export class ControlCenterPage {
       });
   }
 
+  protected chooseEntitlementField(field: EntitlementField): void {
+    this.entitlementField.set(field);
+    const summary = this.entitlements();
+    if (summary) this.syncEntitlementForm(summary);
+  }
+
+  protected setEntitlementOverride(): void {
+    const id = this.selectedId();
+    const field = this.selectedEntitlement();
+    const reason = this.entitlementReason().trim();
+    if (!id || !field) return;
+    if (reason.length < 3) return this.actionError.set('Limits and entitlement overrides need a reason.');
+
+    this.busy.set(true);
+    this.actionError.set(null);
+    const body =
+      field.field === 'allowedExports'
+        ? { field: field.field, stringValues: this.entitlementExports(), reason }
+        : { field: field.field, numericValue: this.entitlementNumber(), reason };
+
+    this.api
+      .setEntitlementOverride(id, body)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (summary) => {
+          this.busy.set(false);
+          this.entitlementReason.set('');
+          this.entitlements.set(summary);
+          this.syncEntitlementForm(summary);
+        },
+        error: (err: PresentedError) => {
+          this.busy.set(false);
+          this.actionError.set(err.message ?? 'That limit did not save.');
+        },
+      });
+  }
+
+  protected clearEntitlementOverride(field: EntitlementFieldSummary): void {
+    const id = this.selectedId();
+    const reason = this.entitlementReason().trim();
+    if (!id) return;
+    if (reason.length < 3) return this.actionError.set('Clearing an override also needs a reason.');
+
+    this.busy.set(true);
+    this.actionError.set(null);
+    this.api
+      .clearEntitlementOverride(id, { field: field.field, reason })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (summary) => {
+          this.busy.set(false);
+          this.entitlementReason.set('');
+          this.entitlements.set(summary);
+          this.syncEntitlementForm(summary);
+        },
+        error: (err: PresentedError) => {
+          this.busy.set(false);
+          this.actionError.set(err.message ?? 'That override was not cleared.');
+        },
+      });
+  }
+
   protected archive(): void {
     this.lifecycle('archive');
   }
@@ -204,7 +301,34 @@ export class ControlCenterPage {
     return value.toLowerCase().replace(/_/g, ' ');
   }
 
+  protected displayEntitlementValue(value: number | readonly string[]): string {
+    return Array.isArray(value) ? (value.length ? value.map((item) => this.label(item)).join(', ') : 'None') : value.toString();
+  }
+
+  protected toggleExportOption(option: string, checked: boolean): void {
+    const current = new Set(this.entitlementExports());
+    if (checked) current.add(option);
+    else current.delete(option);
+    this.entitlementExports.set([...current]);
+  }
+
+  protected isExportSelected(option: string): boolean {
+    return this.entitlementExports().includes(option);
+  }
+
   protected when(iso: string): string {
     return new Date(iso).toLocaleString();
+  }
+
+  private syncEntitlementForm(summary: TenantEntitlementsSummary): void {
+    const field = summary.fields.find((item) => item.field === this.entitlementField()) ?? summary.fields[0] ?? null;
+    if (!field) return;
+    this.entitlementField.set(field.field);
+    if (field.kind === 'number' && typeof field.effective === 'number') {
+      this.entitlementNumber.set(field.effective);
+    }
+    if (field.kind === 'list' && Array.isArray(field.effective)) {
+      this.entitlementExports.set(field.effective);
+    }
   }
 }

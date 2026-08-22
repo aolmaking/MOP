@@ -11,6 +11,7 @@ process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { RolePermissionLockService } from "./role-permission-lock.service";
+import { TenantEntitlementsService } from "../entitlements/tenant-entitlements.service";
 import { AuditService } from "../../audit/audit.service";
 import { PermissionContextService } from "../../identity/access/permission-context.service";
 import { PermissionResolverService } from "../../identity/access/permission-resolver.service";
@@ -31,10 +32,12 @@ import type { PrismaService } from "../../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
-const locks = new RolePermissionLockService(asService, new AuditService(asService));
+const audit = new AuditService(asService);
+const locks = new RolePermissionLockService(asService, audit);
 
 const capabilities = new CapabilityResolutionService(asService);
-const contextService = new PermissionContextService(asService, capabilities);
+const entitlements = new TenantEntitlementsService(asService, audit);
+const contextService = new PermissionContextService(asService, capabilities, entitlements);
 const resolver = new PermissionResolverService(
   contextService,
   new PlatformControlLayer(),

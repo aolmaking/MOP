@@ -6,9 +6,11 @@ import { WorkOrderDisputeService } from "./work-order-dispute.service";
 import { StaffRestrictionService } from "./staff-restriction.service";
 import { RolePermissionLockService } from "./role-permission-lock.service";
 import { RolePermissionLockController } from "./role-permission-lock.controller";
+import { TenantEntitlementsController } from "./tenant-entitlements.controller";
 import { TenantLifecycleController } from "./tenant-lifecycle.controller";
 import { TenantRelationshipsModule } from "../tenant-relationships/tenant-relationships.module";
 import { PlatformGuard } from "../../identity/auth/platform.guard";
+import { EntitlementsModule } from "../entitlements/entitlements.module";
 
 /**
  * Phase 19's governance-depth primitives (19.B dispute state, 19.D
@@ -18,8 +20,8 @@ import { PlatformGuard } from "../../identity/auth/platform.guard";
  * is the writer.
  */
 @Module({
-  imports: [DatabaseModule, AuthModule, AuditModule, TenantRelationshipsModule],
-  controllers: [RolePermissionLockController, TenantLifecycleController],
+  imports: [DatabaseModule, AuthModule, AuditModule, TenantRelationshipsModule, EntitlementsModule],
+  controllers: [RolePermissionLockController, TenantLifecycleController, TenantEntitlementsController],
   providers: [WorkOrderDisputeService, StaffRestrictionService, RolePermissionLockService, PlatformGuard],
   exports: [WorkOrderDisputeService, StaffRestrictionService, RolePermissionLockService],
 })

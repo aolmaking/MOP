@@ -12,12 +12,14 @@ import { PrismaClient } from "@mop/database";
 import { WarehouseService } from "./warehouse.service";
 import { StockService } from "./stock.service";
 import { AuditService } from "../../audit/audit.service";
+import { TenantEntitlementsService } from "../../control/entitlements/tenant-entitlements.service";
 import type { PrismaService } from "../../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
 
-const warehouses = new WarehouseService(asService, new AuditService(asService));
+const audit = new AuditService(asService);
+const warehouses = new WarehouseService(asService, audit, new TenantEntitlementsService(asService, audit));
 const stock = new StockService(asService);
 
 const ACTOR = { accountId: "manager-1", displayName: "Inventory Manager" };

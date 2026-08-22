@@ -10,6 +10,7 @@ import { CapabilitiesModule } from "../capabilities/capabilities.module";
 import { WorkshopsService } from "./workshops/workshops.service";
 import { WorkshopHealthService } from "./workshops/workshop-health.service";
 import { SpecializationModule } from "../../systems/people/specialization/specialization.module";
+import { EntitlementsModule } from "../entitlements/entitlements.module";
 import { PlatformReportsController } from "./reports/platform-reports.controller";
 import { PlatformReportsService } from "./reports/platform-reports.service";
 import { LiveViewController } from "./live-view.controller";
@@ -18,7 +19,7 @@ import { OnboardingController } from "./onboarding/onboarding.controller";
 import { OnboardingService } from "./onboarding/onboarding.service";
 
 @Module({
-  imports: [AuditModule, AuthModule, CapabilitiesModule, SpecializationModule],
+  imports: [AuditModule, AuthModule, CapabilitiesModule, SpecializationModule, EntitlementsModule],
   // PlatformController owns Add Workshop Owner + the availability-check
   // endpoints (Phase 2 step 2); WorkshopsController owns the Workshops
   // list/details/freeze/reactivate endpoints (step 3); PlatformReportsController

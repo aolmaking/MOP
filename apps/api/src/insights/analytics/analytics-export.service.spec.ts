@@ -10,6 +10,16 @@ function serviceWith(overrides: {
       findUnique: jest.fn().mockResolvedValue({ plan: { allowedExports: overrides.allowedExports ?? ["OPERATIONS"] } }),
     },
   };
+  const entitlements = {
+    assertExportAllowed: jest.fn(async (_tenantId: string, sourcePage: string) => {
+      if (!(overrides.allowedExports ?? ["OPERATIONS"]).includes(sourcePage)) {
+        throw new ForbiddenException({
+          code: "export_not_in_plan",
+          message: "This report category is not included in this workshop's Allowed Exports entitlement.",
+        });
+      }
+    }),
+  };
   const operations = {
     build: jest.fn().mockResolvedValue(
       overrides.operationsReport ?? {
@@ -23,14 +33,14 @@ function serviceWith(overrides: {
     ),
   };
   const service = new AnalyticsExportService(
-    prisma as never,
+    entitlements as never,
     operations as never,
     {} as never,
     {} as never,
     {} as never,
     {} as never,
   );
-  return { service, prisma, operations };
+  return { service, prisma, entitlements, operations };
 }
 
 describe("AnalyticsExportService", () => {

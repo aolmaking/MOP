@@ -3,6 +3,7 @@ import { Prisma } from "@mop/database";
 import { DELEGATION_KEYS, type CapabilityProfile, type SessionContext } from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
+import { TenantEntitlementsService } from "../../control/entitlements/tenant-entitlements.service";
 
 /**
  * Everything the permission layers need, loaded once.
@@ -59,6 +60,7 @@ export class PermissionContextService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly capabilities: CapabilityResolutionService,
+    private readonly entitlements: TenantEntitlementsService,
   ) {}
 
   async load(session: SessionContext): Promise<PermissionContext> {
@@ -85,7 +87,7 @@ export class PermissionContextService {
   private async loadWithin(tx: Prisma.TransactionClient, session: SessionContext): Promise<PermissionContext> {
     const tenantId = session.tenantId!;
 
-    const [controlSettings, tenant, capabilities, roleRows, overrideRows, configuration] = await Promise.all([
+    const [controlSettings, entitlements, capabilities, roleRows, overrideRows, configuration] = await Promise.all([
       // Platform locks and owner delegations are both ControlSetting rows
       // for this tenant, so they load as ONE query and are partitioned by
       // type below. Two obvious queries would be a seventh round trip on
@@ -104,10 +106,7 @@ export class PermissionContextService {
         },
         select: { key: true, value: true, type: true },
       }),
-      tx.tenant.findUnique({
-        where: { id: tenantId },
-        select: { plan: { select: { allowedModules: true, allowedExports: true } } },
-      }),
+      this.entitlements.effectivePlanForTenant(tenantId, tx),
       this.capabilities.resolveCurrent(tenantId, tx),
       // Role rows are only meaningful for tenant staff; a customer session
       // has no StaffRole to key them by.
@@ -138,8 +137,8 @@ export class PermissionContextService {
           .map((row) => [row.key, (row.value as { allowed?: boolean })?.allowed] as const)
           .filter((entry): entry is readonly [string, boolean] => typeof entry[1] === "boolean"),
       ),
-      planAllowedModules: tenant?.plan.allowedModules ?? [],
-      planAllowedExports: tenant?.plan.allowedExports ?? [],
+      planAllowedModules: entitlements.allowedModules,
+      planAllowedExports: entitlements.allowedExports,
       capabilities,
       roleTemplate: new Map(roleRows.map((row) => [row.permissionKey, row.allowed])),
       userOverrides: new Map(

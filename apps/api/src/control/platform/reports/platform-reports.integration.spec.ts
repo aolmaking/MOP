@@ -17,13 +17,14 @@ import { WorkshopsService } from "../workshops/workshops.service";
 import { WorkshopHealthService } from "../workshops/workshop-health.service";
 import { AuditService } from "../../../audit/audit.service";
 import { hashPassword } from "../../../identity/auth/password.util";
+import { TenantEntitlementsService } from "../../entitlements/tenant-entitlements.service";
 import type { PrismaService } from "../../../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
 const health = new WorkshopHealthService();
 const audit = new AuditService(asService);
-const workshops = new WorkshopsService(asService, audit, health);
+const workshops = new WorkshopsService(asService, audit, health, new TenantEntitlementsService(asService, audit));
 const reports = new PlatformReportsService(asService, workshops);
 
 const SUFFIX = `plat-rep-${Date.now()}`;

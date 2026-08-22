@@ -73,7 +73,14 @@ function buildHarness() {
     }),
   } as unknown as CapabilityResolutionService;
 
-  const contextService = new PermissionContextService(prisma, capabilities);
+  const entitlements = {
+    effectivePlanForTenant: jest.fn(async () => {
+      counters.tenant += 1;
+      return { maxBranches: 5, maxUsers: 50, maxWarehouses: 5, allowedModules: [], allowedExports: [] };
+    }),
+  };
+
+  const contextService = new PermissionContextService(prisma, capabilities, entitlements as never);
   const resolver = new PermissionResolverService(
     contextService,
     new PlatformControlLayer(),

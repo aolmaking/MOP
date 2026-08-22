@@ -4,6 +4,7 @@ import type { StaffRole } from "@mop/shared";
 import { PrismaService } from "../../../runtime/database/prisma.service";
 import { AuditService } from "../../../audit/audit.service";
 import { sha256 } from "../../../identity/auth/token.util";
+import { TenantEntitlementsService } from "../../../control/entitlements/tenant-entitlements.service";
 
 export interface StaffActor {
   readonly accountId: string;
@@ -62,6 +63,7 @@ export class StaffService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly entitlements: TenantEntitlementsService,
   ) {}
 
   async list(tenantId: string, cursor?: string, take = 25): Promise<StaffPage> {
@@ -105,17 +107,19 @@ export class StaffService {
       });
     }
 
-    const existing = await this.prisma.account.findFirst({
-      where: { tenantId, email: input.email },
-      select: { id: true },
-    });
-    if (existing) {
-      throw new ConflictException({ code: "email_taken", message: "That email is already used at this workshop." });
-    }
-
     const rawInviteToken = randomBytes(32).toString("hex");
 
     const staffId = await this.prisma.$transaction(async (tx) => {
+      await this.entitlements.assertCanAddUser(tenantId, tx);
+
+      const existing = await tx.account.findFirst({
+        where: { tenantId, email: input.email },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new ConflictException({ code: "email_taken", message: "That email is already used at this workshop." });
+      }
+
       const account = await tx.account.create({
         data: {
           accountType: "TENANT_STAFF",
@@ -203,6 +207,10 @@ export class StaffService {
     if (staff.isActive === isActive) return;
 
     await this.prisma.$transaction(async (tx) => {
+      if (isActive) {
+        await this.entitlements.assertCanAddUser(tenantId, tx);
+      }
+
       await tx.staffUser.update({ where: { id: staffId }, data: { isActive } });
       await tx.account.update({
         where: { id: staff.accountId },

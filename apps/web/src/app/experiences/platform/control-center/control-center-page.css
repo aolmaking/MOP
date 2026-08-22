@@ -1,12 +1,3 @@
-/*
- * Control Center -- Governance Controls.
- *
- * Every control here overrides a workshop's own decisions, so the page is
- * built to slow the hand down: the tenant being governed is always on
- * screen, each action states its consequence, and nothing fires without a
- * written reason.
- */
-
 .control-center {
   display: flex;
   flex-direction: column;
@@ -67,7 +58,6 @@
   color: var(--text);
 }
 
-/* Which workshop is being governed must never be ambiguous. */
 .picker-item--active {
   border-inline-start-color: var(--brand);
   color: var(--text);
@@ -157,8 +147,6 @@
   letter-spacing: var(--tracking-label);
 }
 
-/* A permission forced ON is still an override, but it is not a denial --
-   colouring both the same would make every lock read as a restriction. */
 .badge--on {
   background: var(--success-bg);
   color: var(--success);
@@ -241,6 +229,7 @@
 }
 
 .field select,
+.field input,
 .field textarea {
   padding: var(--space-2);
   background: var(--bg);
@@ -253,9 +242,14 @@
 }
 
 .field select:focus-visible,
+.field input:focus-visible,
 .field textarea:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
+}
+
+.entitlement--override {
+  border-inline-start-color: var(--success);
 }
 
 .lifecycle-actions {
@@ -283,7 +277,6 @@
   font-size: var(--text-sm);
 }
 
-/* A removed lock still belongs in the record, but it is not in force. */
 .history-row--removed {
   color: var(--text-faint);
   text-decoration: line-through;
@@ -323,8 +316,6 @@
     grid-template-columns: 1fr;
   }
 
-  /* Stacked, the picker is a short list above the controls rather than a
-     sticky column beside them. */
   .picker {
     position: static;
     flex-direction: row;
@@ -334,4 +325,5 @@
   .picker-item {
     flex: 1 1 12rem;
   }
+
 }

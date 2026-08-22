@@ -65,10 +65,20 @@ describe("WorkshopsService", () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
     };
+    const entitlements = {
+      current: jest.fn().mockResolvedValue({
+        fields: [
+          { field: "maxBranches", effective: 5 },
+          { field: "maxUsers", effective: 25 },
+          { field: "maxWarehouses", effective: 3 },
+        ],
+      }),
+    };
 
     return {
       prisma,
-      service: new WorkshopsService(prisma as never, {} as never, new WorkshopHealthService()),
+      service: new WorkshopsService(prisma as never, {} as never, new WorkshopHealthService(), entitlements as never),
+      entitlements,
     };
   }
 

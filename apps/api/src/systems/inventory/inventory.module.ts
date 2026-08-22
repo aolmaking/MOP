@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { PoliciesModule } from "../../control/policies/policies.module";
+import { EntitlementsModule } from "../../control/entitlements/entitlements.module";
 import { DatabaseModule } from "../../runtime/database/database.module";
 import { AuthModule } from "../../identity/auth/auth.module";
 import { AccessModule } from "../../identity/access/access.module";
@@ -41,6 +42,7 @@ import { WarehouseService } from "./warehouse.service";
     OperationsModule,
     AuditModule,
     PoliciesModule,
+    EntitlementsModule,
   ],
   controllers: [InventoryController],
   providers: [

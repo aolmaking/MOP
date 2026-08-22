@@ -4,6 +4,7 @@ import { PrismaService } from "../../../runtime/database/prisma.service";
 import { AuditService } from "../../../audit/audit.service";
 import { WorkshopHealthService, type HealthStatus, type HealthWarning } from "./workshop-health.service";
 import type { ListWorkshopsQueryDto } from "./list-workshops.dto";
+import { TenantEntitlementsService } from "../../entitlements/tenant-entitlements.service";
 
 const CLOSED_WORK_ORDER_STATUSES = ["CLOSED", "CANCELLED"] as const;
 const FREEZING_STATUSES = new Set(["FROZEN", "SUSPENDED"]);
@@ -42,6 +43,7 @@ export class WorkshopsService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly health: WorkshopHealthService,
+    private readonly entitlements: TenantEntitlementsService,
   ) {}
 
   async list(query: ListWorkshopsQueryDto): Promise<WorkshopListResult> {
@@ -112,7 +114,18 @@ export class WorkshopsService {
     });
     if (!tenant) throw new NotFoundException({ code: "workshop_not_found", message: "Workshop not found." });
 
-    const [owner, branchPage, branchTotal, warehousePage, warehouseTotal, usersByRole, recentAudit, recentControls, aggregates] =
+    const [
+      owner,
+      branchPage,
+      branchTotal,
+      warehousePage,
+      warehouseTotal,
+      usersByRole,
+      recentAudit,
+      recentControls,
+      aggregates,
+      entitlements,
+    ] =
       await Promise.all([
         this.prisma.staffUser.findFirst({ where: { tenantId, role: "TENANT_OWNER" }, include: { account: true } }),
         this.prisma.branch.findMany({ where: { tenantId }, take: 20, orderBy: { name: "asc" } }),
@@ -127,6 +140,7 @@ export class WorkshopsService {
           take: 10,
         }),
         this.attachAggregates([tenant]),
+        this.entitlements.current(tenantId),
       ]);
 
     const row = aggregates[0];
@@ -158,9 +172,9 @@ export class WorkshopsService {
         name: tenant.plan.name,
         monthlyPrice: tenant.plan.monthlyPrice.toString(),
         limits: {
-          branches: { used: branchTotal, max: tenant.plan.maxBranches },
-          users: { used: row.userCount, max: tenant.plan.maxUsers },
-          warehouses: { used: warehouseTotal, max: tenant.plan.maxWarehouses },
+          branches: { used: branchTotal, max: effectiveNumber(entitlements, "maxBranches") },
+          users: { used: row.userCount, max: effectiveNumber(entitlements, "maxUsers") },
+          warehouses: { used: warehouseTotal, max: effectiveNumber(entitlements, "maxWarehouses") },
         },
       },
       branches: { items: branchPage, total: branchTotal },
@@ -457,3 +471,8 @@ function maxDate(a: Date | null, b: Date | null): Date | null {
 }
 
 export type { HealthWarning };
+
+function effectiveNumber(summary: Awaited<ReturnType<TenantEntitlementsService["current"]>>, field: "maxBranches" | "maxUsers" | "maxWarehouses"): number {
+  const item = summary.fields.find((entry) => entry.field === field);
+  return typeof item?.effective === "number" ? item.effective : 0;
+}

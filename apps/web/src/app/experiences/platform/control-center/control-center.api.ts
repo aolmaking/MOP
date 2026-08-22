@@ -25,6 +25,35 @@ export interface WorkshopSummary {
   readonly status: string;
 }
 
+export type EntitlementField = 'maxBranches' | 'maxUsers' | 'maxWarehouses' | 'allowedExports';
+
+export interface EntitlementOverride {
+  readonly id: string;
+  readonly field: EntitlementField;
+  readonly value: number | readonly string[];
+  readonly reason: string | null;
+  readonly createdBy: string;
+  readonly createdAt: string;
+  readonly active: boolean;
+}
+
+export interface EntitlementFieldSummary {
+  readonly field: EntitlementField;
+  readonly label: string;
+  readonly kind: 'number' | 'list';
+  readonly planDefault: number | readonly string[];
+  readonly effective: number | readonly string[];
+  readonly usage?: number;
+  readonly options?: readonly string[];
+  readonly override: EntitlementOverride | null;
+}
+
+export interface TenantEntitlementsSummary {
+  readonly tenant: { readonly id: string; readonly name: string; readonly plan: { readonly id: string; readonly code: string; readonly name: string } };
+  readonly usage: { readonly branches: number; readonly users: number; readonly warehouses: number };
+  readonly fields: readonly EntitlementFieldSummary[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class ControlCenterApi {
   private readonly http = inject(HttpClient);
@@ -43,6 +72,29 @@ export class ControlCenterApi {
   lockHistory(tenantId: string): Observable<RoleLockHistoryEntry[]> {
     return this.http.get<RoleLockHistoryEntry[]>(
       `/api/v1/platform/governance/workshops/${tenantId}/role-locks/history`,
+    );
+  }
+
+  entitlements(tenantId: string): Observable<TenantEntitlementsSummary> {
+    return this.http.get<TenantEntitlementsSummary>(`/api/v1/platform/governance/workshops/${tenantId}/entitlements`);
+  }
+
+  setEntitlementOverride(
+    tenantId: string,
+    body:
+      | { field: Exclude<EntitlementField, 'allowedExports'>; numericValue: number; reason: string }
+      | { field: 'allowedExports'; stringValues: readonly string[]; reason: string },
+  ): Observable<TenantEntitlementsSummary> {
+    return this.http.post<TenantEntitlementsSummary>(`/api/v1/platform/governance/workshops/${tenantId}/entitlements`, body);
+  }
+
+  clearEntitlementOverride(
+    tenantId: string,
+    body: { field: EntitlementField; reason: string },
+  ): Observable<TenantEntitlementsSummary> {
+    return this.http.post<TenantEntitlementsSummary>(
+      `/api/v1/platform/governance/workshops/${tenantId}/entitlements/clear`,
+      body,
     );
   }
 

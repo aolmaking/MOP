@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { AuditService } from "../../audit/audit.service";
+import { TenantEntitlementsService } from "../../control/entitlements/tenant-entitlements.service";
 
 export interface WarehouseActor {
   readonly accountId: string;
@@ -35,6 +36,7 @@ export class WarehouseService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly entitlements: TenantEntitlementsService,
   ) {}
 
   /**
@@ -106,6 +108,7 @@ export class WarehouseService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      await this.entitlements.assertCanAddWarehouse(tenantId, tx);
       await tx.warehouse.update({ where: { id: warehouseId }, data: { isActive: true } });
 
       await this.audit.record(
