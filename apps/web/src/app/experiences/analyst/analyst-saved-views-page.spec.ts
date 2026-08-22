@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
+import { AccessApi } from '../../identity/access.api';
 import { AnalystApi, type AnalystSavedView } from './analyst.api';
 import { AnalystSavedViewsPage } from './analyst-saved-views-page';
 
@@ -16,28 +17,38 @@ function view(overrides: Partial<AnalystSavedView> = {}): AnalystSavedView {
   };
 }
 
-function render(items: readonly AnalystSavedView[] = [view()]) {
+function render(items: readonly AnalystSavedView[] = [view()], exportAllowed = false) {
   const api = {
     savedViews: vi.fn().mockReturnValue(of({ items })),
     renameView: vi.fn().mockImplementation((id: string, name: string) => of(view({ id, name }))),
     deleteView: vi.fn().mockReturnValue(of({ ok: true as const })),
   };
+  const access = { can: vi.fn().mockReturnValue(of(exportAllowed)) };
   TestBed.configureTestingModule({
-    providers: [provideRouter([]), { provide: AnalystApi, useValue: api }],
+    providers: [provideRouter([]), { provide: AnalystApi, useValue: api }, { provide: AccessApi, useValue: access }],
   });
   const fixture = TestBed.createComponent(AnalystSavedViewsPage);
   fixture.detectChanges();
-  return { fixture, element: fixture.nativeElement as HTMLElement, api };
+  return { fixture, element: fixture.nativeElement as HTMLElement, api, access };
 }
 
 describe('AnalystSavedViewsPage', () => {
-  it('renders saved views with open links and the explicit export blocker', () => {
-    const { element } = render();
+  it('renders saved views with open links and the plan export blocker', () => {
+    const { element, access } = render();
 
     expect(element.textContent).toContain('Morning operations');
     expect(element.textContent).toContain('Operations');
     expect(element.querySelector('a')?.getAttribute('href')).toContain('/analyst/operations');
     expect(element.textContent).toContain('Allowed Exports');
+    expect(element.textContent).toContain('no categories enabled');
+    expect(access.can).toHaveBeenCalledWith('analytics.export');
+  });
+
+  it('names export file generation as the remaining blocker when the plan allows exports', () => {
+    const { element } = render([view()], true);
+
+    expect(element.textContent).toContain("This workshop's plan allows exports");
+    expect(element.textContent).toContain('export endpoint');
   });
 
   it('renames a saved view without changing its configuration', () => {

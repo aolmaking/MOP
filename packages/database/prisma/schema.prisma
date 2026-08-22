@@ -317,6 +317,7 @@ model Plan {
   allowedModules    String[]
   allowedFeatures   String[]
   allowedReports    String[]
+  allowedExports    String[]       @default([])
   monthlyPrice      Decimal        @db.Decimal(12, 2)
   createdAt         DateTime       @default(now())
 

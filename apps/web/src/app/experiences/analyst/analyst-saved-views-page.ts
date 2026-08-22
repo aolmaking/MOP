@@ -4,6 +4,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ErrorBanner } from '../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../ui/button/button.directive';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
+import { AccessApi } from '../../identity/access.api';
 import { AnalystApi, type AnalystSavedView, type AnalystSavedViewSourcePage } from './analyst.api';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
@@ -32,6 +33,7 @@ const SOURCE_ROUTE: Record<AnalystSavedViewSourcePage, string> = {
 })
 export class AnalystSavedViewsPage {
   private readonly api = inject(AnalystApi);
+  private readonly access = inject(AccessApi);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly state = signal<State>('loading');
@@ -40,6 +42,7 @@ export class AnalystSavedViewsPage {
   protected readonly editingId = signal<string | null>(null);
   protected readonly editedName = signal('');
   protected readonly busyId = signal<string | null>(null);
+  protected readonly exportAllowed = signal(false);
 
   constructor() {
     this.load();
@@ -54,12 +57,20 @@ export class AnalystSavedViewsPage {
         next: (r) => {
           this.views.set(r.items);
           this.state.set('ready');
+          this.loadExportAccess();
         },
         error: (err: PresentedError) => {
           this.state.set(err.httpStatus === 403 ? 'forbidden' : 'error');
           this.error.set(err);
         },
       });
+  }
+
+  private loadExportAccess(): void {
+    this.access
+      .can('analytics.export')
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((allowed) => this.exportAllowed.set(allowed));
   }
 
   protected startRename(view: AnalystSavedView): void {

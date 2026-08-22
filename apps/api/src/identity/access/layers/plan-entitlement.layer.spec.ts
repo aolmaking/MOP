@@ -5,8 +5,10 @@ import { DEFAULT_DECISION } from "../types";
 
 const layer = new PlanEntitlementLayer();
 const INVENTORY_KEY = "inventory.stock.adjust";
+const EXPORT_KEY = "analytics.export";
 
 const withPlan = (planAllowedModules: string[]) => createContext({ planAllowedModules });
+const withExports = (planAllowedExports: string[]) => createContext({ planAllowedExports });
 
 describe("PlanEntitlementLayer", () => {
   it("defers when the session has no tenant", () => {
@@ -32,5 +34,16 @@ describe("PlanEntitlementLayer", () => {
 
     expect(decision).toMatchObject({ allowed: false, locked: true });
     expect(decision?.reason).toContain("plan");
+  });
+
+  it("denies and locks export permission when the plan allows no export categories", () => {
+    const decision = layer.evaluate(createSession(), EXPORT_KEY, DEFAULT_DECISION, withExports([]));
+
+    expect(decision).toMatchObject({ allowed: false, locked: true });
+    expect(decision?.reason).toContain("Exports");
+  });
+
+  it("defers export permission when the plan allows at least one export category", () => {
+    expect(layer.evaluate(createSession(), EXPORT_KEY, DEFAULT_DECISION, withExports(["OPERATIONS"]))).toBeNull();
   });
 });

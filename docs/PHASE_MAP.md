@@ -53,7 +53,7 @@
 | 9 — Billing / Invoicing | 🟠 engine, refund workflow, and credit notes complete and tested; **no country-specific legal invoicing adapter exists** — every real country is compliance-blocked until one ships |
 | 10 — Team Leader & People/Performance | ✅ complete (narrowed) — API and all 5 web pages (4 Team Leader + Owner Home) built and reachable; see `PHASE_10.md` §6 |
 | 11 — Customer Portal | ✅ complete — API + all 6 web pages |
-| 12 — Reporting & Data Analyst | 🟢 6/7 Data Analyst pages complete; Saved Views persistence shipped; Export remains deferred pending `Plan.allowedExports` |
+| 12 — Reporting & Data Analyst | 🟢 6/7 Data Analyst pages complete; Saved Views persistence shipped; `Plan.allowedExports`/`analytics.export` gate shipped; Export file generation remains deferred |
 | 13 — System Automation | ✅ complete (lock, not a separate worker) — `SchedulerLockService` advisory lock |
 | 14 — Internationalization & Release Readiness | 🟠 permission-key lint + a perf fix shipped; the translation pass itself was never done |
 | 15 — Specialization Discovery | ✅ schema settled, 3/5 primitives proven end-to-end |

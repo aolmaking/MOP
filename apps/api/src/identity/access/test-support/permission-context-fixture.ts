@@ -9,6 +9,7 @@ export function createContext(overrides: Partial<PermissionContext> = {}): Permi
   return {
     platformLocks: new Map(),
     planAllowedModules: [],
+    planAllowedExports: [],
     capabilities: {},
     roleTemplate: new Map(),
     userOverrides: new Map(),

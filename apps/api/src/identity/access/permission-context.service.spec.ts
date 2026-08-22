@@ -36,7 +36,7 @@ function buildHarness() {
     tenant: {
       findUnique: jest.fn(async () => {
         counters.tenant += 1;
-        return { plan: { allowedModules: [] } };
+        return { plan: { allowedModules: [], allowedExports: [] } };
       }),
     },
     rolePermission: {

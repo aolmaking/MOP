@@ -35,20 +35,23 @@ Reporting coherence.
 - Data Analyst saved views now have a persistent `AnalystSavedView` model, migration, tenant/account ownership, and `analytics.saved_views.manage` permission.
 - Analytics API exposes saved-view list/get/create/rename/delete, always using the current session's tenant/account rather than client-supplied ownership.
 - The five analytical pages expose Save This View actions, Analytics Home renders saved-view shortcuts, and `/analyst/saved-views` supports Open/Rename/Delete.
-- Data Analyst export remains deliberately deferred because the required plan-level `allowedExports` entitlement does not exist yet.
+- Data Analyst export remains deliberately deferred because no export file endpoint exists yet; the required plan-level `allowedExports` entitlement now exists and gates `analytics.export`.
 - `PAGE_INVENTORY.md`, `PHASE_MAP.md`, and `PROJECT_STATE.md` now reflect 46 complete + 7 partial + 0 missing pages.
 - Analytics Home now composes all five analytical service tiles, including Feature Adoption, rather than leaving the Feature Adoption page out of the home cross-section.
 - The legacy `reports.company.view` backend surface remains live but now applies the current session's assigned branch/category scope to technician metrics, throughput, blockers, and finance totals.
+- `Plan.allowedExports` and `analytics.export` are implemented; the permission resolver locks export permission when a workshop's plan has no allowed export categories.
+- The Saved Views / Exports page now reflects plan entitlement truth: plan-locked when `analytics.export` denies, and endpoint-deferred when the plan permits exports.
 
 ## Current Task
 
-Inspect Governance Controls / Limits & Entitlements, especially the plan entitlement backing needed for Data Analyst export and other deferred controls.
+Checkpoint the export-entitlement foundation, then continue Governance Controls / Limits & Entitlements with per-workshop governed overrides and actual export file generation still remaining.
 
 ## Remaining Tasks
 
-- Inspect Governance Controls / Limits & Entitlements documentation and implementation without re-reading unrelated areas.
-- Determine the smallest backend-first entitlement model work that unblocks documented deferred features without inventing new product scope.
-- Keep Data Analyst export deferred until a real `Plan.allowedExports` entitlement and permission gate exist.
+- Run recursive typecheck and web build after the export entitlement patch.
+- Commit and push the export entitlement checkpoint.
+- Inspect whether per-workshop Limits & Entitlements should be modeled as `ControlSetting` overrides on top of the new plan fields.
+- Keep Data Analyst export file generation deferred until an actual export endpoint can be implemented against `analytics.export`.
 
 ## Last Verified Commit
 
@@ -72,6 +75,11 @@ Inspect Governance Controls / Limits & Entitlements, especially the plan entitle
 - `corepack pnpm --filter @mop/web test -- --include src/app/experiences/analyst/saved-view-action.spec.ts --include src/app/experiences/analyst/analyst-saved-views-page.spec.ts --watch=false --isolate=false`
 - `corepack pnpm --filter @mop/api test -- analytics-home.service.spec.ts reporting.service.spec.ts`
 - `corepack pnpm --filter @mop/web test -- --include src/app/experiences/analyst/analyst-home-page.spec.ts --watch=false --isolate=false`
+- `corepack pnpm --filter @mop/shared build`
+- `corepack pnpm --filter @mop/database generate`
+- `corepack pnpm --filter @mop/database validate`
+- `corepack pnpm --filter @mop/api test -- plan-entitlement.layer.spec.ts permission-context.service.spec.ts`
+- `corepack pnpm --filter @mop/web test -- --include src/app/experiences/analyst/analyst-saved-views-page.spec.ts --watch=false --isolate=false`
 - `node tools/lint-permission-keys.mjs`
 - `corepack pnpm -r typecheck`
 - `corepack pnpm --filter @mop/database validate`
@@ -87,8 +95,8 @@ Inspect Governance Controls / Limits & Entitlements, especially the plan entitle
 - Preserve backend-first behavior: UI reflects policies resolved by the API, never duplicates policy decisions locally.
 - Do not treat old audit entries as current unless source confirms them. Role permission locks and technician part requests are implemented now.
 - Keep legacy reporting endpoints only when they preserve current scope/privacy rules; scoped Data Analyst sessions must never receive unscoped tenant reports through an older permission surface.
-- Deferred or missing features remain out of scope until their documented backing model exists: Data Analyst CSV export needs `Plan.allowedExports`, full country billing adapters need a country-specific adapter, and audited billing override still needs its own path.
+- Deferred or missing features remain out of scope until their documented backing model exists: Data Analyst CSV export has its entitlement gate now but still needs an export endpoint, full country billing adapters need a country-specific adapter, and audited billing override still needs its own path.
 
 ## Exact Next Action
 
-Inspect Governance Controls / Limits & Entitlements docs and implementation, then choose the smallest backend-first entitlement work to unblock documented deferred controls.
+Run typecheck and web build, then commit and push the export entitlement checkpoint.

@@ -24,7 +24,7 @@
 
 Legend: ✅ complete · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built at all
 
-**No page in the 53-page spec is now zero-implementation.** Access Denied and Password Reset are built as real shared public pages, and Data Analyst Saved Views now has its persistence/list/manage surface. Export remains a named 🟡 gap because it depends on the still-missing plan-level `allowedExports` entitlement.
+**No page in the 53-page spec is now zero-implementation.** Access Denied and Password Reset are built as real shared public pages, and Data Analyst Saved Views now has its persistence/list/manage surface. Export remains a named 🟡 gap because file generation is not built yet; the plan-level `allowedExports` entitlement and `analytics.export` gate now exist.
 
 ---
 
@@ -104,7 +104,7 @@ Every Owner page has at least a real, working surface — none are ⬜. Home, Or
 | Inventory Analytics | ✅ | `/analyst/inventory` | Reuses `InventoryReportsService` (Inventory Manager's own page) rather than a second velocity implementation; branch scope resolved to warehouse scope via `BranchWarehouseAccess`; inventory value gated on `inventory.cost.view`, same as the Inventory Manager's own catalog |
 | Customer Decision Analytics | ✅ | `/analyst/decisions` | Approval/rejection rates by importance, response time, overdue rate, critical-rejection follow-up outcome, link-open rate. No customer-identifying field anywhere — enforced by its own test |
 | Feature Adoption Analytics | ✅ | `/analyst/feature-adoption` | Real usage counts for Quick/Full Inspection and Customer Decision Request volume. Custom Fields and Message Templates explicitly reported as **not trackable yet** (no consuming form captures field values; no message-sending code exists anywhere in the product) rather than a fabricated count |
-| Saved Views / Exports | 🟡 | `/analyst/saved-views` | Saved Views persistence is built: per-analyst named configurations, source page, created date, Open/Rename/Delete, plus Save This View actions on the analytical pages. Export is still deferred because it must be gated by `analytics.export` and Super Admin's Allowed Exports plan entitlement, and `Plan.allowedExports` does not exist yet |
+| Saved Views / Exports | 🟡 | `/analyst/saved-views` | Saved Views persistence is built: per-analyst named configurations, source page, created date, Open/Rename/Delete, plus Save This View actions on the analytical pages. Export is still deferred because no export file endpoint exists yet; `analytics.export` is now gated by Super Admin's Allowed Exports plan entitlement (`Plan.allowedExports`) |
 
 ## Customer Portal — 6 / 6 ✅
 

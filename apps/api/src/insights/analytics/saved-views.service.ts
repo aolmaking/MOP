@@ -18,9 +18,9 @@ export interface CreateAnalystSavedViewInput {
 }
 
 /**
- * Data Analyst Saved Views -- persistence only. The export half remains
- * blocked until the plan-level Allowed Exports entitlement exists, per
- * the current implementation audit.
+ * Data Analyst Saved Views -- persistence only. Export file generation is
+ * deliberately separate: `analytics.export` is now plan-entitlement-gated,
+ * but no endpoint in this service writes report bytes.
  */
 @Injectable()
 export class AnalystSavedViewsService {
