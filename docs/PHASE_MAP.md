@@ -19,7 +19,7 @@
 | Operations engine | `WorkOrderLifecycleService` sole writer of status, capability-aware from its first line |
 | Auth | 4 account types, DB-backed sessions, refresh rotation, lockout, rate limiting |
 | Money | `Decimal` in DB, `string` across API, dedicated `lint-money.mjs` guarding it |
-| Pages | **44 complete + 6 partial + 3 not built, of 53 spec'd** — see `PAGE_INVENTORY.md` for the full per-role breakdown; that document is the only place this count is tracked |
+| Pages | **46 complete + 7 partial + 0 not built, of 53 spec'd** — see `PAGE_INVENTORY.md` for the full per-role breakdown; that document is the only place this count is tracked |
 | Test coverage | Business logic is real everywhere (no stubs, no hardcoded fake returns found anywhere in `apps/api/src`), but only Auth, Access/Permissions, and Platform/Super-Admin have tests that exercise a real HTTP request through the session guard — every other subsystem is tested at the service layer only, which proves the logic but not the route wiring |
 | Discovery | Three discovery passes complete and archived: 20 workshop-floor scenarios (`docs/archive/discovery/scenarios/`), 40 platform-layer scenarios (`docs/archive/discovery/scenarios2/`), 20 edge cases (`docs/archive/discovery/scenarios3/`) |
 
@@ -53,7 +53,7 @@
 | 9 — Billing / Invoicing | 🟠 engine, refund workflow, and credit notes complete and tested; **no country-specific legal invoicing adapter exists** — every real country is compliance-blocked until one ships |
 | 10 — Team Leader & People/Performance | ✅ complete (narrowed) — API and all 5 web pages (4 Team Leader + Owner Home) built and reachable; see `PHASE_10.md` §6 |
 | 11 — Customer Portal | ✅ complete — API + all 6 web pages |
-| 12 — Reporting & Data Analyst | 🟢 6/7 Data Analyst pages complete; Saved Views/Exports has zero implementation |
+| 12 — Reporting & Data Analyst | 🟢 6/7 Data Analyst pages complete; Saved Views persistence shipped; `Plan.allowedExports`/`analytics.export` gate shipped; Export file generation remains deferred |
 | 13 — System Automation | ✅ complete (lock, not a separate worker) — `SchedulerLockService` advisory lock |
 | 14 — Internationalization & Release Readiness | 🟠 permission-key lint + a perf fix shipped; the translation pass itself was never done |
 | 15 — Specialization Discovery | ✅ schema settled, 3/5 primitives proven end-to-end |
@@ -65,7 +65,7 @@
 | **21 — Policy & Decision Architecture** | 🟠 **architectural resolution pass complete** — relevance graph built and proven acyclic (4 cycles found+fixed), S-01 resolved into 3 sub-questions, QC decomposed (new P-71), owner/Super-Admin money authority recorded as an open conflict rather than assumed; awaiting owner review; no implementation, by design |
 | Platform Super Admin (cross-cutting) | 🟢 5/6 pages complete, 1 partial — **Governance Controls and Workshop Live View are both built and working**, correcting an earlier claim in this table (and in two of this project's own now-archived audits) that they were unblocked-but-unbuilt. Only Builder Control's broader scope (theme/layout/workflow-policy editors, config version rollback) remains unbuilt beyond the capability-shaping page that exists today |
 
-**Total page inventory: see `docs/PAGE_INVENTORY.md`** — the only place this count is tracked, currently 44 complete + 6 partial + 3 not built, of 53. This file previously carried its own count and self-contradicted (23/53 in one section, 34/53 in another); both were wrong and neither is repeated here.
+**Total page inventory: see `docs/PAGE_INVENTORY.md`** — the only place this count is tracked, currently 46 complete + 7 partial + 0 not built, of 53. This file previously carried its own count and self-contradicted (23/53 in one section, 34/53 in another); both were wrong and neither is repeated here.
 
 ## The phases
 

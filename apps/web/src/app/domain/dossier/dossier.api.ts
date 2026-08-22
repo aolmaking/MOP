@@ -38,6 +38,11 @@ export interface DossierMoney {
   readonly outstanding: string | null;
 }
 
+export interface DossierCapabilityDeviation {
+  readonly key: string;
+  readonly status: string;
+}
+
 export interface WorkOrderDossier {
   readonly workOrderId: string;
   readonly status: string;
@@ -57,6 +62,7 @@ export interface WorkOrderDossier {
     at: string;
   }[];
   readonly money: DossierMoney;
+  readonly capabilityDeviationsAtOpen: readonly DossierCapabilityDeviation[];
   readonly timeline: readonly DossierTimelineEntry[];
   readonly priorVisits: number;
 }

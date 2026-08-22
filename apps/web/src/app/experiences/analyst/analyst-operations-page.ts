@@ -5,12 +5,13 @@ import { ButtonDirective } from '../../ui/button/button.directive';
 import { BarList, type BarListItem } from '../../ui/charts/bar-list/bar-list';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import { AnalystApi, type OperationsAnalyticsReport } from './analyst.api';
+import { SavedViewAction } from './saved-view-action';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
 @Component({
   selector: 'app-analyst-operations-page',
-  imports: [ErrorBanner, ButtonDirective, BarList],
+  imports: [ErrorBanner, ButtonDirective, BarList, SavedViewAction],
   templateUrl: './analyst-operations-page.html',
   styleUrl: './analyst-operations-page.css',
 })
@@ -34,6 +35,7 @@ export class AnalystOperationsPage {
   protected readonly blockerItems = computed<BarListItem[]>(() =>
     (this.data()?.blockers ?? []).map((r) => ({ label: r.reason, value: r.count, displayValue: r.count.toString() })),
   );
+  protected readonly viewConfiguration = computed(() => ({ range: this.data()?.range ?? null, groupBy: 'day' }));
 
   constructor() {
     this.load();

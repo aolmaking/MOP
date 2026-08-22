@@ -47,6 +47,14 @@ enum StaffRole {
   DATA_ANALYST
 }
 
+enum AnalystSavedViewSourcePage {
+  OPERATIONS
+  PEOPLE
+  INVENTORY
+  DECISIONS
+  FEATURE_ADOPTION
+}
+
 enum CustomerPortalStatus {
   NOT_INVITED
   INVITED
@@ -309,6 +317,7 @@ model Plan {
   allowedModules    String[]
   allowedFeatures   String[]
   allowedReports    String[]
+  allowedExports    String[]       @default([])
   monthlyPrice      Decimal        @db.Decimal(12, 2)
   createdAt         DateTime       @default(now())
 
@@ -377,6 +386,7 @@ model Tenant {
   rolePages               RolePage[]
   auditLogs               AuditLog[]
   operationEvents         OperationEvent[]
+  analystSavedViews       AnalystSavedView[]
   stakeholders            TenantStakeholder[]
   groupMemberships        TenantGroupMember[]
   liveViewSessions        PlatformLiveViewSession[]
@@ -482,11 +492,17 @@ model Account {
   // same pattern session secrets already use (see auth/token.util.ts).
   inviteTokenHash      String?
   inviteTokenExpiresAt DateTime?
+  // Password reset is distinct from invite activation: an invited account
+  // is not active yet, while a reset is recovery for an existing account.
+  // The raw reset token is never stored, only this hash.
+  passwordResetTokenHash      String?
+  passwordResetTokenExpiresAt DateTime?
 
   tenant   Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   staff    StaffUser?
   customer Customer?
   sessions Session[]
+  analystSavedViews AnalystSavedView[]
 
   // A stakeholder relationship to OTHER tenants, distinct from `tenant`
   // above (the one tenant this account's own StaffUser/Customer row
@@ -496,7 +512,26 @@ model Account {
 
   @@unique([tenantId, email])
   @@index([accountType, tenantId])
+  @@index([passwordResetTokenHash])
   @@map("accounts")
+}
+
+model AnalystSavedView {
+  id            String                     @id @default(cuid())
+  tenantId      String
+  accountId     String
+  name          String
+  sourcePage    AnalystSavedViewSourcePage
+  configuration Json
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, accountId, createdAt])
+  @@index([tenantId, sourcePage])
+  @@map("analyst_saved_views")
 }
 
 model Session {

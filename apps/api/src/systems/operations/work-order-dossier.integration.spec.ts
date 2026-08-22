@@ -19,8 +19,9 @@ import type { PrismaService } from "../../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
-const policiesForTest = new PolicyResolutionService(asService, new AuditService(asService), new CapabilityResolutionService(asService));
-const dossier = new WorkOrderDossierService(asService, policiesForTest);
+const capabilitiesForTest = new CapabilityResolutionService(asService);
+const policiesForTest = new PolicyResolutionService(asService, new AuditService(asService), capabilitiesForTest);
+const dossier = new WorkOrderDossierService(asService, policiesForTest, capabilitiesForTest);
 
 const SUFFIX = `dos-${Date.now()}`;
 let tenantId: string;

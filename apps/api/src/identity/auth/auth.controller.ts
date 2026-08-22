@@ -4,8 +4,9 @@ import type { Request, Response } from "express";
 import type { SessionContext } from "@mop/shared";
 import { readThrottleSettings } from "../../runtime/config/environment";
 import { AuthService, MultipleAccountsError, TenantUnavailableError } from "./auth.service";
-import { AcceptInviteDto, InviteTokenDto, LoginDto } from "./dto";
+import { AcceptInviteDto, CompletePasswordResetDto, InviteTokenDto, LoginDto, PasswordResetRequestDto, PasswordResetTokenDto } from "./dto";
 import { InviteService } from "./invite.service";
+import { PasswordResetService } from "./password-reset.service";
 import { ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME, clearSessionCookies, setSessionCookies } from "./cookie.util";
 import { SessionGuard } from "./session.guard";
 import { CurrentSession } from "./current-session.decorator";
@@ -24,6 +25,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly inviteService: InviteService,
+    private readonly passwordResetService: PasswordResetService,
   ) {}
 
   /**
@@ -116,5 +118,26 @@ export class AuthController {
   @HttpCode(200)
   acceptInvite(@Body() dto: AcceptInviteDto) {
     return this.inviteService.accept(dto.token, dto.password);
+  }
+
+  @Post("password-reset/request")
+  @Throttle(AUTH_THROTTLE)
+  @HttpCode(200)
+  requestPasswordReset(@Body() dto: PasswordResetRequestDto) {
+    return this.passwordResetService.request(dto.identifier);
+  }
+
+  @Post("password-reset/describe")
+  @Throttle(AUTH_THROTTLE)
+  @HttpCode(200)
+  describePasswordReset(@Body() dto: PasswordResetTokenDto) {
+    return this.passwordResetService.describe(dto.token);
+  }
+
+  @Post("password-reset/complete")
+  @Throttle(AUTH_THROTTLE)
+  @HttpCode(200)
+  completePasswordReset(@Body() dto: CompletePasswordResetDto) {
+    return this.passwordResetService.complete(dto.token, dto.password);
   }
 }

@@ -125,6 +125,7 @@
                 <th scope="col" class="col-num">Active jobs</th>
                 <th scope="col">Last activity</th>
                 <th scope="col">Builder</th>
+                <th scope="col">Compliance</th>
                 <th scope="col">Health</th>
                 <th scope="col"><span class="visually-hidden">Actions</span></th>
               </tr>
@@ -164,6 +165,11 @@
                     </span>
                   </td>
                   <td><span class="badge" [attr.data-builder]="row.builderStatus">{{ label(row.builderStatus) }}</span></td>
+                  <td>
+                    <span class="badge" [attr.data-compliance]="row.compliantBlocked ? 'BLOCKED' : 'CLEAR'">
+                      {{ row.compliantBlocked ? 'billing review' : 'clear' }}
+                    </span>
+                  </td>
                   <td><span class="badge" [attr.data-health]="row.health">{{ label(row.health) }}</span></td>
                   <td class="col-action">
                     <div class="actions">

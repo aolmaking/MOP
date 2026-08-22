@@ -1,15 +1,16 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ErrorBanner } from '../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../ui/button/button.directive';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import { AnalystApi, type FeatureAdoptionReport } from './analyst.api';
+import { SavedViewAction } from './saved-view-action';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
 @Component({
   selector: 'app-analyst-feature-adoption-page',
-  imports: [ErrorBanner, ButtonDirective],
+  imports: [ErrorBanner, ButtonDirective, SavedViewAction],
   templateUrl: './analyst-feature-adoption-page.html',
   styleUrl: './analyst-feature-adoption-page.css',
 })
@@ -20,6 +21,7 @@ export class AnalystFeatureAdoptionPage {
   protected readonly state = signal<State>('loading');
   protected readonly error = signal<PresentedError | null>(null);
   protected readonly data = signal<FeatureAdoptionReport | null>(null);
+  protected readonly viewConfiguration = computed(() => ({ range: this.data()?.range ?? null }));
 
   constructor() {
     this.load();

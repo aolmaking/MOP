@@ -17,14 +17,14 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| ✅ Complete (real page, real backend, no named gap) | **44** |
-| 🟡 Partial (real page and backend, but a named piece of the spec is missing) | **6** |
-| ⬜ Not built at all (no route, no component, no controller) | **3** |
-| **Complete + Partial (has a real, working page today)** | **50** |
+| ✅ Complete (real page, real backend, no named gap) | **46** |
+| 🟡 Partial (real page and backend, but a named piece of the spec is missing) | **7** |
+| ⬜ Not built at all (no route, no component, no controller) | **0** |
+| **Complete + Partial (has a real, working page today)** | **53** |
 
 Legend: ✅ complete · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built at all
 
-**The 3 pages with zero implementation, full stop:** Access Denied (Shared), Password Reset (Shared), Saved Views/Exports (Data Analyst). Nothing else in the 53-page spec is completely absent — every other row has at least a real page wired to a real backend, even where it's 🟡.
+**No page in the 53-page spec is now zero-implementation.** Access Denied and Password Reset are built as real shared public pages, and Data Analyst Saved Views now has its persistence/list/manage surface. Export remains a named 🟡 gap because file generation is not built yet; the plan-level `allowedExports` entitlement and `analytics.export` gate now exist.
 
 ---
 
@@ -94,17 +94,17 @@ Every Owner page has at least a real, working surface — none are ⬜. Home, Or
 | Vehicles / Work Orders View | ✅ | `/team-leader/work-orders` | No price/cost/payment field anywhere in the response shape |
 | Technician Performance Reports | ✅ | `/team-leader/reports` | Managed-scope only; company-wide version is Phase 12 |
 
-## Data Analyst — 6 ✅, 1 ⬜ (7 pages)
+## Data Analyst — 6 ✅, 1 🟡 (7 pages)
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
-| Analytics Home | ✅ | `/analyst/home` | Composes the other 4 services' own headline numbers rather than recomputing them, so the tile can never drift from what the full page shows |
+| Analytics Home | ✅ | `/analyst/home` | Composes the other 5 analytical services' own headline numbers, including Feature Adoption, rather than recomputing them, so the tile can never drift from what the full page shows |
 | Operations Analytics | ✅ | `/analyst/operations` | Volume over time (created vs. completed), status distribution, time-in-status (reuses `lifecycle-duration.util.ts`), branch comparison (absent, not empty, for single-branch scope), blocker analysis, delivery/payment funnel (counts and durations only, never a currency amount) |
 | Technician & Team Analytics | ✅ | `/analyst/people` | Per-technician stats, team throughput, diagnostic-code activity. No payment/invoice figure anywhere in the output shape — enforced by its own test |
 | Inventory Analytics | ✅ | `/analyst/inventory` | Reuses `InventoryReportsService` (Inventory Manager's own page) rather than a second velocity implementation; branch scope resolved to warehouse scope via `BranchWarehouseAccess`; inventory value gated on `inventory.cost.view`, same as the Inventory Manager's own catalog |
 | Customer Decision Analytics | ✅ | `/analyst/decisions` | Approval/rejection rates by importance, response time, overdue rate, critical-rejection follow-up outcome, link-open rate. No customer-identifying field anywhere — enforced by its own test |
 | Feature Adoption Analytics | ✅ | `/analyst/feature-adoption` | Real usage counts for Quick/Full Inspection and Customer Decision Request volume. Custom Fields and Message Templates explicitly reported as **not trackable yet** (no consuming form captures field values; no message-sending code exists anywhere in the product) rather than a fabricated count |
-| Saved Views / Exports | ⬜ | — | Deferred — a distinct persistence + CSV-export mechanism, not part of the analytical surface itself |
+| Saved Views / Exports | 🟡 | `/analyst/saved-views` | Saved Views persistence is built: per-analyst named configurations, source page, created date, Open/Rename/Delete, plus Save This View actions on the analytical pages. Export is still deferred because no export file endpoint exists yet; `analytics.export` is now gated by Super Admin's Allowed Exports plan entitlement (`Plan.allowedExports`) |
 
 ## Customer Portal — 6 / 6 ✅
 
@@ -117,16 +117,16 @@ Every Owner page has at least a real, working surface — none are ⬜. Home, Or
 | Invoice & Payment Status | ✅ | `/customer/invoices` | `total`/`paid`/`balance` rendered as the exact strings the server sends |
 | Safe Technical History | ✅ | `/customer/history` | Entries labelled by plate/VIN cross-referenced from the customer's own asset list, never a raw asset id |
 
-## Shared System Pages — 4 ✅, 2 ⬜ (6 pages)
+## Shared System Pages — 6 ✅ (6 pages)
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
 | Login / Identity Gateway | ✅ | `/login` | Links out to Register; redirects to Tenant Frozen on `tenant_unavailable` |
 | Register as Customer | ✅ | `/register` | Resolves `Tenant.slug` or `customerRegistrationCode` (case-insensitive, excludes frozen/suspended/archived tenants) as its own step, then creates the linked Account + Customer. Does not auto-login, matching Invite Accept's precedent |
 | Invite Accept / Set Password | ✅ | `/invite/accept?token=` | Closed the four-phase hole: owners created by Add Workshop can now sign in. Verified end to end against the running stack |
-| Access Denied | ⬜ | — | Deliberately not centralized this pass -- every existing page already implements its own inline `forbidden` state for action-level denials (see e.g. `owner-home-page.ts`'s `State` type), and there is no route-level permission guard today for a dedicated page to be the fallback *of*. Centralizing would mean redesigning an established, working convention across ~30 pages, not filling a gap -- left for a deliberate call, not assumed here |
+| Access Denied | ✅ | `/access-denied` | Public route outside every role shell; unknown post-login landing pages resolve here rather than guessing a role fallback |
 | Tenant Frozen / Workspace Unavailable | ✅ | `/tenant-frozen` | Reached only from Login's `tenant_unavailable` response. Deliberate dead end, no nav, exact spec copy, no freeze reason surfaced |
-| Password Reset | ⬜ | — | Spec marks it a placeholder pending unbuilt email/SMS infra |
+| Password Reset | ✅ | `/password-reset` | Token persistence and non-enumerating request/describe/complete endpoints are built. The raw token is never returned from the public API; future email/SMS delivery remains the channel adapter, not the reset mechanism itself |
 
 ---
 

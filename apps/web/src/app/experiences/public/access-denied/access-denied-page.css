@@ -1,0 +1,36 @@
+/*
+ * Access Denied -- same plain public-page language as Tenant Frozen.
+ * No shell and no role navigation: this page exists precisely because
+ * the app could not place the person safely inside a role experience.
+ */
+
+.access-denied {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-5);
+  text-align: center;
+  background: var(--bg);
+}
+
+.title {
+  color: var(--white);
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.body {
+  max-width: 26rem;
+  color: var(--text-muted);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+}
+
+.link {
+  color: var(--brand-text);
+  font-size: var(--text-sm);
+  text-decoration: underline;
+}

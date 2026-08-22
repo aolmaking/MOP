@@ -24,6 +24,7 @@ function row(overrides: Partial<WorkshopRow> = {}): WorkshopRow {
     activeWorkOrderCount: 7,
     lastActivityAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
     builderStatus: 'NOT_CUSTOMIZED',
+    compliantBlocked: false,
     health: 'HEALTHY',
     ...overrides,
   };
@@ -79,6 +80,13 @@ describe('WorkshopsPage', () => {
     });
 
     expect(element.querySelector('.tag')?.textContent).toContain('Invite pending');
+  });
+
+  it('shows the compliance badge when billing needs platform review', () => {
+    const { element } = render({ items: [row({ compliantBlocked: true })], total: 1 });
+
+    const badge = element.querySelector("[data-compliance='BLOCKED']");
+    expect(badge?.textContent).toContain('billing review');
   });
 
   it('offers Freeze on a live workshop and Reactivate on a frozen one', () => {

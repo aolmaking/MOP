@@ -27,6 +27,8 @@ export interface PermissionContext {
   readonly platformLocks: ReadonlyMap<string, boolean>;
   /** Empty means the plan imposes no module restriction. */
   readonly planAllowedModules: readonly string[];
+  /** Empty means exports are not included in the plan. */
+  readonly planAllowedExports: readonly string[];
   readonly capabilities: CapabilityProfile;
   /** permissionKey -> allowed, for this session's role. */
   readonly roleTemplate: ReadonlyMap<string, boolean>;
@@ -44,6 +46,7 @@ export interface PermissionContext {
 const EMPTY_CONTEXT: PermissionContext = {
   platformLocks: new Map(),
   planAllowedModules: [],
+  planAllowedExports: [],
   capabilities: {},
   roleTemplate: new Map(),
   userOverrides: new Map(),
@@ -103,7 +106,7 @@ export class PermissionContextService {
       }),
       tx.tenant.findUnique({
         where: { id: tenantId },
-        select: { plan: { select: { allowedModules: true } } },
+        select: { plan: { select: { allowedModules: true, allowedExports: true } } },
       }),
       this.capabilities.resolveCurrent(tenantId, tx),
       // Role rows are only meaningful for tenant staff; a customer session
@@ -136,6 +139,7 @@ export class PermissionContextService {
           .filter((entry): entry is readonly [string, boolean] => typeof entry[1] === "boolean"),
       ),
       planAllowedModules: tenant?.plan.allowedModules ?? [],
+      planAllowedExports: tenant?.plan.allowedExports ?? [],
       capabilities,
       roleTemplate: new Map(roleRows.map((row) => [row.permissionKey, row.allowed])),
       userOverrides: new Map(

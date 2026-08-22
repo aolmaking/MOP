@@ -13,6 +13,7 @@ function card(overrides: Partial<WorkCard> = {}): WorkCard {
     status: 'IN_PROGRESS',
     complaint: null,
     inspectionDeclined: false,
+    timeTracking: 'OPTIONAL',
     tasks: [],
     parts: [],
     finish: { available: false, passed: false, conditions: [] },
@@ -146,5 +147,44 @@ describe('TechWorkCard', () => {
     const { element } = await render(card());
 
     expect(element.querySelector('.checks')).toBeNull();
+  });
+
+  it('requires whole minutes before completing a task when TIME_TRACKING is required', async () => {
+    const { api, fixture, element } = await render(
+      card({
+        timeTracking: 'REQUIRED',
+        tasks: [{ id: 't1', title: 'Brakes', status: 'IN_PROGRESS', blockedReason: null }],
+      }),
+    );
+
+    const done = [...element.querySelectorAll('button')].find((button) => button.textContent?.trim() === 'Done') as HTMLButtonElement;
+    expect(done.disabled).toBe(true);
+
+    const input = element.querySelector('.time-entry input') as HTMLInputElement;
+    input.value = '25';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(done.disabled).toBe(false);
+    done.click();
+    fixture.detectChanges();
+
+    expect(api.completeTask).toHaveBeenCalledWith('t1', 25);
+  });
+
+  it('hides time entry and sends no minutes when TIME_TRACKING is off', async () => {
+    const { api, element } = await render(
+      card({
+        timeTracking: 'OFF',
+        tasks: [{ id: 't1', title: 'Brakes', status: 'IN_PROGRESS', blockedReason: null }],
+      }),
+    );
+
+    expect(element.querySelector('.time-entry')).toBeNull();
+
+    const done = [...element.querySelectorAll('button')].find((button) => button.textContent?.trim() === 'Done') as HTMLButtonElement;
+    done.click();
+
+    expect(api.completeTask).toHaveBeenCalledWith('t1', undefined);
   });
 });

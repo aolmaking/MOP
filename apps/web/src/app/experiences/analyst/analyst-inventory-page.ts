@@ -6,12 +6,13 @@ import { BarList, type BarListItem } from '../../ui/charts/bar-list/bar-list';
 import { KpiCard } from '../../ui/charts/kpi-card/kpi-card';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import { AnalystApi, type InventoryAnalyticsReport } from './analyst.api';
+import { SavedViewAction } from './saved-view-action';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
 @Component({
   selector: 'app-analyst-inventory-page',
-  imports: [ErrorBanner, ButtonDirective, BarList, KpiCard],
+  imports: [ErrorBanner, ButtonDirective, BarList, KpiCard, SavedViewAction],
   templateUrl: './analyst-inventory-page.html',
   styleUrl: './analyst-inventory-page.css',
 })
@@ -33,6 +34,7 @@ export class AnalystInventoryPage {
       .slice(0, 10)
       .map((r) => ({ label: r.name, value: 1 / (r.daysLeft! + 1), displayValue: `${r.daysLeft} day(s) left` })),
   );
+  protected readonly viewConfiguration = computed(() => ({}));
 
   constructor() {
     this.load();

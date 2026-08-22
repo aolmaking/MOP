@@ -44,12 +44,12 @@ describe('landingRouteFor', () => {
     );
   });
 
-  it('falls back to the placeholder for roles whose home is not built', () => {
-    // Deliberately '/' and not a guess: the placeholder names the phase
-    // that builds their home, which is more honest than a wrong page.
+  it('falls back to access denied when the server names no known landing page', () => {
+    // Deliberately not a role guess: an unknown server landing page is
+    // safer as a permission boundary than as the generic home shell.
     expect(
       landingRouteFor({ role: 'DATA_ANALYST', landingPage: 'not-yet-built-home' } as unknown as SessionContext),
-    ).toBe('/');
+    ).toBe('/access-denied');
   });
 
   it('handles no session without throwing', () => {

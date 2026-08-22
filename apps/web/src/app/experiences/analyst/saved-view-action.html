@@ -1,0 +1,19 @@
+@if (!open()) {
+  <button appButton variant="secondary" size="small" type="button" (click)="start()">Save this view</button>
+} @else {
+  <div class="save-view">
+    <label class="field">
+      <span class="field-label">Name</span>
+      <input type="text" [value]="name()" (input)="name.set($any($event.target).value)" />
+    </label>
+    @if (error(); as message) {
+      <p class="error">{{ message }}</p>
+    }
+    <div class="actions">
+      <button appButton size="small" type="button" [disabled]="!canSave()" (click)="save()">
+        {{ saving() ? 'Saving...' : 'Save' }}
+      </button>
+      <button appButton variant="ghost" size="small" type="button" (click)="cancel()">Cancel</button>
+    </div>
+  </div>
+}

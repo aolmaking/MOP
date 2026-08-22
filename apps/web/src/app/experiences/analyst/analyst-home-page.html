@@ -35,6 +35,19 @@
           </a>
         }
       </div>
+
+      @if (savedViews().length > 0) {
+        <section class="shortcuts">
+          <h2 class="shortcuts-title">Saved Views</h2>
+          <div class="shortcut-list">
+            @for (view of savedViews(); track view.id) {
+              <a class="shortcut" [routerLink]="savedViewRoute[view.sourcePage]" [queryParams]="{ savedView: view.id }">
+                {{ view.name }}
+              </a>
+            }
+          </div>
+        </section>
+      }
     }
   }
 </section>

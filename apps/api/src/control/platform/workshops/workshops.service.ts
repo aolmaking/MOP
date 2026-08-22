@@ -25,6 +25,7 @@ export interface WorkshopRow {
   activeWorkOrderCount: number;
   lastActivityAt: Date | null;
   builderStatus: BuilderStatus;
+  compliantBlocked: boolean;
   health: HealthStatus;
 }
 
@@ -54,7 +55,7 @@ export class WorkshopsService {
       const [tenants, total] = await Promise.all([
         this.prisma.tenant.findMany({
           where,
-          include: { plan: true, configuration: true },
+          include: { plan: true, configuration: true, financeConfiguration: true },
           orderBy: this.buildOrderBy(query.sort),
           skip: (query.page - 1) * query.pageSize,
           take: query.pageSize,
@@ -78,7 +79,7 @@ export class WorkshopsService {
     const [candidates, matchingTotal] = await Promise.all([
       this.prisma.tenant.findMany({
         where,
-        include: { plan: true, configuration: true },
+        include: { plan: true, configuration: true, financeConfiguration: true },
         orderBy: { createdAt: "desc" },
         take: CANDIDATE_CAP,
       }),
@@ -107,7 +108,7 @@ export class WorkshopsService {
   async getDetails(tenantId: string) {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
-      include: { plan: true, configuration: true },
+      include: { plan: true, configuration: true, financeConfiguration: true },
     });
     if (!tenant) throw new NotFoundException({ code: "workshop_not_found", message: "Workshop not found." });
 
@@ -179,6 +180,7 @@ export class WorkshopsService {
         renewalDate: null,
         paidThroughDate: null,
       },
+      compliantBlocked: row.compliantBlocked,
       health: { status: row.health, warnings: await this.healthWarnings(tenant.id, row) },
     };
   }
@@ -330,7 +332,7 @@ export class WorkshopsService {
   }
 
   private async attachAggregates(
-    tenants: Array<Prisma.TenantGetPayload<{ include: { plan: true; configuration: true } }>>,
+    tenants: Array<Prisma.TenantGetPayload<{ include: { plan: true; configuration: true; financeConfiguration: true } }>>,
   ): Promise<WorkshopRow[]> {
     if (tenants.length === 0) return [];
     const tenantIds = tenants.map((t) => t.id);
@@ -409,6 +411,7 @@ export class WorkshopsService {
         activeWorkOrderCount: workOrderCountByTenant.get(tenant.id) ?? 0,
         lastActivityAt,
         builderStatus: this.builderStatus(tenant.configuration),
+        compliantBlocked: tenant.financeConfiguration?.compliantBlocked ?? false,
         health: healthStatus,
       };
     });

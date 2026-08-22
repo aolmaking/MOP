@@ -164,5 +164,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "analytics.inventory.view": true,
     "analytics.decisions.view": true,
     "analytics.feature_adoption.view": true,
+    "analytics.saved_views.manage": true,
+    "analytics.export": true,
   },
 };

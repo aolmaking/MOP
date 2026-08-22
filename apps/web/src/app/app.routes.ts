@@ -5,6 +5,14 @@ import { TEAM_API_BASE_PATH, TeamApi } from './experiences/branch-manager/team/t
 export const routes: Routes = [
   { path: 'login', loadComponent: () => import('./experiences/public/login/login-page').then((m) => m.LoginPage) },
   {
+    path: 'password-reset',
+    loadComponent: () => import('./experiences/public/password-reset/password-reset-page').then((m) => m.PasswordResetPage),
+  },
+  {
+    path: 'access-denied',
+    loadComponent: () => import('./experiences/public/access-denied/access-denied-page').then((m) => m.AccessDeniedPage),
+  },
+  {
     // Public, and deliberately outside every shell: the person arriving
     // here has no account yet, which is the whole point. The URL shape
     // matches what PlatformService already puts in the invite link.
@@ -331,8 +339,9 @@ export const routes: Routes = [
     ],
   },
   {
-    // The Data Analyst's shell -- a rail, like Inventory/Owner. Six real
-    // pages per docs/detailed-specs/data-analyst.md, read-only throughout.
+    // The Data Analyst's shell -- a rail, like Inventory/Owner. Seven
+    // pages per docs/detailed-specs/data-analyst.md; saved views persist
+    // this analyst's own report configuration, never operational data.
     path: 'analyst',
     canActivate: [authGuard],
     loadComponent: () => import('./experiences/analyst/shell/analyst-shell').then((m) => m.AnalystShell),
@@ -365,6 +374,11 @@ export const routes: Routes = [
         path: 'feature-adoption',
         loadComponent: () =>
           import('./experiences/analyst/analyst-feature-adoption-page').then((m) => m.AnalystFeatureAdoptionPage),
+      },
+      {
+        path: 'saved-views',
+        loadComponent: () =>
+          import('./experiences/analyst/analyst-saved-views-page').then((m) => m.AnalystSavedViewsPage),
       },
     ],
   },

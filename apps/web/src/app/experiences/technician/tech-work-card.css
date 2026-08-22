@@ -164,6 +164,29 @@
   font-size: var(--tech-text-sm);
 }
 
+.time-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--tap);
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+}
+
+.time-entry input {
+  inline-size: 6rem;
+  min-block-size: var(--tap);
+  padding-inline: var(--space-3);
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--tech-text);
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- taps ---------------------------------------------------------- */
 
 .tap {

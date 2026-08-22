@@ -2,8 +2,10 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import type { Observable } from 'rxjs';
 
+export type AnalyticsHomePageKey = 'operations' | 'people' | 'inventory' | 'decisions' | 'feature-adoption';
+
 export interface AnalyticsHomeTile {
-  readonly page: string;
+  readonly page: AnalyticsHomePageKey;
   readonly label: string;
   readonly metrics: readonly { readonly label: string; readonly value: string }[];
 }
@@ -75,6 +77,23 @@ export interface FeatureAdoptionReport {
   readonly notTrackable: readonly { feature: string; reason: string }[];
 }
 
+export type AnalystSavedViewSourcePage = 'OPERATIONS' | 'PEOPLE' | 'INVENTORY' | 'DECISIONS' | 'FEATURE_ADOPTION';
+
+export interface AnalystSavedView {
+  readonly id: string;
+  readonly name: string;
+  readonly sourcePage: AnalystSavedViewSourcePage;
+  readonly configuration: Record<string, unknown>;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface CreateAnalystSavedView {
+  readonly name: string;
+  readonly sourcePage: AnalystSavedViewSourcePage;
+  readonly configuration: Record<string, unknown>;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AnalystApi {
   private readonly http = inject(HttpClient);
@@ -101,5 +120,21 @@ export class AnalystApi {
 
   featureAdoption(): Observable<FeatureAdoptionReport> {
     return this.http.get<FeatureAdoptionReport>('/api/v1/analytics/feature-adoption');
+  }
+
+  savedViews(): Observable<{ items: readonly AnalystSavedView[] }> {
+    return this.http.get<{ items: readonly AnalystSavedView[] }>('/api/v1/analytics/saved-views');
+  }
+
+  saveView(input: CreateAnalystSavedView): Observable<AnalystSavedView> {
+    return this.http.post<AnalystSavedView>('/api/v1/analytics/saved-views', input);
+  }
+
+  renameView(id: string, name: string): Observable<AnalystSavedView> {
+    return this.http.patch<AnalystSavedView>(`/api/v1/analytics/saved-views/${id}`, { name });
+  }
+
+  deleteView(id: string): Observable<{ ok: true }> {
+    return this.http.delete<{ ok: true }>(`/api/v1/analytics/saved-views/${id}`);
   }
 }

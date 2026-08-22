@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, ForbiddenException, Get, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
 import { SessionGuard } from "../../identity/auth/session.guard";
 import { CurrentSession } from "../../identity/auth/current-session.decorator";
@@ -10,12 +10,15 @@ import { PeopleAnalyticsService } from "./people-analytics.service";
 import { InventoryAnalyticsService } from "./inventory-analytics.service";
 import { DecisionsAnalyticsService } from "./decisions-analytics.service";
 import { FeatureAdoptionAnalyticsService } from "./feature-adoption-analytics.service";
+import { AnalystSavedViewsService } from "./saved-views.service";
+import { CreateAnalystSavedViewDto, RenameAnalystSavedViewDto } from "./saved-views.dto";
 
 /**
- * Data Analyst (docs/detailed-specs/data-analyst.md) -- 6 real analytical
- * views, each with its own query shape, per that spec's own explicit
- * warning against the previous build's "7 routes, 1 generic component"
- * mistake. Read-only: not one write endpoint exists in this controller.
+ * Data Analyst (docs/detailed-specs/data-analyst.md) -- analytical views
+ * each have their own query shape, per that spec's own explicit warning
+ * against the previous build's "7 routes, 1 generic component" mistake.
+ * The only writes here persist the analyst's own saved view configuration;
+ * no endpoint mutates workshop operations, inventory, finance, or workflow.
  */
 @Controller("analytics")
 @UseGuards(SessionGuard)
@@ -27,6 +30,7 @@ export class AnalyticsController {
     private readonly inventory: InventoryAnalyticsService,
     private readonly decisions: DecisionsAnalyticsService,
     private readonly featureAdoption: FeatureAdoptionAnalyticsService,
+    private readonly savedViews: AnalystSavedViewsService,
     private readonly access: EffectiveAccessService,
   ) {}
 
@@ -74,6 +78,44 @@ export class AnalyticsController {
   ) {
     const tenantId = await this.require(session, "analytics.feature_adoption.view");
     return this.wrap(() => this.featureAdoption.build(tenantId, { from, to }));
+  }
+
+  @Get("saved-views")
+  async listSavedViews(@CurrentSession() session: SessionContext) {
+    const tenantId = await this.require(session, "analytics.saved_views.manage");
+    return { items: await this.savedViews.list(tenantId, session.accountId) };
+  }
+
+  @Get("saved-views/:id")
+  async getSavedView(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const tenantId = await this.require(session, "analytics.saved_views.manage");
+    return this.savedViews.get(tenantId, session.accountId, id);
+  }
+
+  @Post("saved-views")
+  async createSavedView(@CurrentSession() session: SessionContext, @Body() dto: CreateAnalystSavedViewDto) {
+    const tenantId = await this.require(session, "analytics.saved_views.manage");
+    return this.savedViews.create(tenantId, session.accountId, {
+      name: dto.name,
+      sourcePage: dto.sourcePage,
+      configuration: dto.configuration,
+    });
+  }
+
+  @Patch("saved-views/:id")
+  async renameSavedView(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: RenameAnalystSavedViewDto,
+  ) {
+    const tenantId = await this.require(session, "analytics.saved_views.manage");
+    return this.savedViews.rename(tenantId, session.accountId, id, dto.name);
+  }
+
+  @Delete("saved-views/:id")
+  async deleteSavedView(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const tenantId = await this.require(session, "analytics.saved_views.manage");
+    return this.savedViews.remove(tenantId, session.accountId, id);
   }
 
   private async wrap<T>(fn: () => Promise<T>): Promise<T> {

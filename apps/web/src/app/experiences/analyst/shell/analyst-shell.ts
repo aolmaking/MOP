@@ -28,6 +28,7 @@ export class AnalystShell {
     { label: 'Inventory', route: '/analyst/inventory' },
     { label: 'Customer Decisions', route: '/analyst/decisions' },
     { label: 'Feature Adoption', route: '/analyst/feature-adoption' },
+    { label: 'Saved Views', route: '/analyst/saved-views' },
   ];
 
   async logout(): Promise<void> {
