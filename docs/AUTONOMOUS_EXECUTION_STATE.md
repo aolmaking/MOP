@@ -45,20 +45,22 @@ High-risk HTTP/API coverage after Governance Controls.
 - Entitlement overrides are stored as audited `ControlSetting` rows, preserve plan ceilings, refuse numeric values below active usage, and refuse unsafe clearing when the plan default would fall below current usage.
 - Effective entitlements now feed permission resolution, analytics export authorization, Platform workshop details, Organization user/branch writes, and Inventory warehouse writes.
 - Control Center renders effective entitlement values, shows plan/default and usage context, applies overrides with a written reason, and clears active overrides.
+- Finance Core now scopes invoice settlement reads, payment recording, refund decisions, discount decisions, and work-order billing entry points to the current tenant.
+- Finance controller now threads the session tenant into invoice/refund/discount decision calls, and focused service/controller specs cover the tenant-isolation boundary without requiring Postgres.
 
 ## Current Task
 
-Inspect the highest-risk Finance, Billing, and Inventory HTTP/API surfaces and close the next missing coverage or runtime gap without adding new product scope.
+Inspect Inventory controller/API boundaries for the next highest-risk missing request-boundary coverage or tenant/scope enforcement gap.
 
 ## Remaining Tasks
 
-- Add or repair HTTP-level coverage for the riskiest Finance/Billing/Inventory controllers and workflows, starting where existing docs or tests show real behavior but no request-boundary proof.
+- Add or repair HTTP-level coverage for the riskiest Inventory and Billing controllers/workflows, starting where existing docs or tests show real behavior but no request-boundary proof.
 - Continue validating country billing adapter/compliant-blocked behavior without silently inventing country-specific adapters.
 - Keep deferred/unbacked Control Center Builder, workflow-policy, full rollback, and country-adapter work out of implementation unless the documented backing model exists.
 
 ## Last Verified Commit
 
-`ff26b6e37b1d89786e647a338ca48690b545453a`
+`17719d6a9df6622d9d698437673824ddb062d39a`
 
 ## Last Successful Validation
 
@@ -95,6 +97,8 @@ Inspect the highest-risk Finance, Billing, and Inventory HTTP/API surfaces and c
 - `corepack pnpm --filter @mop/web test -- --include src/app/experiences/platform/control-center/control-center-page.spec.ts --watch=false --isolate=false`
 - `corepack pnpm -r typecheck`
 - `corepack pnpm --filter @mop/web build`
+- `corepack pnpm --filter @mop/api test -- finance.service.spec.ts finance.controller.spec.ts`
+- `corepack pnpm --filter @mop/api typecheck`
 
 ## Known Blockers
 
@@ -108,7 +112,8 @@ Inspect the highest-risk Finance, Billing, and Inventory HTTP/API surfaces and c
 - Keep legacy reporting endpoints only when they preserve current scope/privacy rules; scoped Data Analyst sessions must never receive unscoped tenant reports through an older permission surface.
 - Deferred or missing features remain out of scope until their documented backing model exists: Data Analyst CSV export is now backed by its entitlement gate and endpoint; full country billing adapters still need a country-specific adapter, and audited billing override still needs its own path.
 - Per-workshop Limits & Entitlements overrides are `ControlSetting` deltas on top of `Plan`, not a second plan model. Plan fields remain the ceiling; runtime consumers read the effective entitlement service.
+- Finance service methods that accept session-derived `tenantId` must still prove that the target invoice, refund, discount, or work order belongs to that tenant before reading or mutating money records.
 
 ## Exact Next Action
 
-Inspect Finance, Billing, and Inventory controller/service tests to identify the highest-risk missing HTTP-level coverage, then implement the smallest backend-first fix or coverage slice and verify it.
+Inspect Inventory controller/service tests for request-boundary gaps around warehouse scope, cost visibility, and tenant ownership; implement the smallest backend-first fix or coverage slice and verify it.
