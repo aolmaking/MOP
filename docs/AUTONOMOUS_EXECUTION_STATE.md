@@ -8,7 +8,7 @@ Implementation, after documentation and source audit.
 
 ## Current Subsystem
 
-Reporting coherence.
+Governance Controls / Limits & Entitlements.
 
 ## Completed Tasks
 
@@ -44,18 +44,17 @@ Reporting coherence.
 
 ## Current Task
 
-Checkpoint the export-entitlement foundation, then continue Governance Controls / Limits & Entitlements with per-workshop governed overrides and actual export file generation still remaining.
+Continue Governance Controls / Limits & Entitlements with per-workshop governed overrides and actual export file generation still remaining.
 
 ## Remaining Tasks
 
-- Run recursive typecheck and web build after the export entitlement patch.
-- Commit and push the export entitlement checkpoint.
 - Inspect whether per-workshop Limits & Entitlements should be modeled as `ControlSetting` overrides on top of the new plan fields.
 - Keep Data Analyst export file generation deferred until an actual export endpoint can be implemented against `analytics.export`.
+- Decide and implement the smallest backend-first export endpoint only after the entitlement and report-category scope are fully traced.
 
 ## Last Verified Commit
 
-`d4acdfd7c48119c243e7eb5c80530263be21d200`
+`a7520ae931eb6399bb3e6fc549616e3de79cecfb`
 
 ## Last Successful Validation
 
@@ -99,4 +98,4 @@ Checkpoint the export-entitlement foundation, then continue Governance Controls 
 
 ## Exact Next Action
 
-Run typecheck and web build, then commit and push the export entitlement checkpoint.
+Push the export entitlement checkpoint, then inspect per-workshop Limits & Entitlements override requirements against `ControlSetting`.
