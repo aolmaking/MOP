@@ -108,11 +108,11 @@ sessions and every one is `ENFORCED` as of 2026-08-22.
 
 > **Superseded 2026-08-21** — the paragraphs immediately below (the "23 of 53" narrative) are kept as historical record of what this file said before a code-verified audit corrected it; they were true at the time they were written but are not the current state. **The current, verified state and the current objective are in the box right after this note.** See §0 above for the full account of what changed and why.
 
-**Current objective, as of the 2026-08-22 autonomous pass:** the original 9-role product is essentially built — `docs/PAGE_INVENTORY.md` reads 47 complete + 6 partial + 0 fully-missing, out of 53 spec'd pages (up from the 23/53 this section originally reported). The active frontier is no longer "build more pages." Four things now matter more than any remaining page:
+**Current objective, as of the 2026-08-22 autonomous pass:** the original 9-role product is essentially built — `docs/PAGE_INVENTORY.md` reads 48 complete + 5 partial + 0 fully-missing, out of 53 spec'd pages (up from the 23/53 this section originally reported). The active frontier is no longer "build more pages." Four things now matter more than any remaining page:
 
 1. **Close the HTTP-level test-coverage gap** on the highest-risk subsystems (Finance, Billing, Inventory) — most of the API is proven only at the service layer, never through an actual guarded HTTP request. This is the single most likely source of an undetected regression as more people touch the codebase.
 2. **Ship at least one real country's billing/invoicing adapter** (Egypt ETA or Saudi ZATCA) — `GenericBillingAdapter` is the only one that exists, so every real country is currently compliance-blocked. This blocks onboarding a real paying customer in most markets, which is a business blocker, not a technical nice-to-have.
-3. **Close remaining partial page gaps only where their blockers are backed**: Access Denied, Password Reset, and Data Analyst Saved Views/Exports are now built; export permission is gated by `analytics.export`, the plan category list is enforced by `Plan.allowedExports`, and the CSV endpoint preserves the current analytical page filters.
+3. **Close remaining partial page gaps only where their blockers are backed**: Access Denied, Password Reset, Data Analyst Saved Views/Exports, and Platform Reports are now built; export permission is gated by `analytics.export`, the plan category list is enforced by `Plan.allowedExports`, and the CSV endpoint preserves the current analytical page filters.
 4. **Get an explicit owner decision on Phase 21's Policy & Decision Architecture direction** before investing further in Phases 15–20 (specialization, tenant relationships, governance depth, resilience) — Phase 21 is deliberately paused at documents-only, by design, awaiting exactly this review.
 
 Phases 15–17 (specialization) and 18–20 (tenant relationships, governance depth, operational resilience) remain real, valuable, partially-shipped tracks — see the corrected phase table in §2 for exactly how much of each is built versus still design-only. Below is the original historical narrative, kept for the audit trail:
@@ -202,23 +202,22 @@ Three doors closed earlier this arc, from the original audit:
 | 20 — Operational Resilience at Scale | 🟠 one real concurrency race fixed and proven; "no offline mode" decided and documented; no real load testing has been done; bulk onboarding not built |
 | 21 — Policy & Decision Architecture | 🟠 documents only, by design — ~70 policy decisions cataloged with defaults and build-posture verdicts; zero implementation; explicitly paused awaiting an owner decision before continuing |
 
-**Platform Super Admin — 5 of 6 pages complete, 1 partial (not 4 of 6):** Add Workshop Owner, Workshops, **Control Center — Governance Controls**, and **Workshop Live View** are all real and working — both confirmed built by direct code read this pass, correcting the stale claim above. Only Control Center's Builder Control facet remains narrow (capability shaping only; the spec's broader theme/layout/workflow-policy/permission-matrix scope is unbuilt), and Platform Reports covers only its first two sections of six. See `docs/PAGE_INVENTORY.md` for the full breakdown.
+**Platform Super Admin — 5 of 6 pages complete, 1 partial (not 4 of 6):** Add Workshop Owner, Workshops, **Control Center — Governance Controls**, **Platform Reports**, and **Workshop Live View** are all real and working — confirmed by direct code read and focused verification, correcting the stale claim above. Only Control Center's Builder Control facet remains narrow (capability shaping only; the spec's broader theme/layout/workflow-policy/permission-matrix scope is unbuilt). See `docs/PAGE_INVENTORY.md` for the full breakdown.
 
-**No page in the entire 53-page spec now has zero implementation.** Access Denied, Password Reset, and Saved Views/Exports are built, including entitlement-gated CSV export generation. See `docs/PAGE_INVENTORY.md` for the complete, current, canonical count (47 complete + 6 partial + 0 missing = 53) — this file and `docs/PHASE_MAP.md` now cite that document's total rather than each keeping a separate one.
+**No page in the entire 53-page spec now has zero implementation.** Access Denied, Password Reset, Saved Views/Exports, and Platform Reports are built, including entitlement-gated CSV export generation and all six Platform Reports sections. See `docs/PAGE_INVENTORY.md` for the complete, current, canonical count (48 complete + 5 partial + 0 missing = 53) — this file and `docs/PHASE_MAP.md` now cite that document's total rather than each keeping a separate one.
 
 **The other real, non-cosmetic gap found this pass:** automated test coverage. Only Auth, Access/Permissions, and Platform/Super-Admin have tests that exercise a real HTTP request through the session guard and DTO validation. Every other subsystem — Technician, Inventory, Finance, Billing, Customer Portal, Team Leader, Branch Manager, Governance/Audit, Organization — is tested only by calling the service layer directly against a real database, which proves the business logic but never proves the actual route wiring, guard behavior, or request validation. Business logic itself is consistently real everywhere: no stub services, no hardcoded fake returns, no leftover TODOs were found anywhere in `apps/api/src`.
 
-**Platform Reports (closed this session, 2026-08-13).** Found already
-implemented and uncommitted on this working tree at session start
-(`PlatformReportsController`/`Service`, two web pages) — verified
-complete against the full gate rather than rebuilt, then committed.
-Level 1 (aggregate totals + per-workshop card grid, reusing
-`WorkshopsService.list()`'s paging/sort/search) and Level 2's Usage
-Overview section only; the spec's other five Level 2 sections (Feature
-Usage, Builder Adoption, Operational Activity, Commercial Snapshot,
-Health & Risk) are named as owed in `PAGE_INVENTORY.md`, not built as
-empty tabs. `usageScore` is this project's own defined composite (a
-recency bucket off `lastActivityAt`) since the source spec names "a
+**Platform Reports (completed in the 2026-08-22 autonomous pass).**
+Level 1 keeps the aggregate totals + per-workshop card grid, reusing
+`WorkshopsService.list()`'s paging/sort/search, and now adds active-user,
+feature-adoption, and builder-adoption signals to the cards. Level 2 now
+returns and renders all six specified sections: Usage Overview, Feature
+Usage, Builder Adoption, Operational Activity, Commercial Snapshot, and
+Health & Risk. Metrics are backed by existing product rows; platform
+subscription money remains explicit nulls because no platform billing
+table exists yet. `usageScore` is this project's own defined composite
+(a recency bucket off `lastActivityAt`) since the source spec names "a
 composite" without pinning a formula.
 
 **Verified at last commit:** 480 API tests + 225 web tests + 121 shared tests, typecheck clean, all **five** custom lint rules passing (audit boundary, directional CSS, touch targets, money, permission keys), full build green.
@@ -419,7 +418,7 @@ The owner sent a detailed, structured follow-up closing out everything above had
 
 - **Close the HTTP-level test-coverage gap** on Finance, Billing, and Inventory first — every one of their endpoints is proven only at the service layer today, never through an actual guarded HTTP request. Highest leverage, since it protects money- and stock-correctness code from a future silent regression.
 - **Ship one real country's billing/invoicing adapter** (Egypt ETA or Saudi ZATCA) against the existing `GenericBillingAdapter` seam — this is what actually unblocks onboarding a paying customer in a real market, not any remaining page.
-- **Remaining page work is partial, not zero-implementation**: Data Analyst Saved Views/Exports is now complete, including the `Plan.allowedExports` entitlement, `analytics.export` permission gate, and CSV file-generation endpoint. The remaining page gaps are the partial rows already named in `docs/PAGE_INVENTORY.md`.
+- **Remaining page work is partial, not zero-implementation**: Data Analyst Saved Views/Exports and Platform Reports are now complete, including the `Plan.allowedExports` entitlement, `analytics.export` permission gate, CSV file-generation endpoint, and all six Platform Reports sections. The remaining page gaps are the partial rows already named in `docs/PAGE_INVENTORY.md`.
 - **Get an explicit owner decision on Phase 21** before investing further in Phases 15–20 — it is deliberately paused at documents-only, awaiting exactly this review, per its own stop boundary above.
 - **The remaining edge cases** (see `docs/archive/discovery/scenarios3/EDGE_CASE_REGISTER.md`) are no longer bug-fix-shaped — each needs its own short design note before code, not a quick fix.
 - **Platform Super Admin, Owner, and every other role's page count** is no longer the active frontier — see the corrected count in §2 and the canonical breakdown in `docs/PAGE_INVENTORY.md`. Do not re-open "build the remaining pages" as a track without first checking that document; most of what earlier entries in this file called "owed" is already built.

@@ -25,7 +25,7 @@ const asService = prisma as unknown as PrismaService;
 const health = new WorkshopHealthService();
 const audit = new AuditService(asService);
 const workshops = new WorkshopsService(asService, audit, health, new TenantEntitlementsService(asService, audit));
-const reports = new PlatformReportsService(asService, workshops);
+const reports = new PlatformReportsService(asService, workshops, health);
 
 const SUFFIX = `plat-rep-${Date.now()}`;
 

@@ -15,7 +15,10 @@ function card(overrides: Partial<WorkshopReportCard> = {}): WorkshopReportCard {
     lastActivityAt: '2026-08-12T10:00:00.000Z',
     staffUserCount: 5,
     customerCount: 40,
+    activeUserCount: 8,
     usageScore: 80,
+    featureAdoptionPercent: 70,
+    builderAdoptionPercent: 25,
     ...overrides,
   };
 }

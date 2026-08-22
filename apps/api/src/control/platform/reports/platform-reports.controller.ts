@@ -19,4 +19,9 @@ export class PlatformReportsController {
   usage(@Param("id") id: string, @Query() query: UsageOverviewQueryDto) {
     return this.reports.usageOverview(id, query.window);
   }
+
+  @Get(":id")
+  detail(@Param("id") id: string, @Query() query: UsageOverviewQueryDto) {
+    return this.reports.detail(id, query.window);
+  }
 }

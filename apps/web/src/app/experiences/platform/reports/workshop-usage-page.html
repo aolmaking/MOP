@@ -19,7 +19,10 @@
     @case ('ready') {
       @if (data(); as d) {
         <header class="usage-head">
-          <h1 class="usage-title">Usage Overview</h1>
+          <div>
+            <h1 class="usage-title">{{ d.workshop.name }}</h1>
+            <p class="usage-subtitle">{{ d.workshop.planName }} · {{ label(d.workshop.status) }}</p>
+          </div>
           <div class="window-toggle">
             <button type="button" class="window-option" [attr.aria-pressed]="windowDays() === 30" (click)="setWindow(30)">
               30 days
@@ -30,77 +33,306 @@
           </div>
         </header>
 
-        <div class="row">
+        <div class="row row--summary">
           <div class="stat">
-            <span class="stat-value">{{ d.activeUsers.staff }}</span>
+            <span class="stat-value">{{ d.usageOverview.activeUsers.staff }}</span>
             <span class="stat-label">Active staff</span>
           </div>
           <div class="stat">
-            <span class="stat-value">{{ d.activeUsers.customer }}</span>
+            <span class="stat-value">{{ d.usageOverview.activeUsers.customer }}</span>
             <span class="stat-label">Active customers</span>
           </div>
-          <div class="stat" [class.stat--stale]="d.ownerLastLogin.isStale">
-            <span class="stat-value">{{ when(d.ownerLastLogin.at) }}</span>
+          <div class="stat" [class.stat--stale]="d.usageOverview.ownerLastLogin.isStale">
+            <span class="stat-value">{{ when(d.usageOverview.ownerLastLogin.at) }}</span>
             <span class="stat-label">Owner last login</span>
-            @if (d.ownerLastLogin.isStale) {
+            @if (d.usageOverview.ownerLastLogin.isStale) {
               <span class="stale-flag">Stale</span>
             }
           </div>
+          <div class="stat">
+            <span class="stat-value">{{ percent(d.featureUsage.adoptionPercent) }}</span>
+            <span class="stat-label">Feature adoption</span>
+          </div>
+          <div class="stat" [class.stat--stale]="d.healthRisk.status !== 'HEALTHY'">
+            <span class="stat-value">{{ label(d.healthRisk.status) }}</span>
+            <span class="stat-label">Health risk</span>
+          </div>
         </div>
 
-        <h2 class="section-title">Logins per day</h2>
-        <div class="chart">
-          @for (day of d.loginsByDay; track day.date) {
-            <div class="bar-col" [title]="dayLabel(day.date) + ': ' + day.count">
-              <div class="bar" [style.block-size]="barHeight(day.count)"></div>
+        <section class="section-panel">
+          <h2 class="section-title">Usage Overview</h2>
+          <div class="chart">
+            @for (day of d.usageOverview.loginsByDay; track day.date) {
+              <div class="bar-col" [title]="dayLabel(day.date) + ': ' + day.count">
+                <div class="bar" [style.block-size]="barHeight(day.count)"></div>
+              </div>
+            }
+          </div>
+
+          <div class="table-scroll">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Staff</th>
+                  <th>Role</th>
+                  <th>Last action</th>
+                  <th>When</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of d.usageOverview.staffActivity; track row.staffUserId) {
+                  <tr>
+                    <td>{{ row.fullName }}</td>
+                    <td>{{ label(row.role) }}</td>
+                    <td>{{ row.lastAction ? label(row.lastAction) : 'No recent activity' }}</td>
+                    <td class="cell-mono">{{ when(row.lastActionAt) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <div class="row">
+            <div class="stat">
+              <span class="stat-value">{{ d.usageOverview.customerPortal.sessions }}</span>
+              <span class="stat-label">Customer portal sessions</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.usageOverview.customerPortal.distinctCustomers }}</span>
+              <span class="stat-label">Distinct customers</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">
+                {{ d.usageOverview.customerPortal.decisionResponseRate ?? '—' }}{{ d.usageOverview.customerPortal.decisionResponseRate !== null ? '%' : '' }}
+              </span>
+              <span class="stat-label">Decision response rate</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="section-panel">
+          <h2 class="section-title">Feature Usage</h2>
+          <div class="table-scroll">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Feature</th>
+                  <th>Usage</th>
+                  <th>Trend</th>
+                  <th>Enablement</th>
+                  <th>Metric</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of d.featureUsage.rows; track row.key) {
+                  <tr [class.row-muted]="!row.enabled" [class.row-warning]="row.adoptionSignal === 'ENABLED_UNUSED'">
+                    <td>{{ row.label }}</td>
+                    <td class="cell-mono">{{ row.currentUsage }}</td>
+                    <td>{{ trend(row.trend) }}</td>
+                    <td>{{ row.enabled ? label(row.enablementStatus) : 'Disabled' }}</td>
+                    <td>{{ row.metric }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section-panel">
+          <h2 class="section-title">Builder Adoption</h2>
+          <div class="row">
+            <div class="stat">
+              <span class="stat-value">{{ d.builderAdoption.adoptionPercent }}%</span>
+              <span class="stat-label">Adoption score</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ bool(d.builderAdoption.themeCustomized) }}</span>
+              <span class="stat-label">Theme customized</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.builderAdoption.pagesCustomized }}</span>
+              <span class="stat-label">Pages customized</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.builderAdoption.formsCustomized }}</span>
+              <span class="stat-label">Forms customized</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.builderAdoption.messagesCustomized }}</span>
+              <span class="stat-label">Messages customized</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.builderAdoption.rollbackCount }}</span>
+              <span class="stat-label">Rollbacks</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.builderAdoption.validationFailures }}</span>
+              <span class="stat-label">Validation failures</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.builderAdoption.lastPublish ? when(d.builderAdoption.lastPublish.at) : 'Never' }}</span>
+              <span class="stat-label">Last publish</span>
+            </div>
+          </div>
+
+          @if (d.builderAdoption.highRiskChanges.length > 0) {
+            <div class="table-scroll">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>High-risk change</th>
+                    <th>Risk</th>
+                    <th>When</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of d.builderAdoption.highRiskChanges; track row.id) {
+                    <tr>
+                      <td>{{ label(row.action) }}</td>
+                      <td>{{ label(row.riskLevel) }}</td>
+                      <td class="cell-mono">{{ when(row.at) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
             </div>
           }
-        </div>
+        </section>
 
-        <h2 class="section-title">Staff activity</h2>
-        <div class="table-scroll">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Staff</th>
-                <th>Role</th>
-                <th>Last action</th>
-                <th>When</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (row of d.staffActivity; track row.staffUserId) {
-                <tr>
-                  <td>{{ row.fullName }}</td>
-                  <td>{{ label(row.role) }}</td>
-                  <td>{{ row.lastAction ? label(row.lastAction) : 'No recent activity' }}</td>
-                  <td class="cell-mono">{{ when(row.lastActionAt) }}</td>
-                </tr>
+        <section class="section-panel">
+          <h2 class="section-title">Operational Activity</h2>
+          <div class="row">
+            <div class="stat">
+              <span class="stat-value">{{ d.operationalActivity.workOrders.created }}</span>
+              <span class="stat-label">Work orders created</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.operationalActivity.workOrders.completed }}</span>
+              <span class="stat-label">Work orders completed</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ percent(d.operationalActivity.workOrders.completionRate) }}</span>
+              <span class="stat-label">Completion rate</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.operationalActivity.activeTasks }}</span>
+              <span class="stat-label">Active tasks</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.operationalActivity.waiting.customer }}</span>
+              <span class="stat-label">Waiting customer</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.operationalActivity.waiting.parts }}</span>
+              <span class="stat-label">Waiting parts</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.operationalActivity.blockers.open }}</span>
+              <span class="stat-label">Open blockers</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.operationalActivity.blockers.resolvedThisPeriod }}</span>
+              <span class="stat-label">Blockers resolved</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.operationalActivity.paymentsRecorded.count }}</span>
+              <span class="stat-label">Payments recorded</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ money(d.operationalActivity.paymentsRecorded.totalAmount, d.operationalActivity.paymentsRecorded.currency) }}</span>
+              <span class="stat-label">Payment total</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.operationalActivity.invoicesIssued }}</span>
+              <span class="stat-label">Invoices issued</span>
+            </div>
+          </div>
+
+          @if (d.operationalActivity.inventoryMovements.length > 0) {
+            <div class="movement-list">
+              @for (row of d.operationalActivity.inventoryMovements; track row.type) {
+                <span>{{ label(row.type) }} · {{ row.count }}</span>
               }
-            </tbody>
-          </table>
-        </div>
+            </div>
+          }
+        </section>
 
-        <h2 class="section-title">Customer portal</h2>
-        <div class="row">
-          <div class="stat">
-            <span class="stat-value">{{ d.customerPortal.sessions }}</span>
-            <span class="stat-label">Sessions</span>
+        <section class="section-panel">
+          <h2 class="section-title">Commercial Snapshot</h2>
+          <div class="row">
+            <div class="stat">
+              <span class="stat-value">{{ d.commercialSnapshot.plan }}</span>
+              <span class="stat-label">Plan</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ label(d.commercialSnapshot.subscriptionStatus) }}</span>
+              <span class="stat-label">Subscription status</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">—</span>
+              <span class="stat-label">Paid / unpaid</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">—</span>
+              <span class="stat-label">Renewal date</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">—</span>
+              <span class="stat-label">Overdue amount</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">—</span>
+              <span class="stat-label">MRR contribution</span>
+            </div>
           </div>
-          <div class="stat">
-            <span class="stat-value">{{ d.customerPortal.distinctCustomers }}</span>
-            <span class="stat-label">Distinct customers</span>
-          </div>
-          <div class="stat">
-            <span class="stat-value">{{ d.customerPortal.decisionResponseRate ?? '—' }}{{ d.customerPortal.decisionResponseRate !== null ? '%' : '' }}</span>
-            <span class="stat-label">Decision response rate</span>
-          </div>
-        </div>
+          <p class="note">{{ d.commercialSnapshot.note }}</p>
+        </section>
 
-        <p class="owed-note">
-          Feature Usage, Builder Adoption, Operational Activity, Commercial Snapshot, and Health &amp; Risk are not built
-          yet.
-        </p>
+        <section class="section-panel">
+          <h2 class="section-title">Health &amp; Risk</h2>
+          <div class="row">
+            <div class="stat" [class.stat--stale]="d.healthRisk.status !== 'HEALTHY'">
+              <span class="stat-value">{{ label(d.healthRisk.status) }}</span>
+              <span class="stat-label">Health badge</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.healthRisk.ownerInactivityDays ?? '—' }}</span>
+              <span class="stat-label">Owner inactivity days</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.healthRisk.lowStaffUsageCount }}</span>
+              <span class="stat-label">Staff with zero actions</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.healthRisk.failedLogins.count }}</span>
+              <span class="stat-label">Failed logins</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.healthRisk.builderValidationErrors }}</span>
+              <span class="stat-label">Builder validation errors</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ d.healthRisk.lowFeatureAdoptionCount }}</span>
+              <span class="stat-label">Enabled unused features</span>
+            </div>
+          </div>
+
+          @if (d.healthRisk.warnings.length > 0) {
+            <ul class="warning-list">
+              @for (warning of d.healthRisk.warnings; track warning.code) {
+                <li>{{ warning.message }}</li>
+              }
+            </ul>
+          }
+
+          @if (d.healthRisk.frozenOrSuspendedHistory.length > 0) {
+            <div class="movement-list">
+              @for (row of d.healthRisk.frozenOrSuspendedHistory; track row.at) {
+                <span>{{ label(row.action) }} · {{ when(row.at) }}</span>
+              }
+            </div>
+          }
+        </section>
       }
     }
   }

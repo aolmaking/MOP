@@ -88,8 +88,7 @@ export const routes: Routes = [
       },
       {
         // Level 1: the aggregated workshop-card view. Level 2 is
-        // 'reports/:id' below -- Usage Overview only, see PAGE_INVENTORY.md
-        // for the five sections deliberately not built this pass.
+        // 'reports/:id' below -- the six-section per-workshop report.
         path: 'reports',
         loadComponent: () => import('./experiences/platform/reports/reports-page').then((m) => m.ReportsPage),
       },

@@ -4,17 +4,12 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ErrorBanner } from '../../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../../ui/button/button.directive';
 import type { PresentedError } from '../../../runtime/http/error.interceptor';
-import { PlatformReportsApi, type UsageOverview } from './platform-reports.api';
+import { PlatformReportsApi, type PlatformReportDetail, type UsageTrend } from './platform-reports.api';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
 /**
- * Platform Reports — Level 2, Usage Overview only.
- *
- * The five other sections the spec names (Feature Usage, Builder
- * Adoption, Operational Activity, Commercial Snapshot, Health & Risk)
- * are not built this pass -- named as owed rather than shown as empty
- * tabs, which would claim a page exists where it doesn't.
+ * Platform Reports — Level 2, all six sections for one workshop.
  */
 @Component({
   selector: 'app-workshop-usage-page',
@@ -28,12 +23,14 @@ export class WorkshopUsagePage {
   private readonly api = inject(PlatformReportsApi);
   private readonly destroyRef = inject(DestroyRef);
 
-  protected readonly data = signal<UsageOverview | null>(null);
+  protected readonly data = signal<PlatformReportDetail | null>(null);
   protected readonly state = signal<State>('loading');
   protected readonly error = signal<PresentedError | null>(null);
   protected readonly windowDays = signal<30 | 90>(30);
 
-  protected readonly maxLogins = computed(() => Math.max(1, ...(this.data()?.loginsByDay.map((d) => d.count) ?? [1])));
+  protected readonly maxLogins = computed(() =>
+    Math.max(1, ...(this.data()?.usageOverview.loginsByDay.map((d) => d.count) ?? [1])),
+  );
 
   constructor() {
     // Deferred to a microtask so a route-bound `id` is set before the
@@ -44,7 +41,7 @@ export class WorkshopUsagePage {
   protected load(): void {
     this.state.set('loading');
     this.api
-      .usage(this.id(), this.windowDays())
+      .detail(this.id(), this.windowDays())
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (data) => {
@@ -78,5 +75,30 @@ export class WorkshopUsagePage {
 
   protected label(value: string): string {
     return value.toLowerCase().replace(/[._]/g, ' ');
+  }
+
+  protected bool(value: boolean): string {
+    return value ? 'Yes' : 'No';
+  }
+
+  protected percent(value: number | null): string {
+    return value === null ? '—' : `${value}%`;
+  }
+
+  protected money(amount: number, currency: string): string {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);
+  }
+
+  protected trend(value: UsageTrend): string {
+    switch (value) {
+      case 'UP':
+        return 'Up';
+      case 'DOWN':
+        return 'Down';
+      case 'NEW':
+        return 'New';
+      default:
+        return 'Flat';
+    }
   }
 }

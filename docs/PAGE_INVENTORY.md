@@ -17,8 +17,8 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| ✅ Complete (real page, real backend, no named gap) | **47** |
-| 🟡 Partial (real page and backend, but a named piece of the spec is missing) | **6** |
+| ✅ Complete (real page, real backend, no named gap) | **48** |
+| 🟡 Partial (real page and backend, but a named piece of the spec is missing) | **5** |
 | ⬜ Not built at all (no route, no component, no controller) | **0** |
 | **Complete + Partial (has a real, working page today)** | **53** |
 
@@ -28,7 +28,7 @@ Legend: ✅ complete · 🟡 partial (exists but does not cover the spec's conte
 
 ---
 
-## Platform Super Admin — 4 ✅, 2 🟡 (6 pages)
+## Platform Super Admin — 5 ✅, 1 🟡 (6 pages)
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
@@ -36,7 +36,7 @@ Legend: ✅ complete · 🟡 partial (exists but does not cover the spec's conte
 | Workshops | ✅ | `/platform/workshops` | Server-side paged/sorted/filtered, details drawer, freeze/reactivate with impact preview |
 | Control Center — Governance Controls | ✅ | `/platform/control-center` | Per-role permission locks (set/remove, both audited, both require a written reason), tenant archive/reactivate, and backed Limits & Entitlements overrides for Max Branches, Max Users, Max Warehouses, and Allowed Exports. Entitlement overrides are written as audited `ControlSetting` rows, preserve plan ceilings, refuse limits below active usage, and are enforced by Organization, Inventory, Access, and Analytics export paths. Two of this project's own prior audits (now archived) claimed this page was unbuilt — a direct code read confirms it is real and working; those audits were stale |
 | Control Center — Builder Control | 🟡 | `/platform/workshops/:id/capabilities` | No page named "Builder Control" exists as such — the Capabilities page covers capability shaping only (turn subsystems on/off with a preview step). The spec's Builder Control is broader (theme, page layouts, role experience, workflow policy, permission matrix, config version rollback) and none of that broader scope is built |
-| Platform Reports | 🟡 | `/platform/reports`, `/platform/reports/:id` | Level 1 (aggregate totals + per-workshop card grid) and Level 2's Usage Overview section only. Feature Usage, Builder Adoption, Operational Activity, Commercial Snapshot, and Health & Risk are named as owed, not built as empty tabs |
+| Platform Reports | ✅ | `/platform/reports`, `/platform/reports/:id` | Level 1 now exposes aggregate totals plus workshop cards with active-user, usage-score, feature-adoption, builder-adoption, health, plan, staff and customer counts. Level 2 now returns and renders all six specified sections: Usage Overview, Feature Usage, Builder Adoption, Operational Activity, Commercial Snapshot, and Health & Risk. Every metric is derived from existing rows (`Session`, `AuditLog`, `TenantCapability`, `Inspection`, `PartRequest`, `IssuedItem`, `PartReturnRequest`, `Task`, `TaskBlocker`, `StockMovement`, `Payment`, `Invoice`, `MessageTemplate`, `CustomFieldDefinition`, `TenantConfigurationVersion`); platform subscription money remains explicitly null because no platform billing table exists yet |
 | Workshop Live View | ✅ | `/platform/live-view` | Real endpoint (`platform/live-view.controller.ts` → `LiveViewService.build()`), auto-refreshing, the only cross-tenant read in the product, deliberately confined to counts and event-key summaries (never payload). Same as Governance Controls above — a prior archived audit claimed this was unbuilt; it is real |
 
 ## Branch Manager — 7 ✅ (7 pages)

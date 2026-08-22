@@ -24,11 +24,7 @@ const SORTS = [
  * page asking "which of these needs attention", the same job a card
  * grid does better than a table with thirty columns.
  *
- * Only Level 1 and Level 2's Usage Overview section are built this
- * pass; Feature Usage, Builder Adoption, Operational Activity,
- * Commercial Snapshot, and Health & Risk are named as owed in
- * PAGE_INVENTORY.md rather than shown as empty tabs that would imply
- * they exist.
+ * Level 2 is the six-section per-workshop detail at `/platform/reports/:id`.
  */
 @Component({
   selector: 'app-reports-page',

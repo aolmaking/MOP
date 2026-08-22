@@ -23,8 +23,8 @@ import { OnboardingService } from "./onboarding/onboarding.service";
   // PlatformController owns Add Workshop Owner + the availability-check
   // endpoints (Phase 2 step 2); WorkshopsController owns the Workshops
   // list/details/freeze/reactivate endpoints (step 3); PlatformReportsController
-  // owns Platform Reports (Level 1 + Usage Overview, see PAGE_INVENTORY.md
-  // for what's deliberately not built yet). Each sits under its own
+  // owns Platform Reports (Level 1 + the six-section per-workshop detail).
+  // Each sits under its own
   // literal prefix (platform/workshops, platform/reports), so registration
   // order between them never matters.
   controllers: [

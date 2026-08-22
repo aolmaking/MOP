@@ -104,7 +104,12 @@
               <div class="card-counts">
                 <span>{{ card.staffUserCount }} staff</span>
                 <span>{{ card.customerCount }} customers</span>
+                <span>{{ card.activeUserCount }} active users</span>
                 <span class="card-activity">{{ ago(card.lastActivityAt) }}</span>
+              </div>
+              <div class="card-counts">
+                <span>Feature adoption {{ card.featureAdoptionPercent ?? '—' }}{{ card.featureAdoptionPercent !== null ? '%' : '' }}</span>
+                <span>Builder adoption {{ card.builderAdoptionPercent }}%</span>
               </div>
             </button>
           }
