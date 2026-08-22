@@ -6,6 +6,8 @@ import { EffectiveAccessService } from "../../identity/access/effective-access.s
 import { FinanceConfigurationService, type FinanceConfigView } from "./finance-configuration.service";
 import { PriceCatalogService, type PriceCatalogItemView } from "./price-catalog.service";
 import { SetPriceDto, UpdateFinanceConfigDto } from "./finance-configuration.dto";
+import { SetMoneyHandlerPermissionDto } from "./money-handling-permissions.dto";
+import { MoneyHandlingPermissionsService, type MoneyHandlingPermissionsView } from "./money-handling-permissions.service";
 
 /**
  * Pricing & Financial Configuration -- Tax/VAT, Discounts & Deposits,
@@ -19,6 +21,7 @@ export class FinanceConfigurationController {
   constructor(
     private readonly config: FinanceConfigurationService,
     private readonly catalog: PriceCatalogService,
+    private readonly moneyHandlers: MoneyHandlingPermissionsService,
     private readonly access: EffectiveAccessService,
   ) {}
 
@@ -47,6 +50,21 @@ export class FinanceConfigurationController {
   async setPrice(@CurrentSession() session: SessionContext, @Body() dto: SetPriceDto): Promise<PriceCatalogItemView> {
     const tenantId = await this.require(session);
     return this.catalog.setPrice(tenantId, dto, this.actorOf(session));
+  }
+
+  @Get("money-handlers")
+  async moneyHandlerPermissions(@CurrentSession() session: SessionContext): Promise<MoneyHandlingPermissionsView> {
+    const tenantId = await this.require(session);
+    return this.moneyHandlers.view(tenantId, session);
+  }
+
+  @Post("money-handlers")
+  async setMoneyHandlerPermission(
+    @CurrentSession() session: SessionContext,
+    @Body() dto: SetMoneyHandlerPermissionDto,
+  ): Promise<MoneyHandlingPermissionsView> {
+    const tenantId = await this.require(session);
+    return this.moneyHandlers.set(tenantId, session, dto.role, dto.permissionKey, dto.allowed, this.actorOf(session));
   }
 
   private actorOf(session: SessionContext) {

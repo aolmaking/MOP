@@ -13,6 +13,7 @@ import { FinanceService } from "./finance.service";
 import { FinanceConfigurationController } from "./finance-configuration.controller";
 import { FinanceConfigurationService } from "./finance-configuration.service";
 import { PriceCatalogService } from "./price-catalog.service";
+import { MoneyHandlingPermissionsService } from "./money-handling-permissions.service";
 
 /**
  * Finance Core. `FinanceService` is the only writer of invoices and
@@ -41,7 +42,7 @@ import { PriceCatalogService } from "./price-catalog.service";
     PoliciesModule,
   ],
   controllers: [FinanceController, FinanceConfigurationController],
-  providers: [FinanceService, FinanceConfigurationService, PriceCatalogService],
+  providers: [FinanceService, FinanceConfigurationService, PriceCatalogService, MoneyHandlingPermissionsService],
   exports: [FinanceService],
 })
 export class FinanceModule {}

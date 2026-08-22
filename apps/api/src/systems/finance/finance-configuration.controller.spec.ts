@@ -11,8 +11,12 @@ function harness(allowed = true) {
     list: jest.fn().mockResolvedValue([]),
     setPrice: jest.fn().mockResolvedValue({ id: "price-1", itemKey: "Oil change" }),
   };
+  const moneyHandlers = {
+    view: jest.fn().mockResolvedValue({ permissions: [] }),
+    set: jest.fn().mockResolvedValue({ permissions: [] }),
+  };
   const access = { can: jest.fn().mockResolvedValue(allowed) };
-  const controller = new FinanceConfigurationController(config as never, catalog as never, access as never);
+  const controller = new FinanceConfigurationController(config as never, catalog as never, moneyHandlers as never, access as never);
   const session = createSession({
     tenantId: "tenant-1",
     accountId: "owner-1",
@@ -20,7 +24,7 @@ function harness(allowed = true) {
     role: "TENANT_OWNER",
   });
 
-  return { controller, config, catalog, access, session };
+  return { controller, config, catalog, moneyHandlers, access, session };
 }
 
 describe("FinanceConfigurationController", () => {
@@ -50,12 +54,40 @@ describe("FinanceConfigurationController", () => {
     expect(catalog.setPrice).toHaveBeenCalledWith("tenant-1", input, { accountId: "owner-1", displayName: "Owner" });
   });
 
+  it("passes the current tenant into money-handler reads", async () => {
+    const { controller, moneyHandlers, session } = harness();
+
+    await controller.moneyHandlerPermissions(session);
+
+    expect(moneyHandlers.view).toHaveBeenCalledWith("tenant-1", session);
+  });
+
+  it("passes the current tenant, requested role permission, and actor into money-handler writes", async () => {
+    const { controller, moneyHandlers, session } = harness();
+
+    await controller.setMoneyHandlerPermission(session, {
+      role: "BRANCH_MANAGER",
+      permissionKey: "finance.payment.record",
+      allowed: true,
+    });
+
+    expect(moneyHandlers.set).toHaveBeenCalledWith(
+      "tenant-1",
+      session,
+      "BRANCH_MANAGER",
+      "finance.payment.record",
+      true,
+      { accountId: "owner-1", displayName: "Owner" },
+    );
+  });
+
   it("does not call services when access is denied", async () => {
-    const { controller, config, catalog, session } = harness(false);
+    const { controller, config, catalog, moneyHandlers, session } = harness(false);
 
     await expect(controller.catalogList(session)).rejects.toBeInstanceOf(ForbiddenException);
 
     expect(config.get).not.toHaveBeenCalled();
     expect(catalog.list).not.toHaveBeenCalled();
+    expect(moneyHandlers.view).not.toHaveBeenCalled();
   });
 });

@@ -34,6 +34,10 @@ export class EffectiveAccessService {
     return this.permissionResolver.resolve(session, permissionKey);
   }
 
+  async checkMany(session: SessionContext, permissionKeys: readonly string[]): Promise<Map<string, LayerResult>> {
+    return this.permissionResolver.resolveMany(session, permissionKeys);
+  }
+
   scope(session: SessionContext, kind: ScopeArrayKind, fieldName: string): Record<string, { in: string[] }> {
     return this.scopeResolver.filterBy(session, kind, fieldName);
   }

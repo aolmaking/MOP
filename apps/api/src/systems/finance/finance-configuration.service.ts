@@ -51,12 +51,10 @@ export interface UpdateFinanceConfigInput {
  * surface those real consumers were missing, not a new decision about
  * what the fields mean.
  *
- * "Who Can Handle Money" (the finance.invoice.issue/finance.payment.record
- * role-permission slice) is deliberately not included here -- it needs to
- * respect Super Admin's platform-lock ControlSettings the same way
- * Builder Control's Permission Matrix does, which is its own
- * self-contained mechanism worth getting right in its own pass rather
- * than bolted on here. Named as owed, not silently dropped.
+ * "Who Can Handle Money" is implemented next to this service, not inside
+ * the FinanceConfiguration row, because it writes RolePermission rows and
+ * must respect the same platform-lock resolver that guards every other
+ * permission decision.
  */
 @Injectable()
 export class FinanceConfigurationService {
