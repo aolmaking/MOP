@@ -163,6 +163,7 @@ const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: "analytics.inventory.view", module: "REPORTS" },
   { key: "analytics.decisions.view", module: "REPORTS" },
   { key: "analytics.feature_adoption.view", module: "REPORTS" },
+  { key: "analytics.saved_views.manage", module: "REPORTS" },
 
   // Audit
   { key: "audit.own_tenant.view", module: "AUDIT" },

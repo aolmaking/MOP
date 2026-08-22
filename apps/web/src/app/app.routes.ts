@@ -339,8 +339,9 @@ export const routes: Routes = [
     ],
   },
   {
-    // The Data Analyst's shell -- a rail, like Inventory/Owner. Six real
-    // pages per docs/detailed-specs/data-analyst.md, read-only throughout.
+    // The Data Analyst's shell -- a rail, like Inventory/Owner. Seven
+    // pages per docs/detailed-specs/data-analyst.md; saved views persist
+    // this analyst's own report configuration, never operational data.
     path: 'analyst',
     canActivate: [authGuard],
     loadComponent: () => import('./experiences/analyst/shell/analyst-shell').then((m) => m.AnalystShell),
@@ -373,6 +374,11 @@ export const routes: Routes = [
         path: 'feature-adoption',
         loadComponent: () =>
           import('./experiences/analyst/analyst-feature-adoption-page').then((m) => m.AnalystFeatureAdoptionPage),
+      },
+      {
+        path: 'saved-views',
+        loadComponent: () =>
+          import('./experiences/analyst/analyst-saved-views-page').then((m) => m.AnalystSavedViewsPage),
       },
     ],
   },

@@ -5,13 +5,14 @@ import { ButtonDirective } from '../../ui/button/button.directive';
 import { BarList, type BarListItem } from '../../ui/charts/bar-list/bar-list';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import { AnalystApi, type PeopleAnalyticsReport } from './analyst.api';
+import { SavedViewAction } from './saved-view-action';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
 /** Never shows payment or invoice figures tied to a technician -- the same no-finance discipline Team Leader observes. */
 @Component({
   selector: 'app-analyst-people-page',
-  imports: [ErrorBanner, ButtonDirective, BarList],
+  imports: [ErrorBanner, ButtonDirective, BarList, SavedViewAction],
   templateUrl: './analyst-people-page.html',
   styleUrl: './analyst-people-page.css',
 })
@@ -29,6 +30,7 @@ export class AnalystPeoplePage {
   protected readonly diagnosticItems = computed<BarListItem[]>(() =>
     (this.data()?.diagnosticCodeActivity ?? []).slice(0, 10).map((r) => ({ label: r.code, value: r.count, displayValue: r.count.toString() })),
   );
+  protected readonly viewConfiguration = computed(() => ({ range: this.data()?.range ?? null }));
 
   constructor() {
     this.load();

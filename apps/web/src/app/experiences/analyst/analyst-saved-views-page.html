@@ -1,0 +1,86 @@
+<section class="analytics-page">
+  <header class="head">
+    <h1 class="title">Saved Views</h1>
+    <p class="sub">Named configurations for your analytical pages.</p>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') { <p class="state-body" aria-busy="true">Loading…</p> }
+    @case ('forbidden') { <div class="state"><p class="state-title">You don't have access to this page</p></div> }
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+    @case ('ready') {
+      @if (error(); as err) {
+        <app-error-banner [error]="err" />
+      }
+
+      <section class="panel">
+        <h2 class="panel-title">Views</h2>
+        @if (views().length === 0) {
+          <p class="state-body">No saved views yet.</p>
+        } @else {
+          <div class="mop-table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Source page</th>
+                  <th>Created</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (view of views(); track view.id) {
+                  <tr>
+                    <td>
+                      @if (editingId() === view.id) {
+                        <input
+                          class="rename-input"
+                          type="text"
+                          [value]="editedName()"
+                          (input)="editedName.set($any($event.target).value)"
+                        />
+                      } @else {
+                        {{ view.name }}
+                      }
+                    </td>
+                    <td>{{ sourceLabel(view.sourcePage) }}</td>
+                    <td>{{ formatDate(view.createdAt) }}</td>
+                    <td class="row-actions">
+                      @if (editingId() === view.id) {
+                        <button appButton size="small" type="button" [disabled]="busyId() === view.id" (click)="rename(view)">Save</button>
+                        <button appButton variant="ghost" size="small" type="button" (click)="cancelRename()">Cancel</button>
+                      } @else {
+                        <a class="link" [routerLink]="sourceRoute(view.sourcePage)" [queryParams]="{ savedView: view.id }">Open</a>
+                        <button appButton variant="ghost" size="small" type="button" (click)="startRename(view)">Rename</button>
+                        <button
+                          appButton
+                          variant="danger"
+                          size="small"
+                          type="button"
+                          [disabled]="busyId() === view.id"
+                          (click)="deleteView(view)"
+                        >
+                          Delete
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+
+      <section class="panel panel-muted">
+        <h2 class="panel-title">Exports</h2>
+        <p class="panel-hint">Exports are unavailable until Allowed Exports is backed by the workshop plan entitlement.</p>
+      </section>
+    }
+  }
+</section>

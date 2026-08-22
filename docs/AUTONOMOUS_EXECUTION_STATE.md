@@ -8,7 +8,7 @@ Implementation, after documentation and source audit.
 
 ## Current Subsystem
 
-Data Analyst saved views and exports.
+Reporting coherence.
 
 ## Completed Tasks
 
@@ -32,18 +32,23 @@ Data Analyst saved views and exports.
 - Access Denied is a real routed public support page and unknown post-login landing pages now route to it.
 - Password Reset has dedicated token fields, migration, non-enumerating request endpoint, token validation/completion endpoints, and public reset UI.
 - Backend and frontend focused tests cover the password-reset support path.
+- Data Analyst saved views now have a persistent `AnalystSavedView` model, migration, tenant/account ownership, and `analytics.saved_views.manage` permission.
+- Analytics API exposes saved-view list/get/create/rename/delete, always using the current session's tenant/account rather than client-supplied ownership.
+- The five analytical pages expose Save This View actions, Analytics Home renders saved-view shortcuts, and `/analyst/saved-views` supports Open/Rename/Delete.
+- Data Analyst export remains deliberately deferred because the required plan-level `allowedExports` entitlement does not exist yet.
+- `PAGE_INVENTORY.md`, `PHASE_MAP.md`, and `PROJECT_STATE.md` now reflect 46 complete + 7 partial + 0 missing pages.
 
 ## Current Task
 
-Inspect Data Analyst saved-view/export requirements and existing analytics/reporting surfaces, then implement only the documented backed scope.
+Inspect reporting drift and reconcile the smallest backed gaps first: Analytics Home's missing Feature Adoption tile and the legacy `reports.company.view` reporting surface with no frontend consumer.
 
 ## Remaining Tasks
 
-- Confirm whether saved views/exports have a documented entitlement model or must remain deferred.
-- If backed, add backend persistence/API before frontend controls.
-- Add focused tests for backend behavior and analyst UI.
-- Run focused verification, then recursive typecheck.
-- Commit and push the completed unit once Git write permissions are available.
+- Decide from docs/source whether Analytics Home should include Feature Adoption now or remain documented as 4-tile-only.
+- Trace `apps/api/src/insights/analyst-reporting` and `reports.company.view` consumers; either retire stale product surface or fold it into the current analytics subsystem without duplicating report logic.
+- Preserve Data Analyst's privacy/no-finance leakage constraints while reconciling reporting surfaces.
+- Add focused backend/web tests for whatever reporting coherence change is made.
+- Run focused verification, recursive typecheck, Prisma validate when schema is touched, and web build when Angular routes/templates change.
 
 ## Last Verified Commit
 
@@ -62,8 +67,13 @@ Inspect Data Analyst saved-view/export requirements and existing analytics/repor
 - `corepack pnpm --filter @mop/web test -- --include src/app/identity/landing.spec.ts --watch=false --isolate=false`
 - `corepack pnpm --filter @mop/web test -- --include src/app/experiences/public/access-denied/access-denied-page.spec.ts --watch=false --isolate=false`
 - `corepack pnpm --filter @mop/web test -- --include src/app/experiences/public/password-reset/password-reset-page.spec.ts --watch=false --isolate=false`
+- `corepack pnpm --filter @mop/database generate`
+- `corepack pnpm --filter @mop/api test -- saved-views.service.spec.ts`
+- `corepack pnpm --filter @mop/web test -- --include src/app/experiences/analyst/saved-view-action.spec.ts --include src/app/experiences/analyst/analyst-saved-views-page.spec.ts --watch=false --isolate=false`
+- `node tools/lint-permission-keys.mjs`
 - `corepack pnpm -r typecheck`
 - `corepack pnpm --filter @mop/database validate`
+- `corepack pnpm --filter @mop/web build`
 
 ## Known Blockers
 
@@ -74,8 +84,8 @@ Inspect Data Analyst saved-view/export requirements and existing analytics/repor
 
 - Preserve backend-first behavior: UI reflects policies resolved by the API, never duplicates policy decisions locally.
 - Do not treat old audit entries as current unless source confirms them. Role permission locks and technician part requests are implemented now.
-- Deferred or missing features remain out of scope until their documented backing model exists: Data Analyst saved exports, full country billing adapters, and audited billing override path.
+- Deferred or missing features remain out of scope until their documented backing model exists: Data Analyst CSV export needs `Plan.allowedExports`, full country billing adapters need a country-specific adapter, and audited billing override still needs its own path.
 
 ## Exact Next Action
 
-Inspect Data Analyst saved-view/export backing and entitlement scope.
+Commit and push the saved-view checkpoint, update this ledger with the new verified commit SHA, then inspect Analytics Home and legacy `reports.company.view` reporting drift.
