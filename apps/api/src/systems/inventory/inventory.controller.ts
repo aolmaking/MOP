@@ -117,29 +117,31 @@ export class InventoryController {
 
   @Post("requests/:id/approve")
   async approve(@CurrentSession() session: SessionContext, @Param("id") id: string) {
-    await this.require(session, "inventory.request.approve");
-    return this.parts.approve(id, this.actor(session));
+    const tenantId = await this.require(session, "inventory.request.approve");
+    return this.parts.approve(id, this.actor(session), tenantId);
   }
 
   @Post("requests/:id/reject")
   async reject(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() body: { reason?: string }) {
-    await this.require(session, "inventory.request.reject");
-    return this.parts.reject(id, this.actor(session), body?.reason);
+    const tenantId = await this.require(session, "inventory.request.reject");
+    return this.parts.reject(id, this.actor(session), body?.reason, tenantId);
   }
 
   @Post("requests/:id/unavailable")
   async unavailable(@CurrentSession() session: SessionContext, @Param("id") id: string) {
-    await this.require(session, "inventory.request.mark_unavailable");
-    return this.parts.markUnavailable(id, this.actor(session));
+    const tenantId = await this.require(session, "inventory.request.mark_unavailable");
+    return this.parts.markUnavailable(id, this.actor(session), tenantId);
   }
 
   /** Hand a part over. May be partial -- see PHASE_7.md section 2. */
   @Post("requests/:id/issue")
   async issue(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: IssueDto) {
-    await this.require(session, "inventory.request.issue");
+    const tenantId = await this.require(session, "inventory.request.issue");
+    this.requireWarehouseInScope(session, dto.warehouseId);
     return this.parts.issue(
       { partRequestId: id, warehouseId: dto.warehouseId, quantity: dto.quantity },
       this.actor(session),
+      tenantId,
     );
   }
 
@@ -185,17 +187,18 @@ export class InventoryController {
    */
   @Post("returns/:id/accept")
   async acceptReturn(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: ReturnDto) {
-    await this.require(session, "inventory.stock.return.accept");
+    const tenantId = await this.require(session, "inventory.stock.return.accept");
+    this.requireWarehouseInScope(session, dto.warehouseId);
     const actor = this.actor(session);
-    await this.parts.acceptReturn(id, actor);
-    await this.parts.completeReturn(id, dto.warehouseId, dto.quantity, actor, { damaged: dto.damaged ?? false });
+    await this.parts.acceptReturn(id, actor, tenantId);
+    await this.parts.completeReturn(id, dto.warehouseId, dto.quantity, actor, { damaged: dto.damaged ?? false }, tenantId);
     return { ok: true as const };
   }
 
   @Post("returns/:id/reject")
   async rejectReturn(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: RejectReturnDto) {
-    await this.require(session, "inventory.stock.return.reject");
-    return this.parts.rejectReturn(id, this.actor(session), dto.reason);
+    const tenantId = await this.require(session, "inventory.stock.return.reject");
+    return this.parts.rejectReturn(id, this.actor(session), dto.reason, tenantId);
   }
 
   @Post("returns/:id/clarify")
@@ -204,8 +207,8 @@ export class InventoryController {
     @Param("id") id: string,
     @Body() dto: RequestClarificationDto,
   ) {
-    await this.require(session, "inventory.stock.return.clarify");
-    return this.parts.requestClarification(id, this.actor(session), dto.question);
+    const tenantId = await this.require(session, "inventory.stock.return.clarify");
+    return this.parts.requestClarification(id, this.actor(session), dto.question, tenantId);
   }
 
   /** H7/P-32: refuses while any item still holds stock in this warehouse. */
@@ -217,6 +220,7 @@ export class InventoryController {
     @Body() dto: WarehouseStatusDto,
   ) {
     const tenantId = await this.require(session, "inventory.warehouse.manage");
+    this.requireWarehouseInScope(session, id);
     await this.warehouses.deactivate(tenantId, id, this.warehouseActor(session), dto.reason);
     return { ok: true };
   }
@@ -229,8 +233,17 @@ export class InventoryController {
     @Body() dto: WarehouseStatusDto,
   ) {
     const tenantId = await this.require(session, "inventory.warehouse.manage");
+    this.requireWarehouseInScope(session, id);
     await this.warehouses.reactivate(tenantId, id, this.warehouseActor(session), dto.reason);
     return { ok: true };
+  }
+
+  private requireWarehouseInScope(session: SessionContext, warehouseId: string): void {
+    if (session.warehouseScope.length === 0 || session.warehouseScope.includes(warehouseId)) return;
+    throw new ForbiddenException({
+      code: "outside_warehouse_scope",
+      message: "You do not have access to that warehouse.",
+    });
   }
 
   private warehouseActor(session: SessionContext) {
