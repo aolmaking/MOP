@@ -79,15 +79,11 @@ export class FinanceConfigurationService {
     if (input.maxDiscountPercent !== undefined && (input.maxDiscountPercent < 0 || input.maxDiscountPercent > 100)) {
       throw new BadRequestException({ code: "invalid_percent", message: "Max discount % must be between 0 and 100." });
     }
-    if (
-      input.maxBranchDiscountPercent !== undefined &&
-      input.maxDiscountPercent !== undefined &&
-      input.maxBranchDiscountPercent > input.maxDiscountPercent
-    ) {
-      throw new BadRequestException({
-        code: "branch_ceiling_exceeds_workshop_ceiling",
-        message: "The branch discount ceiling cannot exceed the workshop-wide max discount %.",
-      });
+    if (input.maxBranchDiscountPercent !== undefined && (input.maxBranchDiscountPercent < 0 || input.maxBranchDiscountPercent > 100)) {
+      throw new BadRequestException({ code: "invalid_percent", message: "Branch max discount % must be between 0 and 100." });
+    }
+    if (input.depositPercent !== undefined && (input.depositPercent < 0 || input.depositPercent > 100)) {
+      throw new BadRequestException({ code: "invalid_percent", message: "Deposit % must be between 0 and 100." });
     }
     if (input.taxRatePercent !== undefined && (input.taxRatePercent < 0 || input.taxRatePercent > 100)) {
       throw new BadRequestException({ code: "invalid_percent", message: "Tax rate must be between 0 and 100." });
@@ -95,6 +91,14 @@ export class FinanceConfigurationService {
 
     const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { currency: true } });
     const before = await this.prisma.financeConfiguration.upsert({ where: { tenantId }, create: { tenantId }, update: {} });
+    const effectiveWorkshopCeiling = input.maxDiscountPercent ?? Number(before.maxDiscountPercent);
+    const effectiveBranchCeiling = input.maxBranchDiscountPercent ?? Number(before.maxBranchDiscountPercent);
+    if (effectiveBranchCeiling > effectiveWorkshopCeiling) {
+      throw new BadRequestException({
+        code: "branch_ceiling_exceeds_workshop_ceiling",
+        message: "The branch discount ceiling cannot exceed the workshop-wide max discount %.",
+      });
+    }
 
     const updated = await this.prisma.financeConfiguration.update({
       where: { tenantId },
