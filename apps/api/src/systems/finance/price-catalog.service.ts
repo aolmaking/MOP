@@ -122,9 +122,14 @@ export class PriceCatalogService {
 
   async setPrice(tenantId: string, input: SetPriceInput, actor: FinanceConfigActor): Promise<PriceCatalogItemView> {
     const itemKey = input.itemKey.trim();
+    const itemType = input.itemType.trim();
     if (!itemKey) throw new BadRequestException({ code: "item_key_required", message: "An item needs a name." });
-    if (input.unitPrice < 0) {
+    if (!itemType) throw new BadRequestException({ code: "item_type_required", message: "An item needs a type." });
+    if (!Number.isFinite(input.unitPrice) || input.unitPrice < 0) {
       throw new BadRequestException({ code: "invalid_price", message: "Unit price cannot be negative." });
+    }
+    if (input.laborPrice !== undefined && (!Number.isFinite(input.laborPrice) || input.laborPrice < 0)) {
+      throw new BadRequestException({ code: "invalid_price", message: "Labour price cannot be negative." });
     }
 
     const created = await this.prisma.$transaction(async (tx) => {
@@ -141,7 +146,7 @@ export class PriceCatalogService {
         data: {
           tenantId,
           itemKey,
-          itemType: input.itemType,
+          itemType,
           unitPrice: input.unitPrice,
           laborPrice: input.laborPrice ?? null,
           isActive: input.isActive ?? true,
@@ -158,7 +163,7 @@ export class PriceCatalogService {
       targetType: "PriceCatalogEntry",
       targetId: created.id,
       action: "price_catalog.set",
-      after: { itemKey, itemType: input.itemType, unitPrice: input.unitPrice },
+      after: { itemKey, itemType, unitPrice: input.unitPrice },
       riskLevel: "MEDIUM",
     });
 
