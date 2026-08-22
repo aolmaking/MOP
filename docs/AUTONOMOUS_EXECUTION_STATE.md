@@ -4,11 +4,11 @@ This document tracks the current Codex autonomous run. It is not a replacement f
 
 ## Current Phase
 
-Implementation, after documentation and source audit.
+Paused at user request after a verified implementation checkpoint.
 
 ## Current Subsystem
 
-Gap scan after high-risk Finance/Inventory HTTP coverage.
+Paused before starting any next mission.
 
 ## Completed Tasks
 
@@ -67,21 +67,25 @@ Gap scan after high-risk Finance/Inventory HTTP coverage.
 - Finance HTTP route coverage now proves guarded payment routes reject unauthenticated requests before access checks, enforce DTO money validation before FinanceService, respect permission denies, thread the session tenant/actor into payment recording, and wire invoice issuance through the Finance boundary that owns Billing downstream.
 - Inventory HTTP route coverage now proves guarded stock issue routes reject unauthenticated requests before access checks, enforce DTO quantity validation before PartRequestService, thread the session tenant/actor into issue calls, enforce explicit warehouse scope over HTTP, and keep warehouse deactivation as a validated 200-status command.
 - Billing has no standalone controller in the current bounded-system architecture; its HTTP exposure remains through Finance invoice issuance while BillingService retains service/integration coverage.
+- Owner Pricing backend/API now exposes the documented "Who Can Handle Money" role-permission slice for `finance.invoice.issue` and `finance.payment.record`.
+- Money-handling delegation writes audited `RolePermission` rows with `OWNER_OVERRIDE`, refuses unsupported roles/permission keys, and refuses to override platform/plan/resolver-locked decisions.
+- `EffectiveAccessService.checkMany()` now exposes the resolver's existing batch path so administrative views can render lock-aware permission cells without duplicating permission logic.
 
 ## Current Task
 
-Continue the documented gap scan after the Finance/Inventory high-risk route coverage checkpoint.
+Stopped by direct user instruction. Do not start another mission until the user explicitly resumes.
 
 ## Remaining Tasks
 
 - Continue the documented gap scan after the HTTP coverage pass, prioritizing remaining partial pages and backend-first runtime gaps over UI polish.
+- Finish the Owner Pricing "Who Can Handle Money" slice only after user resumes: wire the Pricing web page to `GET/POST /organization/finance-configuration/money-handlers`, add focused web tests, then update page inventory if the full page gap is closed.
 - Add more route-level coverage only where a remaining subsystem exposes high-risk money, stock, permission, or lifecycle endpoints without an HTTP proof.
 - Continue validating country billing adapter/compliant-blocked behavior without silently inventing country-specific adapters.
 - Keep deferred/unbacked Control Center Builder, workflow-policy, full rollback, and country-adapter work out of implementation unless the documented backing model exists.
 
 ## Last Verified Commit
 
-`911906b8495301f90540d17c160c30133326d78a`
+`64486fc90b63a2a456efb4a5d889c52b3057511c`
 
 ## Last Successful Validation
 
@@ -137,6 +141,8 @@ Continue the documented gap scan after the Finance/Inventory high-risk route cov
 - `corepack pnpm -r typecheck`
 - `corepack pnpm --filter @mop/api test -- finance.controller.http.spec.ts inventory.controller.http.spec.ts`
 - `corepack pnpm --filter @mop/api typecheck`
+- `corepack pnpm --filter @mop/api test -- money-handling-permissions.service.spec.ts finance-configuration.controller.spec.ts`
+- `corepack pnpm --filter @mop/api typecheck`
 
 ## Known Blockers
 
@@ -157,7 +163,8 @@ Continue the documented gap scan after the Finance/Inventory high-risk route cov
 - Price Catalog must normalize and validate item identity at the service boundary, not rely solely on DTO validators.
 - Platform Reports may aggregate platform-visible staff/workshop metrics, but must not expose customer PII; platform subscription money remains placeholder/null until a real platform billing source exists.
 - Billing has no public/controller HTTP boundary in the current codebase; until a documented Billing controller exists, route-level Billing exposure is proven through Finance invoice issuance and Billing's own service/integration contract tests.
+- Owner "Who Can Handle Money" is a narrow `RolePermission` writer, not a `FinanceConfiguration` field. Its read shape must be lock-aware and use the real permission resolver decisions.
 
 ## Exact Next Action
 
-Inspect the remaining documented partial pages/runtime gaps, choose the next backend-first subsystem with real implementation risk, and continue from the smallest verifiable slice.
+Wait for the user's next instruction. If resumed on this same mission, continue with the Owner Pricing web integration for the money-handling permission slice; do not start a different subsystem first.
