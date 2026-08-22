@@ -47,20 +47,23 @@ High-risk HTTP/API coverage after Governance Controls.
 - Control Center renders effective entitlement values, shows plan/default and usage context, applies overrides with a written reason, and clears active overrides.
 - Finance Core now scopes invoice settlement reads, payment recording, refund decisions, discount decisions, and work-order billing entry points to the current tenant.
 - Finance controller now threads the session tenant into invoice/refund/discount decision calls, and focused service/controller specs cover the tenant-isolation boundary without requiring Postgres.
+- Inventory Manager part-request mutations now pass the session tenant into `PartRequestService`, and the service can scope request, fulfilment, issue, return, and transition reads to that tenant.
+- Inventory Manager routes now refuse explicit warehouse actions outside the session's `warehouseScope` while preserving empty-scope-as-all access for owner/admin-style sessions.
+- Focused Inventory controller/service specs cover tenant-scoped part-request mutation and explicit warehouse-scope enforcement without requiring Postgres.
 
 ## Current Task
 
-Inspect Inventory controller/API boundaries for the next highest-risk missing request-boundary coverage or tenant/scope enforcement gap.
+Inspect Billing and Finance Configuration API/service boundaries for the next highest-risk missing request-boundary coverage or tenant/scope enforcement gap.
 
 ## Remaining Tasks
 
-- Add or repair HTTP-level coverage for the riskiest Inventory and Billing controllers/workflows, starting where existing docs or tests show real behavior but no request-boundary proof.
+- Add or repair HTTP-level coverage for the riskiest Billing and Finance Configuration workflows, starting where existing docs or tests show real behavior but no request-boundary proof.
 - Continue validating country billing adapter/compliant-blocked behavior without silently inventing country-specific adapters.
 - Keep deferred/unbacked Control Center Builder, workflow-policy, full rollback, and country-adapter work out of implementation unless the documented backing model exists.
 
 ## Last Verified Commit
 
-`17719d6a9df6622d9d698437673824ddb062d39a`
+`36274e1884f5d35dba909a24050b404894e33e27`
 
 ## Last Successful Validation
 
@@ -99,6 +102,8 @@ Inspect Inventory controller/API boundaries for the next highest-risk missing re
 - `corepack pnpm --filter @mop/web build`
 - `corepack pnpm --filter @mop/api test -- finance.service.spec.ts finance.controller.spec.ts`
 - `corepack pnpm --filter @mop/api typecheck`
+- `corepack pnpm --filter @mop/api test -- part-request.service.spec.ts inventory.controller.spec.ts`
+- `corepack pnpm --filter @mop/api typecheck`
 
 ## Known Blockers
 
@@ -113,7 +118,8 @@ Inspect Inventory controller/API boundaries for the next highest-risk missing re
 - Deferred or missing features remain out of scope until their documented backing model exists: Data Analyst CSV export is now backed by its entitlement gate and endpoint; full country billing adapters still need a country-specific adapter, and audited billing override still needs its own path.
 - Per-workshop Limits & Entitlements overrides are `ControlSetting` deltas on top of `Plan`, not a second plan model. Plan fields remain the ceiling; runtime consumers read the effective entitlement service.
 - Finance service methods that accept session-derived `tenantId` must still prove that the target invoice, refund, discount, or work order belongs to that tenant before reading or mutating money records.
+- Inventory Manager service methods reached from route IDs must prove the target part request belongs to the session tenant; explicit warehouse mutations must respect non-empty `warehouseScope`.
 
 ## Exact Next Action
 
-Inspect Inventory controller/service tests for request-boundary gaps around warehouse scope, cost visibility, and tenant ownership; implement the smallest backend-first fix or coverage slice and verify it.
+Inspect Billing and Finance Configuration controller/service tests for tenant-boundary and compliant-blocked gaps; implement the smallest backend-first fix or coverage slice and verify it.
