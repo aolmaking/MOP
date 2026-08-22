@@ -8,7 +8,7 @@ Implementation, after documentation and source audit.
 
 ## Current Subsystem
 
-High-risk HTTP/API coverage after Platform Reports completion.
+Gap scan after high-risk Finance/Inventory HTTP coverage.
 
 ## Completed Tasks
 
@@ -64,21 +64,24 @@ High-risk HTTP/API coverage after Platform Reports completion.
 - Platform Reports keeps platform subscription money as explicit null placeholders because no platform billing table exists, while all usage/operations/health metrics are derived from existing product rows.
 - `PAGE_INVENTORY.md`, `PHASE_MAP.md`, and `PROJECT_STATE.md` now reflect 48 complete + 5 partial + 0 missing pages.
 - Focused Platform Reports backend/web specs and the web build cover the new detail contract and UI rendering.
+- Finance HTTP route coverage now proves guarded payment routes reject unauthenticated requests before access checks, enforce DTO money validation before FinanceService, respect permission denies, thread the session tenant/actor into payment recording, and wire invoice issuance through the Finance boundary that owns Billing downstream.
+- Inventory HTTP route coverage now proves guarded stock issue routes reject unauthenticated requests before access checks, enforce DTO quantity validation before PartRequestService, thread the session tenant/actor into issue calls, enforce explicit warehouse scope over HTTP, and keep warehouse deactivation as a validated 200-status command.
+- Billing has no standalone controller in the current bounded-system architecture; its HTTP exposure remains through Finance invoice issuance while BillingService retains service/integration coverage.
 
 ## Current Task
 
-Start the documented high-risk HTTP-level coverage gap, beginning with Finance/Billing/Inventory route wiring and guarded request behavior.
+Continue the documented gap scan after the Finance/Inventory high-risk route coverage checkpoint.
 
 ## Remaining Tasks
 
-- Close the HTTP-level test-coverage gap on Finance, Billing, and Inventory first; service-layer coverage exists, but guarded route wiring and DTO validation are still thin outside platform/auth/access.
 - Continue the documented gap scan after the HTTP coverage pass, prioritizing remaining partial pages and backend-first runtime gaps over UI polish.
+- Add more route-level coverage only where a remaining subsystem exposes high-risk money, stock, permission, or lifecycle endpoints without an HTTP proof.
 - Continue validating country billing adapter/compliant-blocked behavior without silently inventing country-specific adapters.
 - Keep deferred/unbacked Control Center Builder, workflow-policy, full rollback, and country-adapter work out of implementation unless the documented backing model exists.
 
 ## Last Verified Commit
 
-`39f5b49b7d5fcb6cb368f42847fa9fb775a96621`
+`911906b8495301f90540d17c160c30133326d78a`
 
 ## Last Successful Validation
 
@@ -132,6 +135,8 @@ Start the documented high-risk HTTP-level coverage gap, beginning with Finance/B
 - `corepack pnpm --filter @mop/web test -- --include src/app/experiences/platform/reports/reports-page.spec.ts --include src/app/experiences/platform/reports/workshop-usage-page.spec.ts --watch=false --isolate=false`
 - `corepack pnpm --filter @mop/web build`
 - `corepack pnpm -r typecheck`
+- `corepack pnpm --filter @mop/api test -- finance.controller.http.spec.ts inventory.controller.http.spec.ts`
+- `corepack pnpm --filter @mop/api typecheck`
 
 ## Known Blockers
 
@@ -151,7 +156,8 @@ Start the documented high-risk HTTP-level coverage gap, beginning with Finance/B
 - Finance Configuration validation must compare effective post-update values, not only fields present in the same PATCH/POST body.
 - Price Catalog must normalize and validate item identity at the service boundary, not rely solely on DTO validators.
 - Platform Reports may aggregate platform-visible staff/workshop metrics, but must not expose customer PII; platform subscription money remains placeholder/null until a real platform billing source exists.
+- Billing has no public/controller HTTP boundary in the current codebase; until a documented Billing controller exists, route-level Billing exposure is proven through Finance invoice issuance and Billing's own service/integration contract tests.
 
 ## Exact Next Action
 
-Inspect Finance, Billing, and Inventory controller integration/unit-test coverage, then add the smallest HTTP-level tests that prove guarded route wiring, session tenant scoping, and DTO validation for the highest-risk money/stock endpoints.
+Inspect the remaining documented partial pages/runtime gaps, choose the next backend-first subsystem with real implementation risk, and continue from the smallest verifiable slice.
