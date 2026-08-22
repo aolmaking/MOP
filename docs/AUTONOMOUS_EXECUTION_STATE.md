@@ -42,19 +42,17 @@ Reporting coherence.
 
 ## Current Task
 
-Checkpoint reporting coherence, then move to the next high-leverage documented gap: Governance Controls / Limits & Entitlements, especially the plan entitlement backing needed for Data Analyst export and other deferred controls.
+Inspect Governance Controls / Limits & Entitlements, especially the plan entitlement backing needed for Data Analyst export and other deferred controls.
 
 ## Remaining Tasks
 
-- Run the focused reporting specs after the scope-aware legacy report patch.
-- Review, commit, and push the reporting coherence checkpoint.
 - Inspect Governance Controls / Limits & Entitlements documentation and implementation without re-reading unrelated areas.
 - Determine the smallest backend-first entitlement model work that unblocks documented deferred features without inventing new product scope.
 - Keep Data Analyst export deferred until a real `Plan.allowedExports` entitlement and permission gate exist.
 
 ## Last Verified Commit
 
-`7386101ec991a62530581b3358a39c5280b1280c`
+`d4acdfd7c48119c243e7eb5c80530263be21d200`
 
 ## Last Successful Validation
 
@@ -93,4 +91,4 @@ Checkpoint reporting coherence, then move to the next high-leverage documented g
 
 ## Exact Next Action
 
-Run focused reporting tests, then commit and push the reporting coherence checkpoint.
+Inspect Governance Controls / Limits & Entitlements docs and implementation, then choose the smallest backend-first entitlement work to unblock documented deferred controls.
