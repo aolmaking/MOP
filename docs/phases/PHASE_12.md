@@ -13,11 +13,11 @@ This phase takes the second option. **Every report here is computed live, agains
 
 ## 2. What ships
 
-`ReportingService`/`ReportingController` (`apps/api/src/reporting/`) — one company-wide report, available to `DATA_ANALYST` and `TENANT_OWNER`/`TENANT_ADMIN` via the new `reports.company.view` permission key:
+`ReportingService`/`ReportingController` (`apps/api/src/insights/analyst-reporting/`) — one company-wide-or-assigned-scope report, available to `DATA_ANALYST` and `TENANT_OWNER`/`TENANT_ADMIN` via the new `reports.company.view` permission key. Empty session scope remains company-wide; scoped Data Analyst sessions are narrowed by their assigned branches/categories, matching the current role spec's "reports only within assigned scope" rule:
 
-- **Technician performance, company-wide** — tasks completed, active tasks, blockers, rework count, per technician, across every team — the un-scoped counterpart to Team Leader's own `managedTechnicianIds`-scoped version from Phase 10. The two must never be confused: Team Leader's report is provably reachable only through the managed scope (tested in Phase 10), and this one is provably reachable only through `reports.company.view`, which `TEAM_LEADER`'s default permission set does not include.
-- **Work order throughput** — open work orders grouped by status, company-wide, the same status vocabulary Owner Home already uses.
-- **Finance summary** — total invoiced, total collected, outstanding balance, computed with `@mop/shared`'s `sum()`, never a JS-number reduction.
+- **Technician performance, company-wide or assigned-scope** — tasks completed, active tasks, blockers, rework count, per technician, across every team in scope — the un-scoped counterpart to Team Leader's own `managedTechnicianIds`-scoped version from Phase 10. The two must never be confused: Team Leader's report is provably reachable only through the managed scope (tested in Phase 10), and this one is provably reachable only through `reports.company.view`, which `TEAM_LEADER`'s default permission set does not include.
+- **Work order throughput** — open work orders grouped by status, company-wide or assigned-scope, the same status vocabulary Owner Home already uses.
+- **Finance summary** — total invoiced, total collected, outstanding balance for work orders in scope, computed with `@mop/shared`'s `sum()`, never a JS-number reduction.
 
 Drill-down exists in the minimal sense the rows already support: every technician-performance row carries a real `staffUserId`, so a caller can follow it to `GET /team-leader/technicians/:id` style detail — no separate drill-down endpoint was built, because the roster it would return is identical in shape to data other endpoints already expose.
 

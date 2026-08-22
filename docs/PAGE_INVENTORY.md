@@ -98,7 +98,7 @@ Every Owner page has at least a real, working surface — none are ⬜. Home, Or
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
-| Analytics Home | ✅ | `/analyst/home` | Composes the other 4 services' own headline numbers rather than recomputing them, so the tile can never drift from what the full page shows |
+| Analytics Home | ✅ | `/analyst/home` | Composes the other 5 analytical services' own headline numbers, including Feature Adoption, rather than recomputing them, so the tile can never drift from what the full page shows |
 | Operations Analytics | ✅ | `/analyst/operations` | Volume over time (created vs. completed), status distribution, time-in-status (reuses `lifecycle-duration.util.ts`), branch comparison (absent, not empty, for single-branch scope), blocker analysis, delivery/payment funnel (counts and durations only, never a currency amount) |
 | Technician & Team Analytics | ✅ | `/analyst/people` | Per-technician stats, team throughput, diagnostic-code activity. No payment/invoice figure anywhere in the output shape — enforced by its own test |
 | Inventory Analytics | ✅ | `/analyst/inventory` | Reuses `InventoryReportsService` (Inventory Manager's own page) rather than a second velocity implementation; branch scope resolved to warehouse scope via `BranchWarehouseAccess`; inventory value gated on `inventory.cost.view`, same as the Inventory Manager's own catalog |

@@ -37,18 +37,20 @@ Reporting coherence.
 - The five analytical pages expose Save This View actions, Analytics Home renders saved-view shortcuts, and `/analyst/saved-views` supports Open/Rename/Delete.
 - Data Analyst export remains deliberately deferred because the required plan-level `allowedExports` entitlement does not exist yet.
 - `PAGE_INVENTORY.md`, `PHASE_MAP.md`, and `PROJECT_STATE.md` now reflect 46 complete + 7 partial + 0 missing pages.
+- Analytics Home now composes all five analytical service tiles, including Feature Adoption, rather than leaving the Feature Adoption page out of the home cross-section.
+- The legacy `reports.company.view` backend surface remains live but now applies the current session's assigned branch/category scope to technician metrics, throughput, blockers, and finance totals.
 
 ## Current Task
 
-Inspect reporting drift and reconcile the smallest backed gaps first: Analytics Home's missing Feature Adoption tile and the legacy `reports.company.view` reporting surface with no frontend consumer.
+Checkpoint reporting coherence, then move to the next high-leverage documented gap: Governance Controls / Limits & Entitlements, especially the plan entitlement backing needed for Data Analyst export and other deferred controls.
 
 ## Remaining Tasks
 
-- Decide from docs/source whether Analytics Home should include Feature Adoption now or remain documented as 4-tile-only.
-- Trace `apps/api/src/insights/analyst-reporting` and `reports.company.view` consumers; either retire stale product surface or fold it into the current analytics subsystem without duplicating report logic.
-- Preserve Data Analyst's privacy/no-finance leakage constraints while reconciling reporting surfaces.
-- Add focused backend/web tests for whatever reporting coherence change is made.
-- Run focused verification, recursive typecheck, Prisma validate when schema is touched, and web build when Angular routes/templates change.
+- Run the focused reporting specs after the scope-aware legacy report patch.
+- Review, commit, and push the reporting coherence checkpoint.
+- Inspect Governance Controls / Limits & Entitlements documentation and implementation without re-reading unrelated areas.
+- Determine the smallest backend-first entitlement model work that unblocks documented deferred features without inventing new product scope.
+- Keep Data Analyst export deferred until a real `Plan.allowedExports` entitlement and permission gate exist.
 
 ## Last Verified Commit
 
@@ -70,6 +72,8 @@ Inspect reporting drift and reconcile the smallest backed gaps first: Analytics 
 - `corepack pnpm --filter @mop/database generate`
 - `corepack pnpm --filter @mop/api test -- saved-views.service.spec.ts`
 - `corepack pnpm --filter @mop/web test -- --include src/app/experiences/analyst/saved-view-action.spec.ts --include src/app/experiences/analyst/analyst-saved-views-page.spec.ts --watch=false --isolate=false`
+- `corepack pnpm --filter @mop/api test -- analytics-home.service.spec.ts reporting.service.spec.ts`
+- `corepack pnpm --filter @mop/web test -- --include src/app/experiences/analyst/analyst-home-page.spec.ts --watch=false --isolate=false`
 - `node tools/lint-permission-keys.mjs`
 - `corepack pnpm -r typecheck`
 - `corepack pnpm --filter @mop/database validate`
@@ -84,8 +88,9 @@ Inspect reporting drift and reconcile the smallest backed gaps first: Analytics 
 
 - Preserve backend-first behavior: UI reflects policies resolved by the API, never duplicates policy decisions locally.
 - Do not treat old audit entries as current unless source confirms them. Role permission locks and technician part requests are implemented now.
+- Keep legacy reporting endpoints only when they preserve current scope/privacy rules; scoped Data Analyst sessions must never receive unscoped tenant reports through an older permission surface.
 - Deferred or missing features remain out of scope until their documented backing model exists: Data Analyst CSV export needs `Plan.allowedExports`, full country billing adapters need a country-specific adapter, and audited billing override still needs its own path.
 
 ## Exact Next Action
 
-Inspect Analytics Home and legacy `reports.company.view` reporting drift, then reconcile the smallest backend-backed reporting gaps.
+Run focused reporting tests, then commit and push the reporting coherence checkpoint.

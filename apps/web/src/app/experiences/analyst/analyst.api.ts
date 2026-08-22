@@ -2,8 +2,10 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import type { Observable } from 'rxjs';
 
+export type AnalyticsHomePageKey = 'operations' | 'people' | 'inventory' | 'decisions' | 'feature-adoption';
+
 export interface AnalyticsHomeTile {
-  readonly page: string;
+  readonly page: AnalyticsHomePageKey;
   readonly label: string;
   readonly metrics: readonly { readonly label: string; readonly value: string }[];
 }

@@ -3,11 +3,12 @@ import { OperationsAnalyticsService } from "./operations-analytics.service";
 import { PeopleAnalyticsService } from "./people-analytics.service";
 import { InventoryAnalyticsService } from "./inventory-analytics.service";
 import { DecisionsAnalyticsService } from "./decisions-analytics.service";
+import { FeatureAdoptionAnalyticsService } from "./feature-adoption-analytics.service";
 import type { AnalyticsScope } from "./analytics-scope.util";
 import type { ReportQueryParams } from "../owner-reports/date-range.util";
 
 export interface AnalyticsHomeTile {
-  readonly page: "operations" | "people" | "inventory" | "decisions";
+  readonly page: "operations" | "people" | "inventory" | "decisions" | "feature-adoption";
   readonly label: string;
   readonly metrics: readonly { readonly label: string; readonly value: string }[];
 }
@@ -17,8 +18,8 @@ export interface AnalyticsHomeReport {
 }
 
 /**
- * Data Analyst -- Analytics Home. "A cross-section of the other 6 pages'
- * headline numbers" (spec) -- composes the other services rather than
+ * Data Analyst -- Analytics Home. "A cross-section" of the other analytical
+ * pages' headline numbers (spec) -- composes the other services rather than
  * recomputing anything, so this tile's numbers can never drift from what
  * the full page shows when the analyst clicks through.
  */
@@ -29,14 +30,16 @@ export class AnalyticsHomeService {
     private readonly people: PeopleAnalyticsService,
     private readonly inventory: InventoryAnalyticsService,
     private readonly decisions: DecisionsAnalyticsService,
+    private readonly featureAdoption: FeatureAdoptionAnalyticsService,
   ) {}
 
   async build(tenantId: string, scope: AnalyticsScope, params: ReportQueryParams): Promise<AnalyticsHomeReport> {
-    const [ops, people, inv, dec] = await Promise.all([
+    const [ops, people, inv, dec, feature] = await Promise.all([
       this.operations.build(tenantId, scope, params),
       this.people.build(tenantId, scope, params),
       this.inventory.build(tenantId, scope, false),
       this.decisions.build(tenantId, scope, params),
+      this.featureAdoption.build(tenantId, params),
     ]);
 
     const totalCreated = ops.volume.reduce((sum, p) => sum + p.created, 0);
@@ -77,6 +80,14 @@ export class AnalyticsHomeService {
           metrics: [
             { label: "Approval rate", value: `${dec.approvalRate.toFixed(0)}%` },
             { label: "Critical rejections", value: dec.criticalRejections.toString() },
+          ],
+        },
+        {
+          page: "feature-adoption",
+          label: "Feature Adoption",
+          metrics: [
+            { label: "Trackable features", value: feature.features.length.toString() },
+            { label: "Enabled with zero usage", value: feature.features.filter((row) => row.zeroUsage).length.toString() },
           ],
         },
       ],

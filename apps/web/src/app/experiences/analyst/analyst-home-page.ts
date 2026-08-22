@@ -4,16 +4,21 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ErrorBanner } from '../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../ui/button/button.directive';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
-import { AnalystApi, type AnalyticsHomeTile, type AnalystSavedView, type AnalystSavedViewSourcePage } from './analyst.api';
+import {
+  AnalystApi,
+  type AnalyticsHomePageKey,
+  type AnalyticsHomeTile,
+  type AnalystSavedView,
+  type AnalystSavedViewSourcePage,
+} from './analyst.api';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
-const TILE_ROUTE: Record<string, string> = {
+const TILE_ROUTE: Record<AnalyticsHomePageKey, string> = {
   operations: '/analyst/operations',
   people: '/analyst/people',
   inventory: '/analyst/inventory',
   decisions: '/analyst/decisions',
-  featureAdoption: '/analyst/feature-adoption',
   'feature-adoption': '/analyst/feature-adoption',
 };
 
