@@ -53,20 +53,23 @@ High-risk HTTP/API coverage after Governance Controls.
 - Billing now rejects mismatched candidate/snapshot tenant contracts before writing compliance state or documents.
 - Billing credit-note issuance now scopes invoice and billing-document reads to the input tenant and returns `invoice_not_found` instead of reading another tenant's invoice by bare ID.
 - Focused Billing service specs cover contract tenant mismatch, tenant-scoped credit-note reads, and foreign-invoice refusal without requiring Postgres.
+- Finance Configuration now validates discount ceilings against the effective post-update configuration, so updating only the branch ceiling or only the workshop ceiling cannot leave branch authority above the workshop-wide max.
+- Finance Configuration now rejects branch discount and deposit percentages above 100 before writing or auditing.
+- Focused Finance Configuration service specs cover effective ceiling validation and percentage bounds without requiring Postgres.
 
 ## Current Task
 
-Inspect Finance Configuration and Price Catalog API/service boundaries for missing request-boundary coverage or tenant/scope enforcement gaps.
+Inspect Price Catalog API/service boundaries for missing request-boundary coverage, tenant isolation, and validation gaps.
 
 ## Remaining Tasks
 
-- Add or repair HTTP-level coverage for the riskiest Finance Configuration and Price Catalog workflows, starting where existing docs or tests show real behavior but no request-boundary proof.
+- Add or repair HTTP-level coverage for the riskiest Price Catalog workflows, starting where existing docs or tests show real behavior but no request-boundary proof.
 - Continue validating country billing adapter/compliant-blocked behavior without silently inventing country-specific adapters.
 - Keep deferred/unbacked Control Center Builder, workflow-policy, full rollback, and country-adapter work out of implementation unless the documented backing model exists.
 
 ## Last Verified Commit
 
-`a52a80e6eea1f71e5d4a49cacd6013dea4440b5b`
+`db129f8e5db58903491620e9c917d91424508bc2`
 
 ## Last Successful Validation
 
@@ -109,6 +112,8 @@ Inspect Finance Configuration and Price Catalog API/service boundaries for missi
 - `corepack pnpm --filter @mop/api typecheck`
 - `corepack pnpm --filter @mop/api test -- billing.service.spec.ts`
 - `corepack pnpm --filter @mop/api typecheck`
+- `corepack pnpm --filter @mop/api test -- finance-configuration.service.spec.ts`
+- `corepack pnpm --filter @mop/api typecheck`
 
 ## Known Blockers
 
@@ -125,7 +130,8 @@ Inspect Finance Configuration and Price Catalog API/service boundaries for missi
 - Finance service methods that accept session-derived `tenantId` must still prove that the target invoice, refund, discount, or work order belongs to that tenant before reading or mutating money records.
 - Inventory Manager service methods reached from route IDs must prove the target part request belongs to the session tenant; explicit warehouse mutations must respect non-empty `warehouseScope`.
 - Billing is downstream of Finance, but it still enforces tenant consistency on its typed contract and any invoice/document lookup it performs.
+- Finance Configuration validation must compare effective post-update values, not only fields present in the same PATCH/POST body.
 
 ## Exact Next Action
 
-Inspect Finance Configuration controller and Price Catalog service tests for tenant-boundary, request-boundary, and validation gaps; implement the smallest backend-first fix or coverage slice and verify it.
+Inspect Price Catalog controller/service tests for tenant-boundary, request-boundary, and validation gaps; implement the smallest backend-first fix or coverage slice and verify it.
