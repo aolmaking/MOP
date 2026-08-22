@@ -52,7 +52,7 @@ Inspect reporting drift and reconcile the smallest backed gaps first: Analytics 
 
 ## Last Verified Commit
 
-`a7ecc90236af8095d31f9098ec0966c21bd3eb95`
+`7386101ec991a62530581b3358a39c5280b1280c`
 
 ## Last Successful Validation
 
@@ -88,4 +88,4 @@ Inspect reporting drift and reconcile the smallest backed gaps first: Analytics 
 
 ## Exact Next Action
 
-Commit and push the saved-view checkpoint, update this ledger with the new verified commit SHA, then inspect Analytics Home and legacy `reports.company.view` reporting drift.
+Inspect Analytics Home and legacy `reports.company.view` reporting drift, then reconcile the smallest backend-backed reporting gaps.
