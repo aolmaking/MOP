@@ -63,6 +63,22 @@ export interface PolicyBlueprint {
   readonly enforcement: { readonly status: string; readonly where: string };
   /** Which group this question is asked under. */
   readonly group: string;
+  /**
+   * The behavioural consequence of this answer, grouped by what it
+   * touches rather than by page -- a policy is cross-cutting, and a
+   * screen organised by page would hide that a single answer can move
+   * billing, visibility and a workflow state at once.
+   */
+  readonly impact: {
+    readonly capabilities: readonly string[];
+    readonly roles: readonly string[];
+    readonly workflowStates: readonly string[];
+    readonly permissions: readonly string[];
+    readonly pages: readonly string[];
+    readonly changesVisibility: boolean;
+    readonly changesBilling: boolean;
+    readonly summary: string;
+  };
 }
 
 export interface ResponsibilityBlueprint {
@@ -179,6 +195,7 @@ export class OnboardingService {
         dependsOnPolicies: policy.dependsOnPolicies,
         enforcement: { status: policy.enforcement.status, where: policy.enforcement.where },
         group: EXPLICIT_GROUPS[policy.key] ?? "GENERAL",
+        impact: policy.impact,
       })),
       policyGroups: POLICY_GROUPS.map((group) => ({ ...group })),
       specializationPacks: SPECIALIZATION_PACKS,

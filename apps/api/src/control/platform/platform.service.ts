@@ -5,6 +5,7 @@ import {
   DEFAULT_ROLE_PERMISSIONS,
   ROLE_PAGES,
   definitionsSeededBy,
+  modulesForProfile,
   grantsForResponsibilities,
   policyDefinition,
   specializationPack,
@@ -47,35 +48,22 @@ const TENANT_STAFF_ROLES: readonly StaffRole[] = [
   "DATA_ANALYST",
 ];
 
-// A real, working baseline per starter template -- simple on purpose.
-// Builder Control (Phase 2 step 6) is what eventually gives Super Admin a
-// full theme/layout/role-experience editor per template; until then, the
-// one real thing a template controls is which modules a new workshop
-// starts with, which is honest and non-fake even though it's simple.
-const STARTER_TEMPLATE_MODULES: Record<string, string[]> = {
-  DEFAULT: ["ORGANIZATION", "OPERATIONS", "FINANCE", "INVENTORY", "REPORTS", "AUDIT", "CUSTOMER_PORTAL"],
-  MINIMAL: ["ORGANIZATION", "OPERATIONS", "AUDIT"],
-  HIGH_VOLUME_BRANCH_NETWORK: [
-    "ORGANIZATION",
-    "OPERATIONS",
-    "FINANCE",
-    "INVENTORY",
-    "TEAM_MANAGEMENT",
-    "REPORTS",
-    "AUDIT",
-    "CUSTOMER_PORTAL",
-  ],
-};
-
-/**
- * One real thing the creation transaction did.
+/*
+ * The starter-template module lists that used to decide `enabledModules`
+ * are gone. They were a proxy for a workshop's shape written before the
+ * shape could be stated at creation, and keeping them meant two sources
+ * of truth that could -- and did -- disagree: a workshop with pricing on
+ * and a MINIMAL template got a live FINANCE_CORE capability and no
+ * FINANCE module, so every finance permission was denied by
+ * `ModuleEnabledLayer` with "this module is not enabled for your
+ * workshop".
  *
- * The publish screen shows these as they come back, and shows nothing
- * else: a progress sequence that animates through "configuring systems"
- * while the server does something entirely different is the fake-progress
- * failure this surface exists to avoid. Every step below is reported with
- * the count it actually wrote.
+ * `modulesForProfile` in @mop/shared derives the list from the capability
+ * profile instead. `starterBuilderTemplate` is still accepted and stored
+ * as Builder Control's own starting theme/layout choice -- it just no
+ * longer decides which modules exist.
  */
+
 export interface ProvisioningStep {
   readonly key:
     | "TENANT"
@@ -226,18 +214,18 @@ export class PlatformService {
             roleExperience: {},
             workflowPolicy: {},
             featureFlags: {},
-            enabledModules: STARTER_TEMPLATE_MODULES[dto.starterBuilderTemplate] ?? [],
+            enabledModules: [...modulesForProfile((dto.capabilities ?? {}) as CapabilityProfile)],
             enabledFeatures: [],
             forms: {},
             messageTemplates: {},
           },
         });
-        const enabledModules = STARTER_TEMPLATE_MODULES[dto.starterBuilderTemplate] ?? [];
+        const enabledModules = modulesForProfile((dto.capabilities ?? {}) as CapabilityProfile);
         steps.push({
           key: "CONFIGURATION",
           label: "Preparing the workspace",
           count: enabledModules.length,
-          detail: `${enabledModules.length} module(s) enabled from the ${dto.starterBuilderTemplate} starter template.`,
+          detail: `${enabledModules.join(", ")} — derived from the capabilities above, so the two can never disagree.`,
         });
 
         // The capability profile, before anything that depends on the
@@ -750,6 +738,7 @@ export class PlatformService {
 
     const deliveryRule = this.effectivePolicy(dto, "DELIVERY_BLOCKED_UNTIL_PAID");
     const partialRule = this.effectivePolicy(dto, "PARTIAL_PAYMENT");
+    const invoiceVisibilityRule = this.effectivePolicy(dto, "CUSTOMER_INVOICE_VISIBILITY");
 
     await tx.financeConfiguration.create({
       data: {
@@ -762,6 +751,10 @@ export class PlatformService {
         // rather than this column pretending the difference exists.
         allowUnpaidDelivery: deliveryRule === "NEVER",
         allowPartialPaidDelivery: deliveryRule === "NEVER" && partialRule === "ALLOWED",
+        // Read by CustomerDecisionService.pricingVisible on every decision
+        // request; before this the column only ever held its Prisma
+        // default, whatever the workshop actually answered.
+        customerInvoiceVisible: invoiceVisibilityRule !== "HIDDEN",
       },
     });
     return true;

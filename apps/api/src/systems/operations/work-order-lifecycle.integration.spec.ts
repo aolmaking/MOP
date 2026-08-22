@@ -47,7 +47,7 @@ const capabilities = new CapabilityResolutionService(asService);
 const audit = new AuditService(asService);
 const events = new OperationEventsService(asService, audit, new CustomerSafeProjectionService());
 const gates = new GateEvaluatorService(asService, policiesForTest);
-const lifecycle = new WorkOrderLifecycleService(asService, capabilities, events, gates);
+const lifecycle = new WorkOrderLifecycleService(asService, capabilities, events, gates, policiesForTest);
 
 const ACTOR = { accountId: "tech-1", displayName: "Technician", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `wo-${Date.now()}`;
@@ -277,6 +277,88 @@ describe("the lifecycle refuses what the graph does not allow", () => {
     await drive(workOrder.id, ["REGISTER", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
 
     await expect(lifecycle.apply(workOrder.id, "REQUEST_PART", ACTOR)).rejects.toThrow();
+  }, 120_000);
+});
+
+describe("a policy narrows the graph, for real, against Postgres", () => {
+  // Not the pure-function proof graph-safety.spec.ts already gives every
+  // shipped profile x option combination -- this is the other half:
+  // that a WorkshopPolicy row a real workshop wrote actually reaches
+  // WorkOrderLifecycleService.routingContext and changes what the real
+  // router allows, through the real service and the real database.
+  it("REGISTERED skips inspection under the default answer, and cannot once the workshop requires it", async () => {
+    const fixture = await createWorkshop(`inspect-${SUFFIX}`, {});
+    fixtures.push(fixture);
+
+    const skipped = await newWorkOrder(fixture, true);
+    const path = await drive(skipped.id, ["REGISTER", "REQUEST_APPROVAL"]);
+    expect(path).toEqual(["REGISTERED", "AWAITING_CUSTOMER_APPROVAL"]);
+
+    await policiesForTest.set(
+      fixture.tenantId,
+      "INSPECTION_REQUIRED",
+      "ALWAYS_INSPECT",
+      ACTOR,
+      "PLATFORM",
+      "Integration test: every job must be inspected.",
+    );
+
+    const mustInspect = await newWorkOrder(fixture, true);
+    await lifecycle.apply(mustInspect.id, "REGISTER", ACTOR);
+    await expect(lifecycle.apply(mustInspect.id, "REQUEST_APPROVAL", ACTOR)).rejects.toThrow(/not available/i);
+
+    // The unconditional route stays open: it is what the policy's own
+    // registry entry promises can never be stranded.
+    const stillReachable = await drive(mustInspect.id, ["START_INSPECTION", "REQUEST_APPROVAL"]);
+    expect(stillReachable).toEqual(["UNDER_INSPECTION", "AWAITING_CUSTOMER_APPROVAL"]);
+  }, 120_000);
+
+  it("QC_MANDATORY=RISK_FLAGGED_ONLY skips QC for a clean job and routes a CRITICAL fault through it", async () => {
+    const fixture = await createWorkshop(`qcrisk-${SUFFIX}`, { TEAM_REVIEW: "DISABLED", TEAMS: "DISABLED" });
+    fixtures.push(fixture);
+
+    await policiesForTest.set(
+      fixture.tenantId,
+      "QC_MANDATORY",
+      "RISK_FLAGGED_ONLY",
+      ACTOR,
+      "PLATFORM",
+      "Integration test: only a critical fault needs QC.",
+    );
+
+    // Clean job -- no faults at all -- finishes straight to invoicing.
+    const clean = await newWorkOrder(fixture);
+    await drive(clean.id, ["REGISTER", "START_INSPECTION", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
+    await prisma.inspection.create({
+      data: { tenantId: fixture.tenantId, workOrderId: clean.id, technicianId: "tech-1", type: "QUICK", fields: {} },
+    });
+    const cleanPath = await drive(clean.id, ["FINISH"]);
+    expect(cleanPath).toEqual(["PAYMENT_PENDING"]);
+
+    // Same shape, but this job carries a CRITICAL fault -- QC is not optional.
+    const risky = await newWorkOrder(fixture);
+    await drive(risky.id, ["REGISTER", "START_INSPECTION", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
+    await prisma.inspection.create({
+      data: { tenantId: fixture.tenantId, workOrderId: risky.id, technicianId: "tech-1", type: "QUICK", fields: {} },
+    });
+    await prisma.fault.create({
+      data: { tenantId: fixture.tenantId, workOrderId: risky.id, description: "Brake line leak", severity: "CRITICAL" },
+    });
+    const riskyPath = await drive(risky.id, ["FINISH"]);
+    expect(riskyPath).toEqual(["READY_FOR_QC"]);
+
+    // A HIGH-severity fault, one notch below CRITICAL, still does not
+    // trip it -- the fact is specifically about CRITICAL, not "any fault".
+    const moderate = await newWorkOrder(fixture);
+    await drive(moderate.id, ["REGISTER", "START_INSPECTION", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
+    await prisma.inspection.create({
+      data: { tenantId: fixture.tenantId, workOrderId: moderate.id, technicianId: "tech-1", type: "QUICK", fields: {} },
+    });
+    await prisma.fault.create({
+      data: { tenantId: fixture.tenantId, workOrderId: moderate.id, description: "Worn pad", severity: "HIGH" },
+    });
+    const moderatePath = await drive(moderate.id, ["FINISH"]);
+    expect(moderatePath).toEqual(["PAYMENT_PENDING"]);
   }, 120_000);
 });
 

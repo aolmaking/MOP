@@ -1,0 +1,36 @@
+.pi {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  background: var(--brand-muted);
+  border-inline-start: 3px solid var(--brand);
+  border-radius: var(--radius-md);
+}
+
+.pi-summary {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.pi-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+}
+
+.pi-tag {
+  font-size: var(--text-xs);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.pi-tag--billing,
+.pi-tag--visibility {
+  background: var(--warning-bg);
+  color: var(--warning);
+}

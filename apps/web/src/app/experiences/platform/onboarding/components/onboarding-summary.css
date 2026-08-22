@@ -12,6 +12,15 @@
 }
 
 .onb-summary {
+  /* Sticky here rather than on the host: the host is the grid cell, and a
+     sticky element cannot travel inside a containing block that is
+     exactly its own size. `--onb-sticky-top` is declared on the page and
+     inherits down; the fallback keeps this readable if the panel is ever
+     used somewhere that does not set it. */
+  position: sticky;
+  inset-block-start: var(--onb-sticky-top, 68px);
+  max-block-size: calc(100vh - var(--onb-sticky-top, 68px) - var(--space-4));
+  overflow-y: auto;
   padding: var(--space-4);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -153,6 +162,16 @@
   font-size: var(--text-xs);
   color: var(--text-faint);
   line-height: var(--leading-normal);
+}
+
+/* Below the wide breakpoint the panel moves under the stage, where being
+   sticky would pin it over the content it is describing. */
+@media (max-width: 1200px) {
+  .onb-summary {
+    position: static;
+    max-block-size: none;
+    overflow-y: visible;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

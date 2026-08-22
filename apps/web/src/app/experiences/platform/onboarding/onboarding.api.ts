@@ -50,6 +50,16 @@ export interface PolicyBlueprint {
   readonly dependsOnPolicies: readonly string[];
   readonly enforcement: { readonly status: string; readonly where: string };
   readonly group: string;
+  readonly impact: {
+    readonly capabilities: readonly string[];
+    readonly roles: readonly string[];
+    readonly workflowStates: readonly string[];
+    readonly permissions: readonly string[];
+    readonly pages: readonly string[];
+    readonly changesVisibility: boolean;
+    readonly changesBilling: boolean;
+    readonly summary: string;
+  };
 }
 
 export interface ResponsibilityBlueprint {

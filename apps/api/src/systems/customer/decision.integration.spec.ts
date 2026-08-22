@@ -44,6 +44,7 @@ interface Made {
   requestId: string;
   criticalItemId: string;
   normalItemId: string;
+  highItemId: string;
 }
 
 async function makeRequest(
@@ -98,7 +99,22 @@ async function makeRequest(
     },
   });
 
-  return { token, requestId: request.id, criticalItemId: critical.id, normalItemId: normal.id };
+  const high = await prisma.customerDecisionItem.create({
+    data: {
+      tenantId,
+      decisionRequestId: request.id,
+      name: "Timing belt",
+      explanation: "Due at this mileage; not yet failed.",
+      importance: "HIGH",
+      price: "2200.00",
+      laborPrice: "600.00",
+      total: "2800.00",
+      decision: options.answered ? "APPROVED" : "PENDING",
+      decidedAt: options.answered ? new Date() : null,
+    },
+  });
+
+  return { token, requestId: request.id, criticalItemId: critical.id, normalItemId: normal.id, highItemId: high.id };
 }
 
 beforeAll(async () => {
@@ -246,7 +262,7 @@ describe("the three link states", () => {
     const view = await decisions.read(made.token);
 
     expect(view.state).toBe("OPEN");
-    expect(view.items).toHaveLength(2);
+    expect(view.items).toHaveLength(3);
     expect(view.items.find((item) => item.importance === "Critical")?.total).toBe("1800.00");
     // Plain words, never the internal enum.
     expect(view.items.map((item) => item.importance)).not.toContain("CRITICAL");
@@ -269,8 +285,8 @@ describe("the three link states", () => {
     const view = await decisions.read(made.token);
 
     expect(view.state).toBe("ANSWERED");
-    expect(view.items).toHaveLength(2);
-    expect(view.items.map((item) => item.decision).sort()).toEqual(["APPROVED", "REJECTED"]);
+    expect(view.items).toHaveLength(3);
+    expect(view.items.map((item) => item.decision).sort()).toEqual(["APPROVED", "APPROVED", "REJECTED"]);
   });
 
   it("does not call a request with NO items 'answered'", async () => {
@@ -340,7 +356,7 @@ describe("a workshop that withholds pricing", () => {
     const view = await decisions.read(made.token);
 
     expect(view.pricingVisible).toBe(false);
-    expect(view.items).toHaveLength(2);
+    expect(view.items).toHaveLength(3);
     // Absent, not zeroed -- a withheld price must not look like a free
     // item.
     expect(view.items[0].total).toBeNull();
@@ -421,6 +437,7 @@ describe("the answer reaches the rest of the system", () => {
     await decisions.respond(made.token, [
       { itemId: made.criticalItemId, decision: "APPROVED" },
       { itemId: made.normalItemId, decision: "APPROVED" },
+      { itemId: made.highItemId, decision: "APPROVED" },
     ]);
 
     const stored = await prisma.customerDecisionRequest.findUniqueOrThrow({ where: { id: made.requestId } });
@@ -690,6 +707,7 @@ describe("answering from inside the customer's own session", () => {
     await decisions.respondAsCustomer(tenantId, customerId, made.requestId, [
       { itemId: made.normalItemId, decision: "APPROVED" },
       { itemId: made.criticalItemId, decision: "APPROVED" },
+      { itemId: made.highItemId, decision: "APPROVED" },
     ]);
 
     const viaToken = await decisions.read(made.token);
@@ -726,5 +744,69 @@ describe("answering from inside the customer's own session", () => {
     expect(listed).toHaveLength(0);
 
     await prisma.customer.delete({ where: { id: stranger.id } });
+  });
+});
+
+describe("APPROVAL_WEIGHT -- how heavy a decision request is", () => {
+  const STAFF = { accountId: "staff-1", displayName: "Amira Hassan", actorType: "TENANT_STAFF" as const };
+
+  it("TWO_TIER (the default): a LOW item needs no acknowledgement to reject", async () => {
+    const made = await makeRequest();
+
+    await decisions.respond(made.token, [{ itemId: made.normalItemId, decision: "REJECTED" }]);
+
+    const stored = await prisma.customerDecisionItem.findUniqueOrThrow({ where: { id: made.normalItemId } });
+    expect(stored.decision).toBe("REJECTED");
+  });
+
+  it("TWO_TIER: a HIGH item is refused without acknowledgement, exactly like CRITICAL", async () => {
+    const made = await makeRequest();
+
+    await expect(
+      decisions.respond(made.token, [{ itemId: made.highItemId, decision: "REJECTED" }]),
+    ).rejects.toMatchObject({ status: 400, response: { code: "critical_warning_not_acknowledged" } });
+
+    const stored = await prisma.customerDecisionItem.findUniqueOrThrow({ where: { id: made.highItemId } });
+    expect(stored.decision).toBe("PENDING");
+  });
+
+  it("TWO_TIER: a HIGH item is accepted once acknowledged", async () => {
+    const made = await makeRequest();
+
+    await decisions.respond(made.token, [{ itemId: made.highItemId, decision: "REJECTED", warningAcknowledged: true }]);
+
+    const stored = await prisma.customerDecisionItem.findUniqueOrThrow({ where: { id: made.highItemId } });
+    expect(stored.decision).toBe("REJECTED");
+  });
+
+  it("read() marks requiresAcknowledgement per item under TWO_TIER -- HIGH/CRITICAL true, LOW false", async () => {
+    const made = await makeRequest();
+
+    const view = await decisions.read(made.token);
+
+    expect(view.items.find((item) => item.id === made.normalItemId)?.requiresAcknowledgement).toBe(false);
+    expect(view.items.find((item) => item.id === made.highItemId)?.requiresAcknowledgement).toBe(true);
+    expect(view.items.find((item) => item.id === made.criticalItemId)?.requiresAcknowledgement).toBe(true);
+  });
+
+  it("SINGLE_WEIGHT extends the same acknowledgement requirement down to a LOW item", async () => {
+    await policies.set(tenantId, "APPROVAL_WEIGHT", "SINGLE_WEIGHT", STAFF, "PLATFORM", "test: single weight for everything");
+
+    try {
+      const made = await makeRequest();
+
+      await expect(
+        decisions.respond(made.token, [{ itemId: made.normalItemId, decision: "REJECTED" }]),
+      ).rejects.toMatchObject({ status: 400, response: { code: "critical_warning_not_acknowledged" } });
+
+      const view = await decisions.read(made.token);
+      expect(view.items.every((item) => item.requiresAcknowledgement)).toBe(true);
+
+      await decisions.respond(made.token, [{ itemId: made.normalItemId, decision: "REJECTED", warningAcknowledged: true }]);
+      const stored = await prisma.customerDecisionItem.findUniqueOrThrow({ where: { id: made.normalItemId } });
+      expect(stored.decision).toBe("REJECTED");
+    } finally {
+      await policies.set(tenantId, "APPROVAL_WEIGHT", "TWO_TIER", STAFF, "PLATFORM", "test: restore two tier");
+    }
   });
 });

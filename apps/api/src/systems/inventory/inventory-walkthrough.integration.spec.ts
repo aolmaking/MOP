@@ -48,7 +48,7 @@ const stock = new StockService(asService);
 const capabilities = new CapabilityResolutionService(asService);
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
 const gates = new GateEvaluatorService(asService, policiesForTest);
-const lifecycle = new WorkOrderLifecycleService(asService, capabilities, events, gates);
+const lifecycle = new WorkOrderLifecycleService(asService, capabilities, events, gates, policiesForTest);
 const parts = new PartRequestService(asService, capabilities, stock, events, policiesForTest, lifecycle);
 const view = new InventoryViewService(asService, parts);
 

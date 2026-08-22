@@ -33,6 +33,7 @@ const lifecycle = new WorkOrderLifecycleService(
   capabilities,
   events,
   new GateEvaluatorService(asService, policies),
+  policies,
 );
 const parts = new PartRequestService(asService, capabilities, stock, events, policies, lifecycle);
 

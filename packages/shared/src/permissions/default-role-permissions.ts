@@ -45,6 +45,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "finance.payment.record": true,
     "finance.refund.request": true,
     "finance.refund.decide": true,
+    "finance.discount.request": true,
+    "finance.discount.decide": true,
+    // POST_CLOSE_ADDENDA: the owner can always close out a closed job's
+    // paperwork, the same as a branch manager.
+    "notes.create": true,
     "reports.owner.view": true,
     "reports.company.view": true,
     "audit.own_tenant.view": true,
@@ -74,6 +79,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "workorders.review.decide": true,
     "customer.intake.create": true,
     "decisions.branch.view": true,
+    // POST_CLOSE_ADDENDA: closing out the paperwork on a finished job is
+    // branch-manager territory, same as everything else on this list.
+    "notes.create": true,
     // P-18: the branch is where a customer answers verbally in person or
     // by phone when they have no portal, or simply prefer to.
     "customer_decision.record_on_behalf": true,
@@ -87,6 +95,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     // separation as issuing an invoice in the first place.
     "finance.refund.request": true,
     "finance.refund.decide": false,
+    // Same separation as refunds -- a branch manager can request a
+    // discount above the workshop's threshold, but deciding it stays
+    // with the owner by default.
+    "finance.discount.request": true,
+    "finance.discount.decide": false,
     // True in the template, and still denied until the owner delegates.
     // The template says "this role would do this if allowed to"; the
     // delegation layer says whether anyone but the owner may at all.
@@ -106,6 +119,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     // Explicitly not automatic -- see technician.md's Services/POS tool.
     "finance.running_invoice.add_line": false,
     "inventory.request.create": true,
+    // A technician proposing a goodwill discount is not automatic either
+    // -- the same delegation discipline as adding a line.
+    "finance.discount.request": false,
   },
   INVENTORY_MANAGER: {
     "inventory.home.view": true,

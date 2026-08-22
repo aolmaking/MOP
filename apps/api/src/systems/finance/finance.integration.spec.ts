@@ -60,6 +60,7 @@ const finance = new FinanceService(
     new CapabilityResolutionService(asService),
     events,
     new GateEvaluatorService(asService, policiesForTest),
+    policiesForTest,
   ),
 );
 
@@ -165,6 +166,7 @@ afterAll(async () => {
     await prisma.payment.deleteMany({ where });
     await prisma.creditNote.deleteMany({ where });
     await prisma.refundRequest.deleteMany({ where });
+    await prisma.discountRequest.deleteMany({ where });
     await prisma.billingDocument.deleteMany({ where });
     await prisma.invoiceLine.deleteMany({ where });
     await prisma.invoice.deleteMany({ where });
@@ -615,6 +617,159 @@ describe("refunds: request, approve, and the credit note it produces", () => {
 });
 
 /**
+ * DISCOUNT_AUTHORITY, made real: FinanceConfiguration has carried
+ * discountApprovalThreshold/maxDiscountPercent since Phase 8 with
+ * nothing reading them -- any discount at issue time was unrestricted
+ * for anyone holding finance.invoice.issue. This proves each option
+ * actually changes what issueInvoice will accept, against a real
+ * WorkshopPolicy row and real FinanceConfiguration thresholds.
+ */
+describe("DISCOUNT_AUTHORITY governs what issueInvoice will accept", () => {
+  async function setAuthority(value: string): Promise<void> {
+    await policiesForTest.set(paid.tenantId, "DISCOUNT_AUTHORITY", value, ACTOR, "PLATFORM", "Integration test.");
+  }
+
+  async function jobWithLine(unitPrice = "100.00"): Promise<string> {
+    const job = await makeJob(paid);
+    await finance.addLine(
+      { tenantId: paid.tenantId, workOrderId: job, name: "Service", itemType: "LABOUR", quantity: 1, unitPrice },
+      ACTOR,
+    );
+    return job;
+  }
+
+  it("NONE refuses any discount outright, even a small one", async () => {
+    await setAuthority("NONE");
+    const job = await jobWithLine();
+
+    await expect(finance.issueInvoice(paid.tenantId, job, ACTOR, { discountPercent: 5 })).rejects.toMatchObject({
+      response: { code: "discounts_not_offered" },
+    });
+  });
+
+  it("ANY_STAFF_UNLIMITED applies any discount directly, no request needed", async () => {
+    await setAuthority("ANY_STAFF_UNLIMITED");
+    const job = await jobWithLine();
+
+    const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR, { discountPercent: 50 });
+    expect(settlement.total).toBe("50.00");
+  });
+
+  it("THRESHOLD_THEN_APPROVAL applies a discount under threshold directly", async () => {
+    await setAuthority("THRESHOLD_THEN_APPROVAL");
+    await prisma.financeConfiguration.upsert({
+      where: { tenantId: paid.tenantId },
+      create: { tenantId: paid.tenantId, discountApprovalThreshold: "20.00", maxDiscountPercent: "10" },
+      update: { discountApprovalThreshold: "20.00", maxDiscountPercent: "10" },
+    });
+    const job = await jobWithLine();
+
+    // 5% of 100.00 is 5.00 -- under both the 20.00 threshold and the 10% cap.
+    const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR, { discountPercent: 5 });
+    expect(settlement.total).toBe("95.00");
+  });
+
+  it("THRESHOLD_THEN_APPROVAL refuses a discount over threshold with no approved request", async () => {
+    await setAuthority("THRESHOLD_THEN_APPROVAL");
+    await prisma.financeConfiguration.upsert({
+      where: { tenantId: paid.tenantId },
+      create: { tenantId: paid.tenantId, discountApprovalThreshold: "5.00", maxDiscountPercent: "10" },
+      update: { discountApprovalThreshold: "5.00", maxDiscountPercent: "10" },
+    });
+    const job = await jobWithLine();
+
+    // 20% of 100.00 is 20.00, over both the 5.00 threshold and the 10% cap.
+    await expect(finance.issueInvoice(paid.tenantId, job, ACTOR, { discountPercent: 20 })).rejects.toMatchObject({
+      response: { code: "discount_approval_required" },
+    });
+  });
+
+  it("an approved discount request lets the same amount through, and only that amount", async () => {
+    await setAuthority("THRESHOLD_THEN_APPROVAL");
+    await prisma.financeConfiguration.upsert({
+      where: { tenantId: paid.tenantId },
+      create: { tenantId: paid.tenantId, discountApprovalThreshold: "5.00", maxDiscountPercent: "10" },
+      update: { discountApprovalThreshold: "5.00", maxDiscountPercent: "10" },
+    });
+    const job = await jobWithLine();
+
+    // A request alone must not authorise anything -- still PENDING.
+    const request = await finance.requestDiscount(paid.tenantId, job, "20.00", "Loyal customer, goodwill", ACTOR);
+    expect(request.status).toBe("PENDING");
+    await expect(finance.issueInvoice(paid.tenantId, job, ACTOR, { discountPercent: 20 })).rejects.toMatchObject({
+      response: { code: "discount_approval_required" },
+    });
+
+    const approval = await finance.approveDiscount(request.id, ACTOR);
+    expect(approval.status).toBe("APPROVED");
+
+    const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR, { discountPercent: 20 });
+    expect(settlement.total).toBe("80.00");
+  });
+
+  it("refuses when the approved amount does not match what is being invoiced", async () => {
+    await setAuthority("THRESHOLD_THEN_APPROVAL");
+    await prisma.financeConfiguration.upsert({
+      where: { tenantId: paid.tenantId },
+      create: { tenantId: paid.tenantId, discountApprovalThreshold: "5.00", maxDiscountPercent: "10" },
+      update: { discountApprovalThreshold: "5.00", maxDiscountPercent: "10" },
+    });
+    const job = await jobWithLine();
+
+    const request = await finance.requestDiscount(paid.tenantId, job, "15.00", "Approved for less", ACTOR);
+    await finance.approveDiscount(request.id, ACTOR);
+
+    // Approved for 15.00; trying to invoice with a 20% (20.00) discount.
+    await expect(finance.issueInvoice(paid.tenantId, job, ACTOR, { discountPercent: 20 })).rejects.toMatchObject({
+      response: { code: "discount_approval_mismatch" },
+    });
+  });
+
+  it("ALWAYS_APPROVAL requires approval even for a discount under any threshold", async () => {
+    await setAuthority("ALWAYS_APPROVAL");
+    await prisma.financeConfiguration.upsert({
+      where: { tenantId: paid.tenantId },
+      create: { tenantId: paid.tenantId, discountApprovalThreshold: "1000.00", maxDiscountPercent: "100" },
+      update: { discountApprovalThreshold: "1000.00", maxDiscountPercent: "100" },
+    });
+    const job = await jobWithLine();
+
+    await expect(finance.issueInvoice(paid.tenantId, job, ACTOR, { discountPercent: 1 })).rejects.toMatchObject({
+      response: { code: "discount_approval_required" },
+    });
+  });
+
+  it("rejecting a discount request leaves it unusable, and cannot be decided twice", async () => {
+    await setAuthority("THRESHOLD_THEN_APPROVAL");
+    await prisma.financeConfiguration.upsert({
+      where: { tenantId: paid.tenantId },
+      create: { tenantId: paid.tenantId, discountApprovalThreshold: "1.00", maxDiscountPercent: "1" },
+      update: { discountApprovalThreshold: "1.00", maxDiscountPercent: "1" },
+    });
+    const job = await jobWithLine();
+
+    const request = await finance.requestDiscount(paid.tenantId, job, "20.00", "Trying my luck", ACTOR);
+    await finance.rejectDiscount(request.id, ACTOR, "Too large for this job");
+
+    await expect(finance.issueInvoice(paid.tenantId, job, ACTOR, { discountPercent: 20 })).rejects.toMatchObject({
+      response: { code: "discount_approval_required" },
+    });
+    await expect(finance.approveDiscount(request.id, ACTOR)).rejects.toMatchObject({
+      status: 409,
+      response: { code: "discount_not_pending" },
+    });
+  });
+
+  it("no discount requested at all needs no approval, whatever the policy", async () => {
+    await setAuthority("ALWAYS_APPROVAL");
+    const job = await jobWithLine();
+
+    const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR);
+    expect(settlement.total).toBe("100.00");
+  });
+});
+
+/**
  * compliantBlocked: visibility only, per PHASE_9.md section 6 -- no
  * invoice is ever refused because of it. Kept current on every issue
  * rather than on a schedule, since FinanceConfiguration had no writer
@@ -656,6 +811,96 @@ describe("compliantBlocked", () => {
     const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR);
     return settlement.invoiceId;
   }
+});
+
+/**
+ * UNCOVERED_COUNTRY_BILLING made real: compliantBlocked was computed and
+ * stored on every issue since Phase 9 (proven above), but nothing ever
+ * read it back to decide whether issuing should actually be refused.
+ */
+describe("UNCOVERED_COUNTRY_BILLING governs whether issuing is refused", () => {
+  afterEach(async () => {
+    await policiesForTest.set(
+      paid.tenantId,
+      "UNCOVERED_COUNTRY_BILLING",
+      "WARN_ONLY",
+      ACTOR,
+      "PLATFORM",
+      "Integration test cleanup: back to the default.",
+    );
+  });
+
+  it("WARN_ONLY (the default) issues anyway, flag set", async () => {
+    const job = await makeJob(paid);
+    await finance.addLine(
+      { tenantId: paid.tenantId, workOrderId: job, name: "Service", itemType: "LABOUR", quantity: 1, unitPrice: "20.00" },
+      ACTOR,
+    );
+    const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR);
+    expect(settlement.invoiceId).toBeTruthy();
+
+    const configuration = await prisma.financeConfiguration.findUnique({ where: { tenantId: paid.tenantId } });
+    expect(configuration?.compliantBlocked).toBe(true);
+  });
+
+  it("BLOCK refuses to issue at all, and rolls back the whole invoice attempt", async () => {
+    await policiesForTest.set(paid.tenantId, "UNCOVERED_COUNTRY_BILLING", "BLOCK", ACTOR, "PLATFORM", "Integration test.");
+
+    const job = await makeJob(paid);
+    await finance.addLine(
+      { tenantId: paid.tenantId, workOrderId: job, name: "Service", itemType: "LABOUR", quantity: 1, unitPrice: "20.00" },
+      ACTOR,
+    );
+
+    await expect(finance.issueInvoice(paid.tenantId, job, ACTOR)).rejects.toMatchObject({
+      response: { code: "country_not_covered" },
+    });
+
+    // Not just the billing document -- no Invoice row exists at all.
+    const invoice = await prisma.invoice.findUnique({ where: { workOrderId: job } });
+    expect(invoice).toBeNull();
+  });
+
+  it("BLOCK_WITH_OVERRIDE also refuses -- the override action itself is not built yet", async () => {
+    await policiesForTest.set(
+      paid.tenantId,
+      "UNCOVERED_COUNTRY_BILLING",
+      "BLOCK_WITH_OVERRIDE",
+      ACTOR,
+      "PLATFORM",
+      "Integration test.",
+    );
+
+    const job = await makeJob(paid);
+    await finance.addLine(
+      { tenantId: paid.tenantId, workOrderId: job, name: "Service", itemType: "LABOUR", quantity: 1, unitPrice: "20.00" },
+      ACTOR,
+    );
+
+    await expect(finance.issueInvoice(paid.tenantId, job, ACTOR)).rejects.toMatchObject({
+      response: { code: "country_not_covered" },
+    });
+  });
+
+  it("BLOCK does not refuse once External Billing Mode is on -- compliantBlocked itself is false", async () => {
+    await policiesForTest.set(paid.tenantId, "UNCOVERED_COUNTRY_BILLING", "BLOCK", ACTOR, "PLATFORM", "Integration test.");
+    await prisma.financeConfiguration.upsert({
+      where: { tenantId: paid.tenantId },
+      create: { tenantId: paid.tenantId, externalBillingEnabled: true },
+      update: { externalBillingEnabled: true },
+    });
+
+    const job = await makeJob(paid);
+    await finance.addLine(
+      { tenantId: paid.tenantId, workOrderId: job, name: "Service", itemType: "LABOUR", quantity: 1, unitPrice: "20.00" },
+      ACTOR,
+    );
+
+    const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR);
+    expect(settlement.invoiceId).toBeTruthy();
+
+    await prisma.financeConfiguration.update({ where: { tenantId: paid.tenantId }, data: { externalBillingEnabled: false } });
+  });
 });
 
 /**

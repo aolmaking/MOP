@@ -9,7 +9,7 @@ import { TechnicianWorkViewService } from "./technician-work-view.service";
 import { CustomerDecisionService } from "../../systems/customer/decision.service";
 import { PartRequestService } from "../../systems/inventory/part-request.service";
 import { CatalogService } from "../../systems/inventory/catalog.service";
-import { ReportBlockerDto, CreateFaultDto, RequestPartDto, RecordInspectionDto } from "./technician.dto";
+import { ReportBlockerDto, CreateFaultDto, RequestPartDto, RecordInspectionDto, CompleteTaskDto } from "./technician.dto";
 import { RaiseDecisionDto } from "../../systems/customer/decision.dto";
 
 /**
@@ -82,9 +82,9 @@ export class TechnicianController {
   }
 
   @Post("tasks/:id/complete")
-  async completeTask(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+  async completeTask(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: CompleteTaskDto) {
     await this.requireTechnician(session, "task.complete");
-    return this.work.completeTask(id, this.actor(session));
+    return this.work.completeTask(id, this.actor(session), dto.minutesSpent);
   }
 
   @Post("tasks/:id/blocker")

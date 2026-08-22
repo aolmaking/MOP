@@ -11,6 +11,14 @@ export interface DecisionItem {
   readonly price: string | null;
   readonly labour: string | null;
   readonly total: string | null;
+  /**
+   * APPROVAL_WEIGHT, resolved server-side: whether declining THIS item
+   * needs the explicit acknowledgement modal before the rejection is
+   * recorded. Reflected here, never decided here -- the server re-checks
+   * the same requirement from its own live policy value when the answer
+   * is submitted.
+   */
+  readonly requiresAcknowledgement: boolean;
 }
 
 export interface PublicDecision {
@@ -72,7 +80,10 @@ export class DecisionAnswer {
   protected readonly acknowledged = signal(false);
 
   protected choose(item: DecisionItem, verdict: Verdict): void {
-    if (verdict === 'REJECTED' && item.importance === 'Critical') {
+    // APPROVAL_WEIGHT decides which items this applies to -- server-side,
+    // per item, in `requiresAcknowledgement`. Under TWO_TIER that is
+    // HIGH/CRITICAL only; under SINGLE_WEIGHT it is every item.
+    if (verdict === 'REJECTED' && item.requiresAcknowledgement) {
       this.acknowledged.set(false);
       this.confirming.set(item);
       return;
@@ -110,9 +121,10 @@ export class DecisionAnswer {
       this.decision().items.map((item) => ({
         itemId: item.id,
         decision: this.chosen(item) as 'APPROVED' | 'REJECTED',
-        // Only ever true for a critical rejection the customer confirmed.
-        // The server re-checks this; sending it is not what makes it valid.
-        warningAcknowledged: item.importance === 'Critical' && this.chosen(item) === 'REJECTED',
+        // Only ever true for a rejection the customer confirmed through the
+        // modal. The server re-checks this against its own live policy
+        // value; sending it is not what makes it valid.
+        warningAcknowledged: item.requiresAcknowledgement && this.chosen(item) === 'REJECTED',
       })),
     );
   }

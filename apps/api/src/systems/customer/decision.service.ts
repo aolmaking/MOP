@@ -18,6 +18,14 @@ export interface PublicDecisionItem {
   readonly price: string | null;
   readonly labour: string | null;
   readonly total: string | null;
+  /**
+   * APPROVAL_WEIGHT, resolved server-side: whether declining THIS item
+   * needs the explicit acknowledgement modal before the rejection is
+   * recorded. The client reflects this; it never decides it -- the same
+   * gate is re-checked from the tenant's live policy value in
+   * `applyAnswers`, so a client that lies about this flag changes nothing.
+   */
+  readonly requiresAcknowledgement: boolean;
 }
 
 export type DecisionLinkState = "OPEN" | "EXPIRED" | "ANSWERED";
@@ -150,7 +158,7 @@ export class CustomerDecisionService {
 
   async read(token: string): Promise<PublicDecision> {
     const request = await this.resolve(token);
-    return this.present(request, await this.pricingVisible(request.tenantId));
+    return this.present(request, await this.pricingVisible(request.tenantId), await this.approvalWeight(request.tenantId));
   }
 
   /**
@@ -169,7 +177,7 @@ export class CustomerDecisionService {
     requestId: string,
   ): Promise<PublicDecision> {
     const request = await this.resolveById(tenantId, branchScope, requestId);
-    return this.present(request, await this.pricingVisible(tenantId));
+    return this.present(request, await this.pricingVisible(tenantId), await this.approvalWeight(tenantId));
   }
 
   /**
@@ -177,10 +185,15 @@ export class CustomerDecisionService {
    *
    * Shared by the token link and the authenticated portal so the two can
    * never disagree about state, expiry, or which fields are safe.
+   * `pricingVisible` and `approvalWeight` are resolved once by the caller
+   * rather than inside here, because `listForCustomer` calls this once per
+   * request for the same tenant -- resolving either policy per-item would
+   * be a redundant lookup for a value that cannot differ between them.
    */
   private present(
     request: Prisma.CustomerDecisionRequestGetPayload<{ select: typeof DECISION_SELECT }>,
     pricingVisible: boolean,
+    approvalWeight: string,
   ): PublicDecision {
     // `length > 0` is load-bearing. `[].every()` is vacuously true, so a
     // request with no items would report ANSWERED and the page would tell
@@ -202,7 +215,7 @@ export class CustomerDecisionService {
       // An expired link shows NO items. The spec is explicit: never a
       // confusing empty decision list, and never a priced list somebody
       // can no longer act on.
-      items: state === "EXPIRED" ? [] : request.items.map((item) => this.toPublic(item, pricingVisible)),
+      items: state === "EXPIRED" ? [] : request.items.map((item) => this.toPublic(item, pricingVisible, approvalWeight)),
       criticalWarning: DEFAULT_CRITICAL_WARNING,
     };
   }
@@ -254,9 +267,10 @@ export class CustomerDecisionService {
     });
 
     const pricingVisible = await this.pricingVisible(tenantId);
+    const approvalWeight = await this.approvalWeight(tenantId);
     return requests.map((request) => ({
       requestId: request.id,
-      ...this.present(request, pricingVisible),
+      ...this.present(request, pricingVisible, approvalWeight),
     }));
   }
 
@@ -284,7 +298,7 @@ export class CustomerDecisionService {
     });
 
     const after = await this.resolveForCustomer(tenantId, customerId, requestId);
-    return this.present(after, await this.pricingVisible(tenantId));
+    return this.present(after, await this.pricingVisible(tenantId), await this.approvalWeight(tenantId));
   }
 
   /**
@@ -466,6 +480,11 @@ export class CustomerDecisionService {
 
     const byId = new Map(request.items.map((item) => [item.id, item]));
 
+    // APPROVAL_WEIGHT: resolved once per submission, not per item -- the
+    // policy is a tenant-wide setting, not something that can differ
+    // between two items on the same request.
+    const approvalWeight = await this.policies.resolveValue(request.tenantId, "APPROVAL_WEIGHT");
+
     for (const answer of answers) {
       const item = byId.get(answer.itemId);
 
@@ -488,11 +507,18 @@ export class CustomerDecisionService {
 
       // THE GATE. The browser shows a modal; this is what actually stops
       // it. A replayed or hand-built request reaches here with the same
-      // shape as an honest one and is refused just the same.
-      if (item.importance === "CRITICAL" && answer.decision === "REJECTED" && answer.warningAcknowledged !== true) {
+      // shape as an honest one and is refused just the same. Which items
+      // this applies to comes from APPROVAL_WEIGHT, re-resolved here
+      // rather than trusted from `requiresAcknowledgement` on the
+      // request body -- that field is not even part of SubmittedAnswer.
+      if (
+        this.requiresFormalAcknowledgement(approvalWeight, item.importance) &&
+        answer.decision === "REJECTED" &&
+        answer.warningAcknowledged !== true
+      ) {
         throw new BadRequestException({
           code: "critical_warning_not_acknowledged",
-          message: "Declining a safety-critical repair has to be acknowledged before it can be recorded.",
+          message: "Declining this repair has to be acknowledged before it can be recorded.",
         });
       }
     }
@@ -662,6 +688,11 @@ export class CustomerDecisionService {
     return config?.customerInvoiceVisible ?? true;
   }
 
+  /** APPROVAL_WEIGHT, resolved once per request rather than once per item -- see `present`'s own note. */
+  private async approvalWeight(tenantId: string): Promise<string> {
+    return this.policies.resolveValue(tenantId, "APPROVAL_WEIGHT");
+  }
+
   private toPublic(
     item: {
       id: string;
@@ -674,6 +705,7 @@ export class CustomerDecisionService {
       total: Prisma.Decimal;
     },
     pricingVisible: boolean,
+    approvalWeight: string,
   ): PublicDecisionItem {
     return {
       id: item.id,
@@ -687,7 +719,19 @@ export class CustomerDecisionService {
       price: pricingVisible ? item.price.toFixed(2) : null,
       labour: pricingVisible ? item.laborPrice.toFixed(2) : null,
       total: pricingVisible ? item.total.toFixed(2) : null,
+      requiresAcknowledgement: this.requiresFormalAcknowledgement(approvalWeight, item.importance),
     };
+  }
+
+  /**
+   * APPROVAL_WEIGHT's actual behaviour. TWO_TIER (the default) only asks
+   * for the formal acknowledgement on HIGH/CRITICAL items; SINGLE_WEIGHT
+   * asks for it on every item, however minor. CRITICAL is required under
+   * both -- the one floor this policy cannot lower.
+   */
+  private requiresFormalAcknowledgement(approvalWeight: string, importance: string): boolean {
+    if (approvalWeight === "SINGLE_WEIGHT") return true;
+    return importance === "CRITICAL" || importance === "HIGH";
   }
 
   private notFound(): NotFoundException {

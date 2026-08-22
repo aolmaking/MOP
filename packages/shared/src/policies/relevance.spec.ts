@@ -27,7 +27,17 @@ function definition(overrides: Partial<PolicyDefinition> = {}): PolicyDefinition
     buildPosture: "POLICY_CONTROLLED",
     dependsOnCapabilities: [],
     dependsOnPolicies: [],
-    enforcement: { status: "RECORDED", where: "A real, named consumer this test double stands in for." },
+    enforcement: { status: "RECORDED", where: "A real, named consumer this test double stands in for.", consumers: [] },
+    impact: {
+      capabilities: [],
+      roles: [],
+      workflowStates: [],
+      permissions: [],
+      pages: [],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "A test double's impact statement.",
+    },
     ...overrides,
   };
 }

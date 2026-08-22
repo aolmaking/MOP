@@ -56,6 +56,25 @@ export class StageResponsibility {
     return role.toLowerCase().replace(/_/g, ' ');
   }
 
+  /**
+   * "We will hire an inventory manager", not "We Will Hire A Inventory
+   * Manager".
+   *
+   * The label was a template string wearing `text-transform: capitalize`,
+   * which title-cased a whole sentence and could not know that "inventory"
+   * takes "an". Both problems come from letting CSS do a job that needs
+   * to know what the words are, so the words are assembled here instead.
+   */
+  protected hireLabel(role: string): string {
+    const words = this.humanRole(role);
+    const article = /^[aeiou]/.test(words) ? 'an' : 'a';
+    return `We will hire ${article} ${words}`;
+  }
+
+  protected coversLabel(role: string): string {
+    return `The ${this.humanRole(role)} covers it`;
+  }
+
   protected titleOf(key: string): string {
     return this.blueprint().capabilities.find((capability) => capability.key === key)?.title ?? key;
   }

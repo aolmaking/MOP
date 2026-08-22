@@ -47,9 +47,10 @@ const lifecycle = new WorkOrderLifecycleService(
   new CapabilityResolutionService(asService),
   events,
   new GateEvaluatorService(asService, policiesForTest),
+  policiesForTest,
 );
 const intake = new IntakeService(asService, events, lifecycle);
-const work = new TechnicianWorkService(asService, events, lifecycle);
+const work = new TechnicianWorkService(asService, events, lifecycle, policiesForTest);
 const priceCatalog = new PriceCatalogService(asService, new AuditService(asService));
 const finance = new FinanceService(
   asService,
@@ -331,6 +332,48 @@ describe("tasks and the finish gate together", () => {
     // The work order is BLOCKED, so FINISH is not even routable from here
     // -- the graph refuses before any gate is consulted.
     await expect(lifecycle.apply(workOrderId, "FINISH", ACTOR)).rejects.toThrow(/not available/i);
+  }, 120_000);
+});
+
+describe("TIME_TRACKING governs whether completeTask needs a reported duration", () => {
+  it("OPTIONAL (the default): completes with no time given, and stores it when given", async () => {
+    const workOrderId = await workOrderInProgress();
+    const untimed = await work.createTask(workOrderId, "No timer used", ACTOR);
+    await work.completeTask(untimed.id, ACTOR);
+    const untimedRow = await prisma.task.findUniqueOrThrow({ where: { id: untimed.id } });
+    expect(untimedRow.actualMinutes).toBeNull();
+
+    const timed = await work.createTask(workOrderId, "Timer used", ACTOR);
+    await work.completeTask(timed.id, ACTOR, 25);
+    const timedRow = await prisma.task.findUniqueOrThrow({ where: { id: timed.id } });
+    expect(timedRow.actualMinutes).toBe(25);
+  }, 120_000);
+
+  it("REQUIRED refuses to complete without a reported duration, and accepts one", async () => {
+    const workOrderId = await workOrderInProgress();
+    const { tenantId } = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrderId }, select: { tenantId: true } });
+    await policiesForTest.set(tenantId, "TIME_TRACKING", "REQUIRED", ACTOR, "PLATFORM", "Integration test.");
+
+    const task = await work.createTask(workOrderId, "Must be timed", ACTOR);
+    await expect(work.completeTask(task.id, ACTOR)).rejects.toMatchObject({
+      response: { code: "time_not_recorded" },
+    });
+
+    await work.completeTask(task.id, ACTOR, 40);
+    const row = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
+    expect(row.status).toBe("DONE");
+    expect(row.actualMinutes).toBe(40);
+  }, 120_000);
+
+  it("OFF discards a reported duration even if one is sent -- the control does not exist", async () => {
+    const workOrderId = await workOrderInProgress();
+    const { tenantId } = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrderId }, select: { tenantId: true } });
+    await policiesForTest.set(tenantId, "TIME_TRACKING", "OFF", ACTOR, "PLATFORM", "Integration test.");
+
+    const task = await work.createTask(workOrderId, "Never timed", ACTOR);
+    await work.completeTask(task.id, ACTOR, 999);
+    const row = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
+    expect(row.actualMinutes).toBeNull();
   }, 120_000);
 });
 

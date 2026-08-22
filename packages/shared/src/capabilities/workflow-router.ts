@@ -1,4 +1,11 @@
-import { isCapabilityActive, type CapabilityProfile, type WorkflowGraph, type WorkflowIntent, type WorkflowTransition } from "./types";
+import {
+  isCapabilityActive,
+  type CapabilityProfile,
+  type PolicyCondition,
+  type WorkflowGraph,
+  type WorkflowIntent,
+  type WorkflowTransition,
+} from "./types";
 import { CAPABILITY_REGISTRY } from "./registry";
 import type { GateKey } from "./gates";
 
@@ -36,15 +43,71 @@ export type RoutingResult =
 const isActive = isCapabilityActive;
 
 /**
+ * A workshop's policy answers, as the router needs them: key -> chosen
+ * option. An absent key means the registry default applies, and callers
+ * are expected to have resolved that already -- `PolicyResolutionService`
+ * does, and the pure layer deliberately cannot, because the defaults live
+ * in the policy registry and importing it here would tie the capability
+ * engine to the policy engine in the wrong direction.
+ *
+ * An empty map therefore means "no policy narrows anything", which is
+ * exactly the behaviour every caller had before policies reached the
+ * graph.
+ */
+export type PolicyAnswers = ReadonlyMap<string, string>;
+
+const NO_POLICIES: PolicyAnswers = new Map();
+
+function policyHolds(conditions: readonly PolicyCondition[] | undefined, answers: PolicyAnswers): boolean {
+  if (!conditions || conditions.length === 0) return true;
+  return conditions.every((condition) => {
+    const answer = answers.get(condition.policyKey);
+    // An unanswered policy does not remove an edge. Narrowing the graph
+    // on the strength of a value nobody supplied is how a workshop ends
+    // up unable to move a job for a question it was never asked.
+    if (answer === undefined) return true;
+    return condition.oneOf.includes(answer);
+  });
+}
+
+/**
+ * Facts about one specific work order -- "this job has a critical
+ * fault", not anything true of the tenant. See `WorkflowTransition.
+ * requiresFact`'s own doc for why this is a separate input from
+ * `PolicyAnswers` rather than folded into it.
+ */
+export type WorkOrderFacts = ReadonlySet<string>;
+
+const NO_FACTS: WorkOrderFacts = new Set();
+
+function factsHold(required: readonly string[] | undefined, facts: WorkOrderFacts): boolean {
+  if (!required || required.length === 0) return true;
+  // A missing fact is false, not "unknown" -- unlike an unanswered
+  // policy, there is no safe default direction to assume for data about
+  // a specific work order nobody computed.
+  return required.every((fact) => facts.has(fact));
+}
+
+/**
  * The graph as this workshop actually experiences it: base edges whose
  * capabilities are all active, plus the replacement edges that removal
  * policies contribute.
  */
-export function effectiveGraph(graph: WorkflowGraph, profile: CapabilityProfile): EffectiveGraph {
+export function effectiveGraph(
+  graph: WorkflowGraph,
+  profile: CapabilityProfile,
+  policies: PolicyAnswers = NO_POLICIES,
+  facts: WorkOrderFacts = NO_FACTS,
+): EffectiveGraph {
   const active = (key: string) => isActive(profile, key);
   const known = new Set(graph.states);
 
-  const live = graph.transitions.filter((transition) => (transition.requires ?? []).every(active));
+  const live = graph.transitions.filter(
+    (transition) =>
+      (transition.requires ?? []).every(active) &&
+      policyHolds(transition.requiresPolicy, policies) &&
+      factsHold(transition.requiresFact, facts),
+  );
 
   const replacements: WorkflowTransition[] = [];
   for (const [key, definition] of CAPABILITY_REGISTRY) {
@@ -54,6 +117,8 @@ export function effectiveGraph(graph: WorkflowGraph, profile: CapabilityProfile)
       // A replacement edge is itself conditional -- a finance-off reroute
       // out of team review only applies if team review still exists.
       if (!(transition.requires ?? []).every(active)) continue;
+      if (!policyHolds(transition.requiresPolicy, policies)) continue;
+      if (!factsHold(transition.requiresFact, facts)) continue;
       if (!known.has(transition.from) || !known.has(transition.to)) continue;
       replacements.push(transition);
     }
@@ -72,8 +137,10 @@ export function allowedTransitions(
   graph: WorkflowGraph,
   profile: CapabilityProfile,
   from: string,
+  policies: PolicyAnswers = NO_POLICIES,
+  facts: WorkOrderFacts = NO_FACTS,
 ): readonly WorkflowTransition[] {
-  return effectiveGraph(graph, profile).transitions.filter((transition) => transition.from === from);
+  return effectiveGraph(graph, profile, policies, facts).transitions.filter((transition) => transition.from === from);
 }
 
 /** Is this exact move legal? Used to refuse a state change, not to choose one. */
@@ -82,8 +149,10 @@ export function canTransition(
   profile: CapabilityProfile,
   from: string,
   to: string,
+  policies: PolicyAnswers = NO_POLICIES,
+  facts: WorkOrderFacts = NO_FACTS,
 ): boolean {
-  return allowedTransitions(graph, profile, from).some((transition) => transition.to === to);
+  return allowedTransitions(graph, profile, from, policies, facts).some((transition) => transition.to === to);
 }
 
 /**
@@ -104,8 +173,12 @@ export function resolveIntent(
   profile: CapabilityProfile,
   from: string,
   intent: WorkflowIntent,
+  policies: PolicyAnswers = NO_POLICIES,
+  facts: WorkOrderFacts = NO_FACTS,
 ): RoutingResult {
-  const candidates = allowedTransitions(graph, profile, from).filter((transition) => transition.intent === intent);
+  const candidates = allowedTransitions(graph, profile, from, policies, facts).filter(
+    (transition) => transition.intent === intent,
+  );
 
   if (candidates.length > 0) return { ok: true, transition: candidates[0]! };
 

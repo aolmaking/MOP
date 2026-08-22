@@ -41,10 +41,31 @@ export const WORK_ORDER_GRAPH: WorkflowGraph = {
     { from: "REGISTERED", to: "UNDER_INSPECTION", intent: "START_INSPECTION", label: "technician starts inspection" },
     // A customer who declines inspection and asks for one named service
     // goes straight to approval -- see SCENARIOS.md "intake refusals".
-    { from: "REGISTERED", to: "AWAITING_CUSTOMER_APPROVAL", intent: "REQUEST_APPROVAL", label: "inspection declined, service requested" },
+    // ALWAYS_INSPECT removes the skip; START_INSPECTION above is
+    // unconditional, so no option of this policy can strand REGISTERED.
+    {
+      from: "REGISTERED",
+      to: "AWAITING_CUSTOMER_APPROVAL",
+      intent: "REQUEST_APPROVAL",
+      requiresPolicy: [{ policyKey: "INSPECTION_REQUIRED", oneOf: ["CUSTOMER_MAY_DECLINE"] }],
+      label: "inspection declined, service requested",
+    },
 
     { from: "UNDER_INSPECTION", to: "AWAITING_CUSTOMER_APPROVAL", intent: "REQUEST_APPROVAL", label: "findings need approval" },
-    { from: "UNDER_INSPECTION", to: "APPROVED_FOR_WORK", intent: "APPROVE", label: "no approval required by policy" },
+    // The edge this label always claimed. Until policies could reach the
+    // graph, nothing named here controlled it -- the route was chosen by
+    // whichever intent a service happened to send, and a workshop that
+    // required approval on all work could be walked straight past it.
+    //
+    // ALL_WORK removes the skip. The approval route beside it is
+    // unconditional, so no option of this policy can strand an inspection.
+    {
+      from: "UNDER_INSPECTION",
+      to: "APPROVED_FOR_WORK",
+      intent: "APPROVE",
+      requiresPolicy: [{ policyKey: "APPROVAL_REQUIRED_SCOPE", oneOf: ["BEYOND_INITIAL_SCOPE", "CRITICAL_ONLY"] }],
+      label: "findings within what was agreed -- no approval needed",
+    },
 
     { from: "AWAITING_CUSTOMER_APPROVAL", to: "APPROVED_FOR_WORK", intent: "APPROVE", label: "customer approved" },
     { from: "AWAITING_CUSTOMER_APPROVAL", to: "CANCELLED", label: "customer rejected everything" },
@@ -73,8 +94,45 @@ export const WORK_ORDER_GRAPH: WorkflowGraph = {
     // Every FINISH edge carries the full finish-gate set. Gates whose
     // owning capability is inactive are dropped by the gate registry, so a
     // workshop with no inventory is never asked about parts.
-    { from: "IN_PROGRESS", to: "READY_FOR_TEAM_REVIEW", requires: ["TEAM_REVIEW"], intent: "FINISH", gates: ["inspection_completed", "approved_work_completed", "customer_decisions_resolved", "critical_warning_acknowledged", "no_open_blocker", "parts.received_used_or_returned", "parts.no_pending_return", "parts.external_resolved"], label: "finish -> team review" },
-    { from: "READY_FOR_TEAM_REVIEW", to: "READY_FOR_QC", requires: ["TEAM_REVIEW", "QC"], intent: "REVIEW_PASSED", label: "review passed -> QC" },
+    // Live only while the workshop makes review compulsory.
+    //
+    // This fixes a real contradiction as well as adding the policy. The
+    // finish edges below are ordered review -> QC -> invoicing, and the
+    // router takes the first live match -- so with TEAM_REVIEW on, review
+    // was unconditionally forced and there was no way to express
+    // TECHNICIAN_DIRECT_SEND's own declared default of DIRECT. The
+    // capability meant "review is compulsory" when the policy said it
+    // should mean "review is available".
+    //
+    // Owning the condition here rather than on the two edges below also
+    // keeps `policiesOnEdgesDeclareTheirCapability` satisfied: the policy
+    // depends on TEAM_REVIEW and so does this edge, so the answer cannot
+    // outlive the capability that gives it meaning.
+    //
+    // Optional review -- a technician choosing to send a particular job
+    // for review under DIRECT -- needs its own intent, which the graph
+    // does not have. Recorded here rather than faked: under DIRECT,
+    // finished work goes onward.
+    { from: "IN_PROGRESS", to: "READY_FOR_TEAM_REVIEW", requires: ["TEAM_REVIEW"], intent: "FINISH", requiresPolicy: [{ policyKey: "TECHNICIAN_DIRECT_SEND", oneOf: ["REVIEW_REQUIRED"] }], gates: ["inspection_completed", "approved_work_completed", "customer_decisions_resolved", "critical_warning_acknowledged", "no_open_blocker", "parts.received_used_or_returned", "parts.no_pending_return", "parts.external_resolved"], label: "finish -> team review" },
+    // Same QC_MANDATORY split as the IN_PROGRESS -> READY_FOR_QC pair
+    // above, for the job that went through review first.
+    {
+      from: "READY_FOR_TEAM_REVIEW",
+      to: "READY_FOR_QC",
+      requires: ["TEAM_REVIEW", "QC"],
+      intent: "REVIEW_PASSED",
+      requiresPolicy: [{ policyKey: "QC_MANDATORY", oneOf: ["MANDATORY_ALWAYS"] }],
+      label: "review passed -> QC (always)",
+    },
+    {
+      from: "READY_FOR_TEAM_REVIEW",
+      to: "READY_FOR_QC",
+      requires: ["TEAM_REVIEW", "QC"],
+      intent: "REVIEW_PASSED",
+      requiresPolicy: [{ policyKey: "QC_MANDATORY", oneOf: ["RISK_FLAGGED_ONLY"] }],
+      requiresFact: ["work_order.has_critical_fault"],
+      label: "review passed -> QC (risk-flagged)",
+    },
     {
       from: "READY_FOR_TEAM_REVIEW",
       to: "PAYMENT_PENDING",
@@ -84,7 +142,31 @@ export const WORK_ORDER_GRAPH: WorkflowGraph = {
     },
     { from: "READY_FOR_TEAM_REVIEW", to: "IN_PROGRESS", requires: ["TEAM_REVIEW"], intent: "REVIEW_REJECTED", label: "returned for rework" },
 
-    { from: "IN_PROGRESS", to: "READY_FOR_QC", requires: ["QC"], intent: "FINISH", gates: ["inspection_completed", "approved_work_completed", "customer_decisions_resolved", "critical_warning_acknowledged", "no_open_blocker", "parts.received_used_or_returned", "parts.no_pending_return", "parts.external_resolved"], label: "finish -> QC" },
+    // QC_MANDATORY splits what was one unconditional edge into two,
+    // ordered before the FINANCE_CORE fallback below so a job the
+    // workshop does not consider risk-flagged (RISK_FLAGGED_ONLY, no
+    // qualifying fault) falls straight through to invoicing/delivery
+    // rather than waiting on a QC step nobody asked for. MANDATORY_ALWAYS
+    // keeps today's unconditional behaviour exactly.
+    {
+      from: "IN_PROGRESS",
+      to: "READY_FOR_QC",
+      requires: ["QC"],
+      intent: "FINISH",
+      requiresPolicy: [{ policyKey: "QC_MANDATORY", oneOf: ["MANDATORY_ALWAYS"] }],
+      gates: ["inspection_completed", "approved_work_completed", "customer_decisions_resolved", "critical_warning_acknowledged", "no_open_blocker", "parts.received_used_or_returned", "parts.no_pending_return", "parts.external_resolved"],
+      label: "finish -> QC (always)",
+    },
+    {
+      from: "IN_PROGRESS",
+      to: "READY_FOR_QC",
+      requires: ["QC"],
+      intent: "FINISH",
+      requiresPolicy: [{ policyKey: "QC_MANDATORY", oneOf: ["RISK_FLAGGED_ONLY"] }],
+      requiresFact: ["work_order.has_critical_fault"],
+      gates: ["inspection_completed", "approved_work_completed", "customer_decisions_resolved", "critical_warning_acknowledged", "no_open_blocker", "parts.received_used_or_returned", "parts.no_pending_return", "parts.external_resolved"],
+      label: "finish -> QC (risk-flagged)",
+    },
     { from: "READY_FOR_QC", to: "QC_FAILED", requires: ["QC"], intent: "QC_FAILED", label: "QC failed" },
     { from: "QC_FAILED", to: "IN_PROGRESS", requires: ["QC"], intent: "RESOLVE_BLOCKER", label: "rework" },
     { from: "READY_FOR_QC", to: "PAYMENT_PENDING", requires: ["QC", "FINANCE_CORE"], intent: "QC_PASSED", label: "QC passed -> invoice" },

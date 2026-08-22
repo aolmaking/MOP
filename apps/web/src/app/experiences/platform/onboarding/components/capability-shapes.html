@@ -1,0 +1,24 @@
+<section class="onb-shapes">
+  <h3>Start from a shape</h3>
+  <p class="onb-shapes-hint">
+    Optional — every capability is on until you say otherwise. Picking one sets them all at once, and you can change any
+    of them below afterwards.
+  </p>
+  <ul class="onb-shape-row">
+    @for (shape of shapes; track shape.key) {
+      <li>
+        <button
+          type="button"
+          class="onb-shape"
+          [class.onb-shape--applied]="store.appliedProfile() === shape.key"
+          [attr.aria-pressed]="store.appliedProfile() === shape.key"
+          (click)="store.applyProfile(shape.key)"
+        >
+          <span class="onb-shape-title">{{ shape.title }}</span>
+          <span class="onb-shape-summary">{{ shape.summary }}</span>
+          <span class="onb-shape-count">{{ activeCountFor(shape.key) }} of {{ total() }} on</span>
+        </button>
+      </li>
+    }
+  </ul>
+</section>

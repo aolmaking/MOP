@@ -77,8 +77,47 @@ export interface AttentionRank {
   readonly score: number;
 }
 
-export function rankAttentionItem(input: AttentionInput, now: Date = new Date()): AttentionRank {
-  const waitingHours = Math.max(0, (now.getTime() - input.waitingSince.getTime()) / 3_600_000);
+/**
+ * `Date.getUTCDay()` order: 0 = Sunday .. 6 = Saturday. Empty means every
+ * day counts -- WORKING_WEEK's SEVEN_DAY option, and the default every
+ * caller had before that policy could narrow it.
+ *
+ * WORKING_WEEK (packages/shared/src/policies/registry.ts). "A job has
+ * been waiting two days" meant two calendar days everywhere in the
+ * product, silently wrong for a workshop closed Friday-Saturday: a job
+ * left Thursday evening looked exactly as overdue Saturday morning as one
+ * left overnight midweek. `workingHoursBetween` is what both
+ * `rankAttentionItem` below and `AttentionQueueService.slaOverruns`
+ * (the one other place that measures elapsed time on its own) now share.
+ *
+ * Day boundaries are UTC, not the tenant's own timezone -- a real
+ * simplification, named rather than hidden, the same honest-not-precise
+ * discipline `AttentionQueueService`'s own comments already use for
+ * `updatedAt` standing in for a state-entry timestamp. A workshop within
+ * a few hours of UTC (true of every real seed tenant today) sees the
+ * correct day in practice; a precise fix needs a tenant-timezone-aware
+ * calendar library this pure package does not carry.
+ */
+export function workingHoursBetween(from: Date, to: Date, weekendDays: readonly number[] = []): number {
+  if (to <= from) return 0;
+  if (weekendDays.length === 0) return (to.getTime() - from.getTime()) / 3_600_000;
+
+  const weekend = new Set(weekendDays);
+  let hours = 0;
+  let cursor = from;
+  while (cursor < to) {
+    const nextMidnight = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate() + 1));
+    const segmentEnd = nextMidnight < to ? nextMidnight : to;
+    if (!weekend.has(cursor.getUTCDay())) {
+      hours += (segmentEnd.getTime() - cursor.getTime()) / 3_600_000;
+    }
+    cursor = segmentEnd;
+  }
+  return hours;
+}
+
+export function rankAttentionItem(input: AttentionInput, now: Date = new Date(), weekendDays: readonly number[] = []): AttentionRank {
+  const waitingHours = Math.max(0, workingHoursBetween(input.waitingSince, now, weekendDays));
 
   const base = BASE_TIER[input.kind];
   const threshold = ESCALATE_AFTER_HOURS[input.kind];

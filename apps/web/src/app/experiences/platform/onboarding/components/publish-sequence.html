@@ -1,0 +1,66 @@
+<div class="onb-publish">
+  <div class="onb-publish-inner">
+    @if (steps().length === 0) {
+      <p class="onb-eyebrow">Creating</p>
+      <h1 class="onb-publish-title">{{ workshopName() }}</h1>
+      <p class="onb-publish-sub">One transaction. It either produces the whole workshop or none of it.</p>
+      <div class="onb-publish-pulse" aria-hidden="true"></div>
+      <p class="mop-visually-hidden" role="status">Creating the workshop.</p>
+    } @else {
+      @if (ready()) {
+        <p class="onb-eyebrow">Ready</p>
+        <h1 class="onb-publish-title">{{ workshopName() }} is ready.</h1>
+        <p class="onb-publish-sub">{{ summaryLine() }}</p>
+      } @else {
+        <p class="onb-eyebrow">Building</p>
+        <h1 class="onb-publish-title">{{ workshopName() }}</h1>
+      }
+
+      <ol class="onb-steps" role="status" aria-live="polite">
+        @for (step of steps(); track step.key; let i = $index) {
+          @if (i < revealed()) {
+            <li class="onb-step">
+              <span class="onb-step-tick" aria-hidden="true">&#10003;</span>
+              <span class="onb-step-body">
+                <span class="onb-step-label">
+                  {{ step.label }}
+                  @if (step.count > 0) {
+                    <span class="onb-step-count">{{ step.count }}</span>
+                  }
+                </span>
+                <span class="onb-step-detail">{{ step.detail }}</span>
+              </span>
+            </li>
+          }
+        }
+      </ol>
+    }
+
+    @if (ready()) {
+      <section class="onb-next">
+        <h2>What to do next</h2>
+        <ol class="onb-next-list">
+          @for (item of nextSteps(); track item.title) {
+            <li>
+              <strong>{{ item.title }}</strong>
+              <span>{{ item.detail }}</span>
+            </li>
+          }
+        </ol>
+      </section>
+
+      <section class="onb-invite">
+        <h2>The owner's invite link</h2>
+        <p>
+          Valid once, for fourteen days. Email delivery does not exist yet, so this is the link — send it to
+          {{ ownerEmail() }} yourself.
+        </p>
+        <code class="onb-invite-link">{{ inviteLink() }}</code>
+      </section>
+
+      <div class="onb-publish-actions">
+        <button type="button" appButton variant="primary" (click)="done.emit()">Go to workshops</button>
+      </div>
+    }
+  </div>
+</div>

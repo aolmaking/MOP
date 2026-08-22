@@ -97,10 +97,55 @@ export type CapabilityProfile = Readonly<Partial<Record<CapabilityKey, Capabilit
  * the graph capability-aware rather than a fixed state machine with
  * buttons hidden on top of it.
  */
+/**
+ * A policy condition on a transition.
+ *
+ * Capabilities decide whether a step EXISTS; policies decide the rule it
+ * passes under. Until this existed, a policy could not touch the graph at
+ * all -- which meant "is customer approval required?" was answered by
+ * whichever intent a service happened to send, and the graph carried an
+ * edge literally labelled "no approval required by policy" that no policy
+ * controlled.
+ *
+ * The constraint that keeps this safe is PHASE_21.md S3.1's test: a
+ * policy may never change *reachability*. A condition here may only ever
+ * narrow the choice between routes that all still reach a terminal
+ * state -- never remove the last way out of a state. `validatePolicyGraph`
+ * proves that for every option of every policy that appears on an edge,
+ * so an option that would strand a job fails CI rather than a workshop.
+ */
+export interface PolicyCondition {
+  readonly policyKey: string;
+  /** The edge is live only while the workshop's answer is one of these. */
+  readonly oneOf: readonly string[];
+}
+
 export interface WorkflowTransition {
   readonly from: string;
   readonly to: string;
   readonly requires?: readonly CapabilityKey[];
+  /**
+   * Policy answers under which this edge is live. All conditions must
+   * hold. An edge with none is unconditional on policy, which is what
+   * every edge was before policies could reach the graph.
+   */
+  readonly requiresPolicy?: readonly PolicyCondition[];
+  /**
+   * Facts about THIS work order under which this edge is live -- all
+   * named facts must be true. Unlike `requires`/`requiresPolicy`, which
+   * are true or false for the whole tenant, a fact is computed per work
+   * order (e.g. "this job has a critical-severity fault") and can only
+   * be evaluated once a specific work order is in hand, which is why the
+   * router takes it as a third, separate input rather than folding it
+   * into `PolicyAnswers`.
+   *
+   * Exists for exactly the case that needed it: QC_MANDATORY's
+   * RISK_FLAGGED_ONLY option, where whether QC is required depends on
+   * this job's own faults, not on anything true of the workshop as a
+   * whole. A missing fact is treated as false (conservative: a job is
+   * never assumed risk-flagged, or exempt, on data nobody computed).
+   */
+  readonly requiresFact?: readonly string[];
   /**
    * The action a person takes, as opposed to the states it happens to
    * connect. "Technician finishes" lands on Team Review, QC, invoicing or

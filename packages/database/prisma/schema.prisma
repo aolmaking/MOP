@@ -608,6 +608,26 @@ model SupervisionNote {
   @@map("supervision_notes")
 }
 
+// POST_CLOSE_ADDENDA (packages/shared/src/policies/registry.ts). Nothing
+// on a closed WorkOrder is ever edited -- this is the real, additive
+// append operation the policy governs: whether one may be added at all
+// once the job is CLOSED. Immutable once written, like every other
+// historical record in this schema; there is no update or delete path.
+model WorkOrderNote {
+  id          String   @id @default(cuid())
+  tenantId    String
+  workOrderId String
+  authorId    String
+  authorName  String
+  body        String
+  createdAt   DateTime @default(now())
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, workOrderId])
+  @@map("work_order_notes")
+}
+
 // ============================================================================
 // SPECIALIZATION PRIMITIVES (Phase 15)
 //
@@ -1062,6 +1082,7 @@ model WorkOrder {
   timelineEvents     CustomerTimelineEvent[]
   safeHistoryEntries SafeTechnicalHistory[]
   disputes           WorkOrderDispute[]
+  notes              WorkOrderNote[]
 
   @@index([tenantId, status])
   @@index([tenantId, branchId, status])
@@ -1107,6 +1128,15 @@ model Task {
   // not in its catalogue, and free-text `title` remains the fallback.
   serviceKey  String?
   status      TaskStatus @default(ASSIGNED)
+  // TIME_TRACKING (packages/shared/src/policies/registry.ts). Minutes the
+  // technician reports at completion, whole minutes because that is the
+  // granularity the Work Card's control actually offers -- not derived
+  // from startedAt/updatedAt, since a task blocked and resumed later
+  // would make elapsed wall-clock time overstate time actually worked.
+  // Null under OFF (the field is never written) and under OPTIONAL when
+  // the technician chose not to record it; REQUIRED refuses completion
+  // without it.
+  actualMinutes Int?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 

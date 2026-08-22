@@ -2,8 +2,16 @@
 
 > **Purpose:** everything needed to continue MOP in a fresh session without the previous conversation.
 > **Companion:** [`CLAUDE.md`](./CLAUDE.md) holds permanent knowledge (architecture, rules, toolchain). This holds *where we are*.
-> **Last updated:** 2026-08-13, after closing Platform Reports, a live CI break (Node/Angular version mismatch), and nine edge-case register items (H1, H2, H4, H5, H8, H9 partial, H10, E14, E19) — 12 of 20 register items now closed. See §11 for the full session log and what's next.
+> **Last updated:** 2026-08-22, after the policy engine mission finished and was merged with the concurrent `apps/api`/`apps/web` reorg. See §0 below for that, §11 for the older full session log.
 > **Keep this current.** Update it at the end of any phase task, and before ending a long session.
+
+---
+
+## 0. Policy engine mission complete, merged with the concurrent reorg (2026-08-22)
+
+The policy engine backend-first mission (started from `docs/POLICY_COVERAGE_MATRIX.md`'s 9-ENFORCED/7-RECORDED baseline) is done: all 16 registered policies are now `ENFORCED` with real, wired backend consumers. `DISCOUNT_AUTHORITY`, `QC_MANDATORY`, `UNCOVERED_COUNTRY_BILLING`, `TIME_TRACKING`, `WORKING_WEEK`, `POST_CLOSE_ADDENDA` and `APPROVAL_WEIGHT` went from `RECORDED` to real backend behaviour this pass, each proven against real Postgres. New primitives built along the way: `WorkOrderFacts` (a per-work-order dynamic-fact set threaded through the workflow router alongside `PolicyAnswers`), a `WorkOrderNote` model, `Task.actualMinutes`, and a `requiresAcknowledgement` per-decision-item projection driving the customer decision page's acknowledgement modal. `docs/POLICY_COVERAGE_MATRIX.md` still needs a pass to reflect the new 16/0 split.
+
+This branch (`claude/jolly-cray-as9y2r`) diverged from `main` before the `apps/api`/`apps/web` directory reorg (`REORGANIZATION_REPORT.md`, `CODE_MAP.md`) described below landed there. Merging the two required reconciling roughly 30 conflicting files by hand: moving this mission's logic onto the new `control/`/`systems/`/`experiences/` layout, and reconciling two independent extensions of `CustomerDecisionService`, `FinanceService.emit()` and `AttentionQueueService` that had each grown new parameters for unrelated reasons — main's authenticated customer-portal decision flow and customer-timeline events, this branch's `APPROVAL_WEIGHT`/`DISCOUNT_AUTHORITY`/`WORKING_WEEK` enforcement. See the merge commit for the reconciliation in full.
 
 ---
 
@@ -34,7 +42,65 @@
 
 **Important caveat discovered when resuming after the pause:** between the checkpoint commit and resuming, other work landed on `main` from elsewhere — including a large reorganization of `apps/api/src` and `apps/web/src` into the layered structure (`audit/`, `runtime/`, `identity/`, `control/`, `systems/`, `experiences/`, `insights/` on the API side; `runtime/`, `ui/`, `domain/`, `experiences/` on the web side) that `CLAUDE.md` already describes. This is exactly the concurrent-session collision risk this file's own §7 item 8 warned about from an earlier incident. Nothing from this documentation pass was lost or overwritten — `git reflog` confirms the checkpoint commit is a clean ancestor of the current `HEAD`, and this second pass's edits applied without conflict. But it does mean: **specific file paths cited in this session's code audit (in the chat transcript this pass is based on, and possibly echoed in `docs/PAGE_INVENTORY.md`'s notes) may now point at pre-reorganization locations.** The *findings* (which pages are real, which subsystems have real business logic, where the HTTP-test-coverage gap is) were verified functionally and almost certainly still hold, since a reorganization moves files without rewriting behavior — but nobody should treat a specific `apps/api/src/<old-path>/foo.service.ts`-style reference in this consolidation pass as a currently-accurate path without checking it against `CODE_MAP.md` (new this pass, from the reorganization work, not from this documentation task) first.
 
-**Unrelated, pre-existing uncommitted work left untouched by this pass, on purpose:** at session start there was already-uncommitted work in the working tree — modifications to `apps/api/src/branch-manager/branch-manager.controller.ts`, `apps/api/src/customer/decision.service.ts` and its integration spec, several `apps/web/.../approvals/*` files, `apps/web/.../customer/decision-answer.*`, and three new untracked `record-approval-drawer.*` files. None of that belongs to this documentation task — it was not staged, not committed, and not modified by this pass, and remains exactly as it was found.
+**Unrelated, pre-existing uncommitted work left untouched by this pass, on purpose:** at session start there was already-uncommitted work in the working tree — modifications to `apps/api/src/branch-manager/branch-manager.controller.ts`, `apps/api/src/customer/decision.service.ts` and its integration spec, several `apps/web/.../approvals/*` files, `apps/web/.../customer/decision-answer.*`, and three new untracked `record-approval-drawer.*` files. None of that belongs to this documentation task — it was not staged, not committed, and not modified by this pass, and remains exactly as it was found. (That work later landed on `main` directly; it is the same authenticated customer-portal decision flow referenced in §0 above.)
+
+---
+
+## 0. Latest session on `claude/jolly-cray-as9y2r` — Workshop Creation rebuilt (2026-08-20)
+
+`Add Workshop Owner` was a single form with eighteen fields. Creating a
+workshop wrote a `Tenant`, a configuration blob, an owner and a
+permission baseline — and nothing else. **Every workshop the product had
+ever created was implicitly the full twelve-capability platform with no
+policies, no structure and no named operator**, whatever the operator had
+been shown. The capability engine's seven shipped profiles were
+documented as "Super Admin applies one at creation" and wired to nothing.
+
+It is now a nine-stage journey (identity · plan · capabilities ·
+specialisation · policies · responsibility · structure · services ·
+review) over a pure engine in `packages/shared/src/onboarding/`. The
+browser previews a workshop with exactly the functions the server refuses
+it with, so a preview cannot promise something the publish then rejects.
+
+**Three defects found by building it, not by looking for them:**
+
+1. **`TENANT_OWNER` holds no `inventory.*` permission.** A workshop that
+   enabled Inventory and never staffed a storekeeper had part requests
+   nobody on earth could approve, and nothing anywhere refused that
+   configuration. The Responsibility stage asks who operates each
+   capability and writes the missing grants at creation — never
+   laundering a permission the dedicated role is explicitly denied.
+2. **`enabledModules` came from the starter template while capabilities
+   came from the profile** — two sources of truth for one fact, with
+   `ModuleEnabledLayer` denying any key whose module is absent. A
+   workshop with pricing ON and a MINIMAL template got a live
+   `FINANCE_CORE` and no FINANCE module. Found by logging in as a created
+   workshop's owner. `modulesForProfile` derives it now.
+3. **`.rail-content { overflow-x: auto }` broke `position: sticky`
+   shell-wide** — a scroll container redirects every descendant's sticky
+   to itself. `clip` stops the same overflow without one; wide surfaces
+   already scroll in their own `.table-scroll` wrappers.
+
+**Also shipped:** the policy registry went from 3 to 14 entries (Tranche-1
+of `POLICY_DECISION_INVENTORY.md`), each carrying an `enforcement`
+declaration so the UI never implies a stored string is live when nothing
+reads it. Four are wired to real consumers — including P-07, the
+per-workshop separation-of-duties opt-in that Phase 19.A was reverted for
+want of. A 128-country registry replaced the free-text country field,
+deriving currency, timezone and the working week (the bug behind P-15).
+Specialization packs became data (7 packs, 11 real cards) instead of an
+if-chain over two profiles.
+
+**Verified:** 725 API + 239 web + 201 shared tests, six linters,
+typecheck and build clean. Three materially different workshops created
+through real HTTP against real Postgres and asserted row by row; one
+created through a real browser and its owner logged into afterwards to
+confirm the runtime product matches the configuration.
+
+**Owed:** bulk staff/customer/asset import (17.C/17.D) is still not part
+of creation. What was "ten of the fourteen policies `RECORDED`" here is
+now resolved -- see §0 above: the registry grew to 16 entries across later
+sessions and every one is `ENFORCED` as of 2026-08-22.
 
 ---
 

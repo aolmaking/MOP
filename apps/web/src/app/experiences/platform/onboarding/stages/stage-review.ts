@@ -2,6 +2,7 @@ import { Component, computed, inject, input, output } from '@angular/core';
 import { CAPABILITY_PRESENTATION, country, responsibilitySummary, type CapabilityKey, type OnboardingStageId } from '@mop/shared';
 import { OnboardingStore } from '../onboarding.store';
 import type { OnboardingBlueprint } from '../onboarding.api';
+import { ReviewConsequences } from '../components/review-consequences';
 
 /**
  * Everything decided, in one place, before anything is created.
@@ -17,7 +18,7 @@ import type { OnboardingBlueprint } from '../onboarding.api';
  */
 @Component({
   selector: 'app-stage-review',
-  imports: [],
+  imports: [ReviewConsequences],
   templateUrl: './stage-review.html',
   styleUrl: './stage-review.css',
 })

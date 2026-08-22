@@ -4,6 +4,7 @@ import type { InspectionType, Prisma, SeverityLevel } from "@mop/database";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { OperationEventsService } from "./operation-events.service";
 import { WorkOrderLifecycleService, type LifecycleActor } from "./work-order-lifecycle.service";
+import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 
 export interface RecordInspectionInput {
   readonly workOrderId: string;
@@ -47,6 +48,7 @@ export class TechnicianWorkService {
     private readonly prisma: PrismaService,
     private readonly events: OperationEventsService,
     private readonly lifecycle: WorkOrderLifecycleService,
+    private readonly policies: PolicyResolutionService,
   ) {}
 
   /**
@@ -162,7 +164,13 @@ export class TechnicianWorkService {
     });
   }
 
-  async completeTask(taskId: string, actor: LifecycleActor) {
+  /**
+   * `minutesSpent` is TIME_TRACKING's own input, read once (before the
+   * transaction, the same reason enforceDiscountAuthority and
+   * countryBillingRule are resolved before FinanceService's) so a policy
+   * lookup never adds latency inside the write.
+   */
+  async completeTask(taskId: string, actor: LifecycleActor, minutesSpent?: number) {
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
       // serviceKey is loaded so the completion event can name the
@@ -181,8 +189,19 @@ export class TechnicianWorkService {
       });
     }
 
+    const timeTracking = await this.policies.resolveValue(task.tenantId, "TIME_TRACKING");
+    if (timeTracking === "REQUIRED" && minutesSpent === undefined) {
+      throw new BadRequestException({
+        code: "time_not_recorded",
+        message: "Record how long this task took before completing it.",
+      });
+    }
+    // OFF: the control is absent from the Work Card, so the value is
+    // never persisted even if a caller sent one anyway.
+    const actualMinutes = timeTracking === "OFF" ? null : minutesSpent ?? null;
+
     await this.prisma.$transaction(async (tx) => {
-      await tx.task.update({ where: { id: taskId }, data: { status: "DONE" } });
+      await tx.task.update({ where: { id: taskId }, data: { status: "DONE", actualMinutes } });
       await this.events.emit(
         {
           tenantId: task.tenantId,
@@ -198,7 +217,7 @@ export class TechnicianWorkService {
           // into operations tables. Finance owning the charge and
           // Operations owning the work is the boundary; the event is how
           // they agree on what happened.
-          payload: { taskId, workOrderId: task.workOrderId, serviceKey: task.serviceKey },
+          payload: { taskId, workOrderId: task.workOrderId, serviceKey: task.serviceKey, actualMinutes },
         },
         tx,
       );

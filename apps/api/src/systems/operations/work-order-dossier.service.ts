@@ -1,6 +1,19 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { sum as sumMoney, type Money } from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
+import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
+
+export interface WorkOrderNoteActor {
+  readonly accountId: string;
+  readonly displayName: string;
+}
+
+export interface WorkOrderNoteRecord {
+  readonly id: string;
+  readonly body: string;
+  readonly authorName: string;
+  readonly createdAt: string;
+}
 
 export interface DossierTimelineEntry {
   readonly at: string;
@@ -79,7 +92,54 @@ export interface WorkOrderDossier {
  */
 @Injectable()
 export class WorkOrderDossierService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly policies: PolicyResolutionService,
+  ) {}
+
+  /**
+   * POST_CLOSE_ADDENDA (packages/shared/src/policies/registry.ts): the
+   * one real, additive operation the policy governs. Nothing on a closed
+   * job is ever edited -- this only ever adds a new, immutable row -- so
+   * the question is exclusively whether one may be added at all once the
+   * job reaches CLOSED. A job still open needs no policy check: adding a
+   * note before close was never in question.
+   */
+  async addNote(tenantId: string, workOrderId: string, body: string, actor: WorkOrderNoteActor): Promise<WorkOrderNoteRecord> {
+    const workOrder = await this.prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      select: { id: true, tenantId: true, status: true },
+    });
+    if (!workOrder || workOrder.tenantId !== tenantId) {
+      throw new NotFoundException({ code: "work_order_not_found", message: "Work order not found." });
+    }
+
+    if (workOrder.status === "CLOSED") {
+      const rule = await this.policies.resolveValue(tenantId, "POST_CLOSE_ADDENDA");
+      if (rule === "NOTHING") {
+        throw new ForbiddenException({
+          code: "closed_work_order_sealed",
+          message: "This workshop does not allow anything to be added to a job once it is closed.",
+        });
+      }
+    }
+
+    const note = await this.prisma.workOrderNote.create({
+      data: { tenantId, workOrderId, authorId: actor.accountId, authorName: actor.displayName, body },
+      select: { id: true, body: true, authorName: true, createdAt: true },
+    });
+
+    return { id: note.id, body: note.body, authorName: note.authorName, createdAt: note.createdAt.toISOString() };
+  }
+
+  async notes(tenantId: string, workOrderId: string): Promise<readonly WorkOrderNoteRecord[]> {
+    const rows = await this.prisma.workOrderNote.findMany({
+      where: { tenantId, workOrderId },
+      select: { id: true, body: true, authorName: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map((row) => ({ id: row.id, body: row.body, authorName: row.authorName, createdAt: row.createdAt.toISOString() }));
+  }
 
   async build(
     tenantId: string,

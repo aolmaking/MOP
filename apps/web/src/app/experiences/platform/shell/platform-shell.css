@@ -181,7 +181,21 @@
 .rail-content {
   flex: 1;
   padding: var(--space-6) var(--space-7);
-  overflow-x: auto;
+  /*
+   * `clip`, not `auto`.
+   *
+   * Both stop wide content spilling out of the shell, but `auto` makes
+   * this a scroll container -- and a scroll container silently breaks
+   * `position: sticky` for every descendant, which sticks to the nearest
+   * scrollport rather than the viewport. That cost the onboarding
+   * journey its stage rail and its live summary, and would cost the same
+   * to anything else in this shell that wants a column to stay put.
+   *
+   * Nothing is lost: every wide surface here already scrolls inside its
+   * own `.table-scroll` wrapper, per DESIGN_LANGUAGE's rule that wide
+   * content scrolls in place. This was belt-and-braces over that.
+   */
+  overflow-x: clip;
 }
 
 .rail-icon {

@@ -102,6 +102,20 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
       where:
         "GateEvaluatorService's payment.settled_or_policy_allows check, via FinanceConfiguration.allowUnpaidDelivery. " +
         "REQUIRES_OVERRIDE blocks like ALWAYS today; the audited release action is Governance Controls' work.",
+      consumers: [
+        "GateEvaluatorService.check (payment.settled_or_policy_allows)",
+        "PlatformService.writeFinanceConfiguration",
+      ],
+    },
+    impact: {
+      capabilities: ["FINANCE_CORE", "BILLING"],
+      roles: ["BRANCH_MANAGER", "TENANT_OWNER"],
+      workflowStates: ["READY_FOR_DELIVERY", "PAYMENT_PENDING"],
+      permissions: ["workorders.branch.release_delivery"],
+      pages: ["branch_manager.delivery-payments-status", "branch_manager.work-order-workspace"],
+      changesVisibility: false,
+      changesBilling: true,
+      summary: "Whether an outstanding balance physically holds a vehicle in the yard.",
     },
   },
 
@@ -137,10 +151,27 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     dependsOnCapabilities: [],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
+      status: "ENFORCED",
       where:
-        "Read once TechnicianWorkService derives decision items from a scope delta rather than from staff choice. " +
-        "The scope-delta comparison does not exist yet.",
+        "WORK_ORDER_GRAPH narrows the UNDER_INSPECTION -> APPROVED_FOR_WORK edge to BEYOND_INITIAL_SCOPE and " +
+        "CRITICAL_ONLY; under ALL_WORK that edge is dark and every inspection must route through customer " +
+        "approval. WorkOrderLifecycleService.routingContext supplies the answer the router reads. What is not " +
+        "yet built is the scope-delta comparison itself -- TechnicianWorkService still lets staff choose which " +
+        "items are decision-worthy rather than deriving that from what the customer actually agreed to at intake.",
+      consumers: [
+        "WORK_ORDER_GRAPH (UNDER_INSPECTION -> APPROVED_FOR_WORK)",
+        "WorkOrderLifecycleService.routingContext",
+      ],
+    },
+    impact: {
+      capabilities: ["CUSTOMER_PORTAL", "FINANCE_CORE"],
+      roles: ["TECHNICIAN", "BRANCH_MANAGER"],
+      workflowStates: ["UNDER_INSPECTION", "AWAITING_CUSTOMER_APPROVAL", "APPROVED_FOR_WORK"],
+      permissions: ["customer_decision.create", "customer_decision.send", "customer_decision.record_on_behalf"],
+      pages: ["technician.work-card", "branch_manager.approvals-customer-decisions", "customer.decision"],
+      changesVisibility: false,
+      changesBilling: true,
+      summary: "Whether an inspection can go straight to work, or has to stop at the customer first.",
     },
   },
 
@@ -161,27 +192,41 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
         label: "Formal for critical, lightweight for routine",
         meaning: "Safety-critical and high-value items use the formal request; low-value routine items use a lighter confirm.",
       },
-      {
-        key: "PER_ITEM_CHOICE",
-        label: "Staff choose per item",
-        meaning: "The person raising the item picks how heavy the request is.",
-      },
     ],
     default: "TWO_TIER",
     defaultReason:
       "A single weight guarantees one of two failures: heavy enough for a safety warning means friction on a " +
       "wiper blade, light enough for a wiper blade means a safety rejection is not properly evidenced. Two " +
-      "tiers is the only option correct at both ends; PER_ITEM_CHOICE moves a safety judgement onto a busy technician.",
+      "tiers is the only option correct at both ends.",
     relevantWhen: () => true,
     mutability: "GOVERNED",
     buildPosture: "POLICY_CONTROLLED",
     dependsOnCapabilities: [],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
+      status: "ENFORCED",
       where:
-        "Read once CustomerDecisionItem carries a weight/tier field and the decision page renders two forms. " +
-        "The critical-rejection acknowledgement gate is an invariant and holds under every option regardless.",
+        "CustomerDecisionService.applyAnswers resolves this before the acknowledgement gate. TWO_TIER requires " +
+        "the formal acknowledgement -- the same modal every CRITICAL rejection already showed -- for HIGH and " +
+        "CRITICAL items only; LOW and MEDIUM record with a single choice, no modal. SINGLE_WEIGHT requires the " +
+        "same acknowledgement for every item regardless of importance, including a routine LOW one. CRITICAL " +
+        "requires it under both options, which is the floor this policy cannot lower. PER_ITEM_CHOICE (staff " +
+        "picking the weight per item) was dropped rather than faked: it needs a real per-item tier chosen when " +
+        "the item is raised, and the backend flow for a technician to raise and send a decision item does not " +
+        "exist yet -- there is nothing for a per-item choice to attach to.",
+      consumers: ["CustomerDecisionService.applyAnswers"],
+    },
+    impact: {
+      capabilities: ["CUSTOMER_PORTAL"],
+      roles: ["TECHNICIAN", "BRANCH_MANAGER"],
+      workflowStates: [],
+      permissions: [],
+      pages: ["customer.decision", "branch_manager.approvals-customer-decisions"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary:
+        "Which decision items require an explicit acknowledgement before a rejection is recorded -- only " +
+        "HIGH/CRITICAL, or every item regardless of importance.",
     },
   },
 
@@ -210,7 +255,23 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     buildPosture: "POLICY_CONTROLLED",
     dependsOnCapabilities: ["FINANCE_CORE"],
     dependsOnPolicies: [],
-    enforcement: { status: "ENFORCED", where: "FinanceService.recordPayment refuses a short amount under FULL_ONLY." },
+    enforcement: {
+      status: "ENFORCED",
+      where: "FinanceService.recordPayment refuses a short amount under FULL_ONLY.",
+      consumers: [
+        "FinanceService.recordPayment",
+      ],
+    },
+    impact: {
+      capabilities: ["FINANCE_CORE"],
+      roles: ["BRANCH_MANAGER", "TENANT_OWNER"],
+      workflowStates: ["PAYMENT_PENDING"],
+      permissions: ["finance.payment.record"],
+      pages: ["branch_manager.delivery-payments-status"],
+      changesVisibility: false,
+      changesBilling: true,
+      summary: "Whether a customer may pay part of the balance, or must settle it in one go.",
+    },
   },
 
   // -------------------------------------------------------------------
@@ -248,10 +309,28 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     dependsOnCapabilities: ["FINANCE_CORE"],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
+      status: "ENFORCED",
       where:
-        "FinanceConfiguration already carries discountApprovalThreshold and maxDiscountPercent; the approval " +
-        "step itself (a DiscountRequest raised above the threshold) is Phase 8's owed discount path.",
+        "FinanceService.enforceDiscountAuthority runs on every issueInvoice call: NONE refuses any discount " +
+        "outright, ANY_STAFF_UNLIMITED is unrestricted, and THRESHOLD_THEN_APPROVAL/ALWAYS_APPROVAL both require " +
+        "a matching APPROVED DiscountRequest -- raised via FinanceService.requestDiscount, decided via " +
+        "approveDiscount/rejectDiscount -- for this exact work order and amount before the invoice can issue.",
+      consumers: [
+        "FinanceService.enforceDiscountAuthority",
+        "FinanceService.requestDiscount",
+        "FinanceService.approveDiscount",
+        "FinanceService.rejectDiscount",
+      ],
+    },
+    impact: {
+      capabilities: ["FINANCE_CORE"],
+      roles: ["BRANCH_MANAGER", "TENANT_OWNER", "TECHNICIAN"],
+      workflowStates: [],
+      permissions: ["finance.running_invoice.add_line", "finance.discount.request", "finance.discount.decide"],
+      pages: ["branch_manager.work-order-workspace", "owner.pricing-financial-configuration"],
+      changesVisibility: false,
+      changesBilling: true,
+      summary: "Who may reduce a price, and above what size a second person has to agree.",
     },
   },
 
@@ -295,7 +374,23 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     buildPosture: "POLICY_CONTROLLED",
     dependsOnCapabilities: ["INVENTORY"],
     dependsOnPolicies: [],
-    enforcement: { status: "ENFORCED", where: "PartRequestService.approve refuses self-approval or a non-manager approver." },
+    enforcement: {
+      status: "ENFORCED",
+      where: "PartRequestService.approve refuses self-approval or a non-manager approver.",
+      consumers: [
+        "PartRequestService.approve",
+      ],
+    },
+    impact: {
+      capabilities: ["INVENTORY"],
+      roles: ["INVENTORY_MANAGER", "TECHNICIAN", "TENANT_OWNER"],
+      workflowStates: [],
+      permissions: ["inventory.request.approve"],
+      pages: ["inventory_manager.technician-requests", "technician.work-card"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Whether the person who asks for a part may also be the person who releases it.",
+    },
   },
 
   // -------------------------------------------------------------------
@@ -330,6 +425,19 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     enforcement: {
       status: "ENFORCED",
       where: "GateEvaluatorService drops or downgrades parts.received_used_or_returned to advisory.",
+      consumers: [
+        "GateEvaluatorService.suppressedByPolicy",
+      ],
+    },
+    impact: {
+      capabilities: ["INVENTORY", "PART_RETURNS"],
+      roles: ["TECHNICIAN", "INVENTORY_MANAGER"],
+      workflowStates: ["IN_PROGRESS"],
+      permissions: [],
+      pages: ["technician.work-card", "inventory_manager.returns-movements"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Whether an unaccounted part stops a job being finished, or is only flagged for reconciliation.",
     },
   },
 
@@ -364,10 +472,25 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     dependsOnCapabilities: ["TEAM_REVIEW"],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
+      status: "ENFORCED",
       where:
-        "Read once WorkflowRouter picks the FINISH edge by policy rather than by declaration order. The " +
-        "reachability test PHASE_21.md flags for REVIEW_REQUIRED must be written before that lands.",
+        "WORK_ORDER_GRAPH narrows IN_PROGRESS -> READY_FOR_TEAM_REVIEW to REVIEW_REQUIRED; under DIRECT that " +
+        "edge is dark and FINISH must reach a terminal without stopping at review. graph-safety.spec.ts proves " +
+        "the reachability guarantee PHASE_21.md S3.1 requires holds across both options and every shipped profile.",
+      consumers: [
+        "WORK_ORDER_GRAPH (IN_PROGRESS -> READY_FOR_TEAM_REVIEW)",
+        "WorkOrderLifecycleService.routingContext",
+      ],
+    },
+    impact: {
+      capabilities: ["TEAMS", "TEAM_REVIEW", "QC", "FINANCE_CORE"],
+      roles: ["TECHNICIAN", "TEAM_LEADER"],
+      workflowStates: ["IN_PROGRESS", "READY_FOR_TEAM_REVIEW", "READY_FOR_QC", "PAYMENT_PENDING"],
+      permissions: [],
+      pages: ["technician.work-card", "team_leader.home", "team_leader.vehicles-work-orders-view"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Where a finished job goes next -- through the team leader, or straight onward.",
     },
   },
 
@@ -401,8 +524,24 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     dependsOnCapabilities: [],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
-      where: "Read once the Work Card's finish path checks recorded time. The shift record it would read already exists.",
+      status: "ENFORCED",
+      where:
+        "TechnicianWorkService.completeTask reads this on every call: REQUIRED refuses completion without a " +
+        "minutesSpent value, OFF discards one even if the caller sent it (the control does not exist, so the " +
+        "column never holds a stray value from before the policy changed), OPTIONAL stores whatever was given. " +
+        "Task.actualMinutes is the technician's own reported figure, not derived from start/complete timestamps " +
+        "-- a task blocked and resumed later would make elapsed wall-clock time overstate time actually worked.",
+      consumers: ["TechnicianWorkService.completeTask"],
+    },
+    impact: {
+      capabilities: ["TEAMS"],
+      roles: ["TECHNICIAN", "TEAM_LEADER"],
+      workflowStates: [],
+      permissions: [],
+      pages: ["technician.work-card", "team_leader.technician-performance-reports"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Whether a technician may finish a task without saying how long it took.",
     },
   },
 
@@ -435,10 +574,25 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     dependsOnCapabilities: ["BILLING"],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
+      status: "ENFORCED",
       where:
-        "compliantBlocked is computed and stored on every issueDocument call today, visibility-only per " +
-        "PHASE_9.md SS6. BLOCK and BLOCK_WITH_OVERRIDE need the refusal path and the override record.",
+        "FinanceService.issueInvoice resolves this before opening its transaction and hands it to " +
+        "BillingService.issueDocument, which computes compliantBlocked on every call: WARN_ONLY issues anyway " +
+        "(visibility only, per PHASE_9.md S6), BLOCK and BLOCK_WITH_OVERRIDE both refuse -- inside the same " +
+        "transaction the invoice itself is created in, so the whole invoice rolls back, not just the billing " +
+        "document. The audited exception BLOCK_WITH_OVERRIDE names is Governance Controls' work, the same " +
+        "honest gap DELIVERY_BLOCKED_UNTIL_PAID's REQUIRES_OVERRIDE already carries.",
+      consumers: ["BillingService.issueDocument", "FinanceService.issueInvoice"],
+    },
+    impact: {
+      capabilities: ["BILLING"],
+      roles: ["TENANT_OWNER"],
+      workflowStates: [],
+      permissions: ["finance.invoice.issue"],
+      pages: ["owner.pricing-financial-configuration"],
+      changesVisibility: false,
+      changesBilling: true,
+      summary: "What happens when this country has no billing adapter -- flag it, or refuse to issue.",
     },
   },
 
@@ -454,11 +608,6 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
         label: "Derived from the country",
         meaning: "Ageing and SLA arithmetic uses the standard working week for the country entered above.",
       },
-      {
-        key: "EXPLICIT_DAYS",
-        label: "The workshop names its own days",
-        meaning: "The owner declares which days count; ageing skips the rest.",
-      },
       { key: "SEVEN_DAY", label: "No weekend", meaning: "Ageing is pure elapsed time — every day counts equally." },
     ],
     default: "FROM_COUNTRY",
@@ -466,16 +615,40 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
       "Country is already collected at creation, and this is right without being asked in the overwhelming " +
       "majority of cases. It is also the only option that fixes the bug it was raised for: MOP's ageing " +
       "arithmetic assumes Monday-to-Friday, which is silently wrong for every Gulf tenant.",
+    // `EXPLICIT_DAYS` is deliberately absent: nothing stores a per-workshop
+    // day set, the same "an option whose answer cannot be honoured is
+    // worse than an option not offered" discipline already used for
+    // P-01/P-05/P-26/QC_MANDATORY in this file.
     relevantWhen: () => true,
     mutability: "FREELY",
     buildPosture: "POLICY_CONTROLLED",
     dependsOnCapabilities: [],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
+      status: "ENFORCED",
       where:
-        "Read once attention-ranking and the SLA overrun calculation take a working-week argument instead of " +
-        "counting elapsed hours. Both are pure functions today, which is what makes that change small.",
+        "AttentionQueueService.weekendDaysFor resolves this once per build() call (FROM_COUNTRY reads the " +
+        "tenant's own country via packages/shared/src/platform/countries.ts's WEEKEND_DAYS, SEVEN_DAY skips " +
+        "nothing) and threads it into every attention-ranking and SLA-overrun calculation via " +
+        "workingHoursBetween, replacing the raw elapsed-wall-clock-hours arithmetic every one of them used " +
+        "before. A job left Thursday evening at a Friday-Saturday-weekend workshop no longer ages over the " +
+        "weekend it was never worked.",
+      consumers: [
+        "AttentionQueueService.weekendDaysFor",
+        "AttentionQueueService.slaOverruns",
+        "workingHoursBetween",
+        "rankAttentionItem",
+      ],
+    },
+    impact: {
+      capabilities: [],
+      roles: ["BRANCH_MANAGER", "TEAM_LEADER", "DATA_ANALYST"],
+      workflowStates: [],
+      permissions: [],
+      pages: ["branch_manager.home", "owner.reports-analytics"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Which days count when the product says a job has been waiting two days.",
     },
   },
 
@@ -489,8 +662,8 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
       { key: "NOTHING", label: "Closed is closed", meaning: "A closed work order takes no further entries of any kind." },
       {
         key: "APPEND_ONLY_NOTES",
-        label: "Notes and attachments may be appended",
-        meaning: "A note or photo can be added afterwards; nothing already recorded changes.",
+        label: "Notes may be appended",
+        meaning: "A note can be added afterwards; nothing already recorded changes.",
       },
     ],
     default: "APPEND_ONLY_NOTES",
@@ -502,15 +675,35 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     // it makes a terminal state non-terminal, which fails PHASE_21.md
     // SS3.1's test outright. It is a capability, not a policy option.
     // `LINKED_FOLLOW_UP` needs the work-order-to-work-order linkage
-    // (P-40) that does not exist.
+    // (P-40) that does not exist. The option itself no longer promises a
+    // photo alongside the note either: `Attachment` exists in the schema
+    // (targetType/targetId, generic) but nothing anywhere in this
+    // codebase uploads to it or reads from it today -- wiring a photo
+    // upload flow is real, separate future work, not a detail of this
+    // policy's own enforcement.
     relevantWhen: () => true,
     mutability: "GOVERNED",
     buildPosture: "POLICY_CONTROLLED",
     dependsOnCapabilities: [],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
-      where: "Read once an addendum record exists on the work order. Attachment (16.H) is already the store it would use.",
+      status: "ENFORCED",
+      where:
+        "WorkOrderDossierService.addNote refuses on every call once the work order is CLOSED and this policy " +
+        "reads NOTHING; a job still open needs no check, since adding a note before close was never in " +
+        "question. WorkOrderNote is a new, append-only table -- no update or delete path exists, matching every " +
+        "other historical record in this schema.",
+      consumers: ["WorkOrderDossierService.addNote"],
+    },
+    impact: {
+      capabilities: [],
+      roles: ["BRANCH_MANAGER", "TENANT_OWNER"],
+      workflowStates: ["CLOSED"],
+      permissions: ["notes.create"],
+      pages: ["branch_manager.work-order-workspace"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Whether a closed job can still take a note two days later, or is sealed.",
     },
   },
 
@@ -554,51 +747,214 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
     dependsOnCapabilities: [],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
+      status: "ENFORCED",
       where:
-        "CustomerDecisionService.recordOnBehalf already attributes to staff unconditionally, which is the " +
-        "invariant half. Refusing the call under PORTAL_ONLY is the half that reads this value.",
+        "CustomerDecisionService.recordOnBehalf reads the resolved value on every call: PORTAL_ONLY refuses the " +
+        "request outright, ALLOWED_WITH_EVIDENCE requires a non-empty evidenceReference before the answer is " +
+        "applied, and attribution to staff -- never the customer -- holds unconditionally under all three.",
+      consumers: [
+        "CustomerDecisionService.recordOnBehalf",
+      ],
+    },
+    impact: {
+      capabilities: ["CUSTOMER_PORTAL"],
+      roles: ["BRANCH_MANAGER"],
+      workflowStates: ["AWAITING_CUSTOMER_APPROVAL", "WAITING_CUSTOMER"],
+      permissions: ["customer_decision.record_on_behalf"],
+      pages: ["branch_manager.approvals-customer-decisions", "customer.decision"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Whether staff may record an answer the customer gave on the phone, or only the customer may answer.",
     },
   },
 
   // -------------------------------------------------------------------
   // P-71 -- Is QC mandatory for every job, or only above a threshold?
+  //
+  // `ABOVE_VALUE_THRESHOLD` is deliberately absent: it needs a stored
+  // per-workshop threshold value the option model has nowhere to hold
+  // (PolicyOption is an enum key, not a parameter), the same "an option
+  // whose answer cannot be honoured is worse than an option not offered"
+  // discipline P-01/P-05/P-26 already use in this file. RISK_FLAGGED_ONLY
+  // needed no such new storage -- Fault.severity already exists -- so it
+  // is real instead of dropped.
   // -------------------------------------------------------------------
   {
     key: "QC_MANDATORY",
-    question: "Is QC required for every finished job, or only above a value/risk threshold?",
+    question: "Is QC required for every finished job, or only for one flagged safety-critical?",
     options: [
       {
         key: "MANDATORY_ALWAYS",
         label: "Always",
-        meaning: "Every finished job routes through QC. The workflow graph's own current, only behaviour.",
-      },
-      {
-        key: "ABOVE_VALUE_THRESHOLD",
-        label: "Above a value threshold",
-        meaning: "Only jobs over a declared value require QC.",
+        meaning: "Every finished job routes through QC.",
       },
       {
         key: "RISK_FLAGGED_ONLY",
         label: "Risk-flagged only",
-        meaning: "Only jobs flagged risky by their specialization severity require QC.",
+        meaning: "Only a job carrying a CRITICAL-severity fault routes through QC; anything else finishes straight to invoicing or delivery.",
       },
     ],
     default: "MANDATORY_ALWAYS",
     defaultReason:
-      "The only option requiring no new data, and it matches every workshop that has the QC capability " +
-      "enabled today -- the workflow graph currently has no conditional path, so loosening this is real " +
-      "future work (a threshold value, or reading specialization severity), not an assumption to make now.",
+      "It is what already ships, and QC exists precisely to catch what a technician might miss -- exempting " +
+      "most jobs from it by default would be the capability quietly doing less than turning it on promised. " +
+      "RISK_FLAGGED_ONLY is a real choice for a workshop confident its routine jobs do not need a second look.",
     relevantWhen: () => true,
     mutability: "GOVERNED",
     buildPosture: "POLICY_CONTROLLED",
     dependsOnCapabilities: ["QC"],
     dependsOnPolicies: [],
     enforcement: {
-      status: "RECORDED",
+      status: "ENFORCED",
       where:
-        "MANDATORY_ALWAYS is the graph's only behaviour today, so choosing it is honoured. The other two need " +
-        "the conditional QC route their own defaultReason names as real future work.",
+        "WORK_ORDER_GRAPH narrows both routes into READY_FOR_QC (IN_PROGRESS and READY_FOR_TEAM_REVIEW) to " +
+        "RISK_FLAGGED_ONLY plus the work_order.has_critical_fault fact; GateEvaluatorService/WorkOrderLifecycleService " +
+        "compute that fact from this work order's own Fault rows on every routing call, not from anything true " +
+        "of the tenant as a whole. A job with no CRITICAL fault finishes straight to invoicing or delivery, the " +
+        "same fallback route a workshop with QC off already uses.",
+      consumers: [
+        "WORK_ORDER_GRAPH (IN_PROGRESS -> READY_FOR_QC)",
+        "WORK_ORDER_GRAPH (READY_FOR_TEAM_REVIEW -> READY_FOR_QC)",
+        "WorkOrderLifecycleService.routingContext",
+      ],
+    },
+    impact: {
+      capabilities: ["QC"],
+      roles: ["TECHNICIAN"],
+      workflowStates: ["READY_FOR_QC", "QC_FAILED", "PAYMENT_PENDING", "READY_FOR_DELIVERY"],
+      permissions: [],
+      pages: ["technician.work-card", "branch_manager.work-orders-board"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Whether every finished job waits for a quality check, or only one carrying a critical fault.",
+    },
+  },
+
+  // -------------------------------------------------------------------
+  // Not in docs/POLICY_DECISION_INVENTORY.md -- that document's P-numbers
+  // run to P-84 with none of them this question, so this is a genuinely
+  // new entry rather than a numbered one this file is catching up on.
+  //
+  // May a customer decline inspection and go straight to a named
+  // service? The edge WORK_ORDER_GRAPH already ships (REGISTERED ->
+  // AWAITING_CUSTOMER_APPROVAL, "inspection declined, service requested")
+  // was unconditional -- every workshop allowed the skip, whether or not
+  // it wanted to. Registering the question makes that an answer rather
+  // than an accident of what the graph happened to contain.
+  // -------------------------------------------------------------------
+  {
+    key: "INSPECTION_REQUIRED",
+    question: "May a customer decline inspection and request one named service directly?",
+    options: [
+      {
+        key: "CUSTOMER_MAY_DECLINE",
+        label: "Customer may decline",
+        meaning: "A customer who names what they want skips straight to approval; the finish gate never demands the inspection they refused.",
+      },
+      {
+        key: "ALWAYS_INSPECT",
+        label: "Every job is inspected",
+        meaning: "There is no walk-in-and-name-it route. Every job passes through UNDER_INSPECTION before approval.",
+      },
+    ],
+    default: "CUSTOMER_MAY_DECLINE",
+    defaultReason:
+      "It is what already ships, and SCENARIOS.md's intake-refusals case is a real, recurring situation: a " +
+      "customer who wants one named service and nothing else should not be made to sit through a diagnostic " +
+      "they did not ask for. ALWAYS_INSPECT is a legitimate choice for a workshop whose liability policy " +
+      "requires it, not a safer default for every workshop.",
+    relevantWhen: () => true,
+    mutability: "GOVERNED",
+    buildPosture: "POLICY_CONTROLLED",
+    dependsOnCapabilities: [],
+    dependsOnPolicies: [],
+    enforcement: {
+      status: "ENFORCED",
+      where:
+        "WORK_ORDER_GRAPH narrows REGISTERED -> AWAITING_CUSTOMER_APPROVAL to CUSTOMER_MAY_DECLINE; under " +
+        "ALWAYS_INSPECT that edge is dark and every job must pass START_INSPECTION -> UNDER_INSPECTION first. " +
+        "graph-safety.spec.ts proves both options reach a terminal under every shipped profile.",
+      consumers: [
+        "WORK_ORDER_GRAPH (REGISTERED -> AWAITING_CUSTOMER_APPROVAL)",
+        "WorkOrderLifecycleService.routingContext",
+      ],
+    },
+    impact: {
+      capabilities: [],
+      roles: ["TECHNICIAN", "BRANCH_MANAGER"],
+      workflowStates: ["REGISTERED", "UNDER_INSPECTION", "AWAITING_CUSTOMER_APPROVAL"],
+      permissions: ["customer.intake.create", "inspection.quick.create", "inspection.full.create"],
+      pages: ["technician.work-card", "branch_manager.work-orders-board"],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "Whether a customer who names one service can skip the inspection step entirely.",
+    },
+  },
+
+  // -------------------------------------------------------------------
+  // P-26 -- Are prices shown to the customer before approval?
+  //
+  // Already catalogued in docs/POLICY_DECISION_INVENTORY.md, and its own
+  // "Why" already named the exact gap this closes: "FinanceConfiguration.
+  // customerInvoiceVisible exists and decision.service.ts already honours
+  // it... The decision was made in code; it was never written down or
+  // surfaced." This is that surfacing. Registered here as GOVERNED per
+  // that entry's own header, though its "Later: freely" free-text field
+  // disagrees with itself -- GOVERNED is kept, since a decision that
+  // silently changes what a customer already saw is exactly the kind of
+  // in-flight consequence the impact-preview pipeline exists to catch.
+  //
+  // The inventory's third option, `TOTAL_ONLY` (one figure, no
+  // breakdown), is deliberately absent: it needs a new projection
+  // CustomerDecisionService does not have, the same "an option whose
+  // answer cannot be honoured is worse than an option not offered"
+  // discipline P-01/P-05 already use elsewhere in this file.
+  // -------------------------------------------------------------------
+  {
+    key: "CUSTOMER_INVOICE_VISIBILITY",
+    question: "Are prices shown to the customer before they approve a repair?",
+    options: [
+      {
+        key: "SHOWN",
+        label: "Shown",
+        meaning: "Each decision item shows its price, so the customer can weigh cost against the finding.",
+      },
+      {
+        key: "HIDDEN",
+        label: "Hidden",
+        meaning: "The item still appears, without numbers; pricing is discussed by phone or at the counter instead.",
+      },
+    ],
+    default: "SHOWN",
+    defaultReason:
+      "Asking someone to approve work without telling them the price is not informed consent, which is the " +
+      "entire purpose of the decision step. HIDDEN is a real choice only for a workshop that has a reason to " +
+      "negotiate off-portal -- not the safer default for everyone.",
+    relevantWhen: () => true,
+    mutability: "GOVERNED",
+    buildPosture: "POLICY_CONTROLLED",
+    dependsOnCapabilities: ["FINANCE_CORE"],
+    dependsOnPolicies: [],
+    enforcement: {
+      status: "ENFORCED",
+      where:
+        "CustomerDecisionService.pricingVisible reads FinanceConfiguration.customerInvoiceVisible on every " +
+        "decision-request read, and PlatformService.writeFinanceConfiguration now sets that column from this " +
+        "policy's answer at creation instead of leaving it on the Prisma column default for every tenant.",
+      consumers: [
+        "CustomerDecisionService.pricingVisible",
+        "PlatformService.writeFinanceConfiguration",
+      ],
+    },
+    impact: {
+      capabilities: ["FINANCE_CORE", "CUSTOMER_PORTAL"],
+      roles: ["TECHNICIAN", "BRANCH_MANAGER"],
+      workflowStates: ["AWAITING_CUSTOMER_APPROVAL", "WAITING_CUSTOMER"],
+      permissions: ["customer.invoice.view_own"],
+      pages: ["customer.decision", "branch_manager.approvals-customer-decisions"],
+      changesVisibility: true,
+      changesBilling: false,
+      summary: "Whether a customer sees a price next to a finding, or only the finding itself.",
     },
   },
 ];

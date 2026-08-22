@@ -28,11 +28,11 @@ Legend: ✅ complete · 🟡 partial (exists but does not cover the spec's conte
 
 ---
 
-## Platform Super Admin — 5 ✅, 1 🟡 (6 pages)
+## Platform Super Admin — 4 ✅, 2 🟡 (6 pages)
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
-| Add Workshop Owner | ✅ | `/platform/workshops/new` | Multi-step onboarding wizard; creates the workshop's owner account atomically with the workshop itself |
+| Workshop Creation | ✅ | `/platform/workshops/new` | Rebuilt from the Phase-2 single form into a nine-stage configuration journey (identity · plan · capabilities · specialisation · policies · responsibility · structure · services · review). Creation now writes the workshop's actual shape in one transaction — `TenantCapability`, `WorkshopPolicy`, `FinanceConfiguration`, branches/warehouses and their grants, `PriceCatalogEntry`, `SpecializationDefinition`, and a version-1 snapshot — where it previously wrote only a tenant, a config blob, an owner and a permission baseline. Every figure on screen is derived by `@mop/shared/onboarding` from the same registries the runtime uses, and the server refuses a draft with the same `validateDraft` the browser previews with. `GET/POST /platform/onboarding/{blueprint,validate}` |
 | Workshops | ✅ | `/platform/workshops` | Server-side paged/sorted/filtered, details drawer, freeze/reactivate with impact preview |
 | Control Center — Governance Controls | ✅ | `/platform/control-center` | Per-role permission locks (set/remove, both audited, both require a written reason) and tenant archive/reactivate, backed by real endpoints (`governance/role-permission-lock.controller.ts`, `governance/tenant-lifecycle.controller.ts`). Two of this project's own prior audits (now archived) claimed this page was unbuilt — a direct code read confirms it is real and working; those audits were stale |
 | Control Center — Builder Control | 🟡 | `/platform/workshops/:id/capabilities` | No page named "Builder Control" exists as such — the Capabilities page covers capability shaping only (turn subsystems on/off with a preview step). The spec's Builder Control is broader (theme, page layouts, role experience, workflow policy, permission matrix, config version rollback) and none of that broader scope is built |

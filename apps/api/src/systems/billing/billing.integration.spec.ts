@@ -68,6 +68,7 @@ const lifecycleForFinance = new WorkOrderLifecycleService(
   capabilities,
   events,
   new GateEvaluatorService(asService, policiesForTest),
+  policiesForTest,
 );
 const genericBilling = new BillingService(asService, new GenericBillingAdapter());
 const chargeable = new ChargeableItemsService(asService);

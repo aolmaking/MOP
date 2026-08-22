@@ -8,6 +8,7 @@ import { ButtonDirective } from '../../../ui/button/button.directive';
 import { ErrorBanner } from '../../../ui/error-banner/error-banner';
 import type { PresentedError } from '../../../runtime/http/error.interceptor';
 import { OnboardingSummary } from './components/onboarding-summary';
+import { PublishSequence } from './components/publish-sequence';
 import { StageIdentity } from './stages/stage-identity';
 import { StagePlan } from './stages/stage-plan';
 import { StageCapabilities } from './stages/stage-capabilities';
@@ -42,6 +43,7 @@ type Phase = 'CONFIGURING' | 'PUBLISHING' | 'READY';
     ButtonDirective,
     ErrorBanner,
     OnboardingSummary,
+    PublishSequence,
     StageIdentity,
     StagePlan,
     StageCapabilities,
@@ -175,6 +177,15 @@ export class OnboardingPage implements OnInit {
   protected async enterWorkshops(): Promise<void> {
     await this.router.navigate(['/platform/workshops']);
   }
+
+  /** The one-line "what you just got" figure on the completion screen. */
+  protected readonly summaryLine = computed(() => {
+    const facts = this.store.facts();
+    return (
+      `${facts.activeCapabilities.length} capabilities live · ${facts.pageCount} pages · ` +
+      `${facts.activeRoles.length} roles · ${facts.branchCount} branch(es)`
+    );
+  });
 
   /**
    * Next steps that genuinely apply to the workshop that was created.

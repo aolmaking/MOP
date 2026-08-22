@@ -16,6 +16,14 @@ export class ReportBlockerDto {
   note?: string;
 }
 
+export class CompleteTaskDto {
+  /** TIME_TRACKING's own field. Absent under OFF/OPTIONAL is fine; REQUIRED refuses without it. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  minutesSpent?: number;
+}
+
 export class RecordInspectionDto {
   @IsEnum(InspectionType)
   type!: InspectionType;

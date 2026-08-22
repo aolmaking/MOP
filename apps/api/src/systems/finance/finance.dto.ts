@@ -96,3 +96,19 @@ export class RejectRefundDto {
   @Length(1, 500)
   reason?: string;
 }
+
+export class RequestDiscountDto {
+  @Matches(MONEY, { message: "amount must be a money value with at most 2 decimal places, as a string" })
+  amount!: string;
+
+  @IsString()
+  @Length(1, 500)
+  reason!: string;
+}
+
+export class RejectDiscountDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 500)
+  reason?: string;
+}

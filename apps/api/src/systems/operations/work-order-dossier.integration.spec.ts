@@ -12,11 +12,15 @@ process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { WorkOrderDossierService } from "./work-order-dossier.service";
+import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
+import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
+import { AuditService } from "../../audit/audit.service";
 import type { PrismaService } from "../../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
-const dossier = new WorkOrderDossierService(asService);
+const policiesForTest = new PolicyResolutionService(asService, new AuditService(asService), new CapabilityResolutionService(asService));
+const dossier = new WorkOrderDossierService(asService, policiesForTest);
 
 const SUFFIX = `dos-${Date.now()}`;
 let tenantId: string;
@@ -359,5 +363,84 @@ describe("WorkOrderDossierService", () => {
     expect(d.priorVisits).toBe(1);
 
     await prisma.workOrder.delete({ where: { id: earlier.id } });
+  });
+});
+
+/**
+ * POST_CLOSE_ADDENDA, made real: whether a note can be added to a job
+ * that has already reached CLOSED.
+ */
+describe("POST_CLOSE_ADDENDA governs whether a note can be added after close", () => {
+  const AUTHOR = { accountId: "bm-1", displayName: "Branch Manager" };
+
+  it("adds a note to an open job with no policy check at all", async () => {
+    const note = await dossier.addNote(tenantId, workOrderId, "Customer called about the noise.", AUTHOR);
+    expect(note.body).toBe("Customer called about the noise.");
+    expect(note.authorName).toBe("Branch Manager");
+
+    const notes = await dossier.notes(tenantId, workOrderId);
+    expect(notes.some((n) => n.id === note.id)).toBe(true);
+  });
+
+  it("APPEND_ONLY_NOTES (the default): a closed job still accepts a note", async () => {
+    const closed = await prisma.workOrder.create({
+      data: { tenantId, branchId: branchA, assetId, customerId, status: "CLOSED", closedAt: new Date() },
+    });
+
+    const note = await dossier.addNote(tenantId, closed.id, "Customer collected two days late.", AUTHOR);
+    expect(note.body).toBe("Customer collected two days late.");
+
+    const stored = await prisma.workOrderNote.findUnique({ where: { id: note.id } });
+    expect(stored?.workOrderId).toBe(closed.id);
+
+    await prisma.workOrder.delete({ where: { id: closed.id } });
+  });
+
+  it("NOTHING refuses a note on a closed job, and does not touch an open one", async () => {
+    const setupActor = { accountId: "test-setup", displayName: "Test setup", actorType: "PLATFORM" as const };
+    await policiesForTest.set(tenantId, "POST_CLOSE_ADDENDA", "NOTHING", setupActor, "PLATFORM", "Integration test.");
+
+    const closed = await prisma.workOrder.create({
+      data: { tenantId, branchId: branchA, assetId, customerId, status: "CLOSED", closedAt: new Date() },
+    });
+
+    await expect(dossier.addNote(tenantId, closed.id, "Too late now.", AUTHOR)).rejects.toMatchObject({
+      response: { code: "closed_work_order_sealed" },
+    });
+
+    // The open job is unaffected -- the policy is exclusively about CLOSED.
+    const stillOpen = await dossier.addNote(tenantId, workOrderId, "Still open, still fine.", AUTHOR);
+    expect(stillOpen.body).toBe("Still open, still fine.");
+
+    await policiesForTest.set(
+      tenantId,
+      "POST_CLOSE_ADDENDA",
+      "APPEND_ONLY_NOTES",
+      setupActor,
+      "PLATFORM",
+      "Restored after test.",
+    );
+    await prisma.workOrder.delete({ where: { id: closed.id } });
+  });
+
+  it("notes are read back oldest first, and never appear on another work order", async () => {
+    const other = await prisma.workOrder.create({
+      data: { tenantId, branchId: branchA, assetId, customerId, status: "IN_PROGRESS" },
+    });
+
+    const before = await dossier.notes(tenantId, other.id);
+    expect(before).toHaveLength(0);
+
+    await dossier.addNote(tenantId, other.id, "First on the other job.", AUTHOR);
+    await dossier.addNote(tenantId, other.id, "Second on the other job.", AUTHOR);
+
+    const otherNotes = await dossier.notes(tenantId, other.id);
+    expect(otherNotes.map((n) => n.body)).toEqual(["First on the other job.", "Second on the other job."]);
+
+    // Never leaks onto the shared fixture's own notes.
+    const ownNotes = await dossier.notes(tenantId, workOrderId);
+    expect(ownNotes.every((n) => !n.body.includes("other job"))).toBe(true);
+
+    await prisma.workOrder.delete({ where: { id: other.id } });
   });
 });

@@ -1,0 +1,14 @@
+<div class="pi">
+  <p class="pi-summary">{{ impact().summary }}</p>
+  <div class="pi-tags">
+    @if (impact().changesBilling) {
+      <span class="pi-tag pi-tag--billing">Changes billing</span>
+    }
+    @if (impact().changesVisibility) {
+      <span class="pi-tag pi-tag--visibility">Changes what someone can see</span>
+    }
+    @for (role of impact().roles; track role) {
+      <span class="pi-tag">{{ roleLabel(role) }}</span>
+    }
+  </div>
+</div>

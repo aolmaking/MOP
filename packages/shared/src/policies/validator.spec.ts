@@ -17,7 +17,17 @@ function definition(overrides: Partial<PolicyDefinition> = {}): PolicyDefinition
     buildPosture: "POLICY_CONTROLLED",
     dependsOnCapabilities: [],
     dependsOnPolicies: [],
-    enforcement: { status: "RECORDED", where: "A real, named consumer this test double stands in for." },
+    enforcement: { status: "RECORDED", where: "A real, named consumer this test double stands in for.", consumers: [] },
+    impact: {
+      capabilities: [],
+      roles: [],
+      workflowStates: [],
+      permissions: [],
+      pages: [],
+      changesVisibility: false,
+      changesBilling: false,
+      summary: "A test double's impact statement.",
+    },
     ...overrides,
   };
 }
@@ -112,7 +122,7 @@ describe("policy registration integrity", () => {
 describe("enforcement declarations", () => {
   it("rejects a policy whose enforcement note is a placeholder", () => {
     const result = validatePolicyRegistry([
-      definition({ enforcement: { status: "RECORDED", where: "TODO" } }),
+      definition({ enforcement: { status: "RECORDED", where: "TODO", consumers: [] } }),
     ]);
     expect(result.valid).toBe(false);
     expect(result.issues.map((i) => i.code)).toContain("MISSING_ENFORCEMENT_NOTE");
@@ -136,10 +146,36 @@ describe("enforcement declarations", () => {
       .map((p) => p.key)
       .sort();
     expect(enforced).toEqual([
+      "APPROVAL_REQUIRED_SCOPE",
+      "APPROVAL_WEIGHT",
+      "CUSTOMER_INVOICE_VISIBILITY",
       "DELIVERY_BLOCKED_UNTIL_PAID",
+      "DISCOUNT_AUTHORITY",
+      "INSPECTION_REQUIRED",
       "PARTIAL_PAYMENT",
       "PARTS_SEPARATION_OF_DUTIES",
+      "PORTAL_COUNTER_APPROVAL",
+      "POST_CLOSE_ADDENDA",
+      "QC_MANDATORY",
       "RETURN_UNUSED_BEFORE_FINISH",
+      "TECHNICIAN_DIRECT_SEND",
+      "TIME_TRACKING",
+      "UNCOVERED_COUNTRY_BILLING",
+      "WORKING_WEEK",
     ]);
   });
+
+  it("every ENFORCED policy declares at least one consumer", () => {
+    for (const policy of POLICY_REGISTRY.values()) {
+      if (policy.enforcement.status !== "ENFORCED") continue;
+      expect(policy.enforcement.consumers.length).toBeGreaterThan(0);
+    }
+  });
+
+  // The check that a declared consumer still exists in the source tree
+  // needs `fs`/`path` and reads across `apps/api/src` -- both out of
+  // bounds for this package, which stays framework- and Node-free by
+  // design (see packages/shared's own tsconfig). That check lives in
+  // apps/api/src/policies/dead-consumers.spec.ts instead, where the
+  // dependency is native rather than reached around.
 });
