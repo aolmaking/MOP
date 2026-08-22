@@ -62,18 +62,17 @@ High-risk HTTP/API coverage after Governance Controls.
 
 ## Current Task
 
-Run cumulative API boundary validation for the recent Finance/Billing/Inventory/Governance slices, then continue the documented gap scan.
+Inspect the authoritative trackers for the next highest-priority documented runtime gap after the Finance/Billing/Inventory/Governance boundary pass.
 
 ## Remaining Tasks
 
-- Run a cumulative focused API test set covering the newly added boundary specs and repair any fallout.
 - Continue the documented gap scan after the boundary/security pass, prioritizing remaining partial pages and backend-first runtime gaps over UI polish.
 - Continue validating country billing adapter/compliant-blocked behavior without silently inventing country-specific adapters.
 - Keep deferred/unbacked Control Center Builder, workflow-policy, full rollback, and country-adapter work out of implementation unless the documented backing model exists.
 
 ## Last Verified Commit
 
-`46f9d00f225e3d44e3d31ee62fb6ff9a0371eae3`
+`cfbe3e614d894f36d3c5de83565996edbb638322`
 
 ## Last Successful Validation
 
@@ -120,6 +119,8 @@ Run cumulative API boundary validation for the recent Finance/Billing/Inventory/
 - `corepack pnpm --filter @mop/api typecheck`
 - `corepack pnpm --filter @mop/api test -- price-catalog.service.spec.ts finance-configuration.controller.spec.ts`
 - `corepack pnpm --filter @mop/api typecheck`
+- `corepack pnpm --filter @mop/api test -- tenant-entitlements.service.spec.ts finance.service.spec.ts finance.controller.spec.ts part-request.service.spec.ts inventory.controller.spec.ts billing.service.spec.ts finance-configuration.service.spec.ts price-catalog.service.spec.ts finance-configuration.controller.spec.ts`
+- `corepack pnpm -r typecheck`
 
 ## Known Blockers
 
@@ -141,4 +142,4 @@ Run cumulative API boundary validation for the recent Finance/Billing/Inventory/
 
 ## Exact Next Action
 
-Run the cumulative focused API boundary spec set added in this pass, then inspect the authoritative trackers for the next highest-priority documented runtime gap.
+Inspect `docs/PAGE_INVENTORY.md`, `docs/PHASE_MAP.md`, and `PROJECT_STATE.md` for the next highest-priority documented runtime gap, then implement the smallest backend-first slice that is backed by existing models and requirements.
