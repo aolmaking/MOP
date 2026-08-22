@@ -8,7 +8,7 @@ Implementation, after documentation and source audit.
 
 ## Current Subsystem
 
-Historical policy/capability resolution consumer.
+Auth support pages: Access Denied and Password Reset.
 
 ## Completed Tasks
 
@@ -26,16 +26,20 @@ Historical policy/capability resolution consumer.
 - Platform Workshops list shows a dedicated Compliance badge beside Builder and Health.
 - Platform Workshop drawer shows the itemized compliance warning when local billing is not covered.
 - Backend and frontend focused tests cover the compliance projection and rendering path.
+- Work-order dossier now resolves capability deviations with `CapabilityResolutionService.resolveAsOf()` at the work order's opened-at timestamp.
+- Dossier drawer renders the workshop shape that was in force when the job opened.
+- Backend and frontend focused tests cover the historical dossier capability path.
 
 ## Current Task
 
-Inspect `resolveAsOf`/historical effective-state support and add the smallest production consumer if the documented audit gap still holds.
+Implement the documented missing Access Denied and Password Reset support surfaces without changing authentication policy semantics.
 
 ## Remaining Tasks
 
-- Locate existing historical resolution helpers, stored history records, and current audit/report consumers.
-- Add a production consumer without changing policy semantics or inventing a new feature.
-- Add focused backend tests for historical effective-state behavior.
+- Inspect current auth routes, guards, login/invite/setup flows, and router fallback behavior.
+- Add the smallest backend/API support needed for password reset if not already present.
+- Add web routes/components for Access Denied and Password Reset using existing design language.
+- Add focused backend/frontend tests.
 - Run focused verification, then recursive typecheck.
 - Commit and push the completed unit once Git write permissions are available.
 
@@ -50,6 +54,8 @@ Inspect `resolveAsOf`/historical effective-state support and add the smallest pr
 - `corepack pnpm --filter @mop/api test -- workshops.service.spec.ts`
 - `corepack pnpm --filter @mop/web test -- --include src/app/experiences/platform/workshops/workshops-page.spec.ts --watch=false --isolate=false`
 - `corepack pnpm --filter @mop/web test -- --include src/app/experiences/platform/workshops/workshop-drawer.spec.ts --watch=false --isolate=false`
+- `corepack pnpm --filter @mop/api test -- work-order-dossier.service.spec.ts`
+- `corepack pnpm --filter @mop/web test -- --include src/app/domain/dossier/dossier-drawer.spec.ts --watch=false --isolate=false`
 - `corepack pnpm -r typecheck`
 
 ## Known Blockers
@@ -65,4 +71,4 @@ Inspect `resolveAsOf`/historical effective-state support and add the smallest pr
 
 ## Exact Next Action
 
-Inspect historical policy/capability resolution helpers and add the smallest production consumer if the documented `resolveAsOf` audit gap still holds.
+Commit and push the verified historical dossier capability work, then inspect current auth support routes and password-reset backing.

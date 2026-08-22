@@ -63,6 +63,20 @@
           </div>
         </section>
 
+        @if (d.capabilityDeviationsAtOpen.length > 0) {
+          <section class="band">
+            <h3 class="band-title">Workshop shape at open</h3>
+            <ul class="list list--tight">
+              @for (capability of d.capabilityDeviationsAtOpen; track capability.key) {
+                <li class="row row--sub">
+                  <span class="row-main">{{ label(capability.key) }}</span>
+                  <span class="chip chip--warn">{{ label(capability.status) }}</span>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+
         <!-- Work -->
         <section class="band">
           <h3 class="band-title">Work done</h3>

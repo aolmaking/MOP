@@ -1,7 +1,8 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { sum as sumMoney, type Money } from "@mop/shared";
+import { CAPABILITY_KEYS, sum as sumMoney, type CapabilityProfile, type CapabilityStatus, type Money } from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
+import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 
 export interface WorkOrderNoteActor {
   readonly accountId: string;
@@ -54,6 +55,11 @@ export interface DossierMoney {
   readonly outstanding: string | null;
 }
 
+export interface DossierCapabilityDeviation {
+  readonly key: string;
+  readonly status: CapabilityStatus;
+}
+
 export interface WorkOrderDossier {
   readonly workOrderId: string;
   readonly status: string;
@@ -66,6 +72,7 @@ export interface WorkOrderDossier {
   readonly parts: readonly DossierPartLine[];
   readonly stockMovements: readonly { itemId: string; type: string; quantity: number; beforeQty: number; afterQty: number; at: string }[];
   readonly money: DossierMoney;
+  readonly capabilityDeviationsAtOpen: readonly DossierCapabilityDeviation[];
   readonly timeline: readonly DossierTimelineEntry[];
   readonly priorVisits: number;
 }
@@ -95,6 +102,7 @@ export class WorkOrderDossierService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly policies: PolicyResolutionService,
+    private readonly capabilities: CapabilityResolutionService,
   ) {}
 
   /**
@@ -185,7 +193,8 @@ export class WorkOrderDossierService {
       throw new NotFoundException({ code: "work_order_not_found", message: "That job is not available to you." });
     }
 
-    const [events, partLines, inspections, faults, running, invoice, priorVisits] = await Promise.all([
+    const [capabilityProfileAtOpen, events, partLines, inspections, faults, running, invoice, priorVisits] = await Promise.all([
+      this.capabilities.resolveAsOf(tenantId, workOrder.createdAt),
       this.prisma.operationEvent.findMany({
         where: { tenantId, payload: { path: ["workOrderId"], equals: workOrderId } },
         select: { eventKey: true, actorId: true, createdAt: true, payload: true },
@@ -301,6 +310,7 @@ export class WorkOrderDossierService {
         at: m.createdAt.toISOString(),
       })),
       money: this.money(running?.lines ?? [], invoice),
+      capabilityDeviationsAtOpen: capabilityDeviations(capabilityProfileAtOpen),
       timeline: this.timeline(workOrder.tasks, events, inspections, faults, partLines, stockMovements),
       priorVisits,
     };
@@ -459,4 +469,11 @@ export class WorkOrderDossierService {
 
     return entries.sort((a, b) => a.at.localeCompare(b.at));
   }
+}
+
+function capabilityDeviations(profile: CapabilityProfile): DossierCapabilityDeviation[] {
+  return CAPABILITY_KEYS.flatMap((key) => {
+    const status = profile[key];
+    return status && status !== "ENABLED" ? [{ key, status }] : [];
+  });
 }
