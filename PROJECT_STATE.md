@@ -2,8 +2,24 @@
 
 > **Purpose:** everything needed to continue MOP in a fresh session without the previous conversation.
 > **Companion:** [`CLAUDE.md`](./CLAUDE.md) holds permanent knowledge (architecture, rules, toolchain). This holds *where we are*.
-> **Last updated:** 2026-08-25, after Data Analyst Export was built. See the entry directly below for that, then §0 (2026-08-22) for the policy engine mission, §11 for the older full session log.
+> **Last updated:** 2026-08-25, after Plan ceilings (`maxBranches`/`maxUsers`/`maxWarehouses`) gained ongoing enforcement. See the entry directly below for that, then the Data Analyst Export entry, then §0 (2026-08-22) for the policy engine mission, §11 for the older full session log.
 > **Keep this current.** Update it at the end of any phase task, and before ending a long session.
+
+---
+
+## 0. Plan ceilings (`maxBranches`/`maxUsers`/`maxWarehouses`) now enforced on an ongoing basis, not just at creation (2026-08-25)
+
+Found while investigating the Autonomous Execution track's "Limits & Entitlements" queue item: `Plan.maxBranches`/`maxUsers`/`maxWarehouses` were checked exactly once, at workshop creation (`OnboardingService.validate()`, against the draft's own counts), and never again anywhere in the codebase. Nothing stopped a workshop from adding an unbounded number of branches, warehouses, or staff after that single moment — the ceiling a Super Admin sets at sign-up was decorative for the rest of the workshop's life. A real, unambiguous configuration island: `BranchWarehouseService.createBranch()`/`createWarehouse()` and `StaffService.invite()` had zero awareness the field existed.
+
+New `PlanLimitsService` (`apps/api/src/control/platform/plan-limits.service.ts`, its own dependency-free `PlanLimitsModule`) exposes `assertBranchCapacity`/`assertWarehouseCapacity`/`assertUserCapacity`, each counting only **active** rows (a deactivated branch/warehouse/staff account frees the seat) against the tenant's plan ceiling, throwing a real 403 (`plan_branches_limit_reached` etc.) with a message naming the actual limit. Called as the first real check in all three creation paths. Workshop creation itself is untouched — `PlatformService`'s onboarding-time writes go straight to Prisma, as before, so the one-time draft-validation ceiling check there is unaffected and there's no double-application risk.
+
+No web changes were needed: Organization & Access's existing Add Branch/Add Warehouse/Invite Staff forms already render `PresentedError.message` through the shared `ErrorBanner`/error-interceptor plumbing, so the new refusal surfaces automatically.
+
+Proven against real Postgres: a new integration suite (`plan-limits.service.integration.spec.ts`) creates a plan capped at 1 of each resource, confirms the first of each succeeds and the second is refused with the real error shape (including through the actual `BranchWarehouseService.createBranch()` caller a controller would use, not just the bare service method), and confirms deactivating the occupying branch frees the seat. Sanity-checked against the real seeded dev tenants (Apex Motors: 2/10 branches, 2/5 warehouses, 7/100 staff; Delta Quick Service: 1/1 branches, 0/0 warehouses by design, 1/10 staff) to confirm the seeded demo accounts sit comfortably under their ceilings and are not accidentally blocked.
+
+Full gate green: 871 API tests (866 + 5 new), all 6 lints, `apps/api` typecheck and build.
+
+**Still open from the same "Limits & Entitlements" investigation, not done in this pass:** whether Super Admin should be able to narrow one specific workshop's ceiling *below* its shared plan's (a per-tenant override via `ControlSetting`, distinct from swapping the tenant onto a different `Plan` row entirely, which is already possible today by changing `Tenant.planId`). No product surface asks for that narrower case yet — recorded here rather than built speculatively.
 
 ---
 

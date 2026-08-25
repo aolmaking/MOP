@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import type { StaffRole } from "@mop/shared";
 import { PrismaService } from "../../../runtime/database/prisma.service";
 import { AuditService } from "../../../audit/audit.service";
+import { PlanLimitsService } from "../../../control/platform/plan-limits.service";
 import { sha256 } from "../../../identity/auth/token.util";
 
 export interface StaffActor {
@@ -62,6 +63,7 @@ export class StaffService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly planLimits: PlanLimitsService,
   ) {}
 
   async list(tenantId: string, cursor?: string, take = 25): Promise<StaffPage> {
@@ -112,6 +114,8 @@ export class StaffService {
     if (existing) {
       throw new ConflictException({ code: "email_taken", message: "That email is already used at this workshop." });
     }
+
+    await this.planLimits.assertUserCapacity(tenantId);
 
     const rawInviteToken = randomBytes(32).toString("hex");
 

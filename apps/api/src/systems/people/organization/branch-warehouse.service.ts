@@ -3,6 +3,7 @@ import { WORK_ORDER_GRAPH } from "@mop/shared";
 import type { WorkOrderStatus } from "@mop/database";
 import { PrismaService } from "../../../runtime/database/prisma.service";
 import { AuditService } from "../../../audit/audit.service";
+import { PlanLimitsService } from "../../../control/platform/plan-limits.service";
 
 export interface OrgActor {
   readonly accountId: string;
@@ -51,6 +52,7 @@ export class BranchWarehouseService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly planLimits: PlanLimitsService,
   ) {}
 
   async page(tenantId: string): Promise<OrganizationInfrastructure> {
@@ -109,6 +111,8 @@ export class BranchWarehouseService {
   ): Promise<{ id: string }> {
     const name = input.name.trim();
     if (!name) throw new BadRequestException({ code: "name_required", message: "A branch needs a name." });
+
+    await this.planLimits.assertBranchCapacity(tenantId);
 
     const code = (input.code?.trim() || this.suggestCode(name)).toUpperCase();
 
@@ -178,6 +182,8 @@ export class BranchWarehouseService {
   async createWarehouse(tenantId: string, input: { name: string; code?: string }, actor: OrgActor): Promise<{ id: string }> {
     const name = input.name.trim();
     if (!name) throw new BadRequestException({ code: "name_required", message: "A warehouse needs a name." });
+
+    await this.planLimits.assertWarehouseCapacity(tenantId);
 
     const code = (input.code?.trim() || this.suggestCode(name)).toUpperCase();
     const clash = await this.prisma.warehouse.findFirst({ where: { tenantId, code }, select: { id: true } });
