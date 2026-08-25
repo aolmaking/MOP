@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Query, Res, UseGuards } from "@nestjs/common";
+import type { Response } from "express";
 import type { SessionContext } from "@mop/shared";
 import { SessionGuard } from "../../identity/auth/session.guard";
 import { CurrentSession } from "../../identity/auth/current-session.decorator";
@@ -12,6 +13,7 @@ import { DecisionsAnalyticsService } from "./decisions-analytics.service";
 import { FeatureAdoptionAnalyticsService } from "./feature-adoption-analytics.service";
 import { AnalystSavedViewsService } from "./saved-views.service";
 import { CreateAnalystSavedViewDto, RenameAnalystSavedViewDto } from "./saved-views.dto";
+import { AnalyticsExportService } from "./analytics-export.service";
 
 /**
  * Data Analyst (docs/detailed-specs/data-analyst.md) -- analytical views
@@ -31,6 +33,7 @@ export class AnalyticsController {
     private readonly decisions: DecisionsAnalyticsService,
     private readonly featureAdoption: FeatureAdoptionAnalyticsService,
     private readonly savedViews: AnalystSavedViewsService,
+    private readonly exportService: AnalyticsExportService,
     private readonly access: EffectiveAccessService,
   ) {}
 
@@ -78,6 +81,25 @@ export class AnalyticsController {
   ) {
     const tenantId = await this.require(session, "analytics.feature_adoption.view");
     return this.wrap(() => this.featureAdoption.build(tenantId, { from, to }));
+  }
+
+  @Get("export/:category")
+  async exportCsv(
+    @CurrentSession() session: SessionContext,
+    @Param("category") category: string,
+    @Res() res: Response,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("groupBy") groupBy?: string,
+  ): Promise<void> {
+    const tenantId = await this.require(session, "analytics.export");
+    const canViewCost = await this.access.can(session, "inventory.cost.view");
+
+    const result = await this.exportService.export(tenantId, session, category, canViewCost, { from, to, groupBy });
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
+    res.send(result.csv);
   }
 
   @Get("saved-views")

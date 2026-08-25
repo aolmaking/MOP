@@ -7,12 +7,13 @@ import { KpiCard } from '../../ui/charts/kpi-card/kpi-card';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import { AnalystApi, type InventoryAnalyticsReport } from './analyst.api';
 import { SavedViewAction } from './saved-view-action';
+import { ExportAction } from './export-action';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
 @Component({
   selector: 'app-analyst-inventory-page',
-  imports: [ErrorBanner, ButtonDirective, BarList, KpiCard, SavedViewAction],
+  imports: [ErrorBanner, ButtonDirective, BarList, KpiCard, SavedViewAction, ExportAction],
   templateUrl: './analyst-inventory-page.html',
   styleUrl: './analyst-inventory-page.css',
 })

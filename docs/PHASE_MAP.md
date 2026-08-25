@@ -20,7 +20,7 @@
 | Auth | 4 account types, DB-backed sessions, refresh rotation, lockout, rate limiting |
 | Money | `Decimal` in DB, `string` across API, dedicated `lint-money.mjs` guarding it |
 | Pages | **46 complete + 7 partial + 0 not built, of 53 spec'd** — see `PAGE_INVENTORY.md` for the full per-role breakdown; that document is the only place this count is tracked |
-| Test coverage | Business logic is real everywhere (no stubs, no hardcoded fake returns found anywhere in `apps/api/src`), but only Auth, Access/Permissions, and Platform/Super-Admin have tests that exercise a real HTTP request through the session guard — every other subsystem is tested at the service layer only, which proves the logic but not the route wiring |
+| Test coverage | Business logic is real everywhere (no stubs, no hardcoded fake returns found anywhere in `apps/api/src`), but only Auth, Access/Permissions, Platform/Super-Admin, and the Analytics export endpoint have tests that exercise a real HTTP request through the session guard — every other subsystem is tested at the service layer only, which proves the logic but not the route wiring |
 | Discovery | Three discovery passes complete and archived: 20 workshop-floor scenarios (`docs/archive/discovery/scenarios/`), 40 platform-layer scenarios (`docs/archive/discovery/scenarios2/`), 20 edge cases (`docs/archive/discovery/scenarios3/`) |
 
 **Not yet true:** no country-specific billing/invoicing adapter exists (Egypt ETA, Saudi ZATCA) — `GenericBillingAdapter` is the only one, so every real country is currently compliance-blocked. Phases 15–20's specialization/tenant-relationship/governance/resilience work is real but partially shipped — see the phase table below for exactly how much of each. Phase 21 (Policy & Decision Architecture) is documents-only, by design, awaiting an owner decision before any implementation.
@@ -53,7 +53,7 @@
 | 9 — Billing / Invoicing | 🟠 engine, refund workflow, and credit notes complete and tested; **no country-specific legal invoicing adapter exists** — every real country is compliance-blocked until one ships |
 | 10 — Team Leader & People/Performance | ✅ complete (narrowed) — API and all 5 web pages (4 Team Leader + Owner Home) built and reachable; see `PHASE_10.md` §6 |
 | 11 — Customer Portal | ✅ complete — API + all 6 web pages |
-| 12 — Reporting & Data Analyst | 🟢 6/7 Data Analyst pages complete; Saved Views persistence shipped; `Plan.allowedExports`/`analytics.export` gate shipped; Export file generation remains deferred |
+| 12 — Reporting & Data Analyst | ✅ complete — 7/7 Data Analyst pages; Saved Views persistence and real CSV export (`GET /analytics/export/:category`, gated by `analytics.export` + `Plan.allowedExports` per category) both shipped |
 | 13 — System Automation | ✅ complete (lock, not a separate worker) — `SchedulerLockService` advisory lock |
 | 14 — Internationalization & Release Readiness | 🟠 permission-key lint + a perf fix shipped; the translation pass itself was never done |
 | 15 — Specialization Discovery | ✅ schema settled, 3/5 primitives proven end-to-end |

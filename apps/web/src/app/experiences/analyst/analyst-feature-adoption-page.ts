@@ -5,12 +5,13 @@ import { ButtonDirective } from '../../ui/button/button.directive';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import { AnalystApi, type FeatureAdoptionReport } from './analyst.api';
 import { SavedViewAction } from './saved-view-action';
+import { ExportAction } from './export-action';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
 @Component({
   selector: 'app-analyst-feature-adoption-page',
-  imports: [ErrorBanner, ButtonDirective, SavedViewAction],
+  imports: [ErrorBanner, ButtonDirective, SavedViewAction, ExportAction],
   templateUrl: './analyst-feature-adoption-page.html',
   styleUrl: './analyst-feature-adoption-page.css',
 })

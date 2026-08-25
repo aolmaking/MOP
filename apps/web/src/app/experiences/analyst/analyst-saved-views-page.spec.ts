@@ -44,11 +44,10 @@ describe('AnalystSavedViewsPage', () => {
     expect(access.can).toHaveBeenCalledWith('analytics.export');
   });
 
-  it('names export file generation as the remaining blocker when the plan allows exports', () => {
+  it('points to each analytical page for the actual export action when the plan allows exports', () => {
     const { element } = render([view()], true);
 
-    expect(element.textContent).toContain("This workshop's plan allows exports");
-    expect(element.textContent).toContain('export endpoint');
+    expect(element.textContent).toContain('Export CSV is available from each analytical');
   });
 
   it('renames a saved view without changing its configuration', () => {

@@ -40,21 +40,22 @@ Governance Controls / Limits & Entitlements.
 - Analytics Home now composes all five analytical service tiles, including Feature Adoption, rather than leaving the Feature Adoption page out of the home cross-section.
 - The legacy `reports.company.view` backend surface remains live but now applies the current session's assigned branch/category scope to technician metrics, throughput, blockers, and finance totals.
 - `Plan.allowedExports` and `analytics.export` are implemented; the permission resolver locks export permission when a workshop's plan has no allowed export categories.
-- The Saved Views / Exports page now reflects plan entitlement truth: plan-locked when `analytics.export` denies, and endpoint-deferred when the plan permits exports.
+- The Saved Views / Exports page now reflects plan entitlement truth: plan-locked when `analytics.export` denies, and links out to each analytical page's own Export action when the plan permits exports.
+- **Data Analyst Export is now real, not deferred.** `GET /analytics/export/:category` (`apps/api/src/insights/analytics/analytics-export.service.ts` + `csv.util.ts`) re-runs the same `build()` each analytical page calls and streams a real CSV, gated by `analytics.export` and then, per category, `Plan.allowedExports`. Every export writes a `LOW`-risk `analytics.export.generated` audit row. All 5 analytical pages carry their own `ExportAction` button. Proven by a real-HTTP integration test (success, plan-category-denied, plan-empty, unauthenticated) plus a unit test for the CSV serializer, and by hand against the real dev DB and a running API process logged in as the seeded Data Analyst. `docs/PAGE_INVENTORY.md` now reads Data Analyst 7/7 ✅.
+- Fixed in passing: `login-page.spec.ts` asserted the pre-Access-Denied fallback route; updated to match `identity/landing.ts`'s intentional `/access-denied` behavior for an unrecognized landing page.
 
 ## Current Task
 
-Continue Governance Controls / Limits & Entitlements with per-workshop governed overrides and actual export file generation still remaining.
+Governance Controls / Limits & Entitlements: per-workshop governed overrides is the one item still open from this subsystem.
 
 ## Remaining Tasks
 
-- Inspect whether per-workshop Limits & Entitlements should be modeled as `ControlSetting` overrides on top of the new plan fields.
-- Keep Data Analyst export file generation deferred until an actual export endpoint can be implemented against `analytics.export`.
-- Decide and implement the smallest backend-first export endpoint only after the entitlement and report-category scope are fully traced.
+- Inspect whether per-workshop Limits & Entitlements should be modeled as `ControlSetting` overrides on top of the plan fields (`allowedModules`, `allowedFeatures`, `allowedReports`, `allowedExports`, `maxBranches`/`maxUsers`/`maxWarehouses`) — i.e. can Super Admin narrow one workshop below its plan's ceiling without a new plan row, using the existing `ControlSetting(scope=TENANT)` mechanism the governance layer already has.
+- No analytical page has a date-range filter UI yet, so the new export endpoint currently always exports the server's default range — real filters are a natural follow-up once any analytical page grows its own date-range control.
 
 ## Last Verified Commit
 
-`a7520ae931eb6399bb3e6fc549616e3de79cecfb`
+Data Analyst Export work, on top of `a7520ae931eb6399bb3e6fc549616e3de79cecfb` (see git log for the actual SHA once committed).
 
 ## Last Successful Validation
 
@@ -83,11 +84,19 @@ Continue Governance Controls / Limits & Entitlements with per-workshop governed 
 - `corepack pnpm -r typecheck`
 - `corepack pnpm --filter @mop/database validate`
 - `corepack pnpm --filter @mop/web build`
+- `corepack pnpm --filter @mop/api test -- csv.util.spec.ts`
+- `corepack pnpm --filter @mop/api test -- analytics-export.controller.integration.spec.ts` (real HTTP: success + audit row, plan-category-denied, plan-empty, unauthenticated)
+- `corepack pnpm --filter @mop/web test -- --include src/app/experiences/analyst/export-action.spec.ts --watch=false --isolate=false`
+- `corepack pnpm --filter @mop/web test -- --include "src/app/experiences/analyst/**/*.spec.ts" --watch=false --isolate=false`
+- `corepack pnpm lint` (all 6 rules)
+- `corepack pnpm -r typecheck`
+- `corepack pnpm --filter @mop/shared test` (243 tests), `corepack pnpm --filter @mop/api test` (866 tests), `corepack pnpm --filter @mop/web test -- --watch=false --isolate=false` (272 tests)
+- `corepack pnpm build` (full monorepo)
+- Manual verification against the real dev DB: `db:deploy`, `db:seed`, `db:seed:demo`, `apps/api` dev server, logged in as `analyst@apex-motors.local` over real HTTP, pulled all 5 export categories, confirmed real CSV bytes and real `analytics.export.generated` audit rows, confirmed a role without `analytics.export` gets 403
 
 ## Known Blockers
 
-- Local Postgres is not listening on `localhost:5432`.
-- `docker compose up -d postgres` and Docker inspection commands hang in this runtime after starting the pull. Database-backed integration tests cannot be run until Docker/Postgres is healthy.
+- None currently — local Postgres (`mop-platform-postgres-1`) is up and healthy, and the full test suite (866 API + 243 shared + 272 web) runs clean against it in this environment.
 
 ## Important Architectural Decisions
 
@@ -98,4 +107,4 @@ Continue Governance Controls / Limits & Entitlements with per-workshop governed 
 
 ## Exact Next Action
 
-Push the export entitlement checkpoint, then inspect per-workshop Limits & Entitlements override requirements against `ControlSetting`.
+Push the Data Analyst Export checkpoint, then inspect per-workshop Limits & Entitlements override requirements against `ControlSetting`.

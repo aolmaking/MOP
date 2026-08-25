@@ -205,6 +205,14 @@ async function findOrCreatePlan(spec: TenantSpec) {
       allowedModules: spec.enabledModules,
       allowedFeatures: [],
       allowedReports: [],
+      // Mirrors apps/api/src/insights/analytics/saved-views.constants.ts's
+      // ANALYST_SAVED_VIEW_SOURCE_PAGES -- every category exportable for a
+      // seeded plan that has Reports at all, so the demo Data Analyst
+      // account can actually exercise the export endpoint, not just view
+      // it locked.
+      allowedExports: spec.enabledModules.includes("REPORTS")
+        ? ["OPERATIONS", "PEOPLE", "INVENTORY", "DECISIONS", "FEATURE_ADOPTION"]
+        : [],
       monthlyPrice: 0,
     },
   });

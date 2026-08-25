@@ -17,14 +17,14 @@
 | | Count |
 |---|---|
 | Pages the spec requires | **53** |
-| ✅ Complete (real page, real backend, no named gap) | **46** |
-| 🟡 Partial (real page and backend, but a named piece of the spec is missing) | **7** |
+| ✅ Complete (real page, real backend, no named gap) | **47** |
+| 🟡 Partial (real page and backend, but a named piece of the spec is missing) | **6** |
 | ⬜ Not built at all (no route, no component, no controller) | **0** |
 | **Complete + Partial (has a real, working page today)** | **53** |
 
 Legend: ✅ complete · 🟡 partial (exists but does not cover the spec's content) · ⬜ not built at all
 
-**No page in the 53-page spec is now zero-implementation.** Access Denied and Password Reset are built as real shared public pages, and Data Analyst Saved Views now has its persistence/list/manage surface. Export remains a named 🟡 gap because file generation is not built yet; the plan-level `allowedExports` entitlement and `analytics.export` gate now exist.
+**No page in the 53-page spec is now zero-implementation.** Access Denied and Password Reset are built as real shared public pages, Data Analyst Saved Views has its persistence/list/manage surface, and Data Analyst Export now generates real CSV files (`GET /analytics/export/:category`), gated by `analytics.export` and the plan's `Plan.allowedExports` category list, moving Saved Views / Exports from 🟡 to ✅.
 
 ---
 
@@ -94,7 +94,7 @@ Every Owner page has at least a real, working surface — none are ⬜. Home, Or
 | Vehicles / Work Orders View | ✅ | `/team-leader/work-orders` | No price/cost/payment field anywhere in the response shape |
 | Technician Performance Reports | ✅ | `/team-leader/reports` | Managed-scope only; company-wide version is Phase 12 |
 
-## Data Analyst — 6 ✅, 1 🟡 (7 pages)
+## Data Analyst — 7 ✅ (7 pages)
 
 | Page | State | Route | Notes |
 |---|:--:|---|---|
@@ -104,7 +104,7 @@ Every Owner page has at least a real, working surface — none are ⬜. Home, Or
 | Inventory Analytics | ✅ | `/analyst/inventory` | Reuses `InventoryReportsService` (Inventory Manager's own page) rather than a second velocity implementation; branch scope resolved to warehouse scope via `BranchWarehouseAccess`; inventory value gated on `inventory.cost.view`, same as the Inventory Manager's own catalog |
 | Customer Decision Analytics | ✅ | `/analyst/decisions` | Approval/rejection rates by importance, response time, overdue rate, critical-rejection follow-up outcome, link-open rate. No customer-identifying field anywhere — enforced by its own test |
 | Feature Adoption Analytics | ✅ | `/analyst/feature-adoption` | Real usage counts for Quick/Full Inspection and Customer Decision Request volume. Custom Fields and Message Templates explicitly reported as **not trackable yet** (no consuming form captures field values; no message-sending code exists anywhere in the product) rather than a fabricated count |
-| Saved Views / Exports | 🟡 | `/analyst/saved-views` | Saved Views persistence is built: per-analyst named configurations, source page, created date, Open/Rename/Delete, plus Save This View actions on the analytical pages. Export is still deferred because no export file endpoint exists yet; `analytics.export` is now gated by Super Admin's Allowed Exports plan entitlement (`Plan.allowedExports`) |
+| Saved Views / Exports | ✅ | `/analyst/saved-views` | Saved Views persistence: per-analyst named configurations, source page, created date, Open/Rename/Delete, plus Save This View actions on the analytical pages. Export CSV is real: each of the 5 analytical pages carries its own **Export CSV** action (`GET /analytics/export/:category`), gated twice — `analytics.export` (locked outright when a plan's `allowedExports` is empty) and then the specific category against that same list — generates a real CSV from the same `build()` call the page itself renders, and leaves a `LOW`-risk `analytics.export.generated` audit row. Reflects the page's default range only; no date-range filter UI exists yet on any analytical page, so "exactly the currently-filtered view" is currently "exactly the currently-shown default range" |
 
 ## Customer Portal — 6 / 6 ✅
 

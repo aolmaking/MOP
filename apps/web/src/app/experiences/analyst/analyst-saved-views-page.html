@@ -81,7 +81,8 @@
         <h2 class="panel-title">Exports</h2>
         @if (exportAllowed()) {
           <p class="panel-hint">
-            This workshop's plan allows exports. File generation remains unavailable until the export endpoint is built.
+            Export CSV is available from each analytical page's own header, reflecting exactly what that page is
+            currently allowed to show. Only categories this workshop's plan lists under Allowed Exports will succeed.
           </p>
         } @else {
           <p class="panel-hint">Exports are locked by this workshop's plan. Allowed Exports has no categories enabled.</p>

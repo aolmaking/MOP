@@ -122,6 +122,10 @@ export class AnalystApi {
     return this.http.get<FeatureAdoptionReport>('/api/v1/analytics/feature-adoption');
   }
 
+  exportCsv(category: AnalystSavedViewSourcePage): Observable<Blob> {
+    return this.http.get(`/api/v1/analytics/export/${category}`, { responseType: 'blob' });
+  }
+
   savedViews(): Observable<{ items: readonly AnalystSavedView[] }> {
     return this.http.get<{ items: readonly AnalystSavedView[] }>('/api/v1/analytics/saved-views');
   }
