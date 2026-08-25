@@ -42,12 +42,16 @@ describe('LoginPage', () => {
     expect(navigateSpy).toHaveBeenCalledWith('/branch/attention');
   });
 
-  it('falls back to the placeholder when that role has no page yet', async () => {
+  it('routes to Access Denied when that landing page key is unrecognized', async () => {
     const authStoreStub = configure();
     // Every role that has since gained a real home (Team Leader,
     // Inventory, Data Analyst) stopped being a valid example here the
     // moment its own phase built one -- an unrecognized landing page key
     // is the only thing this test can still assert against.
+    //
+    // `landingRouteFor` (identity/landing.ts) treats an unrecognized key
+    // as an access boundary, not a guessable role fallback, so it now
+    // resolves to /access-denied rather than the generic home shell.
     authStoreStub.login.mockResolvedValue({ landingPage: 'not-yet-built-home' } as unknown as SessionContext);
     const fixture = TestBed.createComponent(LoginPage);
     fixture.detectChanges();
@@ -56,7 +60,7 @@ describe('LoginPage', () => {
     fixture.componentInstance['form'].setValue({ email: 'stores@example.com', password: 'secret123' });
     await fixture.componentInstance.submit();
 
-    expect(navigateSpy).toHaveBeenCalledWith('/');
+    expect(navigateSpy).toHaveBeenCalledWith('/access-denied');
   });
 
   it('navigates to redirectTo when the guard sent one along', async () => {
