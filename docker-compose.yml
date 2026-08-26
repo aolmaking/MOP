@@ -4,10 +4,22 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    # Stated, not inherited. Every timestamp column is `timestamp without
+    # time zone` and 64 of them carry `@default(now())`, which Postgres
+    # casts into such a column through the *session* timezone -- so on a
+    # non-UTC server those land in local time while values the application
+    # writes land in UTC, and every duration and date bucket that mixes
+    # them is out by the offset, silently. This image already defaults to
+    # UTC, so today this changes nothing; it is here so a future image, a
+    # managed instance, or a local install cannot quietly change it.
+    # `pnpm run doctor` fails when the server disagrees.
+    command: postgres -c timezone=UTC -c log_timezone=UTC
     environment:
       POSTGRES_USER: mop_dev
       POSTGRES_PASSWORD: mop_dev_secret
       POSTGRES_DB: mop_platform_dev
+      TZ: UTC
+      PGTZ: UTC
     ports:
       - "5432:5432"
     volumes:

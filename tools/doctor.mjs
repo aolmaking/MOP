@@ -14,7 +14,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { createConnection } from "node:net";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -197,11 +197,20 @@ function parsePort(url) {
   return match ? Number(match[1]) : 5432;
 }
 
-function checkPostgres() {
+/**
+ * The root `.env` is the fallback, never the override -- the same rule
+ * tools/with-env.mjs follows, because Prisma resolves `.env` relative to the
+ * schema file rather than the repo root and a CI-set variable must win.
+ */
+function databaseUrl() {
+  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
   const envPath = join(ROOT, ".env");
-  const url = existsSync(envPath)
-    ? (/^\s*DATABASE_URL\s*=\s*"?([^"\n]+)"?/m.exec(readFileSync(envPath, "utf8"))?.[1] ?? "")
-    : "";
+  if (!existsSync(envPath)) return "";
+  return /^\s*DATABASE_URL\s*=\s*"?([^"\n]+)"?/m.exec(readFileSync(envPath, "utf8"))?.[1] ?? "";
+}
+
+function checkPostgres() {
+  const url = databaseUrl();
   const port = parsePort(url);
 
   return new Promise((resolve) => {
@@ -219,6 +228,71 @@ function checkPostgres() {
   });
 }
 
+// --- Postgres timezone ------------------------------------------------------
+/**
+ * Which clock the database answers in, not just whether it answers.
+ *
+ * Every timestamp column in the schema is `timestamp without time zone`,
+ * and 64 of them carry `@default(now())`. Postgres casts `CURRENT_TIMESTAMP`
+ * into such a column *through the session timezone*, so on a non-UTC server
+ * database-defaulted values land in local time while values the application
+ * writes land in UTC. Anything that subtracts one from the other -- a wait
+ * duration, an SLA overrun, a session expiry, a daily revenue bucket -- is
+ * then wrong by exactly the server's offset, quietly.
+ *
+ * `postgres:16-alpine` happens to default to UTC, so the documented
+ * environment is accidentally correct and this never shows up in Docker.
+ * A cluster installed straight onto a machine inherits the host's zone: the
+ * first fleet cluster came up as Africa/Cairo and six integration tests
+ * failed, two of them short by exactly three hours.
+ *
+ * The dynamic import is deliberate. This file is dependency-free so it can
+ * run when the workspace install is what's broken -- and it stays that way:
+ * if the client is missing or unloadable, this degrades to a warning and
+ * every other check still runs.
+ */
+async function checkPostgresTimezone() {
+  const clientDir = join(ROOT, "packages", "database", "generated", "client");
+  if (!existsSync(clientDir)) {
+    warn("Postgres timezone", "not checked -- Prisma client is not generated", "Run: corepack pnpm db:generate");
+    return;
+  }
+
+  let prisma;
+  try {
+    const { PrismaClient } = await import(pathToFileURL(join(clientDir, "default.js")).href);
+    const url = databaseUrl();
+    if (!url) {
+      warn("Postgres timezone", "not checked -- no DATABASE_URL to connect with");
+      return;
+    }
+    // Passed explicitly rather than through process.env: doctor reads .env,
+    // it does not import it into its own environment, and Prisma resolves
+    // env("DATABASE_URL") against the real process environment only.
+    prisma = new PrismaClient({ datasources: { db: { url } } });
+    const rows = await prisma.$queryRawUnsafe("SHOW TimeZone");
+    const zone = String(rows?.[0]?.TimeZone ?? rows?.[0]?.timezone ?? "").trim();
+
+    if (zone.toUpperCase() === "UTC") {
+      pass("Postgres timezone", "UTC");
+    } else {
+      fail(
+        "Postgres timezone",
+        `server is on ${zone}, not UTC -- @default(now()) values land in ${zone} while values the app writes land in UTC, so every duration and date bucket that mixes them is silently out by that offset`,
+        "docker: add `command: postgres -c timezone=UTC`. Local install: set timezone = 'UTC' in postgresql.conf and reload.",
+      );
+    }
+  } catch (error) {
+    warn("Postgres timezone", `not checked -- ${error?.message ?? error}`);
+  } finally {
+    try {
+      await prisma?.$disconnect();
+    } catch {
+      // Disconnect failing tells us nothing the check above did not.
+    }
+  }
+}
+
 // --- Report -----------------------------------------------------------------
 async function main() {
   checkNode();
@@ -228,6 +302,7 @@ async function main() {
   checkGitignore();
   checkGitOwnership();
   await checkPostgres();
+  await checkPostgresTimezone();
 
   const icon = { PASS: "  ok  ", WARN: " warn ", FAIL: " FAIL " };
   console.log("\nMOP environment check\n");
