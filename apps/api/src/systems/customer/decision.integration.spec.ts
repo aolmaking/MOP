@@ -20,17 +20,22 @@ import { CustomerSafeProjectionService } from "../operations/customer-safe-proje
 import { AuditService } from "../../audit/audit.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
+import { GateEvaluatorService } from "../operations/gate-evaluator.service";
+import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
 import type { PrismaService } from "../../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
 const audit = new AuditService(asService);
 const policies = new PolicyResolutionService(asService, audit, new CapabilityResolutionService(asService));
-const decisions = new CustomerDecisionService(
+const lifecycle = new WorkOrderLifecycleService(
   asService,
+  new CapabilityResolutionService(asService),
   new OperationEventsService(asService, audit, new CustomerSafeProjectionService()),
+  new GateEvaluatorService(asService, policies),
   policies,
 );
+const decisions = new CustomerDecisionService(asService, new OperationEventsService(asService, audit, new CustomerSafeProjectionService()), policies, lifecycle);
 
 const SUFFIX = `dec-${Date.now()}`;
 let tenantId: string;

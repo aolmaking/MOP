@@ -239,6 +239,14 @@ export class TechnicianWorkService {
     return this.lifecycle.apply(workOrderId, "FINISH", actor);
   }
 
+  async startInspection(workOrderId: string, actor: LifecycleActor) {
+    return this.lifecycle.apply(workOrderId, "START_INSPECTION", actor);
+  }
+
+  async startWork(workOrderId: string, actor: LifecycleActor) {
+    return this.lifecycle.apply(workOrderId, "START_WORK", actor);
+  }
+
   /**
    * Which catalogued services were actually performed on this job, and by
    * whom.

@@ -5,6 +5,7 @@ import { WORK_ORDER_GRAPH, add } from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
+import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
 
 /** What the public page is allowed to know. Nothing internal appears here. */
 export interface PublicDecisionItem {
@@ -154,6 +155,7 @@ export class CustomerDecisionService {
     private readonly prisma: PrismaService,
     private readonly events: OperationEventsService,
     private readonly policies: PolicyResolutionService,
+    private readonly lifecycle: WorkOrderLifecycleService,
   ) {}
 
   async read(token: string): Promise<PublicDecision> {
@@ -342,7 +344,7 @@ export class CustomerDecisionService {
     const total = add(item.price, laborPrice);
     const secureToken = randomBytes(24).toString("hex");
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const request = await tx.customerDecisionRequest.create({
         data: {
           tenantId,
@@ -387,6 +389,22 @@ export class CustomerDecisionService {
 
       return { requestId: request.id, secureToken: request.secureToken };
     });
+
+    // Best-effort work-order move: asking the customer may advance the job
+    // from UNDER_INSPECTION or REGISTERED (when inspection declined) to
+    // AWAITING_CUSTOMER_APPROVAL. Swallowed if the graph does not allow it
+    // from the job's current state — the request itself is the durable fact.
+    try {
+      await this.lifecycle.apply(workOrderId, "REQUEST_APPROVAL", {
+        accountId: actor.accountId,
+        displayName: actor.displayName,
+        actorType: "TENANT_STAFF",
+      });
+    } catch {
+      // Intent not available from current status; request stands alone.
+    }
+
+    return result;
   }
 
   /**
@@ -609,6 +627,27 @@ export class CustomerDecisionService {
         tx,
       );
     });
+
+    // Best-effort lifecycle advances: a resolved approval may move the job
+    // from AWAITING_CUSTOMER_APPROVAL → APPROVED_FOR_WORK (APPROVE) and a
+    // mid-job answer may move WAITING_CUSTOMER → IN_PROGRESS
+    // (CUSTOMER_RESPONDED). Outside the transaction and swallowed if the
+    // graph does not allow it from the job's current state.
+    const lifecycleActor = {
+      accountId: actor.actorId,
+      displayName: actor.actorName,
+      actorType: actor.actorType as "TENANT_STAFF" | "CUSTOMER",
+    };
+    try {
+      await this.lifecycle.apply(request.workOrderId, "APPROVE", lifecycleActor);
+    } catch {
+      // Not available from current status; the answer itself is the durable fact.
+    }
+    try {
+      await this.lifecycle.apply(request.workOrderId, "CUSTOMER_RESPONDED", lifecycleActor);
+    } catch {
+      // Likewise best-effort.
+    }
   }
 
   // --- internals -----------------------------------------------------
