@@ -320,7 +320,7 @@ describe("Walkthrough (real HTTP, real Postgres)", () => {
         status: "ACTIVE",
       },
     });
-    await booted.prisma.staffUser.create({
+    const staffUser = await booted.prisma.staffUser.create({
       data: {
         accountId: account.id,
         tenantId,
@@ -330,6 +330,9 @@ describe("Walkthrough (real HTTP, real Postgres)", () => {
         warehouseScope: [],
         categoryScope: ["CARS"],
       },
+    });
+    await booted.prisma.workOrderAssignment.create({
+      data: { tenantId, workOrderId, staffUserId: staffUser.id },
     });
 
     const session = await loginAs(booted, technicianEmail, MANAGER_PASSWORD);
