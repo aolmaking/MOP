@@ -1,6 +1,13 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { gateDefinition, type GateEvaluation, type GateKey } from "@mop/shared";
+import {
+  PART_REQUEST_GRAPH,
+  canTransition,
+  gateDefinition,
+  type GateEvaluation,
+  type GateKey,
+} from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
+import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 import { WorkOrderLifecycleService } from "../../systems/operations/work-order-lifecycle.service";
 import { AssetHistoryService } from "../../systems/operations/vehicle-history/asset-history.service";
@@ -54,6 +61,35 @@ export interface WorkCardPart {
   readonly waitingOn: "STORE" | "YOU" | "NOBODY";
   /** The one action available to the technician right now, if any. */
   readonly action: "RECEIVE" | "MARK_USED" | null;
+  /**
+   * Whether sending this part back is a move this workshop actually has.
+   *
+   * Asked of the part-request graph under the tenant's own capability
+   * profile rather than compared against a list of statuses here: a
+   * workshop with PART_RETURNS removed has no RETURN_REQUESTED edge at
+   * all, and a hardcoded `status === "RECEIVED_BY_TECHNICIAN"` would put
+   * a button on the tablet that the service layer then refuses. The
+   * button dies with the capability that owns it.
+   */
+  readonly returnable: boolean;
+  /** The store asked a question about the return and is waiting on an answer. */
+  readonly clarificationPending: boolean;
+  /** What they asked, when they asked something. */
+  readonly clarificationQuestion: string | null;
+}
+
+/**
+ * The single lifecycle move a technician can make on the JOB itself
+ * right now -- not on a task, not on a part.
+ *
+ * Derived from `WorkOrderLifecycleService.availableIntents`, which asks
+ * the workshop's effective graph, so a profile that routes around
+ * inspection never offers "Start inspection". The label is written here
+ * because it is technician-facing wording, not a graph fact.
+ */
+export interface WorkCardPrimaryAction {
+  readonly intent: "START_INSPECTION" | "START_WORK";
+  readonly label: string;
 }
 
 export interface WorkCard {
@@ -67,6 +103,8 @@ export interface WorkCard {
   readonly tasks: readonly TechnicianTask[];
   readonly parts: readonly WorkCardPart[];
   readonly finish: FinishCheck;
+  /** Null when the job is not waiting on a move only this technician can make. */
+  readonly primaryAction: WorkCardPrimaryAction | null;
 }
 
 /**
@@ -121,6 +159,7 @@ export class TechnicianWorkViewService {
     private readonly lifecycle: WorkOrderLifecycleService,
     private readonly assetHistory: AssetHistoryService,
     private readonly policies: PolicyResolutionService,
+    private readonly capabilities: CapabilityResolutionService,
   ) {}
 
   async myWork(staffUserId: string, tenantId: string): Promise<readonly TechnicianJob[]> {
@@ -228,9 +267,11 @@ export class TechnicianWorkViewService {
       throw new NotFoundException({ code: "work_order_not_found", message: "That job is not assigned to you." });
     }
 
-    const [complaints, timeTracking] = await Promise.all([
+    const [complaints, timeTracking, profile, intents] = await Promise.all([
       this.assetHistory.complaintText(tenantId, [workOrder.id]),
       this.policies.resolveValue(tenantId, "TIME_TRACKING") as Promise<"OFF" | "OPTIONAL" | "REQUIRED">,
+      this.capabilities.resolveCurrent(tenantId),
+      this.lifecycle.availableIntents(workOrder.id),
     ]);
 
     // Every part request on the job, not only this technician's own:
@@ -245,6 +286,11 @@ export class TechnicianWorkViewService {
         status: true,
         inventoryItem: { select: { name: true, sku: true } },
         issuedItems: { select: { quantity: true } },
+        // The question the store asked, read from the return request
+        // itself. Without it the card can say "they asked you
+        // something" and never say what, which is a prompt a technician
+        // cannot answer.
+        returnRequest: { select: { clarificationQuestion: true } },
       },
       orderBy: { createdAt: "asc" },
     });
@@ -281,9 +327,13 @@ export class TechnicianWorkViewService {
           statusText: state.text,
           waitingOn: state.waitingOn,
           action: state.action,
+          returnable: canTransition(PART_REQUEST_GRAPH, profile, request.status, "RETURN_REQUESTED"),
+          clarificationPending: request.status === "RETURN_CLARIFICATION_REQUESTED",
+          clarificationQuestion: request.returnRequest?.clarificationQuestion ?? null,
         };
       }),
       finish: await this.finishCheck(workOrderId),
+      primaryAction: primaryActionFor(intents),
     };
   }
 
@@ -347,6 +397,29 @@ export class TechnicianWorkViewService {
       })),
     };
   }
+}
+
+/**
+ * The one job-level move to put in front of the technician, in the
+ * technician's words.
+ *
+ * Only the two intents a technician has a door for. `availableIntents`
+ * also returns moves that belong to other people (a manager's review
+ * decision, the store's part hand-over), and offering those here would
+ * put a button on the tablet that the controller's own permission check
+ * then refuses -- a dead button, which is the thing the surface sweep
+ * exists to eliminate.
+ *
+ * At most one of the two is ever live: they leave from different
+ * statuses (REGISTERED and APPROVED_FOR_WORK). The order below is
+ * therefore a tie-break that never fires, kept explicit so a future
+ * graph change picks the earlier stage rather than whichever the Set
+ * happened to yield first.
+ */
+function primaryActionFor(intents: readonly string[]): WorkCardPrimaryAction | null {
+  if (intents.includes("START_INSPECTION")) return { intent: "START_INSPECTION", label: "Start inspection" };
+  if (intents.includes("START_WORK")) return { intent: "START_WORK", label: "Start work" };
+  return null;
 }
 
 /**

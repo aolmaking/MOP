@@ -423,6 +423,41 @@ export class BranchManagerController {
     }, { reason: dto.note });
   }
 
+  /**
+   * The manager's explicit door to "ask the customer".
+   *
+   * A technician reaches the same transition implicitly, as a side
+   * effect of raising a priced recommendation (CONTRACTS-v0 C5). This
+   * endpoint exists because the manager's case is different: the
+   * recommendation may already have been raised and sent, and the job
+   * still be sitting in UNDER_INSPECTION because nobody moved it. The
+   * intent is named rather than derived -- unlike `advance`, there is
+   * exactly one thing "request approval" can mean -- and the graph is
+   * still the one that decides whether it is available, so a workshop
+   * whose policy has no REQUEST_APPROVAL edge from here refuses it with
+   * its own words rather than this controller inventing a rule.
+   */
+  @Post("work-orders/:id/request-approval")
+  @HttpCode(200)
+  async requestApproval(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    await this.requireBranchView(session);
+    // Scope check first, so this cannot be used to move a job in a
+    // branch the manager cannot see -- `detail` is what applies the
+    // session's branch scope.
+    await this.boardService.detail(
+      { tenantId: session.tenantId as string, branchScope: session.branchScope },
+      id,
+    );
+
+    const result = await this.lifecycle.apply(id, "REQUEST_APPROVAL", {
+      accountId: session.accountId,
+      displayName: session.displayName,
+      actorType: "TENANT_STAFF",
+    });
+
+    return { workOrderId: result.workOrderId, status: result.to };
+  }
+
   @Post("work-orders/:id/tasks")
   async createTask(
     @CurrentSession() session: SessionContext,
