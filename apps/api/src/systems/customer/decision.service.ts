@@ -461,7 +461,17 @@ export class CustomerDecisionService {
   }
 
   async cancel(tenantId: string, branchScope: readonly string[], requestId: string, actor: StaffActor): Promise<void> {
-    const request = await this.resolveById(tenantId, branchScope, requestId);
+    const request = await this.prisma.customerDecisionRequest.findFirst({
+      where: {
+        id: requestId,
+        tenantId,
+        workOrder: branchScope.length > 0 ? { branchId: { in: [...branchScope] } } : {},
+      },
+      select: DECISION_SELECT,
+    });
+    if (!request) {
+      throw new NotFoundException({ code: "decision_not_found", message: "That decision request was not found." });
+    }
     if (["RESOLVED", "EXPIRED", "CANCELLED"].includes(request.status)) {
       throw new ConflictException({ code: "decision_already_final", message: "That decision is already final and cannot be cancelled." });
     }
