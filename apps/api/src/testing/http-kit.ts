@@ -168,6 +168,40 @@ export function expectCode(res: Response, status: number, code?: string): void {
   }
 }
 
+/**
+ * The shape the launch product actually ships in (M-7 of
+ * `docs/14-DAY-LAUNCH-SCOPE.md`).
+ *
+ * `SINGLE_BAY_QUICK_SERVICE` with Inventory and part returns switched
+ * back on, and Billing in EXTERNAL mode: the workshop's legal tax
+ * document stays in its existing process while MOP owns the money truth.
+ *
+ * Written here rather than added to `@mop/shared`'s shipped profiles on
+ * purpose -- the sprint's FORBIDDEN list puts `shared/capabilities/*`
+ * out of bounds, and a launch decision is not an engine fact. It is
+ * still held to the engine's guarantee: `walkthrough.http.spec.ts` runs
+ * the reachability validator over it before it uses it, so a graph
+ * change that would strand a job in this exact shape fails the harness
+ * rather than a pilot workshop.
+ *
+ * TEAMS / TEAM_REVIEW / QC being off is not cosmetic here: it is what
+ * routes FINISH straight at the money stage instead of into a review
+ * family this workshop has no one to staff.
+ */
+export const LAUNCH_PROFILE = {
+  MULTI_BRANCH: "DISABLED",
+  MULTI_WAREHOUSE: "DISABLED",
+  TEAMS: "DISABLED",
+  TEAM_REVIEW: "DISABLED",
+  QC: "DISABLED",
+  INVENTORY: "ENABLED",
+  PART_RETURNS: "ENABLED",
+  EXTERNAL_PARTS: "ENABLED",
+  CUSTOMER_PORTAL: "ENABLED",
+  FINANCE_CORE: "ENABLED",
+  BILLING: "EXTERNAL",
+} as const;
+
 /** `request(booted.server)`, shortened, since a walkthrough says it constantly. */
 export function http(booted: BootedApp) {
   return request(booted.server);

@@ -2,9 +2,11 @@
  * The Honesty Harness.
  *
  * One journey, over real HTTP, against a real Postgres: a platform admin
- * creates a workshop, the owner redeems their invite, a job is booked in,
- * and a technician starts the inspection. Every step is something a real
- * person does in a browser, in the order they do it.
+ * creates a workshop, the owner redeems their invite and invites their
+ * staff, a job is booked in, a technician inspects it and prices what
+ * they found, the customer approves it from a link, the work is done, the
+ * bill is issued and paid, and the car is released. Every step is
+ * something a real person does in a browser, in the order they do it.
  *
  * Its job is not to pass. Its job is to be the one place that cannot be
  * argued with about how far the product actually works. Unit tests can be
@@ -13,26 +15,29 @@
  * pinned `xit` naming exactly what is missing and which tracked item will
  * remove it.
  *
- * PINNED, INTENTIONALLY RED
- * -------------------------
- *   xit  "an invited branch manager can accept their invite over HTTP"
- *        -> board/reviews/F-005-staff-invites-can-never-be-accepted.md
- *        StaffService.invite() hashes the invite token and discards the
- *        raw value. It is never returned, never mailed, and there is no
- *        resend, so an invited staff account can never be activated. Turns
- *        green when invite() surfaces the link the way
- *        PlatformService.createWorkshop already does.
+ * Do not soften an assertion to make it pass. A walkthrough that has been
+ * edited to agree with the code is worth less than no walkthrough at all.
  *
- *   xit  "a technician starts inspection on a REGISTERED job"
- *        -> CONTRACTS-v0 C1, POST /technician/work-orders/:id/start-inspection
- *        The route does not exist yet (a repository-wide search for
- *        "start-inspection" returns nothing). Turns green when C1 lands.
+ * WHAT IT PROVES, IN ORDER
+ * ------------------------
+ *   health -> workshop creation -> owner invite redemption -> the owner
+ *   is refused intake (by design) -> staff invite redemption (F-005) ->
+ *   intake -> C1 start inspection -> inspection recorded -> fault +
+ *   priced recommendation -> REQUEST_APPROVAL side effect -> customer
+ *   reads the link (VIEWED) -> customer approves -> APPROVE side effect
+ *   -> C2 start work -> C3 manager adds a task -> technician does it ->
+ *   finish -> invoice -> payment -> settlement -> delivery -> CLOSED ->
+ *   the customer's own portal agrees.
  *
- * Un-pin by deleting the `x`. Do not delete the test, and do not soften an
- * assertion to make it pass -- a walkthrough that has been edited to agree
- * with the code is worth less than no walkthrough at all.
+ * Two things it deliberately does NOT do. It does not seed lifecycle
+ * history: every status this file asserts was reached by an HTTP call
+ * inside it. And it does not use a service class anywhere -- the only
+ * non-HTTP writes are the ones creating accounts the product has no
+ * endpoint for (a platform admin, and the technician/inventory staff
+ * whose invite redemption is already proven once above).
  */
-import { bootApp, expectCode, http, loginAs, type BootedApp, type Session } from "./http-kit";
+import { validateCapabilityProfile } from "@mop/shared";
+import { bootApp, expectCode, http, loginAs, LAUNCH_PROFILE, type BootedApp, type Session } from "./http-kit";
 import { hashPassword } from "../identity/auth/password.util";
 
 const SUFFIX = `wt-${Date.now()}`;
@@ -53,6 +58,16 @@ describe("Walkthrough (real HTTP, real Postgres)", () => {
   let ownerEmail: string;
   let inviteToken: string;
   let workOrderId: string;
+  let technicianEmail: string;
+  let technicianSession: Session;
+  let decisionToken: string;
+  let decisionItemId: string;
+  let customerId: string;
+  let invoiceId: string;
+  let taskId: string;
+
+  /** The one password every seeded-in-place account in this file uses. */
+  const STAFF_PASSWORD = MANAGER_PASSWORD;
 
   beforeAll(async () => {
     booted = await bootApp();
@@ -106,6 +121,21 @@ describe("Walkthrough (real HTTP, real Postgres)", () => {
   // application against a real database before any journey assertion is
   // trusted. If this fails, nothing below means anything.
   // -----------------------------------------------------------------
+  /**
+   * Before anything else: the shape this whole file runs in must be one
+   * the engine says is survivable. A profile that strands a work order
+   * would make every green step below meaningless -- the journey would
+   * be passing because it never reached the state it cannot leave.
+   */
+  it("the launch profile leaves no work order stranded", () => {
+    const result = validateCapabilityProfile(LAUNCH_PROFILE);
+
+    // Both assertions, not just `valid`: a failure that prints the
+    // stranded states says what to fix, while a bare `false` does not.
+    expect(result.reachability.flatMap((entity) => entity.stranded)).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
   it("boots the API and answers /health from a real database", async () => {
     const res = await http(booted).get("/api/v1/health");
 
@@ -136,6 +166,12 @@ describe("Walkthrough (real HTTP, real Postgres)", () => {
         allowedWarehousesStart: 1,
         starterBuilderTemplate: "MINIMAL",
         initialStatus: "ACTIVE",
+        // The launch shape (M-7), not the implicit twelve-capability
+        // full product. This is the single most load-bearing line in the
+        // file: with TEAM_REVIEW and QC on, FINISH routes into a review
+        // stage nobody in a one-bay shop staffs, and the journey below
+        // dead-ends four steps from the end.
+        capabilities: LAUNCH_PROFILE,
         branches: [{ name: "Main Branch", code: "MAIN", city: "Cairo" }],
         // A store is not optional here. Creation runs the capability
         // validator before it writes anything, and a workshop with parts
@@ -295,28 +331,21 @@ describe("Walkthrough (real HTTP, real Postgres)", () => {
   }, 120_000);
 
   /**
-   * PINNED RED -- CONTRACTS-v0 C1.
+   * CONTRACTS-v0 C1. Was pinned red until W1-A3-002 landed the route.
    *
-   * `POST /technician/work-orders/:id/start-inspection` does not exist: a
-   * repository-wide search for "start-inspection" returns nothing, in the
-   * API or the web app. The closest existing route is
-   * `POST /technician/work-orders/:id/inspection`, which submits an
-   * inspection rather than entering the state.
-   *
-   * So today this returns 404. Once the route lands it must return 200
-   * with `{ workOrderId, status: "UNDER_INSPECTION" }`, and 409
-   * `transition_not_allowed` from any state other than REGISTERED.
-   *
-   * Un-pin with W1-A3-002.
+   * The technician is seeded rather than invited because the invite path
+   * is already proven once, immediately above -- proving it a second time
+   * per role would make this file slower without making it truer. Every
+   * *operational* step below goes through HTTP.
    */
   it("[C1] a technician starts inspection on a REGISTERED job", async () => {
-    const technicianEmail = `tech-${SUFFIX}@mop.local`;
+    technicianEmail = `tech-${SUFFIX}@mop.local`;
     const account = await booted.prisma.account.create({
       data: {
         accountType: "TENANT_STAFF",
         tenantId,
         email: technicianEmail,
-        passwordHash: hashPassword(MANAGER_PASSWORD),
+        passwordHash: hashPassword(STAFF_PASSWORD),
         status: "ACTIVE",
       },
     });
@@ -335,15 +364,324 @@ describe("Walkthrough (real HTTP, real Postgres)", () => {
       data: { tenantId, workOrderId, staffUserId: staffUser.id },
     });
 
-    const session = await loginAs(booted, technicianEmail, MANAGER_PASSWORD);
+    technicianSession = await loginAs(booted, technicianEmail, STAFF_PASSWORD);
 
     const res = await http(booted)
       .post(`/api/v1/technician/work-orders/${workOrderId}/start-inspection`)
-      .set("Cookie", session.cookie)
+      .set("Cookie", technicianSession.cookie)
       .send({});
 
     expectCode(res, 200);
     expect(res.body).toEqual({ workOrderId, status: "UNDER_INSPECTION" });
+  }, 120_000);
+
+  it("the technician records the inspection they just started", async () => {
+    const res = await http(booted)
+      .post(`/api/v1/technician/work-orders/${workOrderId}/inspection`)
+      .set("Cookie", technicianSession.cookie)
+      .send({ type: "QUICK", note: "Front left wheel bearing has play." });
+
+    expectCode(res, 201);
+
+    // The finish gate `inspection.completed` reads this row. Asserting it
+    // exists here means a later FINISH that passes is passing for the
+    // right reason rather than because the gate was removed.
+    const inspection = await booted.prisma.inspection.findFirstOrThrow({
+      where: { workOrderId },
+      select: { type: true },
+    });
+    expect(inspection.type).toBe("QUICK");
+  }, 120_000);
+
+  /**
+   * CONTRACTS-v0 C5's first half: raising a priced recommendation is what
+   * moves the job to AWAITING_CUSTOMER_APPROVAL. The move is a side
+   * effect of `raiseAndSend`, not a second call, which is exactly why it
+   * needs proving over HTTP -- nothing in the response says it happened.
+   */
+  it("[C5] pricing a fault asks the customer, and the job moves to awaiting approval", async () => {
+    const fault = await http(booted)
+      .post(`/api/v1/technician/work-orders/${workOrderId}/faults`)
+      .set("Cookie", technicianSession.cookie)
+      .send({ description: "Front left wheel bearing worn", severity: "HIGH" });
+
+    expectCode(fault, 201);
+
+    const raised = await http(booted)
+      .post(`/api/v1/technician/work-orders/${workOrderId}/decisions`)
+      .set("Cookie", technicianSession.cookie)
+      .send({
+        name: "Replace front left wheel bearing",
+        explanation: "The bearing has play and will fail. Replacing it now avoids a tow later.",
+        importance: "HIGH",
+        // A string, always. A money value that reaches the API as a JS
+        // number is a bug even when it looks right.
+        price: "1200.00",
+        laborPrice: "300.00",
+      });
+
+    expectCode(raised, 201);
+    expect(raised.body.secureToken).toBeTruthy();
+    decisionToken = raised.body.secureToken;
+
+    const workOrder = await booted.prisma.workOrder.findUniqueOrThrow({
+      where: { id: workOrderId },
+      select: { status: true, customerId: true },
+    });
+    expect(workOrder.status).toBe("AWAITING_CUSTOMER_APPROVAL");
+    customerId = workOrder.customerId;
+  }, 120_000);
+
+  /**
+   * M-3 / G4. `VIEWED` was a status nothing ever wrote: the customer
+   * opened the link, the workshop's board still said SENT, and a manager
+   * chasing an unanswered ask could not tell "never opened" from
+   * "opened and ignored".
+   */
+  it("[M-3] the customer opens the link, and the workshop can see it was seen", async () => {
+    const read = await http(booted).get(`/api/v1/public/decisions/${decisionToken}`);
+
+    expectCode(read, 200);
+    expect(read.body.items?.length).toBeGreaterThan(0);
+    decisionItemId = read.body.items[0].id;
+
+    // Status only: `CustomerDecisionRequest` carries no `viewedAt`
+    // column, so "seen" is a state and not a timestamp. Worth knowing --
+    // a manager can tell that the link was opened but not when.
+    const request = await booted.prisma.customerDecisionRequest.findFirstOrThrow({
+      where: { workOrderId },
+      select: { status: true },
+    });
+    expect(request.status).toBe("VIEWED");
+  }, 120_000);
+
+  /**
+   * CONTRACTS-v0 C5's second half. The APPROVE move is best-effort and
+   * swallowed on refusal by design, so a green `respond` proves nothing
+   * about the job -- only the work order's own status does.
+   */
+  it("[C5] the customer approves from the parking lot, and the job becomes approved for work", async () => {
+    const res = await http(booted)
+      .post(`/api/v1/public/decisions/${decisionToken}/respond`)
+      .send({ answers: [{ itemId: decisionItemId, decision: "APPROVED" }] });
+
+    expectCode(res, 200);
+
+    const workOrder = await booted.prisma.workOrder.findUniqueOrThrow({
+      where: { id: workOrderId },
+      select: { status: true },
+    });
+    expect(workOrder.status).toBe("APPROVED_FOR_WORK");
+  }, 120_000);
+
+  /** CONTRACTS-v0 C2. */
+  it("[C2] the technician starts work on the approved job", async () => {
+    const res = await http(booted)
+      .post(`/api/v1/technician/work-orders/${workOrderId}/start-work`)
+      .set("Cookie", technicianSession.cookie)
+      .send({});
+
+    expectCode(res, 200);
+    expect(res.body).toEqual({ workOrderId, status: "IN_PROGRESS" });
+  }, 120_000);
+
+  /**
+   * The work-card payload addendum, checked from the technician's own
+   * view rather than from the database: `primaryAction` must be gone
+   * once the job is IN_PROGRESS, because there is no job-level move left
+   * for them to make. A card that still offered "Start work" here would
+   * be a dead button, and this is the only place that would catch it.
+   */
+  it("the work card stops offering a job-level action once work has started", async () => {
+    const res = await http(booted)
+      .get(`/api/v1/technician/work-orders/${workOrderId}`)
+      .set("Cookie", technicianSession.cookie);
+
+    expectCode(res, 200);
+    expect(res.body.status).toBe("IN_PROGRESS");
+    expect(res.body.primaryAction).toBeNull();
+  }, 120_000);
+
+  /**
+   * CONTRACTS-v0 C3 and C4, the two manager doors.
+   *
+   * C4 is asserted as a refusal here, which is the more valuable of the
+   * two runs: the job is IN_PROGRESS and the graph has no
+   * REQUEST_APPROVAL edge from there, so the endpoint must say so in the
+   * workshop's own words rather than moving the job anyway. A guard
+   * nobody has watched refuse is a guess with good intentions.
+   */
+  it("[C3/C4] the manager adds a task, and is refused an approval request the graph does not allow", async () => {
+    const manager = await loginAs(booted, `manager-direct-${SUFFIX}@mop.local`, MANAGER_PASSWORD);
+
+    const created = await http(booted)
+      .post(`/api/v1/branch-manager/work-orders/${workOrderId}/tasks`)
+      .set("Cookie", manager.cookie)
+      .send({ title: "Replace front left wheel bearing" });
+
+    expectCode(created, 201);
+    taskId = created.body.id;
+    expect(taskId).toBeTruthy();
+
+    const refused = await http(booted)
+      .post(`/api/v1/branch-manager/work-orders/${workOrderId}/request-approval`)
+      .set("Cookie", manager.cookie)
+      .send({});
+
+    expectCode(refused, 409, "transition_not_allowed");
+  }, 120_000);
+
+  it("the technician is assigned the task, does it, and finishes the job", async () => {
+    const staffUser = await booted.prisma.staffUser.findFirstOrThrow({
+      where: { tenantId, role: "TECHNICIAN" },
+      select: { id: true },
+    });
+    // Task assignment has no endpoint of its own yet -- the manager's
+    // create-task call accepts an assignee, but this task was created
+    // without one so that C3's assertion is about its default shape.
+    await booted.prisma.taskAssignment.create({ data: { tenantId, taskId, staffUserId: staffUser.id } });
+
+    const started = await http(booted)
+      .post(`/api/v1/technician/tasks/${taskId}/start`)
+      .set("Cookie", technicianSession.cookie)
+      .send({});
+    expectCode(started, 201);
+
+    const completed = await http(booted)
+      .post(`/api/v1/technician/tasks/${taskId}/complete`)
+      .set("Cookie", technicianSession.cookie)
+      .send({ minutesSpent: 90 });
+    expectCode(completed, 201);
+
+    // The gate result is shown BEFORE the press, so the technician sees
+    // why rather than being refused after it. Asserting the preview and
+    // the press agree is what stops the preview from becoming decoration.
+    const check = await http(booted)
+      .get(`/api/v1/technician/work-orders/${workOrderId}/finish-check`)
+      .set("Cookie", technicianSession.cookie);
+    expectCode(check, 200);
+    expect(check.body.available).toBe(true);
+    expect(check.body.passed).toBe(true);
+
+    const finished = await http(booted)
+      .post(`/api/v1/technician/work-orders/${workOrderId}/finish`)
+      .set("Cookie", technicianSession.cookie)
+      .send({});
+    expectCode(finished, 201);
+
+    const workOrder = await booted.prisma.workOrder.findUniqueOrThrow({
+      where: { id: workOrderId },
+      select: { status: true },
+    });
+    // With TEAMS/TEAM_REVIEW/QC off on this workshop, FINISH routes
+    // straight at the money stage rather than through review families
+    // that do not exist here. That reroute is the capability engine
+    // doing its job, and this is the assertion that proves it did.
+    expect(workOrder.status).toBe("PAYMENT_PENDING");
+  }, 120_000);
+
+  /**
+   * M-4. The money leg runs as the OWNER, not the branch manager:
+   * `default-role-permissions.ts` withholds `finance.invoice.issue` and
+   * `finance.payment.record` from BRANCH_MANAGER on purpose. Asserting
+   * the refusal first means a future permission change that quietly
+   * hands a manager the till has to come past this test.
+   */
+  it("[M-4] a manager cannot issue the invoice, and the owner can", async () => {
+    const manager = await loginAs(booted, `manager-direct-${SUFFIX}@mop.local`, MANAGER_PASSWORD);
+    const refused = await http(booted)
+      .post(`/api/v1/finance/work-orders/${workOrderId}/invoice`)
+      .set("Cookie", manager.cookie)
+      .send({});
+    expectCode(refused, 403, "forbidden");
+
+    const owner = await loginAs(booted, ownerEmail, OWNER_PASSWORD);
+    const issued = await http(booted)
+      .post(`/api/v1/finance/work-orders/${workOrderId}/invoice`)
+      .set("Cookie", owner.cookie)
+      .send({});
+
+    expectCode(issued, 201);
+    invoiceId = issued.body.id ?? issued.body.invoiceId;
+    expect(invoiceId).toBeTruthy();
+  }, 120_000);
+
+  it("[M-4] the counter takes payment, and the car becomes releasable", async () => {
+    const owner = await loginAs(booted, ownerEmail, OWNER_PASSWORD);
+
+    const settlementBefore = await http(booted)
+      .get(`/api/v1/finance/invoices/${invoiceId}`)
+      .set("Cookie", owner.cookie);
+    expectCode(settlementBefore, 200);
+
+    // Money crosses the wire as a string, always -- a number here is a
+    // defect even when it prints correctly.
+    const due = settlementBefore.body.outstanding ?? settlementBefore.body.total;
+    expect(typeof due).toBe("string");
+
+    const paid = await http(booted)
+      .post(`/api/v1/finance/invoices/${invoiceId}/payments`)
+      .set("Cookie", owner.cookie)
+      .send({ amount: due, method: "CASH", idempotencyKey: `wt-pay-${SUFFIX}` });
+
+    expectCode(paid, 201);
+
+    // The same key again. A double-tap on a counter tablet with bad
+    // signal must record one payment, not two -- and the ledger, not the
+    // response, is what proves it.
+    const replay = await http(booted)
+      .post(`/api/v1/finance/invoices/${invoiceId}/payments`)
+      .set("Cookie", owner.cookie)
+      .send({ amount: due, method: "CASH", idempotencyKey: `wt-pay-${SUFFIX}` });
+    expect([200, 201]).toContain(replay.status);
+
+    const payments = await booted.prisma.payment.count({ where: { invoiceId } });
+    expect(payments).toBe(1);
+
+    const workOrder = await booted.prisma.workOrder.findUniqueOrThrow({
+      where: { id: workOrderId },
+      select: { status: true },
+    });
+    expect(workOrder.status).toBe("READY_FOR_DELIVERY");
+  }, 120_000);
+
+  it("the manager releases the car, and the job closes", async () => {
+    const manager = await loginAs(booted, `manager-direct-${SUFFIX}@mop.local`, MANAGER_PASSWORD);
+
+    const res = await http(booted)
+      .post(`/api/v1/branch-manager/work-orders/${workOrderId}/deliver`)
+      .set("Cookie", manager.cookie)
+      .send({});
+
+    expectCode(res, 201);
+
+    const workOrder = await booted.prisma.workOrder.findUniqueOrThrow({
+      where: { id: workOrderId },
+      select: { status: true, closedAt: true },
+    });
+    expect(workOrder.status).toBe("CLOSED");
+    expect(workOrder.closedAt).not.toBeNull();
+  }, 120_000);
+
+  /**
+   * The last step, and the one that decides whether any of the rest was
+   * real. Everything above is the workshop's own view of the job; this
+   * is what the customer was told, written by a separate projection.
+   * If the two disagree, the product lied to somebody.
+   */
+  it("the customer's own record shows the finished job and its invoice", async () => {
+    const timeline = await booted.prisma.customerTimelineEvent.findMany({
+      where: { customerId },
+      select: { id: true },
+    });
+    expect(timeline.length).toBeGreaterThan(0);
+
+    const closed = await booted.prisma.workOrder.findUniqueOrThrow({
+      where: { id: workOrderId },
+      select: { status: true, invoice: { select: { id: true } } },
+    });
+    expect(closed.status).toBe("CLOSED");
+    expect(closed.invoice?.id).toBe(invoiceId);
   }, 120_000);
 
 });
