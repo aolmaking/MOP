@@ -61,3 +61,19 @@ export class CreateFaultDto {
   @IsEnum(SeverityLevel)
   severity!: SeverityLevel;
 }
+
+export class RequestReturnDto {
+  @IsInt()
+  @Min(1)
+  quantity!: number;
+
+  @IsString()
+  @Length(3, 500)
+  reason!: string;
+}
+
+export class ClarificationDto {
+  @IsString()
+  @Length(3, 1000)
+  answer!: string;
+}

@@ -9,7 +9,7 @@ import { TechnicianWorkViewService } from "./technician-work-view.service";
 import { CustomerDecisionService } from "../../systems/customer/decision.service";
 import { PartRequestService } from "../../systems/inventory/part-request.service";
 import { CatalogService } from "../../systems/inventory/catalog.service";
-import { ReportBlockerDto, CreateFaultDto, RequestPartDto, RecordInspectionDto, CompleteTaskDto } from "./technician.dto";
+import { ReportBlockerDto, CreateFaultDto, RequestPartDto, RecordInspectionDto, CompleteTaskDto, RequestReturnDto, ClarificationDto } from "./technician.dto";
 import { RaiseDecisionDto } from "../../systems/customer/decision.dto";
 
 /**
@@ -230,6 +230,26 @@ export class TechnicianController {
   async usePart(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     await this.requirePartOnMyJob(session, id);
     return this.partRequests.markUsed(id, this.actor(session));
+  }
+
+  @Post("parts/:id/return")
+  async requestReturn(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: RequestReturnDto,
+  ) {
+    await this.requirePartOnMyJob(session, id);
+    return this.partRequests.requestReturn(id, dto.quantity, this.actor(session), dto.reason);
+  }
+
+  @Post("parts/:id/clarification")
+  async answerClarification(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: ClarificationDto,
+  ) {
+    await this.requirePartOnMyJob(session, id);
+    return this.partRequests.respondToClarification(id, this.actor(session), dto.answer);
   }
 
   /** What the Finish Gate would say, asked before anything is pressed. */
