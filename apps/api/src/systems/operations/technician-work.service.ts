@@ -247,6 +247,47 @@ export class TechnicianWorkService {
     return this.lifecycle.apply(workOrderId, "START_WORK", actor);
   }
 
+  async addExternalPartLine(
+    workOrderId: string,
+    input: { name: string; provenance: "CUSTOMER_SUPPLIED" | "EXTERNAL_PURCHASE"; quantity?: number },
+    actor: LifecycleActor,
+  ) {
+    const workOrder = await this.requireWorkOrder(workOrderId);
+    const quantity = input.quantity ?? 1;
+    return this.prisma.$transaction(async (tx) => {
+      const line = await tx.workOrderPartLine.create({
+        data: {
+          tenantId: workOrder.tenantId,
+          workOrderId,
+          name: input.name,
+          provenance: input.provenance,
+          quantity,
+          // Customer-supplied: zero cost, not warranted by workshop.
+          // External purchase: cost unknown at this point; sellingPrice set by finance later via catalog? For now zero cost/sellingPrice, finance will snapshot.
+          sellingPrice: 0,
+          cost: null,
+          workshopWarranted: input.provenance === "CUSTOMER_SUPPLIED" ? false : true,
+          addedById: actor.accountId,
+        },
+      });
+      await this.events.emit(
+        {
+          tenantId: workOrder.tenantId,
+          eventKey: "work_order.external_part_added",
+          actorId: actor.accountId,
+          actorName: actor.displayName,
+          actorType: actor.actorType,
+          targetType: "WorkOrderPartLine",
+          targetId: line.id,
+          riskLevel: "LOW",
+          payload: { workOrderId, name: input.name, provenance: input.provenance, quantity },
+        },
+        tx,
+      );
+      return line;
+    });
+  }
+
   /**
    * Which catalogued services were actually performed on this job, and by
    * whom.

@@ -9,7 +9,7 @@ import { TechnicianWorkViewService } from "./technician-work-view.service";
 import { CustomerDecisionService } from "../../systems/customer/decision.service";
 import { PartRequestService } from "../../systems/inventory/part-request.service";
 import { CatalogService } from "../../systems/inventory/catalog.service";
-import { ReportBlockerDto, CreateFaultDto, RequestPartDto, RecordInspectionDto, CompleteTaskDto, RequestReturnDto, ClarificationDto } from "./technician.dto";
+import { ReportBlockerDto, CreateFaultDto, RequestPartDto, RecordInspectionDto, CompleteTaskDto, RequestReturnDto, ClarificationDto, ExternalPartDto } from "./technician.dto";
 import { RaiseDecisionDto } from "../../systems/customer/decision.dto";
 
 /**
@@ -250,6 +250,17 @@ export class TechnicianController {
   ) {
     await this.requirePartOnMyJob(session, id);
     return this.partRequests.respondToClarification(id, this.actor(session), dto.answer);
+  }
+
+  @Post("work-orders/:id/external-parts")
+  async addExternalPart(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: ExternalPartDto,
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "inventory.request.create");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.work.addExternalPartLine(id, dto, this.actor(session));
   }
 
   /** What the Finish Gate would say, asked before anything is pressed. */
