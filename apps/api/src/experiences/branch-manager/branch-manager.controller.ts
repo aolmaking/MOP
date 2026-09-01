@@ -18,6 +18,8 @@ import { AddNoteDto } from "./add-note.dto";
 import { WorkOrderDossierService } from "../../systems/operations/work-order-dossier.service";
 import { WorkflowJourneyService } from "../../systems/operations/workflow-journey.service";
 import { WorkOrderLifecycleService } from "../../systems/operations/work-order-lifecycle.service";
+import { TechnicianWorkService } from "../../systems/operations/technician-work.service";
+import { CreateBranchTaskDto } from "./create-task.dto";
 
 export interface AttentionCenterResponse {
   /** Ranked most urgent first. Empty is a valid and desirable state. */
@@ -43,6 +45,7 @@ export class BranchManagerController {
     private readonly dossierService: WorkOrderDossierService,
     private readonly journey: WorkflowJourneyService,
     private readonly lifecycle: WorkOrderLifecycleService,
+    private readonly techWork: TechnicianWorkService,
   ) {}
 
   /**
@@ -402,6 +405,26 @@ export class BranchManagerController {
       displayName: session.displayName,
       actorType: "TENANT_STAFF",
     }, { reason: dto.note });
+  }
+
+  @Post("work-orders/:id/tasks")
+  async createTask(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: CreateBranchTaskDto,
+  ) {
+    await this.requireBranchView(session);
+    await this.boardService.detail(
+      { tenantId: session.tenantId as string, branchScope: session.branchScope },
+      id,
+    );
+    return this.techWork.createTask(
+      id,
+      dto.title,
+      { accountId: session.accountId, displayName: session.displayName, actorType: "TENANT_STAFF" },
+      dto.assignToStaffUserId,
+      dto.serviceKey,
+    );
   }
 
   private async requireBranchView(session: SessionContext): Promise<void> {

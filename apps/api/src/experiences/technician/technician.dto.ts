@@ -61,3 +61,33 @@ export class CreateFaultDto {
   @IsEnum(SeverityLevel)
   severity!: SeverityLevel;
 }
+
+export class RequestReturnDto {
+  @IsInt()
+  @Min(1)
+  quantity!: number;
+
+  @IsString()
+  @Length(3, 500)
+  reason!: string;
+}
+
+export class ClarificationDto {
+  @IsString()
+  @Length(3, 1000)
+  answer!: string;
+}
+
+export class ExternalPartDto {
+  @IsString()
+  @Length(1, 200)
+  name!: string;
+
+  @IsEnum(["CUSTOMER_SUPPLIED", "EXTERNAL_PURCHASE"] as const)
+  provenance!: "CUSTOMER_SUPPLIED" | "EXTERNAL_PURCHASE";
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  quantity?: number;
+}

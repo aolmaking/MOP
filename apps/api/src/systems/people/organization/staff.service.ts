@@ -93,7 +93,7 @@ export class StaffService {
     };
   }
 
-  async invite(tenantId: string, input: InviteStaffInput, actor: StaffActor): Promise<{ staffId: string }> {
+  async invite(tenantId: string, input: InviteStaffInput, actor: StaffActor): Promise<{ staffId: string; invitePath: string }> {
     if (ROLES_NEEDING_BRANCH.has(input.role) && (!input.branchScope || input.branchScope.length === 0)) {
       throw new BadRequestException({
         code: "branch_scope_required",
@@ -163,7 +163,36 @@ export class StaffService {
       return staff.id;
     });
 
-    return { staffId };
+    return { staffId, invitePath: `/invite/accept?token=${rawInviteToken}` };
+  }
+
+  async regenerateInviteLink(tenantId: string, staffId: string, actor: StaffActor): Promise<{ invitePath: string }> {
+    const staff = await this.findOwned(tenantId, staffId);
+    const account = await this.prisma.account.findUnique({ where: { id: staff.accountId }, select: { status: true } });
+    if (!account || account.status !== "INVITED") {
+      throw new BadRequestException({ code: "not_invited", message: "That staff member is not awaiting an invite." });
+    }
+    const rawInviteToken = randomBytes(32).toString("hex");
+    await this.prisma.$transaction(async (tx) => {
+      await tx.account.update({
+        where: { id: staff.accountId },
+        data: { inviteTokenHash: sha256(rawInviteToken), inviteTokenExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) },
+      });
+      await this.audit.record(
+        {
+          tenantId,
+          actorId: actor.accountId,
+          actorType: "TENANT_STAFF",
+          actorName: actor.displayName,
+          targetType: "StaffUser",
+          targetId: staffId,
+          action: "staff.invite_regenerated",
+          riskLevel: "MEDIUM",
+        },
+        tx,
+      );
+    });
+    return { invitePath: `/invite/accept?token=${rawInviteToken}` };
   }
 
   async updateScope(

@@ -9,7 +9,7 @@ import { TechnicianWorkViewService } from "./technician-work-view.service";
 import { CustomerDecisionService } from "../../systems/customer/decision.service";
 import { PartRequestService } from "../../systems/inventory/part-request.service";
 import { CatalogService } from "../../systems/inventory/catalog.service";
-import { ReportBlockerDto, CreateFaultDto, RequestPartDto, RecordInspectionDto, CompleteTaskDto } from "./technician.dto";
+import { ReportBlockerDto, CreateFaultDto, RequestPartDto, RecordInspectionDto, CompleteTaskDto, RequestReturnDto, ClarificationDto, ExternalPartDto } from "./technician.dto";
 import { RaiseDecisionDto } from "../../systems/customer/decision.dto";
 
 /**
@@ -232,6 +232,37 @@ export class TechnicianController {
     return this.partRequests.markUsed(id, this.actor(session));
   }
 
+  @Post("parts/:id/return")
+  async requestReturn(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: RequestReturnDto,
+  ) {
+    await this.requirePartOnMyJob(session, id);
+    return this.partRequests.requestReturn(id, dto.quantity, this.actor(session), dto.reason);
+  }
+
+  @Post("parts/:id/clarification")
+  async answerClarification(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: ClarificationDto,
+  ) {
+    await this.requirePartOnMyJob(session, id);
+    return this.partRequests.respondToClarification(id, this.actor(session), dto.answer);
+  }
+
+  @Post("work-orders/:id/external-parts")
+  async addExternalPart(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: ExternalPartDto,
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "inventory.request.create");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.work.addExternalPartLine(id, dto, this.actor(session));
+  }
+
   /** What the Finish Gate would say, asked before anything is pressed. */
   @Get("work-orders/:id/finish-check")
   async finishCheck(@CurrentSession() session: SessionContext, @Param("id") id: string) {
@@ -254,6 +285,20 @@ export class TechnicianController {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.finish_attempt");
     await this.view.workCard(staffUserId, tenantId, id);
     return this.work.finishWorkOrder(id, this.actor(session));
+  }
+
+  @Post("work-orders/:id/start-inspection")
+  async startInspection(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.work.startInspection(id, this.actor(session));
+  }
+
+  @Post("work-orders/:id/start-work")
+  async startWork(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.work.startWork(id, this.actor(session));
   }
 
   private actor(session: SessionContext) {

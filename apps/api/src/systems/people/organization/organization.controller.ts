@@ -44,9 +44,18 @@ export class OrganizationController {
   async inviteStaff(
     @CurrentSession() session: SessionContext,
     @Body() dto: InviteStaffDto,
-  ): Promise<{ staffId: string }> {
+  ): Promise<{ staffId: string; invitePath: string }> {
     await this.requireAccess(session);
     return this.staff.invite(session.tenantId!, dto, this.actorOf(session));
+  }
+
+  @Post("staff/:id/invite-link")
+  async regenerateInviteLink(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+  ): Promise<{ invitePath: string }> {
+    await this.requireAccess(session);
+    return this.staff.regenerateInviteLink(session.tenantId!, id, this.actorOf(session));
   }
 
   @Patch("staff/:id/scope")
