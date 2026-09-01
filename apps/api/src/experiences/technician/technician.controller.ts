@@ -291,14 +291,16 @@ export class TechnicianController {
   async startInspection(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
     await this.view.workCard(staffUserId, tenantId, id);
-    return this.work.startInspection(id, this.actor(session));
+    const result = await this.work.startInspection(id, this.actor(session));
+    return { workOrderId: result.workOrderId, status: result.to };
   }
 
   @Post("work-orders/:id/start-work")
   async startWork(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
     await this.view.workCard(staffUserId, tenantId, id);
-    return this.work.startWork(id, this.actor(session));
+    const result = await this.work.startWork(id, this.actor(session));
+    return { workOrderId: result.workOrderId, status: result.to };
   }
 
   private actor(session: SessionContext) {

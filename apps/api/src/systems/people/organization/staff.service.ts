@@ -93,7 +93,7 @@ export class StaffService {
     };
   }
 
-  async invite(tenantId: string, input: InviteStaffInput, actor: StaffActor): Promise<{ staffId: string; invitePath: string }> {
+  async invite(tenantId: string, input: InviteStaffInput, actor: StaffActor): Promise<{ staffId: string; inviteLink: string }> {
     if (ROLES_NEEDING_BRANCH.has(input.role) && (!input.branchScope || input.branchScope.length === 0)) {
       throw new BadRequestException({
         code: "branch_scope_required",
@@ -163,10 +163,10 @@ export class StaffService {
       return staff.id;
     });
 
-    return { staffId, invitePath: `/invite/accept?token=${rawInviteToken}` };
+    return { staffId, inviteLink: `/invite/accept?token=${rawInviteToken}` };
   }
 
-  async regenerateInviteLink(tenantId: string, staffId: string, actor: StaffActor): Promise<{ invitePath: string }> {
+  async regenerateInviteLink(tenantId: string, staffId: string, actor: StaffActor): Promise<{ inviteLink: string }> {
     const staff = await this.findOwned(tenantId, staffId);
     const account = await this.prisma.account.findUnique({ where: { id: staff.accountId }, select: { status: true } });
     if (!account || account.status !== "INVITED") {
@@ -192,7 +192,7 @@ export class StaffService {
         tx,
       );
     });
-    return { invitePath: `/invite/accept?token=${rawInviteToken}` };
+    return { inviteLink: `/invite/accept?token=${rawInviteToken}` };
   }
 
   async updateScope(
@@ -300,3 +300,4 @@ export class StaffService {
     return staff;
   }
 }
+

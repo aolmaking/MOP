@@ -209,7 +209,7 @@ describe("Walkthrough (real HTTP, real Postgres)", () => {
    * an endpoint that has not been written yet; this one is a journey that
    * looks finished from every angle except the only one that matters.
    */
-  xit("[F-005] an invited branch manager can accept their invite over HTTP", async () => {
+  it("[F-005] an invited branch manager can accept their invite over HTTP", async () => {
     const owner = await loginAs(booted, ownerEmail, OWNER_PASSWORD);
     const managerEmail = `manager-${SUFFIX}@mop.local`;
 
@@ -309,7 +309,7 @@ describe("Walkthrough (real HTTP, real Postgres)", () => {
    *
    * Un-pin with W1-A3-002.
    */
-  xit("[C1] a technician starts inspection on a REGISTERED job", async () => {
+  it("[C1] a technician starts inspection on a REGISTERED job", async () => {
     const technicianEmail = `tech-${SUFFIX}@mop.local`;
     const account = await booted.prisma.account.create({
       data: {
@@ -343,24 +343,4 @@ describe("Walkthrough (real HTTP, real Postgres)", () => {
     expect(res.body).toEqual({ workOrderId, status: "UNDER_INSPECTION" });
   }, 120_000);
 
-  /**
-   * The same fact, asserted the other way round, and NOT pinned.
-   *
-   * A pinned test proves nothing while it is pinned -- it is a note. This
-   * one runs on every gate and states the current truth out loud: the C1
-   * route is absent. When W1-A3-002 lands it fails immediately, which is
-   * the reminder to un-pin the real test above rather than discovering
-   * weeks later that the harness was still describing a world that had
-   * moved on.
-   */
-  it("records that the C1 route is still absent -- delete this when W1-A3-002 lands", async () => {
-    const session = await loginAs(booted, `manager-direct-${SUFFIX}@mop.local`, MANAGER_PASSWORD);
-
-    const res = await http(booted)
-      .post(`/api/v1/technician/work-orders/${workOrderId}/start-inspection`)
-      .set("Cookie", session.cookie)
-      .send({});
-
-    expect(res.status).toBe(404);
-  }, 120_000);
 });

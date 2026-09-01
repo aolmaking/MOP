@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+﻿import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
 import { SessionGuard } from "../../../identity/auth/session.guard";
 import { CurrentSession } from "../../../identity/auth/current-session.decorator";
@@ -44,7 +44,7 @@ export class OrganizationController {
   async inviteStaff(
     @CurrentSession() session: SessionContext,
     @Body() dto: InviteStaffDto,
-  ): Promise<{ staffId: string; invitePath: string }> {
+  ): Promise<{ staffId: string; inviteLink: string }> {
     await this.requireAccess(session);
     return this.staff.invite(session.tenantId!, dto, this.actorOf(session));
   }
@@ -53,7 +53,7 @@ export class OrganizationController {
   async regenerateInviteLink(
     @CurrentSession() session: SessionContext,
     @Param("id") id: string,
-  ): Promise<{ invitePath: string }> {
+  ): Promise<{ inviteLink: string }> {
     await this.requireAccess(session);
     return this.staff.regenerateInviteLink(session.tenantId!, id, this.actorOf(session));
   }
@@ -183,3 +183,4 @@ export class OrganizationController {
     return { staffUserId: session.staffUserId ?? "", accountId: session.accountId, displayName: session.displayName };
   }
 }
+
