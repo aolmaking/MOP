@@ -1,0 +1,5 @@
+# The staging edge's TLS material. Generated per machine by
+# `tools/staging/README.md`'s openssl command and never committed: a
+# private key in a repository is a private key that has leaked, even a
+# self-signed one for a LAN dress rehearsal.
+*.pem
