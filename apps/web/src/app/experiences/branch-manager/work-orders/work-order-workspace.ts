@@ -67,6 +67,79 @@ export class WorkOrderWorkspace {
       },
     });
   }
+  /**
+   * CONTRACTS-v0 C3. The counter's own "and while it is in, do this
+   * too": work the technician did not think to raise, added by the
+   * person the customer is standing in front of.
+   */
+  protected readonly addingTask = signal(false);
+  protected readonly newTaskTitle = signal('');
+  protected readonly taskError = signal<string | null>(null);
+  protected readonly savingTask = signal(false);
+  protected readonly taskTitleValid = computed(() => this.newTaskTitle().trim().length > 0);
+
+  protected toggleAddTask(): void {
+    this.addingTask.update((open) => !open);
+    this.newTaskTitle.set('');
+    this.taskError.set(null);
+  }
+
+  protected addTask(): void {
+    if (!this.taskTitleValid()) return;
+    this.savingTask.set(true);
+    this.taskError.set(null);
+    this.api.createTask(this.id(), { title: this.newTaskTitle().trim() }).subscribe({
+      next: () => {
+        this.savingTask.set(false);
+        this.addingTask.set(false);
+        this.newTaskTitle.set('');
+        // The server decides what the write did -- creating a task can
+        // move the job -- so the page re-reads rather than pushing the
+        // new row into the local list.
+        this.load();
+        this.feed?.refresh();
+      },
+      error: (err: PresentedError) => {
+        this.savingTask.set(false);
+        this.taskError.set(err.message ?? 'That task did not save.');
+      },
+    });
+  }
+
+  /**
+   * CONTRACTS-v0 C4. The job that has a priced recommendation sitting on
+   * it and never moved, because the technician raised it and nobody
+   * pressed anything since.
+   *
+   * Offered whenever the job is not already with the customer. Whether
+   * the move is actually available is the graph's answer, not this
+   * page's guess -- a refusal comes back as the workshop's own sentence
+   * and is shown verbatim rather than translated into a nicer one.
+   */
+  protected readonly requestingApproval = signal(false);
+  protected readonly approvalError = signal<string | null>(null);
+
+  protected readonly canOfferApproval = computed(() => {
+    const status = this.detail()?.status;
+    return status !== undefined && status !== 'AWAITING_CUSTOMER_APPROVAL' && status !== 'CLOSED' && status !== 'CANCELLED';
+  });
+
+  protected requestApproval(): void {
+    this.requestingApproval.set(true);
+    this.approvalError.set(null);
+    this.api.requestApproval(this.id()).subscribe({
+      next: () => {
+        this.requestingApproval.set(false);
+        this.load();
+        this.feed?.refresh();
+      },
+      error: (err: PresentedError) => {
+        this.requestingApproval.set(false);
+        this.approvalError.set(err.message ?? 'That did not go through.');
+      },
+    });
+  }
+
   protected readonly error = signal<PresentedError | null>(null);
   protected readonly state = signal<State>('loading');
   protected readonly showDossier = signal(false);

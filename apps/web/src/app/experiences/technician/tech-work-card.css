@@ -490,53 +490,10 @@
  * edge, in words, and by weight rather than by colour alone.
  */
 
-.part-requests {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
+/* --- the one job-level move ---------------------------------------- */
 
-.part-request {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  background: var(--surface);
-  /* Carried transparent so the "yours" state does not shift the text. */
-  border-inline-start: 4px solid transparent;
-  border-radius: var(--radius-sm);
-}
-
-.part-request--mine {
-  border-inline-start-color: var(--accent);
-}
-
-.part-request-main {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-inline-size: 0;
-}
-
-.part-request-name {
-  font-size: var(--tech-text);
-  font-weight: 700;
-  line-height: var(--leading-tight);
-}
-
-.part-request-qty {
-  font-variant-numeric: tabular-nums;
-}
-
-.part-request-status {
-  color: var(--text-muted);
-  font-size: var(--tech-text-sm);
-  line-height: var(--leading-normal);
-}
-
-.part-request-partial {
-  color: var(--text-muted);
-  font-size: var(--tech-text-sm);
-  font-variant-numeric: tabular-nums;
+/* Its own band above everything else. What the job is waiting for from
+   this technician should not be something they have to scroll to find. */
+.primary {
+  margin-block-end: var(--space-4);
 }

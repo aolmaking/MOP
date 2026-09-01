@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { Identifier } from '../../ui/identifier/identifier';
 import { WorkflowStrip } from '../../domain/journey/workflow-strip';
 import { PartsPicker, type PartRequestChoice } from './parts-picker';
+import { PartList, type PartClarification, type PartReturn } from './part-list';
 import { pollJourney, type JourneyFeed } from '../../domain/journey/journey-poller';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import {
@@ -13,6 +14,7 @@ import {
   type TechnicianTask,
   type WorkCard,
   type WorkCardPart,
+  type WorkCardPrimaryAction,
 } from './technician.api';
 
 type State = 'loading' | 'ready' | 'not-mine' | 'forbidden' | 'error';
@@ -45,7 +47,7 @@ const BLOCKER_REASONS = [
  */
 @Component({
   selector: 'app-tech-work-card',
-  imports: [RouterLink, Identifier, DatePipe, WorkflowStrip, PartsPicker],
+  imports: [RouterLink, Identifier, DatePipe, WorkflowStrip, PartsPicker, PartList],
   templateUrl: './tech-work-card.html',
   styleUrl: './tech-work-card.css',
 })
@@ -75,7 +77,7 @@ export class TechWorkCard {
   protected readonly actionError = signal<string | null>(null);
 
   /** Which panel is open. Only one at a time -- this is a small screen. */
-  protected readonly panel = signal<'none' | 'blocker' | 'fault' | 'parts' | 'inspection'>('none');
+  protected readonly panel = signal<'none' | 'blocker' | 'fault' | 'parts' | 'inspection' | 'external'>('none');
   protected readonly faultText = signal('');
   protected readonly inspectionNote = signal('');
   protected readonly faultSeverity = signal('MEDIUM');
@@ -126,21 +128,87 @@ export class TechWorkCard {
     this.run('part', this.api.requestPart(this.id(), choice.part.id, choice.quantity));
   }
 
-  /** Only the parts still needing somebody -- settled ones are history. */
+  /**
+   * Only the parts still needing somebody -- settled ones are history.
+   *
+   * A part the technician could still send back counts as open even
+   * when nobody is formally waiting on it: RECEIVED_BY_TECHNICIAN reads
+   * as "yours to fit", and hiding the return door until something has
+   * gone wrong is how a wrong part ends up fitted.
+   */
   protected readonly openParts = computed(
-    () => this.card()?.parts.filter((part) => part.waitingOn !== 'NOBODY') ?? [],
+    () => this.card()?.parts.filter((part) => part.waitingOn !== 'NOBODY' || part.returnable) ?? [],
   );
 
-  protected actOnPart(part: WorkCardPart): void {
-    if (part.action === 'RECEIVE') {
-      this.run(`part-${part.partRequestId}`, this.api.receivePart(part.partRequestId));
-    } else if (part.action === 'MARK_USED') {
-      this.run(`part-${part.partRequestId}`, this.api.usePart(part.partRequestId));
-    }
+  /**
+   * The one job-level move, straight off the payload.
+   *
+   * Deliberately not computed from `card().status`: which move exists
+   * from which state is the workflow graph's business, and a workshop
+   * whose profile routes around inspection must not be offered it. The
+   * server already asked the graph; this reads the answer.
+   */
+  protected readonly primaryAction = computed<WorkCardPrimaryAction | null>(
+    () => this.card()?.primaryAction ?? null,
+  );
+
+  protected runPrimaryAction(): void {
+    const action = this.primaryAction();
+    if (!action) return;
+    this.run(
+      'primary',
+      action.intent === 'START_INSPECTION'
+        ? this.api.startInspection(this.id())
+        : this.api.startWork(this.id()),
+    );
   }
 
-  protected partActionLabel(part: WorkCardPart): string {
-    return part.action === 'RECEIVE' ? "I've got it" : "It's fitted";
+  protected receivePart(part: WorkCardPart): void {
+    this.run(`part-${part.partRequestId}`, this.api.receivePart(part.partRequestId));
+  }
+
+  protected usePart(part: WorkCardPart): void {
+    this.run(`part-${part.partRequestId}`, this.api.usePart(part.partRequestId));
+  }
+
+  protected returnPart(event: PartReturn): void {
+    this.run(
+      `return-${event.part.partRequestId}`,
+      this.api.returnPart(event.part.partRequestId, event.quantity, event.reason),
+    );
+  }
+
+  protected answerClarification(event: PartClarification): void {
+    this.run(
+      `clarify-${event.part.partRequestId}`,
+      this.api.answerClarification(event.part.partRequestId, event.answer),
+    );
+  }
+
+  /**
+   * A part the workshop never held. Offered as its own door rather than
+   * inside the picker, because the picker searches the workshop's own
+   * catalogue and this part is by definition not in it.
+   */
+  protected readonly externalPartName = signal('');
+  protected readonly externalProvenance = signal<'CUSTOMER_SUPPLIED' | 'EXTERNAL_PURCHASE'>('CUSTOMER_SUPPLIED');
+  protected readonly externalQuantity = signal('1');
+  protected readonly externalNameValid = computed(() => this.externalPartName().trim().length >= 1);
+
+  protected addExternalPart(): void {
+    if (!this.externalNameValid()) return;
+    const quantity = Number(this.externalQuantity().trim());
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      this.actionError.set('Say how many — a whole number, at least one.');
+      return;
+    }
+
+    const name = this.externalPartName().trim();
+    const provenance = this.externalProvenance();
+    this.panel.set('none');
+    this.externalPartName.set('');
+    this.externalQuantity.set('1');
+    this.run('external', this.api.addExternalPart(this.id(), name, provenance, quantity));
   }
 
   /**

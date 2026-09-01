@@ -1,0 +1,149 @@
+/*
+ * Parts, at arm's length, on a dirty screen.
+ *
+ * Same rules as the Work Card this was split out of: every control is at
+ * least --tap, nothing depends on hover, and no physical direction ever
+ * appears (Arabic is a primary market, so the whole thing mirrors).
+ */
+
+.part-requests {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.part-request {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* Wraps because a row carries its own return and clarification
+     panels: on a phone those drop to their own line rather than
+     squeezing the part's name down to two characters. */
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface);
+  /* Carried transparent so the "yours" state does not shift the text. */
+  border-inline-start: 4px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.part-request--mine {
+  border-inline-start-color: var(--accent);
+}
+
+.part-request-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.part-request-name {
+  font-size: var(--tech-text);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.part-request-qty {
+  font-variant-numeric: tabular-nums;
+}
+
+.part-request-status {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+  line-height: var(--leading-normal);
+}
+
+.part-request-partial {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The store speaking, not more status text -- hence the italic. */
+.part-said {
+  flex-basis: 100%;
+  font-size: var(--tech-text-sm);
+  font-style: italic;
+  line-height: var(--leading-normal);
+}
+
+.part-panel {
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-block-start: var(--space-3);
+}
+
+.part-panel-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--tech-text-sm);
+}
+
+.part-panel-field input,
+.part-panel-text {
+  min-block-size: var(--tap);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--tech-text);
+}
+
+.part-panel-field input {
+  min-inline-size: 6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.part-panel-text {
+  line-height: var(--leading-normal);
+  resize: vertical;
+}
+
+/* --- taps ----------------------------------------------------------
+   Repeated rather than shared: Angular scopes component styles, and a
+   global .tap would put a technician-sized control on every screen in
+   the product. The Work Card's own copy is the original. */
+
+.tap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--tap);
+  min-inline-size: 7rem;
+  padding: 0 var(--space-4);
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--tech-text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tap:active {
+  background: var(--accent-muted);
+}
+
+.tap:disabled {
+  opacity: 0.5;
+}
+
+.tap--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.tap--wide {
+  inline-size: 100%;
+}

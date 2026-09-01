@@ -175,6 +175,43 @@
               }
             </ul>
           }
+
+          <!-- The counter's own door into the work list: the extra job
+               the customer mentioned while standing at the desk, which
+               the technician never heard about. -->
+          <div class="band-actions">
+            <button appButton variant="secondary" type="button" (click)="toggleAddTask()">
+              {{ addingTask() ? 'Cancel' : 'Add a task' }}
+            </button>
+          </div>
+
+          @if (addingTask()) {
+            <div class="add-task">
+              <label class="add-task-field">
+                <span class="add-task-label">What needs doing?</span>
+                <input
+                  type="text"
+                  maxlength="200"
+                  [value]="newTaskTitle()"
+                  (input)="newTaskTitle.set($any($event.target).value)"
+                />
+              </label>
+
+              @if (taskError(); as message) {
+                <p class="band-error" role="alert">{{ message }}</p>
+              }
+
+              <button
+                appButton
+                variant="primary"
+                type="button"
+                [disabled]="savingTask() || !taskTitleValid()"
+                (click)="addTask()"
+              >
+                {{ savingTask() ? 'Adding…' : 'Add it' }}
+              </button>
+            </div>
+          }
         </section>
 
         <!-- ── what the customer decided ───────────────────────────── -->
@@ -204,6 +241,29 @@
                   }
                 </ul>
               </div>
+            }
+          }
+
+          @if (canOfferApproval()) {
+            <!-- The manager's explicit door to "ask the customer", for the
+                 job that has a priced recommendation on it and never
+                 moved. Whether the move exists from here is the graph's
+                 answer: a refusal comes back as the workshop's own
+                 sentence and is shown exactly as written. -->
+            <div class="band-actions">
+              <button
+                appButton
+                variant="secondary"
+                type="button"
+                [disabled]="requestingApproval()"
+                (click)="requestApproval()"
+              >
+                {{ requestingApproval() ? 'Asking…' : 'Ask the customer to approve' }}
+              </button>
+            </div>
+
+            @if (approvalError(); as message) {
+              <p class="band-error" role="alert">{{ message }}</p>
             }
           }
         </section>

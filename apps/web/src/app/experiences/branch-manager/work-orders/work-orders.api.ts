@@ -97,4 +97,29 @@ export class WorkOrdersApi {
   detail(id: string): Observable<WorkOrderDetail> {
     return this.http.get<WorkOrderDetail>(`/api/v1/branch-manager/work-orders/${id}`);
   }
+
+  /**
+   * CONTRACTS-v0 C3. The manager adds work the technician did not think
+   * to raise -- the counter's own "and while it is in, do this too".
+   */
+  createTask(
+    workOrderId: string,
+    task: { title: string; serviceKey?: string; assignToStaffUserId?: string },
+  ): Observable<WorkOrderTask> {
+    return this.http.post<WorkOrderTask>(`/api/v1/branch-manager/work-orders/${workOrderId}/tasks`, task);
+  }
+
+  /**
+   * CONTRACTS-v0 C4. The manager's explicit door to "ask the customer",
+   * for the job that has a priced recommendation sitting on it and never
+   * moved. Refused with 409 `transition_not_allowed` when the live graph
+   * has no such edge from where the job is -- the refusal message is the
+   * server's and is shown verbatim.
+   */
+  requestApproval(workOrderId: string): Observable<{ workOrderId: string; status: string }> {
+    return this.http.post<{ workOrderId: string; status: string }>(
+      `/api/v1/branch-manager/work-orders/${workOrderId}/request-approval`,
+      {},
+    );
+  }
 }

@@ -1,0 +1,101 @@
+<ul class="part-requests">
+  @for (part of parts(); track part.partRequestId) {
+    <li class="part-request" [class.part-request--mine]="part.waitingOn === 'YOU'">
+      <span class="part-request-main">
+        <span class="part-request-name">
+          {{ part.name }}
+          @if (part.quantity > 1) {
+            <span class="part-request-qty">×{{ part.quantity }}</span>
+          }
+        </span>
+        <span class="part-request-status">{{ part.statusText }}</span>
+        @if (part.issued > 0 && part.issued < part.quantity) {
+          <span class="part-request-partial">
+            {{ part.issued }} of {{ part.quantity }} handed over so far.
+          </span>
+        }
+      </span>
+
+      @if (part.clarificationPending) {
+        <button
+          class="tap tap--primary"
+          type="button"
+          [disabled]="busy() !== null"
+          (click)="open('clarify', part)"
+        >
+          {{ isOpen('clarify', part) ? 'Cancel' : 'Answer the store' }}
+        </button>
+      } @else if (part.action) {
+        <button class="tap tap--primary" type="button" [disabled]="busy() !== null" (click)="act(part)">
+          {{ busy() === 'part-' + part.partRequestId ? '…' : actionLabel(part) }}
+        </button>
+      }
+
+      @if (part.returnable) {
+        <!-- Rendered from the server's flag, never from the status. A
+             workshop with returns removed has no such edge and no
+             button. -->
+        <button class="tap" type="button" [disabled]="busy() !== null" (click)="open('return', part)">
+          {{ isOpen('return', part) ? 'Cancel' : 'Send it back' }}
+        </button>
+      }
+
+      @if (part.clarificationQuestion && part.clarificationPending) {
+        <!-- The store's actual words. A prompt a technician cannot read
+             is a prompt they cannot answer. -->
+        <span class="part-said">“{{ part.clarificationQuestion }}”</span>
+      }
+
+      @if (isOpen('return', part)) {
+        <div class="part-panel">
+          <label class="part-panel-field">
+            <span>How many</span>
+            <input
+              type="number"
+              inputmode="numeric"
+              min="1"
+              step="1"
+              [value]="quantity()"
+              (input)="quantity.set($any($event.target).value)"
+            />
+          </label>
+          <textarea
+            class="part-panel-text"
+            rows="2"
+            placeholder="Why is it going back?"
+            [value]="reason()"
+            (input)="reason.set($any($event.target).value)"
+          ></textarea>
+          <button
+            class="tap tap--primary tap--wide"
+            type="button"
+            [disabled]="busy() !== null || !reasonValid() || !quantityValid()"
+            (click)="sendBack(part)"
+          >
+            {{ busy() === 'return-' + part.partRequestId ? '…' : 'Send it back' }}
+          </button>
+        </div>
+      }
+
+      @if (isOpen('clarify', part)) {
+        <div class="part-panel">
+          <textarea
+            class="part-panel-text"
+            rows="2"
+            placeholder="Your answer"
+            [value]="answer()"
+            (input)="answer.set($any($event.target).value)"
+          ></textarea>
+          <button
+            class="tap tap--primary tap--wide"
+            type="button"
+            [disabled]="busy() !== null || !answerValid()"
+            (click)="sendAnswer(part)"
+          >
+            {{ busy() === 'clarify-' + part.partRequestId ? '…' : 'Send the answer' }}
+          </button>
+        </div>
+      }
+    </li>
+  }
+</ul>

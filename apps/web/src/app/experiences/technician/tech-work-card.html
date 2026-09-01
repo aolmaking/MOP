@@ -45,6 +45,24 @@
         <app-workflow-strip [journey]="j" />
       }
 
+      @if (primaryAction(); as action) {
+        <!-- The one thing this job is waiting for from this technician,
+             above everything else and impossible to miss. Which move it
+             is comes from the server's reading of the workshop's own
+             graph, so a shop that routes around inspection never sees
+             "Start inspection" here. -->
+        <section class="primary">
+          <button
+            class="tap tap--primary tap--wide"
+            type="button"
+            [disabled]="busy() !== null"
+            (click)="runPrimaryAction()"
+          >
+            {{ busy() === 'primary' ? '…' : action.label }}
+          </button>
+        </section>
+      }
+
       <section class="history">
         <button type="button" class="history-toggle" (click)="toggleVehicleHistory()">
           @if (vehicleHistoryOpen()) {
@@ -166,37 +184,14 @@
         <section class="tools">
           <h2 class="tools-title">Parts</h2>
 
-          <ul class="part-requests">
-            @for (part of openParts(); track part.partRequestId) {
-              <li class="part-request" [class.part-request--mine]="part.waitingOn === 'YOU'">
-                <span class="part-request-main">
-                  <span class="part-request-name">
-                    {{ part.name }}
-                    @if (part.quantity > 1) {
-                      <span class="part-request-qty">×{{ part.quantity }}</span>
-                    }
-                  </span>
-                  <span class="part-request-status">{{ part.statusText }}</span>
-                  @if (part.issued > 0 && part.issued < part.quantity) {
-                    <span class="part-request-partial">
-                      {{ part.issued }} of {{ part.quantity }} handed over so far.
-                    </span>
-                  }
-                </span>
-
-                @if (part.action) {
-                  <button
-                    class="tap tap--primary"
-                    type="button"
-                    [disabled]="busy() !== null"
-                    (click)="actOnPart(part)"
-                  >
-                    {{ busy() === 'part-' + part.partRequestId ? '…' : partActionLabel(part) }}
-                  </button>
-                }
-              </li>
-            }
-          </ul>
+          <app-part-list
+            [parts]="openParts()"
+            [busy]="busy()"
+            (receive)="receivePart($event)"
+            (markUsed)="usePart($event)"
+            (returned)="returnPart($event)"
+            (clarified)="answerClarification($event)"
+          />
         </section>
       }
 
@@ -215,6 +210,9 @@
             Record inspection
           </button>
           <button class="tap" type="button" (click)="togglePartsPanel()">Need a part</button>
+          <button class="tap" type="button" (click)="panel.set(panel() === 'external' ? 'none' : 'external')">
+            Part from outside
+          </button>
           <button class="tap" type="button" (click)="panel.set(panel() === 'blocker' ? 'none' : 'blocker')">
             I'm blocked
           </button>
@@ -263,6 +261,64 @@
             (chosen)="requestPart($event)"
             (uncatalogued)="blockOnUncataloguedPart()"
           />
+        }
+
+        @if (panel() === 'external') {
+          <!-- A part that never came off a shelf: the customer brought it,
+               or it was bought outside. Its own door rather than a mode
+               inside the picker, because the picker searches the
+               workshop's catalogue and this part is by definition not in
+               it. No stock moves, and a customer-supplied part is not
+               warranted by the workshop -- the server decides both. -->
+          <div class="fault">
+            <input
+              class="fault-text"
+              type="text"
+              placeholder="What is the part?"
+              [value]="externalPartName()"
+              (input)="externalPartName.set($any($event.target).value)"
+            />
+
+            <div class="severity">
+              <button
+                class="tap tap--severity"
+                type="button"
+                [class.tap--selected]="externalProvenance() === 'CUSTOMER_SUPPLIED'"
+                (click)="externalProvenance.set('CUSTOMER_SUPPLIED')"
+              >
+                Customer brought it
+              </button>
+              <button
+                class="tap tap--severity"
+                type="button"
+                [class.tap--selected]="externalProvenance() === 'EXTERNAL_PURCHASE'"
+                (click)="externalProvenance.set('EXTERNAL_PURCHASE')"
+              >
+                Bought outside
+              </button>
+            </div>
+
+            <label class="part-panel-field">
+              <span>How many</span>
+              <input
+                type="number"
+                inputmode="numeric"
+                min="1"
+                step="1"
+                [value]="externalQuantity()"
+                (input)="externalQuantity.set($any($event.target).value)"
+              />
+            </label>
+
+            <button
+              class="tap tap--primary tap--wide"
+              type="button"
+              [disabled]="busy() !== null || !externalNameValid()"
+              (click)="addExternalPart()"
+            >
+              {{ busy() === 'external' ? '…' : 'Record it' }}
+            </button>
+          </div>
         }
 
         @if (panel() === 'blocker') {

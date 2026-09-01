@@ -40,6 +40,22 @@ export interface WorkCardPart {
   readonly statusText: string;
   readonly waitingOn: 'STORE' | 'YOU' | 'NOBODY';
   readonly action: 'RECEIVE' | 'MARK_USED' | null;
+  /**
+   * Whether this workshop has a return path at all. Server-computed from
+   * the part-request graph under the tenant's capability profile -- the
+   * card renders the button strictly from this flag and never from the
+   * status, because a workshop with PART_RETURNS removed has no such
+   * edge and the button would outlive the capability that owns it.
+   */
+  readonly returnable: boolean;
+  readonly clarificationPending: boolean;
+  readonly clarificationQuestion: string | null;
+}
+
+/** The one job-level move available now, named and worded by the server. */
+export interface WorkCardPrimaryAction {
+  readonly intent: 'START_INSPECTION' | 'START_WORK';
+  readonly label: string;
 }
 
 export interface WorkCard {
@@ -53,6 +69,7 @@ export interface WorkCard {
   readonly tasks: readonly TechnicianTask[];
   readonly parts: readonly WorkCardPart[];
   readonly finish: FinishCheck;
+  readonly primaryAction: WorkCardPrimaryAction | null;
 }
 
 export interface AssetHistoryVisit {
@@ -156,6 +173,54 @@ export class TechnicianApi {
       inventoryItemId,
       quantity,
       reason,
+    });
+  }
+
+  /**
+   * CONTRACTS-v0 C1/C2. Which of the two to call is not a decision this
+   * client makes: the card renders whatever `primaryAction.intent` the
+   * server put on the payload, so the workflow graph stays the only
+   * thing that knows which move exists from which state.
+   */
+  startInspection(workOrderId: string): Observable<{ workOrderId: string; status: string }> {
+    return this.http.post<{ workOrderId: string; status: string }>(
+      `/api/v1/technician/work-orders/${workOrderId}/start-inspection`,
+      {},
+    );
+  }
+
+  startWork(workOrderId: string): Observable<{ workOrderId: string; status: string }> {
+    return this.http.post<{ workOrderId: string; status: string }>(
+      `/api/v1/technician/work-orders/${workOrderId}/start-work`,
+      {},
+    );
+  }
+
+  /** CONTRACTS-v0 C6. */
+  returnPart(partRequestId: string, quantity: number, reason: string): Observable<unknown> {
+    return this.http.post(`/api/v1/technician/parts/${partRequestId}/return`, { quantity, reason });
+  }
+
+  /** CONTRACTS-v0 C7 -- the answer to the question the store asked. */
+  answerClarification(partRequestId: string, answer: string): Observable<unknown> {
+    return this.http.post(`/api/v1/technician/parts/${partRequestId}/clarification`, { answer });
+  }
+
+  /**
+   * CONTRACTS-v0 C8. A part the workshop never held: the customer
+   * brought it, or it was bought outside. No stock moves, because
+   * nothing left a shelf.
+   */
+  addExternalPart(
+    workOrderId: string,
+    name: string,
+    provenance: 'CUSTOMER_SUPPLIED' | 'EXTERNAL_PURCHASE',
+    quantity = 1,
+  ): Observable<unknown> {
+    return this.http.post(`/api/v1/technician/work-orders/${workOrderId}/external-parts`, {
+      name,
+      provenance,
+      quantity,
     });
   }
 

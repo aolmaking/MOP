@@ -17,6 +17,7 @@ function card(overrides: Partial<WorkCard> = {}): WorkCard {
     tasks: [],
     parts: [],
     finish: { available: false, passed: false, conditions: [] },
+    primaryAction: null,
     ...overrides,
   };
 }
@@ -34,6 +35,11 @@ async function render(result: WorkCard | { error: unknown }) {
     receivePart: vi.fn(() => of({})),
     usePart: vi.fn(() => of({})),
     finishWorkOrder: vi.fn(() => of({})),
+    startInspection: vi.fn(() => of({ workOrderId: 'wo1', status: 'UNDER_INSPECTION' })),
+    startWork: vi.fn(() => of({ workOrderId: 'wo1', status: 'IN_PROGRESS' })),
+    returnPart: vi.fn(() => of({})),
+    answerClarification: vi.fn(() => of({})),
+    addExternalPart: vi.fn(() => of({})),
     raiseDecision: vi.fn(() => of({ requestId: 'r1', secureToken: 't1' })),
     vehicleHistory: vi.fn(() => of({ assetId: 'a1', identifier: null, totalPriorVisits: 0, hasPriorOwnerHistory: false, visits: [] })),
   };
@@ -186,5 +192,115 @@ describe('TechWorkCard', () => {
     done.click();
 
     expect(api.completeTask).toHaveBeenCalledWith('t1', undefined);
+  });
+
+  describe('the one job-level move', () => {
+    it("renders the action the server named, in the server's words", async () => {
+      const { element } = await render(
+        card({ status: 'REGISTERED', primaryAction: { intent: 'START_INSPECTION', label: 'Start inspection' } }),
+      );
+
+      expect(element.querySelector('.primary')?.textContent).toContain('Start inspection');
+    });
+
+    it('calls the endpoint that matches the intent, not the status', async () => {
+      const { api, element } = await render(
+        card({ status: 'APPROVED_FOR_WORK', primaryAction: { intent: 'START_WORK', label: 'Start work' } }),
+      );
+
+      (element.querySelector('.primary button') as HTMLButtonElement).click();
+
+      expect(api.startWork).toHaveBeenCalledWith('wo1');
+      expect(api.startInspection).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The whole reason this comes off the payload. A card that decided
+     * for itself from `status` would offer a move the workshop's graph
+     * has routed away, and the press would be refused after the fact.
+     */
+    it('shows nothing when the server says there is no move for this technician', async () => {
+      const { element } = await render(card({ status: 'READY_FOR_QC', primaryAction: null }));
+
+      expect(element.querySelector('.primary')).toBeNull();
+    });
+  });
+
+  describe('parts', () => {
+    const receivedPart = (overrides: Partial<WorkCard['parts'][number]> = {}) => ({
+      partRequestId: 'pr1',
+      name: 'Brake pad set',
+      sku: 'BP-100',
+      quantity: 1,
+      issued: 1,
+      status: 'RECEIVED_BY_TECHNICIAN',
+      statusText: 'You have it. Fit it, then mark it used.',
+      waitingOn: 'YOU' as const,
+      action: 'MARK_USED' as const,
+      returnable: true,
+      clarificationPending: false,
+      clarificationQuestion: null,
+      ...overrides,
+    });
+
+    it('offers a return only when the server says the workshop has one', async () => {
+      const { element } = await render(card({ parts: [receivedPart({ returnable: false })] }));
+
+      expect([...element.querySelectorAll('button')].some((b) => b.textContent?.includes('Send it back'))).toBe(false);
+    });
+
+    it('sends the quantity and reason the technician actually typed', async () => {
+      const { api, fixture, element } = await render(card({ parts: [receivedPart()] }));
+
+      const open = [...element.querySelectorAll('button')].find((b) => b.textContent?.includes('Send it back')) as HTMLButtonElement;
+      open.click();
+      fixture.detectChanges();
+
+      const reason = element.querySelector('.part-panel-text') as HTMLTextAreaElement;
+      reason.value = 'Wrong size for this model';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const send = [...element.querySelectorAll('.part-panel button')].find((b) => b.textContent?.includes('Send it back')) as HTMLButtonElement;
+      send.click();
+
+      expect(api.returnPart).toHaveBeenCalledWith('pr1', 1, 'Wrong size for this model');
+    });
+
+    it("shows the store's actual question, not just that one was asked", async () => {
+      const { element } = await render(
+        card({
+          parts: [
+            receivedPart({
+              status: 'RETURN_CLARIFICATION_REQUESTED',
+              statusText: 'The store asked you a question about the return.',
+              action: null,
+              returnable: false,
+              clarificationPending: true,
+              clarificationQuestion: 'Which of the two did you fit?',
+            }),
+          ],
+        }),
+      );
+
+      expect(element.querySelector('.part-said')?.textContent).toContain('Which of the two did you fit?');
+    });
+  });
+
+  it('records a part the workshop never held', async () => {
+    const { api, page, fixture, element } = await render(card());
+
+    page.panel.set('external');
+    fixture.detectChanges();
+
+    const name = element.querySelector('input.fault-text') as HTMLInputElement;
+    name.value = "Customer's own oil filter";
+    name.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const record = [...element.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Record it') as HTMLButtonElement;
+    record.click();
+
+    expect(api.addExternalPart).toHaveBeenCalledWith('wo1', "Customer's own oil filter", 'CUSTOMER_SUPPLIED', 1);
   });
 });
