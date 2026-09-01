@@ -160,6 +160,11 @@ export class CustomerDecisionService {
 
   async read(token: string): Promise<PublicDecision> {
     const request = await this.resolve(token);
+    if (request.status === "SENT") {
+      await this.prisma.customerDecisionRequest.update({ where: { id: request.id }, data: { status: "VIEWED" } });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (request as any).status = "VIEWED";
+    }
     return this.present(request, await this.pricingVisible(request.tenantId), await this.approvalWeight(request.tenantId));
   }
 
@@ -453,6 +458,28 @@ export class CustomerDecisionService {
       recordedOnBehalf: true,
       evidenceReference: evidenceReference?.trim(),
     });
+  }
+
+  async cancel(tenantId: string, branchScope: readonly string[], requestId: string, actor: StaffActor): Promise<void> {
+    const request = await this.resolveById(tenantId, branchScope, requestId);
+    if (["RESOLVED", "EXPIRED", "CANCELLED"].includes(request.status)) {
+      throw new ConflictException({ code: "decision_already_final", message: "That decision is already final and cannot be cancelled." });
+    }
+    await this.prisma.customerDecisionRequest.update({ where: { id: request.id }, data: { status: "CANCELLED" } });
+    await this.events.emit(
+      {
+        tenantId,
+        eventKey: "customer_decision.cancelled",
+        actorId: actor.accountId,
+        actorName: actor.displayName,
+        actorType: "TENANT_STAFF",
+        targetType: "CustomerDecisionRequest",
+        targetId: request.id,
+        riskLevel: "MEDIUM",
+        payload: { workOrderId: request.workOrderId },
+      },
+      undefined,
+    );
   }
 
   private async applyAnswers(
