@@ -3,6 +3,7 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { AuthStore } from '../../../identity/auth.store';
 import { ToastContainer } from '../../../ui/toast/toast-container';
 import { ButtonDirective } from '../../../ui/button/button.directive';
+import { visibleNavigation } from '../../../runtime/launch-surface';
 
 /**
  * The Tenant Owner shell -- the first Owner surface, and the frame the
@@ -26,7 +27,12 @@ export class OwnerShell {
 
   protected readonly session = this.authStore.session;
 
-  protected readonly navigation = [
+  /**
+   * The rail lists only what exists AND what this sprint ships. The
+   * launch manifest does the second half, so "why is Messages gone?"
+   * has an answer written next to the entry rather than in a diff.
+   */
+  protected readonly navigation = visibleNavigation([
     { label: 'Home', route: '/owner/home' },
     { label: 'Organization', route: '/owner/organization' },
     { label: 'Teams', route: '/owner/organization/teams' },
@@ -36,7 +42,7 @@ export class OwnerShell {
     { label: 'Reports', route: '/owner/reports' },
     { label: 'Workflow Health', route: '/owner/workflow-health' },
     { label: 'History', route: '/owner/audit' },
-  ];
+  ]);
 
   async logout(): Promise<void> {
     await this.authStore.logout();

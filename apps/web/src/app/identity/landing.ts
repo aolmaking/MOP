@@ -1,4 +1,5 @@
 import type { EffectiveRole } from '@mop/shared';
+import { isHeldBack } from '../runtime/launch-surface';
 
 /**
  * Where to send someone who has just signed in and did not ask for a
@@ -22,5 +23,12 @@ const ROUTE_BY_LANDING_PAGE: Record<string, string> = {
 
 export function landingRouteFor(session: { role: EffectiveRole; landingPage: string } | null): string {
   if (!session) return '/';
-  return ROUTE_BY_LANDING_PAGE[session.landingPage] ?? '/access-denied';
+  const route = ROUTE_BY_LANDING_PAGE[session.landingPage];
+  if (!route) return '/access-denied';
+  // A role whose whole surface this sprint holds back lands on the same
+  // boundary as an unknown one. Dropping them into a rail with nothing
+  // on it would be worse than saying so: the scope calls this out
+  // explicitly -- "Analyst/TL landing keys resolve to Access-Denied by
+  // design if anyone logs in."
+  return isHeldBack(route) ? '/access-denied' : route;
 }

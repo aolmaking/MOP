@@ -17,7 +17,14 @@ describe('PlatformShell', () => {
     return authStoreStub;
   }
 
-  it('renders the four spec-defined nav links, and nothing for Add Workshop', () => {
+  /**
+   * Two of the four spec-defined entries -- Reports and Live View -- are
+   * held back for the launch sprint by `runtime/launch-surface.ts`; both
+   * pages still exist and both routes still resolve. Add Workshop is
+   * absent for its own older reason: per spec it is reachable only from
+   * the button on the Workshops page.
+   */
+  it('renders the nav links this sprint ships, and nothing for Add Workshop', () => {
     configure();
     const fixture = TestBed.createComponent(PlatformShell);
     fixture.detectChanges();
@@ -25,7 +32,7 @@ describe('PlatformShell', () => {
     const hrefs = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('a.rail-link')).map((a) =>
       a.getAttribute('href'),
     );
-    expect(hrefs).toEqual(['/platform/workshops', '/platform/control-center', '/platform/reports', '/platform/live-view']);
+    expect(hrefs).toEqual(['/platform/workshops', '/platform/control-center']);
   });
 
   it("shows the signed-in account's display name", () => {
