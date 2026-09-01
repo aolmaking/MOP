@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, ForbiddenException, Get, HttpCode, Param, Post, Query, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
 import { SessionGuard } from "../../identity/auth/session.guard";
 import { CurrentSession } from "../../identity/auth/current-session.decorator";
@@ -288,6 +288,7 @@ export class TechnicianController {
   }
 
   @Post("work-orders/:id/start-inspection")
+  @HttpCode(200)
   async startInspection(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
     await this.view.workCard(staffUserId, tenantId, id);
@@ -296,6 +297,7 @@ export class TechnicianController {
   }
 
   @Post("work-orders/:id/start-work")
+  @HttpCode(200)
   async startWork(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
     await this.view.workCard(staffUserId, tenantId, id);
