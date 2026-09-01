@@ -288,6 +288,72 @@ export class TechnicianWorkService {
     });
   }
 
+  async requestReturn(
+    workOrderId: string,
+    input: { name: string; qty: number; reason: string },
+    actor: LifecycleActor,
+  ) {
+    const workOrder = await this.requireWorkOrder(workOrderId);
+    return this.prisma.$transaction(async (tx) => {
+      const partLine = await tx.workOrderPartLine.findFirstOrThrow({
+        where: { workOrderId, name: input.name },
+        select: { id: true, quantity: true, provenance: true },
+      });
+      await tx.workOrderPartLine.update({
+        where: { id: partLine.id },
+        data: { quantity: { gt: partLine.quantity } ? partLine.quantity - qty : 0, status: "RETURN_PENDING" },
+      });
+      await tx.partReturnRequest.create({
+        data: { workOrderId, partLineId: partLine.id, returnedQty: qty, reason, status: "PENDING" },
+      });
+      await this.events.emit(
+        {
+          tenantId: workOrder.tenantId,
+          eventKey: "part_return_requested",
+          actorId: actor.accountId,
+          actorName: actor.displayName,
+          actorType: actor.actorType,
+          targetType: "WorkOrderPartLine",
+          targetId: partLine.id,
+          riskLevel: "MEDIUM",
+          payload: { workOrderId, partLineId: partLine.id, returnedQty: qty, reason },
+        },
+        tx,
+      );
+      return partLine;
+    });
+  }
+
+  async respondToClarification(
+    partReturnRequestId: string,
+    answer: "CLARIFIED" | "REJECTED",
+    actor: LifecycleActor,
+  ) {
+    const prr = await this.prisma.partReturnRequest.findFirstOrThrow({
+      where: { id: partReturnRequestId },
+      select: { id: true, workOrderId: true, status: true, returnedQty: true },
+    });
+    const newStatus = answer === "CLARIFIED" ? "CLARIFICATION_REQUESTED" : "REJECTED";
+    await this.prisma.partReturnRequest.update({
+      where: { id: partReturnRequestId },
+      data: { status: newStatus },
+    });
+    await this.events.emit(
+      {
+        tenantId: prr.tenantId,
+        eventKey: "part_return_clarification",
+        actorId: actor.accountId,
+        actorName: actor.displayName,
+        actorType: actor.actorType,
+        targetType: "PartReturnRequest",
+        targetId: prr.id,
+        riskLevel: "LOW",
+        payload: { partReturnRequestId: prr.id, answer },
+      },
+    );
+    return { status: newStatus };
+  }
+
   /**
    * Which catalogued services were actually performed on this job, and by
    * whom.

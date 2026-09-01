@@ -7,6 +7,7 @@ import { GateEvaluatorService } from "./gate-evaluator.service";
 import { WorkOrderLifecycleService } from "./work-order-lifecycle.service";
 import { IntakeService } from "./intake.service";
 import { TechnicianWorkService } from "./technician-work.service";
+import { PartsController } from "./parts.controller";
 import { WorkOrderDossierService } from "./work-order-dossier.service";
 import { ChargeableItemsService } from "./chargeable-items.service";
 import { WorkflowJourneyService } from "./workflow-journey.service";
@@ -25,6 +26,7 @@ import { JourneyFactsService } from "./journey-facts.service";
     WorkOrderLifecycleService,
     IntakeService,
     TechnicianWorkService,
+    PartsController,
     WorkOrderDossierService,
     ChargeableItemsService,
     WorkflowJourneyService,
