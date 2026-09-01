@@ -815,3 +815,36 @@ describe("APPROVAL_WEIGHT -- how heavy a decision request is", () => {
     }
   });
 });
+
+describe("VIEWED + CANCEL (W2-A3-007)", () => {
+  it("read transitions SENT->VIEWED idempotently", async () => {
+    const made = await makeRequest();
+    const before = await prisma.customerDecisionRequest.findUniqueOrThrow({ where: { id: made.requestId }, select: { status: true } });
+    expect(before.status).toBe("SENT");
+    await decisions.read(made.token);
+    const afterFirst = await prisma.customerDecisionRequest.findUniqueOrThrow({ where: { id: made.requestId }, select: { status: true } });
+    expect(afterFirst.status).toBe("VIEWED");
+    await decisions.read(made.token);
+    const afterSecond = await prisma.customerDecisionRequest.findUniqueOrThrow({ where: { id: made.requestId }, select: { status: true } });
+    expect(afterSecond.status).toBe("VIEWED");
+  });
+
+  it("cancel sets CANCELLED and second cancel is rejected", async () => {
+    const made = await makeRequest();
+    const staff = { accountId: "staff-1", displayName: "Test Staff" };
+    // Use a branchScope that matches the workOrder's branch - empty scope means tenant-wide in test setup
+    await decisions.cancel(tenantId, [], made.requestId, staff);
+    const cancelled = await prisma.customerDecisionRequest.findUniqueOrThrow({ where: { id: made.requestId }, select: { status: true } });
+    expect(cancelled.status).toBe("CANCELLED");
+    await expect(decisions.cancel(tenantId, [], made.requestId, staff)).rejects.toMatchObject({ response: { code: "decision_already_final" } });
+  });
+
+  it("CANCELLED no longer blocks customer_decisions_resolved gate", async () => {
+    const made = await makeRequest();
+    const staff = { accountId: "staff-1", displayName: "Test Staff" };
+    const reqBefore = await prisma.customerDecisionRequest.findUniqueOrThrow({ where: { id: made.requestId }, select: { workOrderId: true } });
+    await decisions.cancel(tenantId, [], made.requestId, staff);
+    const open = await prisma.customerDecisionRequest.count({ where: { workOrderId: reqBefore.workOrderId, status: { notIn: ["RESOLVED", "EXPIRED", "CANCELLED"] } } });
+    expect(open).toBe(0);
+  });
+});
