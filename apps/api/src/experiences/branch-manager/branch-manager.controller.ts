@@ -303,6 +303,22 @@ export class BranchManagerController {
     return { ok: true };
   }
 
+  @Post("approvals/:requestId/cancel")
+  @HttpCode(200)
+  async cancelApproval(
+    @CurrentSession() session: SessionContext,
+    @Param("requestId") requestId: string,
+  ): Promise<{ ok: true }> {
+    await this.requireBranchView(session);
+    await this.customerDecisions.cancel(
+      session.tenantId as string,
+      session.branchScope,
+      requestId,
+      { accountId: session.accountId, displayName: session.displayName },
+    );
+    return { ok: true };
+  }
+
   /**
    * What is leaving today, and what is holding the rest. Gates are really
    * run here -- see DeliveryService for why nothing may re-implement them.
