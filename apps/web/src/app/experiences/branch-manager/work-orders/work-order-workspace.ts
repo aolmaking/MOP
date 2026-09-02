@@ -71,6 +71,108 @@ export class WorkOrderWorkspace {
   protected readonly state = signal<State>('loading');
   protected readonly showDossier = signal(false);
 
+  /**
+   * Add-task and request-approval, the manager's own doors into the same
+   * writes the technician's Work Card already exposes -- see
+   * `WorkOrdersApi.createTask`/`raiseDecision`. Only one panel open at a
+   * time, same discipline as the Work Card's own tool panels.
+   */
+  protected readonly panel = signal<'none' | 'task' | 'decision'>('none');
+  protected readonly panelBusy = signal(false);
+  protected readonly panelError = signal<string | null>(null);
+
+  protected readonly taskTitle = signal('');
+  protected readonly taskServiceKey = signal('');
+
+  protected readonly decisionName = signal('');
+  protected readonly decisionExplanation = signal('');
+  protected readonly decisionImportance = signal('MEDIUM');
+  protected readonly decisionPrice = signal('');
+  protected readonly decisionLaborPrice = signal('');
+  private static readonly MONEY = /^\d+(\.\d{1,2})?$/;
+  protected readonly decisionPriceValid = computed(() => WorkOrderWorkspace.MONEY.test(this.decisionPrice().trim()));
+
+  protected togglePanel(next: 'task' | 'decision'): void {
+    this.panelError.set(null);
+    this.panel.set(this.panel() === next ? 'none' : next);
+  }
+
+  protected addTask(): void {
+    const title = this.taskTitle().trim();
+    if (title.length < 1) return;
+    const serviceKey = this.taskServiceKey().trim() || undefined;
+
+    this.panelBusy.set(true);
+    this.panelError.set(null);
+    this.api.createTask(this.id(), title, serviceKey).subscribe({
+      next: () => {
+        this.panelBusy.set(false);
+        this.panel.set('none');
+        this.taskTitle.set('');
+        this.taskServiceKey.set('');
+        this.load();
+      },
+      error: (err: PresentedError) => {
+        this.panelBusy.set(false);
+        this.panelError.set(err.message ?? 'That did not work.');
+      },
+    });
+  }
+
+  protected requestApproval(): void {
+    const name = this.decisionName().trim();
+    const explanation = this.decisionExplanation().trim();
+    if (name.length < 1 || explanation.length < 1 || !this.decisionPriceValid()) return;
+
+    this.panelBusy.set(true);
+    this.panelError.set(null);
+    this.api
+      .raiseDecision(this.id(), {
+        name,
+        explanation,
+        importance: this.decisionImportance(),
+        price: this.decisionPrice().trim(),
+        laborPrice: this.decisionLaborPrice().trim() || undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.panelBusy.set(false);
+          this.panel.set('none');
+          this.decisionName.set('');
+          this.decisionExplanation.set('');
+          this.decisionPrice.set('');
+          this.decisionLaborPrice.set('');
+          this.load();
+          this.feed?.refresh();
+        },
+        error: (err: PresentedError) => {
+          this.panelBusy.set(false);
+          this.panelError.set(err.message ?? 'That did not work.');
+        },
+      });
+  }
+
+  protected readonly cancellingRequestId = signal<string | null>(null);
+
+  /** Only meaningful before the customer has answered anything. */
+  protected canCancelDecision(request: { status: string }): boolean {
+    return request.status === 'SENT' || request.status === 'VIEWED';
+  }
+
+  protected cancelDecision(requestId: string): void {
+    this.cancellingRequestId.set(requestId);
+    this.api.cancelDecision(requestId).subscribe({
+      next: () => {
+        this.cancellingRequestId.set(null);
+        this.load();
+      },
+      error: (err: PresentedError) => {
+        this.cancellingRequestId.set(null);
+        this.panelError.set(err.message ?? 'Could not cancel that request.');
+      },
+    });
+  }
+
   constructor() {
     // Re-fetches when the route id changes, so navigating between two
     // jobs does not show the previous car's details under a new plate.

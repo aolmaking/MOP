@@ -175,6 +175,99 @@
               }
             </ul>
           }
+
+          <!-- Parity with the technician's own card: a manager can put a
+               task on the job, or ask the customer, directly from here. -->
+          <div class="advance-actions">
+            <button appButton variant="secondary" size="small" type="button" (click)="togglePanel('task')">
+              Add task
+            </button>
+            <button appButton variant="secondary" size="small" type="button" (click)="togglePanel('decision')">
+              Ask the customer
+            </button>
+          </div>
+
+          @if (panelError(); as message) {
+            <p class="advance-error" role="alert">{{ message }}</p>
+          }
+
+          @if (panel() === 'task') {
+            <form class="inline-form" (submit)="$event.preventDefault(); addTask()">
+              <label class="inline-form-field">
+                <span>Task title</span>
+                <input type="text" [value]="taskTitle()" (input)="taskTitle.set($any($event.target).value)" required />
+              </label>
+              <label class="inline-form-field">
+                <span>Service key (optional)</span>
+                <input
+                  type="text"
+                  [value]="taskServiceKey()"
+                  (input)="taskServiceKey.set($any($event.target).value)"
+                  placeholder="Matches the Pricing catalog"
+                />
+              </label>
+              <button appButton variant="primary" size="small" type="submit" [disabled]="panelBusy() || taskTitle().trim().length === 0">
+                {{ panelBusy() ? 'Adding…' : 'Add task' }}
+              </button>
+            </form>
+          }
+
+          @if (panel() === 'decision') {
+            <form class="inline-form" (submit)="$event.preventDefault(); requestApproval()">
+              <label class="inline-form-field">
+                <span>What needs approval</span>
+                <input type="text" [value]="decisionName()" (input)="decisionName.set($any($event.target).value)" required />
+              </label>
+              <label class="inline-form-field">
+                <span>Explanation</span>
+                <textarea
+                  rows="2"
+                  [value]="decisionExplanation()"
+                  (input)="decisionExplanation.set($any($event.target).value)"
+                  required
+                ></textarea>
+              </label>
+              <label class="inline-form-field">
+                <span>Importance</span>
+                <select [value]="decisionImportance()" (change)="decisionImportance.set($any($event.target).value)">
+                  @for (level of ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']; track level) {
+                    <option [value]="level">{{ label(level) }}</option>
+                  }
+                </select>
+              </label>
+              <div class="ask-price">
+                <label class="ask-price-field">
+                  <span>Price</span>
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="0.00"
+                    [value]="decisionPrice()"
+                    (input)="decisionPrice.set($any($event.target).value)"
+                  />
+                </label>
+                <label class="ask-price-field">
+                  <span>Labour (optional)</span>
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="0.00"
+                    [value]="decisionLaborPrice()"
+                    (input)="decisionLaborPrice.set($any($event.target).value)"
+                  />
+                </label>
+              </div>
+              <button
+                appButton
+                variant="primary"
+                size="small"
+                type="submit"
+                [disabled]="panelBusy() || decisionName().trim().length === 0 || decisionExplanation().trim().length === 0 || !decisionPriceValid()"
+              >
+                {{ panelBusy() ? 'Sending…' : 'Send to customer' }}
+              </button>
+            </form>
+          }
         </section>
 
         <!-- ── what the customer decided ───────────────────────────── -->
@@ -190,6 +283,19 @@
                   <span class="decision-age">
                     {{ request.sentAt ? 'sent ' + since(request.sentAt) : 'not sent yet' }}
                   </span>
+                  @if (canCancelDecision(request)) {
+                    <!-- M-3: withdraw an ask nobody has answered yet. -->
+                    <button
+                      appButton
+                      variant="secondary"
+                      size="small"
+                      type="button"
+                      [disabled]="cancellingRequestId() === request.id"
+                      (click)="cancelDecision(request.id)"
+                    >
+                      {{ cancellingRequestId() === request.id ? 'Cancelling…' : 'Cancel' }}
+                    </button>
+                  }
                 </p>
                 <ul class="decision-items">
                   @for (item of request.items; track item.id) {

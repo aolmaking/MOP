@@ -190,6 +190,28 @@ export class TechWorkCard {
 
   protected readonly blockedTask = computed(() => this.card()?.tasks.find((task) => task.blockedReason) ?? null);
 
+  /**
+   * The job's own next move, as opposed to a task's -- what "Start
+   * inspection"/"Start work" mean on the card. Computed from the status
+   * the server already sent rather than a second lookup: REGISTERED and
+   * APPROVED_FOR_WORK are the only two states with a technician-pressed
+   * move waiting, and the graph itself decides whether either applies.
+   */
+  protected readonly primaryJobAction = computed<{ key: 'start-inspection' | 'start-work'; label: string } | null>(() => {
+    const status = this.card()?.status;
+    if (status === 'REGISTERED') return { key: 'start-inspection', label: 'Start inspection' };
+    if (status === 'APPROVED_FOR_WORK') return { key: 'start-work', label: 'Start work' };
+    return null;
+  });
+
+  protected pressPrimaryJobAction(action: { key: 'start-inspection' | 'start-work' }): void {
+    if (action.key === 'start-inspection') {
+      this.run('start-inspection', this.api.startInspection(this.id()));
+    } else {
+      this.run('start-work', this.api.startWork(this.id()));
+    }
+  }
+
   protected start(task: TechnicianTask): void {
     this.run(`start-${task.id}`, this.api.startTask(task.id));
   }

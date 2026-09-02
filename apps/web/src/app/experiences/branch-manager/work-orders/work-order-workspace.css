@@ -370,3 +370,56 @@
   font-size: var(--text-base);
   font-weight: 500;
 }
+
+/* --- add-task / request-approval panels ----------------------------- */
+
+.inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  max-inline-size: 28rem;
+}
+
+.inline-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.inline-form-field input,
+.inline-form-field select,
+.inline-form-field textarea {
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: var(--text);
+}
+
+.ask-price {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.ask-price-field {
+  display: flex;
+  flex: 1 1 8rem;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.ask-price-field input {
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: var(--text);
+}

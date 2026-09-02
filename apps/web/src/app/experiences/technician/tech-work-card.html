@@ -45,6 +45,20 @@
         <app-workflow-strip [journey]="j" />
       }
 
+      @if (primaryJobAction(); as action) {
+        <!-- The job's own next move -- cheapest, most important tap on
+             the card, so it sits above everything else rather than
+             inside a group with tasks or tools. -->
+        <button
+          class="tap tap--primary tap--wide"
+          type="button"
+          [disabled]="busy() !== null"
+          (click)="pressPrimaryJobAction(action)"
+        >
+          {{ busy() === action.key ? '…' : action.label }}
+        </button>
+      }
+
       <section class="history">
         <button type="button" class="history-toggle" (click)="toggleVehicleHistory()">
           @if (vehicleHistoryOpen()) {

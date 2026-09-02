@@ -97,4 +97,25 @@ export class WorkOrdersApi {
   detail(id: string): Observable<WorkOrderDetail> {
     return this.http.get<WorkOrderDetail>(`/api/v1/branch-manager/work-orders/${id}`);
   }
+
+  /** Parity with the technician's own card -- put a task on the job directly. */
+  createTask(id: string, title: string, serviceKey?: string): Observable<unknown> {
+    return this.http.post(`/api/v1/branch-manager/work-orders/${id}/tasks`, { title, serviceKey });
+  }
+
+  /** Parity with the technician's own "ask the customer" press. */
+  raiseDecision(
+    id: string,
+    item: { name: string; explanation: string; importance: string; price: string; laborPrice?: string },
+  ): Observable<{ requestId: string; secureToken: string }> {
+    return this.http.post<{ requestId: string; secureToken: string }>(
+      `/api/v1/branch-manager/work-orders/${id}/decisions`,
+      item,
+    );
+  }
+
+  /** Withdraw an ask nobody has answered yet. */
+  cancelDecision(requestId: string): Observable<unknown> {
+    return this.http.post(`/api/v1/branch-manager/approvals/${requestId}/cancel`, {});
+  }
 }

@@ -117,6 +117,16 @@ export class TechnicianApi {
     return this.http.get<AssetHistorySummary>(`/api/v1/technician/work-orders/${workOrderId}/vehicle-history`);
   }
 
+  /** REGISTERED -> UNDER_INSPECTION -- the job's own first move, not a task's. */
+  startInspection(workOrderId: string): Observable<unknown> {
+    return this.http.post(`/api/v1/technician/work-orders/${workOrderId}/start-inspection`, {});
+  }
+
+  /** APPROVED_FOR_WORK -> IN_PROGRESS -- the job's own move once approval is in. */
+  startWork(workOrderId: string): Observable<unknown> {
+    return this.http.post(`/api/v1/technician/work-orders/${workOrderId}/start-work`, {});
+  }
+
   startTask(taskId: string): Observable<unknown> {
     return this.http.post(`/api/v1/technician/tasks/${taskId}/start`, {});
   }
