@@ -230,6 +230,34 @@ describe("Decision deadlock (real HTTP, real Postgres)", () => {
     expect(requestId).toBeTruthy();
   }, 180_000);
 
+  /**
+   * WAITING_CUSTOMER is unreachable, and deliberately left that way.
+   *
+   * `ASK_CUSTOMER` (IN_PROGRESS -> WAITING_CUSTOMER) has no production
+   * caller, so a mid-job question leaves the job reading IN_PROGRESS.
+   * That is a real gap -- the board cannot show "waiting on the customer"
+   * mid-work -- but wiring the intent makes things strictly WORSE, which
+   * is why this asserts the gap instead of closing it.
+   *
+   * The graph gives WAITING_CUSTOMER exactly two exits: CUSTOMER_RESPONDED,
+   * which needs the customer to answer, and an unintented edge to
+   * CANCELLED that nothing can drive. FINISH leaves only IN_PROGRESS. So
+   * a job moved to WAITING_CUSTOMER by a customer who then stops
+   * answering has no way out at all -- withdrawing the request (below)
+   * does not move work orders. Leaving the job IN_PROGRESS keeps the
+   * withdraw guard working, which is the lesser of the two.
+   *
+   * Recorded as F-008. Closing it needs a staff exit from
+   * WAITING_CUSTOMER, which is a graph change and out of bounds here.
+   */
+  it("[F-008] a mid-job question leaves the job in progress, because the alternative strands it", async () => {
+    const workOrder = await booted.prisma.workOrder.findUniqueOrThrow({
+      where: { id: workOrderId },
+      select: { status: true },
+    });
+    expect(workOrder.status).toBe("IN_PROGRESS");
+  }, 120_000);
+
   it("the unanswered question holds the finished car in the workshop", async () => {
     const check = await http(booted)
       .get(`/api/v1/technician/work-orders/${workOrderId}/finish-check`)
