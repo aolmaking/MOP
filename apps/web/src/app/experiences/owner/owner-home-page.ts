@@ -5,6 +5,7 @@ import { ErrorBanner } from '../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../ui/button/button.directive';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import { OwnerHomeApi, type OwnerHome } from './owner-home.api';
+import { isHeldBack } from '../../runtime/launch-surface';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
@@ -35,6 +36,14 @@ interface StatCard {
   styleUrl: './owner-home-page.css',
 })
 export class OwnerHomePage {
+  /**
+   * History is written and queryable; the owner-facing page waits for
+   * M4, so the launch sprint holds it back. The recent-activity list
+   * above stays -- only the door to the full page closes, because a
+   * "see everything" link to a page the rail hides is a dead end.
+   */
+  protected readonly historyVisible = !isHeldBack('/owner/audit');
+
   private readonly api = inject(OwnerHomeApi);
   private readonly destroyRef = inject(DestroyRef);
 

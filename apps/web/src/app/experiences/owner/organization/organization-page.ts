@@ -6,6 +6,7 @@ import { ErrorBanner } from '../../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../../ui/button/button.directive';
 import type { PresentedError } from '../../../runtime/http/error.interceptor';
 import { DismissOnEscapeDirective } from '../../../ui/dismiss-on-escape/dismiss-on-escape.directive';
+import { isHeldBack } from '../../../runtime/launch-surface';
 import {
   OrganizationApi,
   type BranchListItem,
@@ -44,6 +45,14 @@ const INVITABLE_ROLES: readonly StaffRole[] = [
   styleUrl: './organization-page.css',
 })
 export class OrganizationPage {
+  /**
+   * The Teams page exists and works; the launch sprint holds its whole
+   * surface back because TEAMS is off in the launch profile. Without
+   * this the sentence above would send a pilot owner to a page their
+   * rail deliberately does not offer.
+   */
+  protected readonly teamsVisible = !isHeldBack('/owner/organization/teams');
+
   private readonly api = inject(OrganizationApi);
   private readonly destroyRef = inject(DestroyRef);
 
