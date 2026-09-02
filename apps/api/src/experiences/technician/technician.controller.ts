@@ -98,6 +98,29 @@ export class TechnicianController {
   }
 
   /**
+   * "Start inspection" -- REGISTERED to UNDER_INSPECTION. The first half
+   * of the spine that was entirely unwired: `WorkOrderLifecycleService`
+   * has always known this move, and nothing ever pressed the button.
+   */
+  @Post("work-orders/:id/start-inspection")
+  async startInspection(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.start_inspection");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.work.startInspection(id, this.actor(session));
+  }
+
+  /**
+   * "Start work" -- APPROVED_FOR_WORK to IN_PROGRESS. Same gap as
+   * `startInspection`, one stage later in the job.
+   */
+  @Post("work-orders/:id/start-work")
+  async startWork(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.start_work");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.work.startWork(id, this.actor(session));
+  }
+
+  /**
    * Record the inspection.
    *
    * `TechnicianWorkService.recordInspection` was fully built, wrote the

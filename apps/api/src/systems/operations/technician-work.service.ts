@@ -225,6 +225,25 @@ export class TechnicianWorkService {
   }
 
   /**
+   * The technician's own press of "Start inspection" -- REGISTERED to
+   * UNDER_INSPECTION, the START_INSPECTION intent. Existed in
+   * WORKFLOW_INTENTS with zero production callers: a job could be booked
+   * in and never move, because nothing ever asked the lifecycle service
+   * for this move.
+   */
+  async startInspection(workOrderId: string, actor: LifecycleActor) {
+    return this.lifecycle.apply(workOrderId, "START_INSPECTION", actor);
+  }
+
+  /**
+   * The technician's own press of "Start work" -- APPROVED_FOR_WORK to
+   * IN_PROGRESS, the START_WORK intent. Same gap as `startInspection`.
+   */
+  async startWork(workOrderId: string, actor: LifecycleActor) {
+    return this.lifecycle.apply(workOrderId, "START_WORK", actor);
+  }
+
+  /**
    * The technician's own press of "Ready to finish" -- the FINISH intent,
    * asked for real rather than only previewed.
    *

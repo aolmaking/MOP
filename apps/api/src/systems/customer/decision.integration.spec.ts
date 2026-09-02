@@ -17,6 +17,8 @@ import { PrismaClient } from "@mop/database";
 import { CustomerDecisionService } from "./decision.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../operations/customer-safe-projection.service";
+import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
+import { GateEvaluatorService } from "../operations/gate-evaluator.service";
 import { AuditService } from "../../audit/audit.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
@@ -26,11 +28,15 @@ const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
 const audit = new AuditService(asService);
 const policies = new PolicyResolutionService(asService, audit, new CapabilityResolutionService(asService));
-const decisions = new CustomerDecisionService(
+const events = new OperationEventsService(asService, audit, new CustomerSafeProjectionService());
+const lifecycle = new WorkOrderLifecycleService(
   asService,
-  new OperationEventsService(asService, audit, new CustomerSafeProjectionService()),
+  new CapabilityResolutionService(asService),
+  events,
+  new GateEvaluatorService(asService, policies),
   policies,
 );
+const decisions = new CustomerDecisionService(asService, events, policies, lifecycle);
 
 const SUFFIX = `dec-${Date.now()}`;
 let tenantId: string;
@@ -654,6 +660,200 @@ describe("raiseAndSend -- a technician actually asking the customer something", 
     // Exact decimal arithmetic -- 0.10 + 0.20, not the float that famously
     // is not 0.30.
     expect(item.total.toFixed(2)).toBe("0.30");
+  });
+
+  it("moves REGISTERED work straight to AWAITING_CUSTOMER_APPROVAL", async () => {
+    const workOrder = await prisma.workOrder.create({
+      data: { tenantId, branchId, assetId, customerId, status: "UNDER_INSPECTION" as never },
+    });
+
+    await decisions.raiseAndSend(
+      tenantId,
+      workOrder.id,
+      { name: "Worn tie rod", explanation: "Play found during inspection.", importance: "HIGH", price: "600.00" },
+      STAFF,
+    );
+
+    const after = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrder.id } });
+    expect(after.status).toBe("AWAITING_CUSTOMER_APPROVAL");
+  });
+
+  it("moves an in-progress job to WAITING_CUSTOMER via ASK_CUSTOMER, not APPROVE", async () => {
+    const workOrder = await prisma.workOrder.create({
+      data: { tenantId, branchId, assetId, customerId, status: "IN_PROGRESS" as never },
+    });
+
+    await decisions.raiseAndSend(
+      tenantId,
+      workOrder.id,
+      { name: "Extra scope found mid-job", explanation: "Bracket cracked while off.", importance: "MEDIUM", price: "300.00" },
+      STAFF,
+    );
+
+    const after = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrder.id } });
+    expect(after.status).toBe("WAITING_CUSTOMER");
+  });
+
+  it("does not blow up asking on a job with no live REQUEST_APPROVAL/ASK_CUSTOMER edge", async () => {
+    // BLOCKED has neither edge. The request must still be created and
+    // sent -- only the optional lifecycle move is swallowed.
+    const workOrder = await prisma.workOrder.create({
+      data: { tenantId, branchId, assetId, customerId, status: "BLOCKED" as never },
+    });
+
+    const result = await decisions.raiseAndSend(
+      tenantId,
+      workOrder.id,
+      { name: "Unrelated ask", explanation: "Asked while blocked.", importance: "LOW", price: "50.00" },
+      STAFF,
+    );
+
+    expect(result.requestId).toBeTruthy();
+    const after = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrder.id } });
+    expect(after.status).toBe("BLOCKED");
+  });
+});
+
+/**
+ * The other half of spine ignition: answering a decision moves the job.
+ * `applyAnswers` used to only ever write item/request rows -- the customer
+ * could approve everything and the job would sit at
+ * AWAITING_CUSTOMER_APPROVAL forever, because nothing downstream of an
+ * answer ever asked the lifecycle service to move it.
+ */
+describe("answering a decision moves the work order", () => {
+  const STAFF = { accountId: "tech-1", displayName: "Hassan Fathy" };
+
+  it("APPROVEs the job once every item is answered and at least one was approved", async () => {
+    const made = await makeRequest();
+
+    await decisions.respond(made.token, [
+      { itemId: made.normalItemId, decision: "APPROVED" },
+      { itemId: made.highItemId, decision: "APPROVED" },
+      { itemId: made.criticalItemId, decision: "APPROVED" },
+    ]);
+
+    const workOrder = await prisma.workOrder.findFirstOrThrow({
+      where: { decisionRequests: { some: { id: made.requestId } } },
+    });
+    expect(workOrder.status).toBe("APPROVED_FOR_WORK");
+  });
+
+  it("does NOT approve the job when the customer rejects everything", async () => {
+    // A full rejection must never read as an approval. The job stays
+    // exactly where it was -- a human decides what happens next, the
+    // system does not invent an APPROVE nobody gave.
+    const made = await makeRequest();
+
+    await decisions.respond(made.token, [
+      { itemId: made.normalItemId, decision: "REJECTED" },
+      { itemId: made.highItemId, decision: "REJECTED", warningAcknowledged: true },
+      { itemId: made.criticalItemId, decision: "REJECTED", warningAcknowledged: true },
+    ]);
+
+    const workOrder = await prisma.workOrder.findFirstOrThrow({
+      where: { decisionRequests: { some: { id: made.requestId } } },
+    });
+    expect(workOrder.status).toBe("AWAITING_CUSTOMER_APPROVAL");
+  });
+
+  it("CUSTOMER_RESPONDED clears a mid-job WAITING_CUSTOMER ask, approved or not", async () => {
+    const workOrder = await prisma.workOrder.create({
+      data: { tenantId, branchId, assetId, customerId, status: "IN_PROGRESS" as never },
+    });
+    const raised = await decisions.raiseAndSend(
+      tenantId,
+      workOrder.id,
+      { name: "Mid-job ask", explanation: "Found while apart.", importance: "LOW", price: "80.00" },
+      STAFF,
+    );
+    // raiseAndSend already moved this to WAITING_CUSTOMER -- confirms the
+    // fixture before the assertion that matters.
+    expect((await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrder.id } })).status).toBe(
+      "WAITING_CUSTOMER",
+    );
+
+    const item = await prisma.customerDecisionItem.findFirstOrThrow({ where: { decisionRequestId: raised.requestId } });
+    await decisions.respond(raised.secureToken, [{ itemId: item.id, decision: "REJECTED" }]);
+
+    const after = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrder.id } });
+    expect(after.status).toBe("IN_PROGRESS");
+  });
+
+  it("does not fire a lifecycle move on a PARTIAL answer -- only once the request is fully resolved", async () => {
+    const made = await makeRequest();
+
+    // Answers only the critical item; normal and high stay PENDING.
+    await decisions.respond(made.token, [{ itemId: made.criticalItemId, decision: "APPROVED" }]);
+
+    const workOrder = await prisma.workOrder.findFirstOrThrow({
+      where: { decisionRequests: { some: { id: made.requestId } } },
+    });
+    expect(workOrder.status).toBe("AWAITING_CUSTOMER_APPROVAL");
+  });
+});
+
+describe("VIEWED -- the customer's own open of the link", () => {
+  it("writes VIEWED the first time the link is read, and only from SENT", async () => {
+    const made = await makeRequest();
+    expect((await prisma.customerDecisionRequest.findUniqueOrThrow({ where: { id: made.requestId } })).status).toBe(
+      "SENT",
+    );
+
+    await decisions.read(made.token);
+
+    expect((await prisma.customerDecisionRequest.findUniqueOrThrow({ where: { id: made.requestId } })).status).toBe(
+      "VIEWED",
+    );
+
+    // A second read must not un-resolve an already-answered request --
+    // resolve it, then confirm a further read leaves it alone.
+    await decisions.respond(made.token, [
+      { itemId: made.normalItemId, decision: "APPROVED" },
+      { itemId: made.highItemId, decision: "APPROVED" },
+      { itemId: made.criticalItemId, decision: "APPROVED", warningAcknowledged: true },
+    ]);
+    await decisions.read(made.token);
+    expect((await prisma.customerDecisionRequest.findUniqueOrThrow({ where: { id: made.requestId } })).status).toBe(
+      "RESOLVED",
+    );
+  });
+});
+
+describe("cancel -- staff withdraws an ask nobody has answered", () => {
+  const STAFF = { accountId: "manager-1", displayName: "Youssef Adel" };
+
+  it("cancels an unanswered request", async () => {
+    const made = await makeRequest();
+
+    await decisions.cancel(tenantId, [], made.requestId, STAFF);
+
+    const stored = await prisma.customerDecisionRequest.findUniqueOrThrow({ where: { id: made.requestId } });
+    expect(stored.status).toBe("CANCELLED");
+
+    // And a cancelled link reads as not-found, same as a made-up token.
+    await expect(decisions.read(made.token)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("refuses to cancel a request the customer has already answered", async () => {
+    const made = await makeRequest();
+    await decisions.respond(made.token, [{ itemId: made.normalItemId, decision: "APPROVED" }]);
+
+    await expect(decisions.cancel(tenantId, [], made.requestId, STAFF)).rejects.toMatchObject({
+      status: 409,
+      response: { code: "decision_already_answered" },
+    });
+  });
+
+  it("respects branch scope, same as recordOnBehalf/detailForStaff", async () => {
+    const made = await makeRequest();
+    const otherBranch = await prisma.branch.create({ data: { tenantId, name: "Other", code: `OTH-${Date.now()}` } });
+
+    await expect(decisions.cancel(tenantId, [otherBranch.id], made.requestId, STAFF)).rejects.toMatchObject({
+      status: 404,
+    });
+
+    await prisma.branch.delete({ where: { id: otherBranch.id } });
   });
 });
 

@@ -78,9 +78,21 @@ const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   // separate key from .create/.send -- this is staff acting AS the
   // decision channel, not drafting or dispatching one.
   { key: "customer_decision.record_on_behalf", module: "OPERATIONS" },
+  // M-3: withdrawing an ask nobody has answered yet -- a distinct act
+  // from recording an answer on the customer's behalf.
+  { key: "customer_decision.cancel", module: "OPERATIONS" },
+  // BM parity with the technician's own "Add task" -- Branch Manager can
+  // put a task on a job directly from the workspace, not only through a
+  // technician's own card.
+  { key: "task.branch.create", module: "OPERATIONS" },
 
   // Technician work card
   { key: "task.view_assigned", module: "OPERATIONS" },
+  // The spine-ignition pair: a technician's own press of "Start
+  // inspection" / "Start work". Existed as WORKFLOW_INTENTS with zero
+  // production callers until now -- see WorkOrderLifecycleService.
+  { key: "task.start_inspection", module: "OPERATIONS" },
+  { key: "task.start_work", module: "OPERATIONS" },
   { key: "task.finish_attempt", module: "OPERATIONS" },
   { key: "task.complete", module: "OPERATIONS" },
   { key: "inspection.quick.create", module: "OPERATIONS" },

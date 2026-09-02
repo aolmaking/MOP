@@ -85,6 +85,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     // P-18: the branch is where a customer answers verbally in person or
     // by phone when they have no portal, or simply prefer to.
     "customer_decision.record_on_behalf": true,
+    "customer_decision.cancel": true,
+    "task.branch.create": true,
     "finance.invoice.view": true,
     // Issuing/recording money is Owner-only unless explicitly delegated --
     // see tenant-owner.md's Pricing page.
@@ -107,6 +109,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
   },
   TECHNICIAN: {
     "task.view_assigned": true,
+    "task.start_inspection": true,
+    "task.start_work": true,
     "task.finish_attempt": true,
     "task.complete": true,
     "inspection.quick.create": true,

@@ -2,8 +2,96 @@
 
 > **Purpose:** everything needed to continue MOP in a fresh session without the previous conversation.
 > **Companion:** [`CLAUDE.md`](./CLAUDE.md) holds permanent knowledge (architecture, rules, toolchain). This holds *where we are*.
-> **Last updated:** 2026-08-25, after Plan ceilings (`maxBranches`/`maxUsers`/`maxWarehouses`) gained ongoing enforcement. See the entry directly below for that, then the Data Analyst Export entry, then §0 (2026-08-22) for the policy engine mission, §11 for the older full session log.
+> **Last updated:** 2026-09-02 — the mission is now governed by
+> [`docs/STRATEGY_B_EXECUTION_LEDGER.md`](./docs/STRATEGY_B_EXECUTION_LEDGER.md). Read that file first; it is the live queue. See the entry directly below for what just landed, then the entries after it for the history this new mission builds on.
 > **Keep this current.** Update it at the end of any phase task, and before ending a long session.
+
+---
+
+## 0. Mission pivot: Strategy B — Quick-Service Vertical, 14-day contract (2026-09-02)
+
+The owner gave a full 14-day product-scope contract directly in chat (four
+strategies compared — Minimal OS, Quick-Service Vertical, Configurable
+Core, Pilot Product — with Strategy B chosen: the existing
+`SINGLE_BAY_QUICK_SERVICE` capability profile shipped as the product,
+`BILLING=EXTERNAL` as the compliance seam since no country adapter
+exists) and instructed this session to self-manage the mission queue,
+work it continuously across sessions without stopping for confirmation,
+and resume automatically after any usage/token limit recharges. The full
+MUST/SHOULD/DEFERRED/FORBIDDEN contract, current code-verified status per
+item, and the next-item pointer live in
+[`docs/STRATEGY_B_EXECUTION_LEDGER.md`](./docs/STRATEGY_B_EXECUTION_LEDGER.md)
+— that file, not this section, is the live queue going forward.
+`docs/UI_UX_EXECUTION_LEDGER.md`'s remaining items were folded into the
+new ledger's "Also queued" section rather than abandoned.
+
+**First slice shipped this pass — M-1 (spine ignition, backend) + M-3
+(decision lifecycle hygiene):** a code-verified audit (Explore agent, full
+file:line citations) found the six lifecycle intents `START_INSPECTION`,
+`REQUEST_APPROVAL`, `APPROVE`, `START_WORK`, `ASK_CUSTOMER`,
+`CUSTOMER_RESPONDED` had zero production callers — a job could be booked
+in and could never move again except through a test calling
+`WorkOrderLifecycleService.apply()` directly. Fixed:
+
+- `TechnicianWorkService.startInspection`/`.startWork` (new), exposed at
+  `POST technician/work-orders/:id/start-inspection`/`start-work`.
+- `CustomerDecisionService.raiseAndSend`/`applyAnswers`
+  (`apps/api/src/systems/customer/decision.service.ts`) now call the
+  lifecycle service themselves, outside their own write transactions, via
+  a new `moveIfPossible` that swallows only a refused transition
+  (`ConflictException`) — a genuine bug still propagates.
+  `raiseAndSend` tries `REQUEST_APPROVAL` then `ASK_CUSTOMER`;
+  `applyAnswers` tries `APPROVE` (only when at least one item was actually
+  approved — a full rejection must never read as an approval) then
+  `CUSTOMER_RESPONDED`, and only once the whole request is resolved, not
+  on a partial answer.
+- Branch Manager gained parity endpoints — `POST
+  branch-manager/work-orders/:id/tasks` and `.../decisions` — reusing the
+  exact same `TechnicianWorkService.createTask`/`CustomerDecisionService.
+  raiseAndSend` the technician's own card calls, so both doors into the
+  same action agree by construction.
+- **M-3:** `CustomerDecisionService.read()` now writes `SENT -> VIEWED`
+  (best-effort; a read must never fail because the status write did) —
+  `CUSTOMER_DECISION_GRAPH` had declared that edge since it was written
+  and nothing wrote it. New `cancel()` lets staff withdraw an ask nobody
+  has answered yet (refuses once `respondedAt` is set), wired at `POST
+  branch-manager/approvals/:requestId/cancel`.
+- New permission keys (all in `packages/shared/src/permissions/`):
+  `task.start_inspection`, `task.start_work`, `task.branch.create`,
+  `customer_decision.cancel` — granted to TECHNICIAN/BRANCH_MANAGER by
+  default respectively. **Note:** existing seeded tenants will not have
+  these rows until re-seeded or backfilled; new tenants get them
+  automatically since onboarding seeds from this map.
+
+**Verified:** 15 new integration tests against real Postgres
+(`decision.integration.spec.ts`, `technician-work.integration.spec.ts`),
+full gate green — 884/885 API tests (the one failure,
+`scheduler-lock.integration.spec.ts`, is a pre-existing flaky
+advisory-lock race under full-suite load; confirmed unrelated, passes
+clean in isolation), 243 shared tests, all 6 custom lints, `apps/api` +
+`packages/shared` typecheck, full build (API + web).
+
+**Explicitly not done in this pass, and next in the queue:** the web-side
+buttons that call these new endpoints (work-card contextual action,
+workspace add-task/request-approval, approvals-drawer cancel) — backend
+and frontend were built together in every prior session's slices, but
+this pass prioritized getting the spine itself provably real first, since
+the ledger's own audit fact is that *nothing downstream matters until
+this lands*. See the ledger's "Next item" for the exact resume point.
+
+**Pre-existing uncommitted work found at session start, left untouched by
+this pass, on purpose:** `apps/api/src/control/platform/
+plan-limits.service.ts` had an uncommitted, substantial extension in the
+working tree (a per-tenant `ControlSetting`-backed override on top of the
+plan default — `EffectiveLimit`, `effectiveLimit(s)`, an
+`activeOverride` read) referencing a `TenantLimitOverrideService` in
+`apps/api/src/control/governance/` that does not yet exist. It typechecks
+and builds cleanly standalone (confirmed as part of this pass's full
+gate) but is not part of the Strategy B mission and was not started by
+this session, so it was left exactly as found rather than committed,
+discarded, or finished. It appears to be the "per-tenant override" item
+the 2026-08-25 Plan-ceilings entry below named as explicitly not done —
+worth finishing as its own slice, but not this one.
 
 ---
 

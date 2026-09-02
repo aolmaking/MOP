@@ -12,12 +12,15 @@ import { WorkOrderBoardService, type BoardResult } from "./work-order-board.serv
 import { ApprovalsService, type ApprovalsResult } from "./approvals.service";
 import { DeliveryService, type DeliveryBoard } from "./delivery.service";
 import { CustomerDecisionService, type PublicDecision } from "../../systems/customer/decision.service";
+import { RaiseDecisionDto } from "../../systems/customer/decision.dto";
 import { RecordDecisionDto } from "./record-decision.dto";
 import { AdvanceWorkOrderDto } from "./advance-work-order.dto";
 import { AddNoteDto } from "./add-note.dto";
+import { CreateTaskDto } from "./create-task.dto";
 import { WorkOrderDossierService } from "../../systems/operations/work-order-dossier.service";
 import { WorkflowJourneyService } from "../../systems/operations/workflow-journey.service";
 import { WorkOrderLifecycleService } from "../../systems/operations/work-order-lifecycle.service";
+import { TechnicianWorkService } from "../../systems/operations/technician-work.service";
 
 export interface AttentionCenterResponse {
   /** Ranked most urgent first. Empty is a valid and desirable state. */
@@ -43,6 +46,7 @@ export class BranchManagerController {
     private readonly dossierService: WorkOrderDossierService,
     private readonly journey: WorkflowJourneyService,
     private readonly lifecycle: WorkOrderLifecycleService,
+    private readonly work: TechnicianWorkService,
   ) {}
 
   /**
@@ -241,6 +245,51 @@ export class BranchManagerController {
     });
   }
 
+  /**
+   * A manager puts a task on the job directly from the workspace, the same
+   * write the technician's own card exposes -- `TechnicianWorkService.
+   * createTask()` existed with zero non-test callers until now.
+   */
+  @Post("work-orders/:id/tasks")
+  async createTask(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: CreateTaskDto) {
+    const allowed = await this.access.can(session, "task.branch.create");
+    if (!allowed || !session.tenantId) {
+      throw new ForbiddenException({ code: "forbidden", message: "You cannot add a task to this job." });
+    }
+    // Scoped through the board's own read first, same rule as every other
+    // write in this controller.
+    await this.boardService.detail({ tenantId: session.tenantId, branchScope: session.branchScope }, id);
+    return this.work.createTask(
+      id,
+      dto.title,
+      { accountId: session.accountId, displayName: session.displayName, actorType: "TENANT_STAFF" },
+      dto.assignToStaffUserId,
+      dto.serviceKey,
+    );
+  }
+
+  /**
+   * A manager asks the customer something directly from the workspace --
+   * the same `raiseAndSend` the technician's card uses, so both doors into
+   * a customer decision agree by construction rather than by two
+   * hand-written implementations.
+   */
+  @Post("work-orders/:id/decisions")
+  async raiseDecision(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: RaiseDecisionDto) {
+    const canCreate = await this.access.can(session, "customer_decision.create");
+    const canSend = await this.access.can(session, "customer_decision.send");
+    if (!canCreate || !canSend || !session.tenantId) {
+      throw new ForbiddenException({ code: "forbidden", message: "You cannot ask the customer for approval." });
+    }
+    await this.boardService.detail({ tenantId: session.tenantId, branchScope: session.branchScope }, id);
+    return this.customerDecisions.raiseAndSend(
+      session.tenantId,
+      id,
+      { name: dto.name, explanation: dto.explanation, importance: dto.importance, price: dto.price, laborPrice: dto.laborPrice },
+      { accountId: session.accountId, displayName: session.displayName },
+    );
+  }
+
   /** The chase list. Oldest first, because it is worked top to bottom. */
   @Get("approvals")
   async approvals(@CurrentSession() session: SessionContext): Promise<ApprovalsResult> {
@@ -297,6 +346,29 @@ export class BranchManagerController {
       { accountId: session.accountId, displayName: session.displayName },
       dto.evidenceReference,
     );
+    return { ok: true };
+  }
+
+  /**
+   * M-3: withdraw an ask nobody has answered yet. `CustomerDecisionService.
+   * cancel` refuses once the customer has answered anything -- this
+   * endpoint adds only the access and branch-scope checks, same rule as
+   * every other write here.
+   */
+  @Post("approvals/:requestId/cancel")
+  @HttpCode(200)
+  async cancelApproval(
+    @CurrentSession() session: SessionContext,
+    @Param("requestId") requestId: string,
+  ): Promise<{ ok: true }> {
+    const allowed = await this.access.can(session, "customer_decision.cancel");
+    if (!allowed || !session.tenantId) {
+      throw new ForbiddenException({ code: "forbidden", message: "You cannot cancel a customer decision." });
+    }
+    await this.customerDecisions.cancel(session.tenantId, session.branchScope, requestId, {
+      accountId: session.accountId,
+      displayName: session.displayName,
+    });
     return { ok: true };
   }
 
