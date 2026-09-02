@@ -267,6 +267,34 @@ describe('TechWorkCard', () => {
       expect(api.returnPart).toHaveBeenCalledWith('pr1', 1, 'Wrong size for this model');
     });
 
+    /**
+     * Found by walking this in a browser. The graph genuinely allows
+     * RETURN_CLARIFICATION_REQUESTED -> RETURN_REQUESTED, so `returnable`
+     * is true here and the card offered "Send it back" beside "Answer
+     * the store" -- two doors to the same room, and the wrong one
+     * silently throws away the question the store asked.
+     */
+    it('does not offer to re-send a part while the store is waiting on an answer', async () => {
+      const { element } = await render(
+        card({
+          parts: [
+            receivedPart({
+              status: 'RETURN_CLARIFICATION_REQUESTED',
+              statusText: 'The store asked you a question about the return.',
+              action: null,
+              returnable: true,
+              clarificationPending: true,
+              clarificationQuestion: 'Which axle did you take these off?',
+            }),
+          ],
+        }),
+      );
+
+      const labels = [...element.querySelectorAll('button')].map((b) => b.textContent?.trim());
+      expect(labels).toContain('Answer the store');
+      expect(labels).not.toContain('Send it back');
+    });
+
     it("shows the store's actual question, not just that one was asked", async () => {
       const { element } = await render(
         card({

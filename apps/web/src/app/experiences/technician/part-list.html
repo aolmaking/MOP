@@ -31,10 +31,17 @@
         </button>
       }
 
-      @if (part.returnable) {
+      @if (part.returnable && !part.clarificationPending) {
         <!-- Rendered from the server's flag, never from the status. A
              workshop with returns removed has no such edge and no
-             button. -->
+             button.
+
+             Suppressed while the store is waiting on an answer even
+             though the graph still allows it: RETURN_CLARIFICATION_REQUESTED
+             loops back to RETURN_REQUESTED, so `returnable` is honestly
+             true here, but offering it beside "Answer the store" gives
+             the technician two doors to the same room -- and taking the
+             wrong one silently discards the question they were asked. -->
         <button class="tap" type="button" [disabled]="busy() !== null" (click)="open('return', part)">
           {{ isOpen('return', part) ? 'Cancel' : 'Send it back' }}
         </button>
