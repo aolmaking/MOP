@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
+import { vi } from 'vitest';
 import { DeliveryPage } from './delivery-page';
+import { AccessApi } from '../../../identity/access.api';
 import { ApprovalsApi, type DeliveryBoard, type DeliveryCandidate } from './approvals.api';
 
 function candidate(overrides: Partial<DeliveryCandidate> = {}): DeliveryCandidate {
@@ -14,16 +16,22 @@ function candidate(overrides: Partial<DeliveryCandidate> = {}): DeliveryCandidat
     waitingHours: 3,
     canLeave: true,
     blockedBy: [],
+    unsettledInvoiceId: null,
     ...overrides,
   };
 }
 
-function render(board: Partial<DeliveryBoard> | { error: unknown }) {
+function render(board: Partial<DeliveryBoard> | { error: unknown }, mayTakePayment = true) {
   const api = {
     delivery: () => ('error' in board ? throwError(() => board.error) : of({ ready: [], held: [], ...board })),
   };
+  const access = { can: vi.fn(() => of(mayTakePayment)) };
   TestBed.configureTestingModule({
-    providers: [provideRouter([]), { provide: ApprovalsApi, useValue: api }],
+    providers: [
+      provideRouter([]),
+      { provide: ApprovalsApi, useValue: api },
+      { provide: AccessApi, useValue: access },
+    ],
   });
   const fixture = TestBed.createComponent(DeliveryPage);
   fixture.detectChanges();
@@ -88,5 +96,43 @@ describe('DeliveryPage', () => {
 
     expect(element.textContent).toContain("don't have access");
     expect(element.textContent).not.toContain('Try again');
+  });
+
+  describe('taking payment (M-4)', () => {
+    const heldForMoney = () =>
+      candidate({
+        workOrderId: 'unpaid',
+        canLeave: false,
+        blockedBy: ['The invoice has not been settled.'],
+        unsettledInvoiceId: 'inv-9',
+      });
+
+    it('offers the way out of a held row, not just the reason', () => {
+      const { element } = render({ held: [heldForMoney()] });
+
+      const link = [...element.querySelectorAll('a')].find((a) => a.textContent?.trim() === 'Take payment');
+      expect(link).toBeTruthy();
+      // Straight at the existing Take Payment page, keyed by the invoice.
+      expect(link?.getAttribute('href')).toBe('/branch/payments/inv-9');
+    });
+
+    /**
+     * `default-role-permissions.ts` withholds `finance.payment.record`
+     * from BRANCH_MANAGER, and this is a manager's page. A button that
+     * greets half its audience with a 403 is worse than no button.
+     */
+    it('hides it from someone who may not record a payment', () => {
+      const { element } = render({ held: [heldForMoney()] }, false);
+
+      expect([...element.querySelectorAll('a')].some((a) => a.textContent?.trim() === 'Take payment')).toBe(false);
+    });
+
+    it('offers nothing when the money is already settled', () => {
+      const { element } = render({
+        held: [candidate({ canLeave: false, blockedBy: ['Another gate.'], unsettledInvoiceId: null })],
+      });
+
+      expect([...element.querySelectorAll('a')].some((a) => a.textContent?.trim() === 'Take payment')).toBe(false);
+    });
   });
 });

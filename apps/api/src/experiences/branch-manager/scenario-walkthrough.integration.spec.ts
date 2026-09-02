@@ -29,6 +29,7 @@ import { AttentionQueueService } from "./attention-queue.service";
 import { WorkOrderBoardService } from "./work-order-board.service";
 import { ApprovalsService } from "./approvals.service";
 import { DeliveryService } from "./delivery.service";
+import type { FinanceService } from "../../systems/finance/finance.service";
 import type { PrismaService } from "../../runtime/database/prisma.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 
@@ -60,7 +61,22 @@ const intake = new IntakeService(asService, events, lifecycle);
 const attention = new AttentionQueueService(asService, policiesForTest);
 const board = new WorkOrderBoardService(asService);
 const approvals = new ApprovalsService(asService);
-const delivery = new DeliveryService(asService, lifecycle);
+/**
+ * The delivery board asks Finance whether an invoice is settled. This
+ * walkthrough's job never has one -- step 13 asserts exactly that -- so
+ * the question is never reached.
+ *
+ * Throwing rather than returning a plausible answer keeps that an
+ * assertion instead of an assumption: if an invoice ever appears here,
+ * this fails loudly rather than quietly agreeing with a stub.
+ */
+const financeNeverAsked = {
+  settlement: () => {
+    throw new Error("This walkthrough has no invoice; the delivery board should not have asked Finance about one.");
+  },
+} as unknown as FinanceService;
+
+const delivery = new DeliveryService(asService, lifecycle, financeNeverAsked);
 
 const ACTOR = { accountId: "advisor-1", displayName: "Advisor", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `walk-${Date.now()}`;

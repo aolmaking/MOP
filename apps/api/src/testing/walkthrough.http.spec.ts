@@ -606,6 +606,30 @@ describe("Walkthrough (real HTTP, real Postgres)", () => {
     expect(invoiceId).toBeTruthy();
   }, 120_000);
 
+  /**
+   * M-4's other half: the counter has to be able to FIND the invoice.
+   *
+   * The delivery board named the reason ("The invoice has not been
+   * settled.") and carried nothing to act on, so the only route to the
+   * Take Payment page was typing its URL. The board now carries the
+   * unsettled invoice id, and the page is keyed by exactly that.
+   */
+  it("[M-4] the delivery board hands the counter the invoice that is holding the car", async () => {
+    const manager = await loginAs(booted, `manager-direct-${SUFFIX}@mop.local`, MANAGER_PASSWORD);
+
+    const board = await http(booted).get("/api/v1/branch-manager/delivery").set("Cookie", manager.cookie);
+    expectCode(board, 200);
+
+    const row = [...board.body.held, ...board.body.ready].find(
+      (candidate: { workOrderId: string }) => candidate.workOrderId === workOrderId,
+    );
+    expect(row).toBeDefined();
+    expect(row.canLeave).toBe(false);
+    expect(row.blockedBy.join(" ")).toContain("settled");
+    // The actionable half: this is what `/branch/payments/:id` is keyed by.
+    expect(row.unsettledInvoiceId).toBe(invoiceId);
+  }, 120_000);
+
   it("[M-4] the counter takes payment, and the car becomes releasable", async () => {
     const owner = await loginAs(booted, ownerEmail, OWNER_PASSWORD);
 
@@ -643,6 +667,18 @@ describe("Walkthrough (real HTTP, real Postgres)", () => {
       select: { status: true },
     });
     expect(workOrder.status).toBe("READY_FOR_DELIVERY");
+
+    // And the board stops offering to take money that is no longer owed.
+    // A "Take payment" link surviving settlement is the same class of
+    // dead button as one that never worked.
+    const manager = await loginAs(booted, `manager-direct-${SUFFIX}@mop.local`, MANAGER_PASSWORD);
+    const board = await http(booted).get("/api/v1/branch-manager/delivery").set("Cookie", manager.cookie);
+    expectCode(board, 200);
+    const row = [...board.body.held, ...board.body.ready].find(
+      (candidate: { workOrderId: string }) => candidate.workOrderId === workOrderId,
+    );
+    expect(row.canLeave).toBe(true);
+    expect(row.unsettledInvoiceId).toBeNull();
   }, 120_000);
 
   it("the manager releases the car, and the job closes", async () => {

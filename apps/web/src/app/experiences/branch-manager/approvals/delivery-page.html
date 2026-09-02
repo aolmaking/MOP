@@ -66,6 +66,20 @@
                       <li class="reason">{{ reason }}</li>
                     }
                   </ul>
+
+                  @if (row.unsettledInvoiceId && mayTakePayment()) {
+                    <!--
+                      The way OUT of the held state, not just its name.
+                      Offered only when there is genuinely money owed AND
+                      this person may record a payment -- BRANCH_MANAGER
+                      does not hold `finance.payment.record` by default,
+                      and a button that greets half its audience with a
+                      403 is worse than no button.
+                    -->
+                    <a class="row-pay" [routerLink]="['/branch/payments', row.unsettledInvoiceId]">
+                      Take payment
+                    </a>
+                  }
                 </li>
               }
             </ul>

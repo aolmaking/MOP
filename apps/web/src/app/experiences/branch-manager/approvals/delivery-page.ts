@@ -4,6 +4,7 @@ import { Identifier } from '../../../ui/identifier/identifier';
 import { ErrorBanner } from '../../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../../ui/button/button.directive';
 import type { PresentedError } from '../../../runtime/http/error.interceptor';
+import { AccessApi } from '../../../identity/access.api';
 import { ApprovalsApi, type DeliveryBoard, type DeliveryCandidate } from './approvals.api';
 
 type State = 'loading' | 'ready' | 'empty' | 'forbidden' | 'error';
@@ -24,6 +25,19 @@ type State = 'loading' | 'ready' | 'empty' | 'forbidden' | 'error';
 })
 export class DeliveryPage {
   private readonly api = inject(ApprovalsApi);
+  private readonly access = inject(AccessApi);
+
+  /**
+   * Whether this person may actually take money.
+   *
+   * `default-role-permissions.ts` withholds `finance.payment.record` from
+   * BRANCH_MANAGER on purpose -- the till is the owner's by default -- and
+   * this page is a manager's page. Asking the server rather than assuming
+   * either way is what keeps "Take payment" from being a button that
+   * greets half its audience with a 403. Defaults to false, so a failed
+   * check costs a hidden action rather than a dead one.
+   */
+  protected readonly mayTakePayment = signal(false);
 
   protected readonly board = signal<DeliveryBoard | null>(null);
   protected readonly error = signal<PresentedError | null>(null);
@@ -34,6 +48,7 @@ export class DeliveryPage {
 
   constructor() {
     this.load();
+    this.access.can('finance.payment.record').subscribe((allowed) => this.mayTakePayment.set(allowed));
   }
 
   protected load(): void {

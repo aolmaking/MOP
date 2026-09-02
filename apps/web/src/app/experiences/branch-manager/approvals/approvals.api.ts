@@ -33,6 +33,12 @@ export interface DeliveryCandidate {
   readonly waitingHours: number;
   readonly canLeave: boolean;
   readonly blockedBy: readonly string[];
+  /**
+   * The invoice still owing money on this job, or null. Server-derived
+   * through Finance, which owns the question -- the page never works it
+   * out from a balance.
+   */
+  readonly unsettledInvoiceId: string | null;
 }
 
 export interface DeliveryBoard {
