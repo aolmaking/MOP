@@ -4,10 +4,13 @@ Read in this order the first time through.
 
 > **Updated 2026-08-21.** This index was previously out of date relative to the doc set it points to — it didn't list several documents that had become important (`PAGE_INVENTORY.md` among them) and pointed at scenario directories using paths that no longer existed after an archival pass. Both are fixed below. See `PROJECT_STATE.md` §0 for the full account of the documentation consolidation this was part of.
 
+> **Updated 2026-09-01.** A 41-document corpus now sits at [`corpus/`](./corpus/00_DOCUMENTATION_INDEX.md). It does not replace anything below — it sits on top, adding a single navigable surface, coverage of *planned* as well as built behaviour, per-claim stage labelling, and cross-cutting indexes (page × feature, feature × runtime, subsystem × dependency) that make a gap visible instead of discoverable. Every document below remains the deeper record for its own topic, and the corpus cites them.
+
 ## Start here
 
 | Document | What it is |
 |---|---|
+| [**`corpus/00_DOCUMENTATION_INDEX.md`**](./corpus/00_DOCUMENTATION_INDEX.md) | **The corpus entry point.** Start here: 41 documents covering product, architecture and implementation state, with every claim labelled by stage. Written so a session does not begin with codebase archaeology |
 | [`VISION.md`](./VISION.md) | What MOP actually is, the architectural ideas, the hard problems, what "done" means, and the failure modes being guarded against |
 | [`SYSTEMS.md`](./SYSTEMS.md) | The five systems running simultaneously, their boundaries, and the contracts between them. Also the going-global constraints |
 | [`CAPABILITY_MODEL.md`](./CAPABILITY_MODEL.md) | How Super Admin shapes a workshop and removes what it doesn't need **without creating logical errors** — the smart-delete architecture |
