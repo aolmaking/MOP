@@ -11,6 +11,7 @@ import { ApiExceptionFilter } from "./runtime/http/filters/api-exception.filter"
 import { validationExceptionFactory } from "./runtime/http/validation/validation-exception-factory";
 import { EnvironmentValidationError, loadEnvironment } from "./runtime/config/environment";
 import { REQUEST_ID_HEADER } from "./runtime/http/request-id";
+import { accessLogMiddleware } from "./runtime/http/access-log.middleware";
 import { MoneySerializationInterceptor } from "./runtime/http/money-serialization.interceptor";
 
 async function bootstrap() {
@@ -53,6 +54,7 @@ async function bootstrap() {
     res.setHeader(REQUEST_ID_HEADER, requestId);
     next();
   });
+  app.use(accessLogMiddleware);
 
   app.useGlobalFilters(new ApiExceptionFilter());
   // Money leaves the API as strings, always -- see the interceptor for why.
