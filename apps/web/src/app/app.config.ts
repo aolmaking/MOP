@@ -4,6 +4,7 @@ import { provideRouter, withComponentInputBinding } from '@angular/router';
 
 import { routes } from './app.routes';
 import { errorInterceptor } from './runtime/http/error.interceptor';
+import { refreshInterceptor } from './runtime/http/refresh.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -12,6 +13,10 @@ export const appConfig: ApplicationConfig = {
     // declares it rather than reaching into ActivatedRoute and unwrapping
     // an observable to get one string.
     provideRouter(routes, withComponentInputBinding()),
-    provideHttpClient(withFetch(), withInterceptors([errorInterceptor]))
+    // Order matters: `refreshInterceptor` sits OUTSIDE `errorInterceptor`,
+    // so by the time it sees a failure the error is already the single
+    // PresentedError shape the rest of the app deals in, and its retry
+    // re-enters the chain normally.
+    provideHttpClient(withFetch(), withInterceptors([refreshInterceptor, errorInterceptor]))
   ]
 };

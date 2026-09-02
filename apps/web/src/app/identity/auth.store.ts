@@ -37,6 +37,22 @@ export class AuthStore {
     }
   }
 
+  /**
+   * Take a session the server just handed us -- today, the one that comes
+   * back from a silent refresh (`runtime/http/refresh.interceptor.ts`).
+   *
+   * Not a shortcut around `bootstrap()`: the argument is a server
+   * response, never anything this client decided for itself. A refresh
+   * can legitimately return a DIFFERENT context than the one held here
+   * (a role changed, a responsibility was revoked, a branch scope
+   * narrowed), so adopting the answer is the honest move -- keeping the
+   * old one would let a stale rail outlive the permission behind it.
+   */
+  adopt(session: SessionContext): void {
+    this._session.set(session);
+    this._status.set('authenticated');
+  }
+
   async login(email: string, password: string): Promise<SessionContext> {
     this._status.set('loading');
     try {
