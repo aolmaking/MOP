@@ -19,6 +19,8 @@ import { CustomerSafeProjectionService } from "../operations/customer-safe-proje
 import { GateEvaluatorService } from "../operations/gate-evaluator.service";
 import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
 import { AuditService } from "../../audit/audit.service";
+import { TechnicianWorkViewService } from "../../experiences/technician/technician-work-view.service";
+import { AssetHistoryService } from "../operations/vehicle-history/asset-history.service";
 import type { PrismaService } from "../../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
@@ -36,6 +38,7 @@ const lifecycle = new WorkOrderLifecycleService(
   policies,
 );
 const parts = new PartRequestService(asService, capabilities, stock, events, policies, lifecycle);
+const techView = new TechnicianWorkViewService(asService, lifecycle, new AssetHistoryService(asService), policies);
 
 const ACTOR = { accountId: "store-1", displayName: "Storekeeper", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `pr-${Date.now()}`;
@@ -45,6 +48,7 @@ let full: Workshop;
 let noReturns: Workshop;
 let noInventory: Workshop;
 let planId: string;
+let fullTechnicianStaffId: string;
 
 interface Workshop {
   tenantId: string;
@@ -131,12 +135,38 @@ beforeAll(async () => {
   full = await makeWorkshop("Full");
   noReturns = await makeWorkshop("NoRet", { PART_RETURNS: "DISABLED" });
   noInventory = await makeWorkshop("NoInv", { INVENTORY: "DISABLED" });
+
+  // A real technician, assigned to `full`'s job, so `TechnicianWorkViewService.
+  // workCard()` -- what the Work Card's parts panel actually renders --
+  // can be exercised against real Postgres rather than asserting on the
+  // service layer alone.
+  const account = await prisma.account.create({
+    data: { accountType: "TENANT_STAFF", tenantId: full.tenantId, email: `tech-${SUFFIX}@x.local`, status: "ACTIVE" },
+  });
+  const staff = await prisma.staffUser.create({
+    data: {
+      accountId: account.id,
+      tenantId: full.tenantId,
+      fullName: "Full Technician",
+      role: "TECHNICIAN",
+      branchScope: [],
+      warehouseScope: [],
+      categoryScope: ["CARS"],
+    },
+  });
+  fullTechnicianStaffId = staff.id;
+  await prisma.workOrderAssignment.create({
+    data: { tenantId: full.tenantId, workOrderId: full.workOrderId, staffUserId: fullTechnicianStaffId },
+  });
 }, 240_000);
 
 afterAll(async () => {
   for (const shop of [full, noReturns, noInventory]) {
     if (!shop) continue;
     const where = { tenantId: shop.tenantId };
+    await prisma.workOrderAssignment.deleteMany({ where });
+    await prisma.staffUser.deleteMany({ where });
+    await prisma.account.deleteMany({ where });
     await prisma.issuedItem.deleteMany({ where });
     await prisma.partRequest.deleteMany({ where });
     await prisma.stockMovement.deleteMany({ where });
@@ -810,5 +840,67 @@ describe("issuing a part puts it on the bill", () => {
 
     const line = await prisma.workOrderPartLine.findUnique({ where: { partRequestId: request.id } });
     expect(line).toBeNull();
+  });
+});
+
+/**
+ * The Work Card's own view of a part moving through the returns loop --
+ * `TechnicianWorkViewService.workCard()`, not the service layer directly.
+ * `actions`/`clarificationQuestion` (technician-work-view.service.ts) were
+ * added so the technician's own card could offer "send it back" and show
+ * the store's question; this is what actually proves the projection is
+ * wired to real rows rather than only typechecking.
+ */
+describe("the technician's own view of a part in the returns loop", () => {
+  function myPart(card: Awaited<ReturnType<typeof techView.workCard>>, partRequestId: string) {
+    const part = card.parts.find((p) => p.partRequestId === partRequestId);
+    if (!part) throw new Error(`part ${partRequestId} not on the card`);
+    return part;
+  }
+
+  // Every test above this block draws from the same seeded stock pool for
+  // `full` -- top up before each of these so ordering never starves them.
+  beforeEach(async () => {
+    await stock.record({
+      tenantId: full.tenantId,
+      inventoryItemId: full.itemId,
+      warehouseId: full.warehouseId,
+      type: "SUPPLIER_RECEIPT",
+      quantity: 5,
+      actorId: ACTOR.accountId,
+    });
+  });
+
+  it("offers MARK_USED and RETURN once received, RETURN alone after a partial return", async () => {
+    const request = await receivedRequest(full, 1);
+
+    const card = await techView.workCard(fullTechnicianStaffId, full.tenantId, full.workOrderId);
+    const part = myPart(card, request.id);
+    expect(part.actions).toEqual(["MARK_USED", "RETURN"]);
+    expect(part.clarificationQuestion).toBeNull();
+  });
+
+  it("offers only RESPOND_CLARIFICATION while a question is open, and surfaces the question text", async () => {
+    const request = await receivedRequest(full, 1);
+    await parts.requestReturn(request.id, 1, ACTOR, "Cracked casing");
+    await parts.requestClarification(request.id, ACTOR, "Is this the correct part number?");
+
+    const card = await techView.workCard(fullTechnicianStaffId, full.tenantId, full.workOrderId);
+    const part = myPart(card, request.id);
+    expect(part.actions).toEqual(["RESPOND_CLARIFICATION"]);
+    expect(part.clarificationQuestion).toBe("Is this the correct part number?");
+  });
+
+  it("clears the question and offers nothing once answered, back at RETURN_REQUESTED", async () => {
+    const request = await receivedRequest(full, 1);
+    await parts.requestReturn(request.id, 1, ACTOR, "Cracked casing");
+    await parts.requestClarification(request.id, ACTOR, "Which SKU is this?");
+    await parts.respondToClarification(request.id, ACTOR, "BRK-4471, confirmed against the box");
+
+    const card = await techView.workCard(fullTechnicianStaffId, full.tenantId, full.workOrderId);
+    const part = myPart(card, request.id);
+    expect(part.actions).toEqual([]);
+    expect(part.clarificationQuestion).toBeNull();
+    expect(part.statusText).toContain("Waiting on the store");
   });
 });

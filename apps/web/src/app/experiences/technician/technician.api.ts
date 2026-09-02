@@ -39,7 +39,8 @@ export interface WorkCardPart {
   readonly status: string;
   readonly statusText: string;
   readonly waitingOn: 'STORE' | 'YOU' | 'NOBODY';
-  readonly action: 'RECEIVE' | 'MARK_USED' | null;
+  readonly actions: readonly ('RECEIVE' | 'MARK_USED' | 'RETURN' | 'RESPOND_CLARIFICATION')[];
+  readonly clarificationQuestion: string | null;
 }
 
 export interface WorkCard {
@@ -179,6 +180,16 @@ export class TechnicianApi {
 
   usePart(partRequestId: string): Observable<unknown> {
     return this.http.post(`/api/v1/technician/parts/${partRequestId}/used`, {});
+  }
+
+  /** Send a received part back to the store. */
+  returnPart(partRequestId: string, quantity: number, reason?: string): Observable<unknown> {
+    return this.http.post(`/api/v1/technician/parts/${partRequestId}/return`, { quantity, reason });
+  }
+
+  /** Answer the store's clarifying question on a return in progress. */
+  respondToReturnClarification(partRequestId: string, response: string): Observable<unknown> {
+    return this.http.post(`/api/v1/technician/parts/${partRequestId}/return/respond`, { response });
   }
 
   /** "Ask the customer" -- creates the decision request and sends it in one call. */

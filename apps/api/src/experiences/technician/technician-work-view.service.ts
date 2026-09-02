@@ -52,8 +52,14 @@ export interface WorkCardPart {
   /** Human words for the state, never the enum. */
   readonly statusText: string;
   readonly waitingOn: "STORE" | "YOU" | "NOBODY";
-  /** The one action available to the technician right now, if any. */
-  readonly action: "RECEIVE" | "MARK_USED" | null;
+  /**
+   * Every action available to the technician right now -- plural, because
+   * a received part offers a real choice (fit it, or send it back), not
+   * a single next step. Empty when nothing is theirs to do.
+   */
+  readonly actions: readonly ("RECEIVE" | "MARK_USED" | "RETURN" | "RESPOND_CLARIFICATION")[];
+  /** What the store actually asked, when RESPOND_CLARIFICATION is one of the actions above. */
+  readonly clarificationQuestion: string | null;
 }
 
 export interface WorkCard {
@@ -78,27 +84,39 @@ export interface WorkCard {
  */
 const PART_STATE: Record<
   string,
-  { text: string; waitingOn: WorkCardPart["waitingOn"]; action: WorkCardPart["action"] }
+  { text: string; waitingOn: WorkCardPart["waitingOn"]; actions: WorkCardPart["actions"] }
 > = {
-  DRAFT: { text: "Not sent to the store yet.", waitingOn: "YOU", action: null },
-  REQUESTED: { text: "Asked. The store hasn't answered yet.", waitingOn: "STORE", action: null },
-  WAREHOUSE_REVIEWING: { text: "The store is looking at it.", waitingOn: "STORE", action: null },
-  APPROVED: { text: "Approved. Waiting to be handed over.", waitingOn: "STORE", action: null },
-  ISSUED: { text: "Handed over by the store.", waitingOn: "YOU", action: "RECEIVE" },
-  IN_TRANSIT: { text: "On its way from another branch.", waitingOn: "STORE", action: null },
-  ARRIVED: { text: "Arrived at the store. Collect it.", waitingOn: "YOU", action: "RECEIVE" },
-  RECEIVED_BY_TECHNICIAN: { text: "You have it. Fit it, then mark it used.", waitingOn: "YOU", action: "MARK_USED" },
-  USED: { text: "Fitted to this vehicle.", waitingOn: "NOBODY", action: null },
-  REJECTED: { text: "The store refused this request.", waitingOn: "NOBODY", action: null },
-  UNAVAILABLE: { text: "The store doesn't have it.", waitingOn: "NOBODY", action: null },
-  WAITING_TRANSFER: { text: "Coming from another branch.", waitingOn: "STORE", action: null },
-  WAITING_SUPPLIER: { text: "On order from a supplier.", waitingOn: "STORE", action: null },
-  RETURN_REQUESTED: { text: "You sent it back. Waiting on the store.", waitingOn: "STORE", action: null },
-  RETURN_ACCEPTED: { text: "Your return was accepted.", waitingOn: "NOBODY", action: null },
-  RETURNED_TO_STOCK: { text: "Back on the shelf.", waitingOn: "NOBODY", action: null },
-  RETURN_REJECTED: { text: "The store refused the return. Fit it or speak to them.", waitingOn: "YOU", action: "MARK_USED" },
-  RETURN_CLARIFICATION_REQUESTED: { text: "The store asked you a question about the return.", waitingOn: "YOU", action: null },
-  CANCELLED: { text: "Cancelled.", waitingOn: "NOBODY", action: null },
+  DRAFT: { text: "Not sent to the store yet.", waitingOn: "YOU", actions: [] },
+  REQUESTED: { text: "Asked. The store hasn't answered yet.", waitingOn: "STORE", actions: [] },
+  WAREHOUSE_REVIEWING: { text: "The store is looking at it.", waitingOn: "STORE", actions: [] },
+  APPROVED: { text: "Approved. Waiting to be handed over.", waitingOn: "STORE", actions: [] },
+  ISSUED: { text: "Handed over by the store.", waitingOn: "YOU", actions: ["RECEIVE"] },
+  IN_TRANSIT: { text: "On its way from another branch.", waitingOn: "STORE", actions: [] },
+  ARRIVED: { text: "Arrived at the store. Collect it.", waitingOn: "YOU", actions: ["RECEIVE"] },
+  RECEIVED_BY_TECHNICIAN: {
+    text: "You have it. Fit it, or send it back.",
+    waitingOn: "YOU",
+    actions: ["MARK_USED", "RETURN"],
+  },
+  USED: { text: "Fitted to this vehicle.", waitingOn: "NOBODY", actions: [] },
+  REJECTED: { text: "The store refused this request.", waitingOn: "NOBODY", actions: [] },
+  UNAVAILABLE: { text: "The store doesn't have it.", waitingOn: "NOBODY", actions: [] },
+  WAITING_TRANSFER: { text: "Coming from another branch.", waitingOn: "STORE", actions: [] },
+  WAITING_SUPPLIER: { text: "On order from a supplier.", waitingOn: "STORE", actions: [] },
+  RETURN_REQUESTED: { text: "You sent it back. Waiting on the store.", waitingOn: "STORE", actions: [] },
+  RETURN_ACCEPTED: { text: "Your return was accepted.", waitingOn: "NOBODY", actions: [] },
+  RETURNED_TO_STOCK: { text: "Back on the shelf.", waitingOn: "NOBODY", actions: [] },
+  RETURN_REJECTED: {
+    text: "The store refused the return. Fit it or speak to them.",
+    waitingOn: "YOU",
+    actions: ["MARK_USED"],
+  },
+  RETURN_CLARIFICATION_REQUESTED: {
+    text: "The store asked you a question about the return.",
+    waitingOn: "YOU",
+    actions: ["RESPOND_CLARIFICATION"],
+  },
+  CANCELLED: { text: "Cancelled.", waitingOn: "NOBODY", actions: [] },
 };
 
 /**
@@ -245,6 +263,7 @@ export class TechnicianWorkViewService {
         status: true,
         inventoryItem: { select: { name: true, sku: true } },
         issuedItems: { select: { quantity: true } },
+        returnRequest: { select: { clarificationQuestion: true } },
       },
       orderBy: { createdAt: "asc" },
     });
@@ -280,7 +299,8 @@ export class TechnicianWorkViewService {
           status: request.status,
           statusText: state.text,
           waitingOn: state.waitingOn,
-          action: state.action,
+          actions: state.actions,
+          clarificationQuestion: request.returnRequest?.clarificationQuestion ?? null,
         };
       }),
       finish: await this.finishCheck(workOrderId),

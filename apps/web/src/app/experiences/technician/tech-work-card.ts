@@ -131,16 +131,71 @@ export class TechWorkCard {
     () => this.card()?.parts.filter((part) => part.waitingOn !== 'NOBODY') ?? [],
   );
 
-  protected actOnPart(part: WorkCardPart): void {
-    if (part.action === 'RECEIVE') {
+  /**
+   * A received part offers a real choice -- fit it or send it back -- so
+   * this dispatches on the specific action pressed rather than assuming
+   * the part's only action, and RETURN/RESPOND_CLARIFICATION open a small
+   * inline panel for the quantity/response instead of firing immediately.
+   */
+  protected actOnPart(part: WorkCardPart, action: WorkCardPart['actions'][number]): void {
+    if (action === 'RECEIVE') {
       this.run(`part-${part.partRequestId}`, this.api.receivePart(part.partRequestId));
-    } else if (part.action === 'MARK_USED') {
+    } else if (action === 'MARK_USED') {
       this.run(`part-${part.partRequestId}`, this.api.usePart(part.partRequestId));
+    } else {
+      const opening = this.activePartPanel() !== part.partRequestId;
+      this.activePartPanel.set(opening ? part.partRequestId : null);
+      if (opening && action === 'RETURN' && !this.returnQuantity()[part.partRequestId]) {
+        this.returnQuantity.update((current) => ({ ...current, [part.partRequestId]: String(part.issued) }));
+      }
     }
   }
 
-  protected partActionLabel(part: WorkCardPart): string {
-    return part.action === 'RECEIVE' ? "I've got it" : "It's fitted";
+  protected partActionLabel(action: WorkCardPart['actions'][number]): string {
+    switch (action) {
+      case 'RECEIVE':
+        return "I've got it";
+      case 'MARK_USED':
+        return "It's fitted";
+      case 'RETURN':
+        return 'Send it back';
+      case 'RESPOND_CLARIFICATION':
+        return 'Answer';
+    }
+  }
+
+  /** Which part's return/respond panel is open. Only one at a time. */
+  protected readonly activePartPanel = signal<string | null>(null);
+  protected readonly returnQuantity = signal<Record<string, string>>({});
+  protected readonly clarificationResponse = signal<Record<string, string>>({});
+
+  protected setReturnQuantity(partRequestId: string, value: string): void {
+    this.returnQuantity.update((current) => ({ ...current, [partRequestId]: value }));
+  }
+
+  protected setClarificationResponse(partRequestId: string, value: string): void {
+    this.clarificationResponse.update((current) => ({ ...current, [partRequestId]: value }));
+  }
+
+  protected submitReturn(part: WorkCardPart): void {
+    const raw = this.returnQuantity()[part.partRequestId]?.trim() ?? '';
+    const quantity = Number(raw);
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      this.actionError.set('Enter a whole number of at least 1 to send back.');
+      return;
+    }
+    this.activePartPanel.set(null);
+    this.run(`part-${part.partRequestId}`, this.api.returnPart(part.partRequestId, quantity));
+  }
+
+  protected submitClarificationResponse(part: WorkCardPart): void {
+    const response = this.clarificationResponse()[part.partRequestId]?.trim() ?? '';
+    if (response.length < 1) {
+      this.actionError.set('Write a reply before sending it.');
+      return;
+    }
+    this.activePartPanel.set(null);
+    this.run(`part-${part.partRequestId}`, this.api.respondToReturnClarification(part.partRequestId, response));
   }
 
   /**

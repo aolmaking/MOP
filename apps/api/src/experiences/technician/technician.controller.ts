@@ -9,7 +9,15 @@ import { TechnicianWorkViewService } from "./technician-work-view.service";
 import { CustomerDecisionService } from "../../systems/customer/decision.service";
 import { PartRequestService } from "../../systems/inventory/part-request.service";
 import { CatalogService } from "../../systems/inventory/catalog.service";
-import { ReportBlockerDto, CreateFaultDto, RequestPartDto, RecordInspectionDto, CompleteTaskDto } from "./technician.dto";
+import {
+  ReportBlockerDto,
+  CreateFaultDto,
+  RequestPartDto,
+  RecordInspectionDto,
+  CompleteTaskDto,
+  ReturnPartDto,
+  RespondToClarificationDto,
+} from "./technician.dto";
 import { RaiseDecisionDto } from "../../systems/customer/decision.dto";
 
 /**
@@ -253,6 +261,36 @@ export class TechnicianController {
   async usePart(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     await this.requirePartOnMyJob(session, id);
     return this.partRequests.markUsed(id, this.actor(session));
+  }
+
+  /**
+   * "Send it back" -- the technician's own half of the returns loop
+   * (`PartRequestService.requestReturn`). Existed at the service layer,
+   * tested, and unreachable: the Inventory Manager's accept/reject/clarify
+   * routes (`inventory.controller.ts`) were the only door into the returns
+   * table, and none of them starts a return -- they only ever decide one
+   * already raised. Same ownership check as receive/used above.
+   */
+  @Post("parts/:id/return")
+  async returnPart(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: ReturnPartDto) {
+    await this.requirePartOnMyJob(session, id);
+    return this.partRequests.requestReturn(id, dto.quantity, this.actor(session), dto.reason);
+  }
+
+  /**
+   * The technician's answer to the store's clarifying question on a
+   * return-in-progress -- the other end of `inventory.controller.ts`'s
+   * `returns/:id/clarify`. Loops the return back to RETURN_REQUESTED so
+   * the store's next move is the same decision as a first-time request.
+   */
+  @Post("parts/:id/return/respond")
+  async respondToReturnClarification(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: RespondToClarificationDto,
+  ) {
+    await this.requirePartOnMyJob(session, id);
+    return this.partRequests.respondToClarification(id, this.actor(session), dto.response);
   }
 
   /** What the Finish Gate would say, asked before anything is pressed. */

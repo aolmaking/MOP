@@ -196,17 +196,65 @@
                       {{ part.issued }} of {{ part.quantity }} handed over so far.
                     </span>
                   }
+                  @if (part.clarificationQuestion) {
+                    <span class="part-request-partial">"{{ part.clarificationQuestion }}"</span>
+                  }
                 </span>
 
-                @if (part.action) {
+                @for (action of part.actions; track action) {
                   <button
                     class="tap tap--primary"
                     type="button"
                     [disabled]="busy() !== null"
-                    (click)="actOnPart(part)"
+                    (click)="actOnPart(part, action)"
                   >
-                    {{ busy() === 'part-' + part.partRequestId ? '…' : partActionLabel(part) }}
+                    {{ busy() === 'part-' + part.partRequestId ? '…' : partActionLabel(action) }}
                   </button>
+                }
+
+                @if (activePartPanel() === part.partRequestId) {
+                  @if (part.actions.includes('RETURN')) {
+                    <div class="fault">
+                      <label class="ask-price-field">
+                        <span>Quantity to send back (of {{ part.issued }} issued)</span>
+                        <input
+                          type="number"
+                          inputmode="numeric"
+                          min="1"
+                          [max]="part.issued"
+                          [value]="returnQuantity()[part.partRequestId] ?? ''"
+                          (input)="setReturnQuantity(part.partRequestId, $any($event.target).value)"
+                        />
+                      </label>
+                      <button
+                        class="tap tap--primary tap--wide"
+                        type="button"
+                        [disabled]="busy() !== null"
+                        (click)="submitReturn(part)"
+                      >
+                        Confirm send back
+                      </button>
+                    </div>
+                  }
+                  @if (part.actions.includes('RESPOND_CLARIFICATION')) {
+                    <div class="fault">
+                      <textarea
+                        class="fault-text"
+                        rows="2"
+                        placeholder="Your reply"
+                        [value]="clarificationResponse()[part.partRequestId] ?? ''"
+                        (input)="setClarificationResponse(part.partRequestId, $any($event.target).value)"
+                      ></textarea>
+                      <button
+                        class="tap tap--primary tap--wide"
+                        type="button"
+                        [disabled]="busy() !== null"
+                        (click)="submitClarificationResponse(part)"
+                      >
+                        Send reply
+                      </button>
+                    </div>
+                  }
                 }
               </li>
             }

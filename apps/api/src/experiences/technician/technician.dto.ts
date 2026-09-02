@@ -53,6 +53,23 @@ export class RequestPartDto {
   reason?: string;
 }
 
+export class ReturnPartDto {
+  @IsInt()
+  @Min(1)
+  quantity!: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 500)
+  reason?: string;
+}
+
+export class RespondToClarificationDto {
+  @IsString()
+  @Length(1, 1000)
+  response!: string;
+}
+
 export class CreateFaultDto {
   @IsString()
   @Length(3, 1000)
