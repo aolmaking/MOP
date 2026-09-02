@@ -15,7 +15,8 @@
 
 Proven end to end over real HTTP against real Postgres, on the launch
 capability profile, in `apps/api/src/testing/walkthrough.http.spec.ts`
-(20 assertions) and `parts-loop.http.spec.ts` (14):
+(21 assertions), `parts-loop.http.spec.ts` (14) and
+`decision-deadlock.http.spec.ts` (6):
 
 A Super Admin creates a workshop through the real creation path. The
 owner redeems an invite link and signs in, and is **refused** intake —
@@ -30,9 +31,14 @@ shelf; a partial issue deliberately does not finish the request. The
 technician receives it, sends the wrong one back, answers the store's
 question, and the store accepts the return — restoring both the stock and
 the bill. The job finishes only once every part is accounted for. The
-owner issues the invoice, takes payment (a replayed idempotency key
-records one payment, not two), and the manager releases the car. It
-closes.
+owner issues the invoice; the delivery board names the car as held and
+hands over the invoice that is holding it; the counter takes payment (a
+replayed idempotency key records one payment, not two), the board stops
+offering to take money that is no longer owed, and the manager releases
+the car. It closes.
+
+An ask the customer never answers does not strand the job: staff withdraw
+it from the approvals list, and the finish gate reopens.
 
 The same code, on a workshop with nothing switched off, routes FINISH
 into team review and then QC before the money
@@ -94,19 +100,33 @@ FORBIDDEN list, and widening the gate without a "received on the
 technician's behalf" path would strand jobs wherever technicians do not
 reliably tap.
 
-### 3.3 "The customer opened the link" is a state, not a time
+### 3.3 A job waiting on a mid-work question still reads "in progress"
+
+`board/reviews/F-008`. `ASK_CUSTOMER` (IN_PROGRESS -> WAITING_CUSTOMER)
+has no production caller, so a technician's mid-job question leaves the
+work order reading IN_PROGRESS on the board, in the dossier and in the
+customer's own journey. Only the finish gate knows.
+
+Wiring it was tried and reverted because it makes things strictly worse:
+WAITING_CUSTOMER's only exits are the customer answering and an
+unintented edge to CANCELLED, and FINISH leaves only IN_PROGRESS -- so a
+customer who goes quiet strands the job with no way out at all. Leaving
+it IN_PROGRESS keeps M-3's withdraw guard working. Closing it needs a
+staff exit from that state, which is a workflow-graph change.
+
+### 3.4 "The customer opened the link" is a state, not a time
 
 `CustomerDecisionRequest` has no `viewedAt` column. A manager can see
 *that* a decision was seen, never *when*. Noted in the walkthrough.
 
-### 3.4 Nothing is pushed, so CI has never been observed green
+### 3.5 Nothing is pushed, so CI has never been observed green
 
 The workflow is correct and merged (`a4371b4`) and runs on `main`,
 `develop`, `track/**` and `infra/**`. Nothing has been pushed to GitHub
 and there is no `gh` on this machine, so **M-12 cannot be closed**. The
 full gate is green locally and that is all anyone can currently say.
 
-### 3.5 No deployment target (blocker B-002)
+### 3.6 No deployment target (blocker B-002)
 
 No Docker, no administrator rights. What exists instead:
 `tools/staging/` runs a real TLS edge over the LAN in front of a
@@ -122,18 +142,20 @@ orders, 31 migrations, restored in 2 seconds, with all three refusal
 modes watched. There is no scheduling, rotation, encryption or offsite
 copy. **M-10's drill is done; its automation is not.**
 
-### 3.6 SHOULD items not shipped
+### 3.7 SHOULD items not shipped
 
-S-1 Attention row actions (partially: the parts subset works), S-2
-security TTL/refresh-cap pair, S-3 Owner Reports tab, S-4 decision expiry
-sweeper, S-5 dossier polish. M-3's cancel endpoint plus read-computed
+S-2 security TTL/refresh-cap pair, S-3 Owner Reports tab, S-4 decision
+expiry sweeper, S-5 dossier polish. S-1 (Attention row actions) IS
+shipped -- its buttons were live no-ops and now navigate to the surfaces
+that perform them. M-3's cancel endpoint plus read-computed
 expiry covers the deadlock S-4 would otherwise address.
 
-### 3.7 M-13 and M-14 are not engineering tasks and are not done
+### 3.8 M-14 is not an engineering task and is not done
 
 The pilot workshop has not been created through the wizard with its real
 catalogue, staff and policies, and no administrator has been trained.
-Both need the pilot.
+Both need the pilot. (M-13, the seed's own honesty, IS done -- see the
+note in §1.)
 
 ---
 
