@@ -14,6 +14,8 @@ export interface DeliveryCandidate {
   readonly canLeave: boolean;
   /** Exactly what is stopping it. Empty when it can go. */
   readonly blockedBy: readonly string[];
+  /** M-4: set only when an unsettled invoice is what's actually holding this car. */
+  readonly invoiceId: string | null;
 }
 
 export interface DeliveryBoard {
@@ -55,6 +57,10 @@ export class DeliveryService {
         updatedAt: true,
         asset: { select: { plateNumber: true, serialNumber: true } },
         customer: { select: { fullName: true, phone: true } },
+        // The invoice, if one has been issued -- what "Take payment" on a
+        // held row actually opens. Only relevant with an outstanding
+        // balance; a settled invoice is not what is holding this car.
+        invoice: { select: { id: true, balance: true } },
       },
       orderBy: { updatedAt: "asc" },
     });
@@ -77,6 +83,8 @@ export class DeliveryService {
         // be able to hand a car back.
         canLeave: blockedBy.length === 0,
         blockedBy,
+        // money-lint-ok: Decimal.greaterThan, never coerced to a number.
+        invoiceId: row.invoice && row.invoice.balance.greaterThan(0) ? row.invoice.id : null,
       });
     }
 

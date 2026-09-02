@@ -66,6 +66,17 @@
                       <li class="reason">{{ reason }}</li>
                     }
                   </ul>
+
+                  @if (row.invoiceId; as invoiceId) {
+                    <!-- M-4: the balance is what holds most of these cars,
+                         so the counter's next move is one click away.
+                         `mop-button` classes are global (styles.css); the
+                         appButton directive only targets <button>, and
+                         this is a real navigation, not a click handler. -->
+                    <a class="mop-button mop-button--primary mop-button--small" [routerLink]="['/branch/payments', invoiceId]">
+                      Take payment
+                    </a>
+                  }
                 </li>
               }
             </ul>

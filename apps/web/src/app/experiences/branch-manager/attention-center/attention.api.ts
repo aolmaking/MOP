@@ -44,6 +44,8 @@ export interface AttentionItem {
   waitingSince: string;
   rank: AttentionRank;
   primaryAction: PrimaryAction;
+  /** Set only for TAKE_PAYMENT -- what the row's action button opens. */
+  invoiceId: string | null;
 }
 
 export interface AttentionCenterResponse {

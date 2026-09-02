@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
+import { vi } from 'vitest';
 import { of, throwError } from 'rxjs';
 import { AttentionCenter } from './attention-center';
 import { AttentionApi, type AttentionCenterResponse, type AttentionItem } from './attention.api';
@@ -16,6 +17,7 @@ function item(overrides: Partial<AttentionItem> = {}): AttentionItem {
     waitingSince: '2026-08-07T10:00:00.000Z',
     rank: { tier: 5, waitingHours: 48, escalated: false, score: 4952 },
     primaryAction: 'CHECK_PARTS',
+    invoiceId: null,
     ...overrides,
   };
 }
@@ -147,5 +149,27 @@ describe('AttentionCenter — the watch list', () => {
 
     expect(element.textContent).toContain('Waiting on customers');
     expect(element.textContent).not.toContain('CUSTOMER_APPROVAL_WAITING');
+  });
+});
+
+describe('AttentionCenter — the row action (M-4)', () => {
+  it('opens Take Payment on the invoice the item actually carries', () => {
+    const { fixture } = render({ items: [] });
+    const router = TestBed.inject(Router);
+    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+    fixture.componentInstance.act(item({ primaryAction: 'TAKE_PAYMENT', invoiceId: 'inv-42' }));
+
+    expect(navigateSpy).toHaveBeenCalledWith(['/branch/payments', 'inv-42']);
+  });
+
+  it('does nothing for an action that is not yet wired', () => {
+    const { fixture } = render({ items: [] });
+    const router = TestBed.inject(Router);
+    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+    fixture.componentInstance.act(item({ primaryAction: 'CHECK_PARTS' }));
+
+    expect(navigateSpy).not.toHaveBeenCalled();
   });
 });

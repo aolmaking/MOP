@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { ButtonDirective } from '../../../ui/button/button.directive';
 import { ErrorBanner } from '../../../ui/error-banner/error-banner';
 import { Identifier } from '../../../ui/identifier/identifier';
@@ -59,6 +59,7 @@ const ACTION_LABELS: Readonly<Record<string, string>> = {
 })
 export class AttentionCenter {
   private readonly api = inject(AttentionApi);
+  private readonly router = inject(Router);
 
   readonly items = signal<readonly AttentionItem[]>([]);
   readonly counts = signal<Readonly<Record<string, number>>>({});
@@ -125,10 +126,15 @@ export class AttentionCenter {
   }
 
   act(item: AttentionItem): void {
-    // Wired to real actions in 5.E, where the approvals and delivery
-    // surfaces exist. Left as a no-op rather than a fake success toast:
-    // a button that pretends to work is worse than one that does nothing.
-    void item;
+    // M-4: TAKE_PAYMENT is real -- the invoice id rides on the item
+    // specifically so this never has to re-derive it. The remaining
+    // actions (chase customer, resolve blocker, reassign, review overrun)
+    // are S-1's scope, not this one, and stay no-ops: a button that
+    // pretends to work is worse than one that does nothing.
+    if (item.primaryAction === 'TAKE_PAYMENT' && item.invoiceId) {
+      void this.router.navigate(['/branch/payments', item.invoiceId]);
+      return;
+    }
   }
 
   filterBy(kind: AttentionKind): void {

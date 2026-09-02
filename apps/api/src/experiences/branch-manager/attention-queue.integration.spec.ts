@@ -209,6 +209,35 @@ describe("what appears in the queue", () => {
     expect(keys).not.toContain("notes");
   }, 120_000);
 
+  it("carries the invoice id on a READY_UNPAID row -- M-4: what Take Payment actually opens", async () => {
+    const workOrder = await makeWorkOrder({ status: "READY_FOR_DELIVERY" });
+    const invoice = await prisma.invoice.create({
+      data: {
+        tenantId,
+        workOrderId: workOrder.id,
+        invoiceNumber: `INV-${SUFFIX}`,
+        subtotal: "500.00",
+        total: "500.00",
+        balance: "500.00",
+        issuedById: "staff-1",
+      },
+    });
+
+    const [row] = await service.build({ tenantId, branchScope: [] }, NOW);
+
+    expect(row?.kind).toBe("READY_UNPAID");
+    expect(row?.primaryAction).toBe("TAKE_PAYMENT");
+    expect(row?.invoiceId).toBe(invoice.id);
+  }, 120_000);
+
+  it("does not carry an invoice id on rows whose action is not TAKE_PAYMENT", async () => {
+    await makeWorkOrder({ status: "WAITING_PARTS" });
+
+    const [row] = await service.build({ tenantId, branchScope: [] }, NOW);
+
+    expect(row?.invoiceId).toBeNull();
+  }, 120_000);
+
   it("returns an empty queue when nothing is stuck", async () => {
     await makeWorkOrder({ status: "IN_PROGRESS" });
 

@@ -14,6 +14,7 @@ function candidate(overrides: Partial<DeliveryCandidate> = {}): DeliveryCandidat
     waitingHours: 3,
     canLeave: true,
     blockedBy: [],
+    invoiceId: null,
     ...overrides,
   };
 }
