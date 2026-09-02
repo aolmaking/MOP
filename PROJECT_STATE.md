@@ -71,13 +71,12 @@ advisory-lock race under full-suite load; confirmed unrelated, passes
 clean in isolation), 243 shared tests, all 6 custom lints, `apps/api` +
 `packages/shared` typecheck, full build (API + web).
 
-**Explicitly not done in this pass, and next in the queue:** the web-side
-buttons that call these new endpoints (work-card contextual action,
-workspace add-task/request-approval, approvals-drawer cancel) — backend
-and frontend were built together in every prior session's slices, but
-this pass prioritized getting the spine itself provably real first, since
-the ledger's own audit fact is that *nothing downstream matters until
-this lands*. See the ledger's "Next item" for the exact resume point.
+**Web wiring shipped in a second commit the same pass** (`1c6ef0a`): the
+Tech Work Card's contextual primary action (Start inspection / Start
+work, computed from job status) and the BM workspace's Add-task /
+Ask-the-customer panels plus a Cancel action on unanswered decisions.
+272/272 web tests, full build clean. See the ledger's "Next item" (M-5,
+the technician part-return leg) for the exact resume point.
 
 **Pre-existing uncommitted work found at session start, left untouched by
 this pass, on purpose:** `apps/api/src/control/platform/

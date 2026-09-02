@@ -39,7 +39,7 @@
 
 | # | Item | Status | Note |
 |---|---|---|---|
-| M-1 | Spine ignition: `START_INSPECTION`/`START_WORK` endpoints; decision-service auto-moves (`REQUEST_APPROVAL`/`ASK_CUSTOMER` on raise, `APPROVE`/`CUSTOMER_RESPONDED` on answer); BM `request-approval`+task-creation endpoints | **DONE (backend)** | 2026-09-02. See commit. Technician `POST work-orders/:id/start-inspection`/`start-work` (`apps/api/src/experiences/technician/technician.controller.ts`) delegate to new `TechnicianWorkService.startInspection`/`.startWork`. `CustomerDecisionService.raiseAndSend`/`applyAnswers` (`apps/api/src/systems/customer/decision.service.ts`) now call `WorkOrderLifecycleService` outside their write transactions, swallowing only `ConflictException` (refusal), via a new `moveIfPossible`. `APPROVE` only fires when at least one item was actually approved — a full rejection never reads as approval. BM gained parity endpoints `POST branch-manager/work-orders/:id/tasks` and `.../decisions` (`branch-manager.controller.ts`), reusing the same services the technician's card uses. New permission keys: `task.start_inspection`, `task.start_work`, `task.branch.create`, `customer_decision.cancel`. 15 new integration tests (`decision.integration.spec.ts`, `technician-work.integration.spec.ts`), full gate green (884/885 API tests; the one failure, `scheduler-lock.integration.spec.ts`, is a pre-existing flaky advisory-lock race, confirmed unrelated — passes clean in isolation). **Not yet done:** the web-side buttons that call these endpoints (card contextual actions, workspace add-task/request-approval) — that is the next item, see "Also queued" below. |
+| M-1 | Spine ignition: `START_INSPECTION`/`START_WORK` endpoints; decision-service auto-moves (`REQUEST_APPROVAL`/`ASK_CUSTOMER` on raise, `APPROVE`/`CUSTOMER_RESPONDED` on answer); BM `request-approval`+task-creation endpoints | **DONE** | 2026-09-02, two commits (backend, then web). Technician `POST work-orders/:id/start-inspection`/`start-work` (`apps/api/src/experiences/technician/technician.controller.ts`) delegate to new `TechnicianWorkService.startInspection`/`.startWork`. `CustomerDecisionService.raiseAndSend`/`applyAnswers` (`apps/api/src/systems/customer/decision.service.ts`) now call `WorkOrderLifecycleService` outside their write transactions, swallowing only `ConflictException` (refusal), via a new `moveIfPossible`. `APPROVE` only fires when at least one item was actually approved — a full rejection never reads as approval. BM gained parity endpoints `POST branch-manager/work-orders/:id/tasks` and `.../decisions` (`branch-manager.controller.ts`), reusing the same services the technician's card uses. New permission keys: `task.start_inspection`, `task.start_work`, `task.branch.create`, `customer_decision.cancel`. Web: `tech-work-card` shows a contextual primary action (Start inspection / Start work) computed from job status; BM `work-order-workspace` gained Add-task and Ask-the-customer panels plus a Cancel action on unanswered decisions. 15 new backend integration tests, full gate green (884/885 API tests — the one failure, `scheduler-lock.integration.spec.ts`, is a pre-existing flaky advisory-lock race, confirmed unrelated, passes clean in isolation; 272/272 web tests; 243/243 shared tests; all 6 lints; full build). **Known gap, not blocking:** no HTTP-level (supertest) test yet for the three new BM controller endpoints specifically — the underlying services are fully covered and the controller wiring mirrors existing, already-HTTP-tested patterns exactly (`recordApproval`/`deliver`/`advance`); worth closing under M-2's Honesty Harness pass rather than as a one-off. |
 | M-2 | Honesty Harness: HTTP-only golden-journey walkthrough green on launch profile + one contrasting profile, in CI | OPEN | `scenario-walkthrough.integration.spec.ts` exists and is service-level, not HTTP-only; needs a supertest-driven HTTP pass through the real golden journey (intake → inspection → decision → approve → work → parts → finish → invoice → payment → deliver) once M-1's endpoints are proven wired end to end, plus a second run on a contrasting profile. |
 | M-3 | Decision lifecycle hygiene: `VIEWED` on read, staff cancel endpoint | **DONE** | 2026-09-02, same commit as M-1. `CustomerDecisionService.read()` writes `SENT -> VIEWED` (best-effort, never fails the read). New `cancel()` refuses once `respondedAt` is set; wired at `POST branch-manager/approvals/:requestId/cancel`. Read-computed expiry already existed. |
 | M-4 | Take Payment reachable from Delivery board + Attention Center | OPEN | `delivery-page.html` rows link only to the work order, not `/branch/payments/:id`; `attention-center.ts`'s `act()` for the payment tile is a literal no-op. Web-only fix, no backend gap. |
@@ -83,9 +83,16 @@ These remain real, valuable work; they resume once the MUST list above is substa
 
 ## Next item
 
-**M-1's web half**: wire the work card's contextual primary action (start
-inspection / start work), the workspace's add-task and request-approval
-controls, and the approvals drawer's cancel action to the endpoints this
-pass just built. Then M-5 (return-leg endpoints, same shape as M-1's
-gap), then M-4 (two small web link fixes), then M-6 (refresh
-interceptor), in that order — each its own commit, gate, and push.
+M-1 and M-3 are both fully done (backend + web), committed and pushed
+(`015fc6d`, `1c6ef0a`). Next: **M-5** — the technician part-return leg.
+Service layer (`PartRequestService.requestReturn/.requestClarification/
+.respondToClarification`) already exists and is tested; add the two
+missing technician-facing routes (`POST technician/parts/:id/return`,
+an answer-clarification endpoint) in
+`apps/api/src/experiences/technician/technician.controller.ts`, same
+shape as M-1's gap, then wire the corresponding web action(s) in the
+Work Card's parts section. Then **M-4** (two small web link fixes:
+delivery-board rows link to `/branch/payments/:id`; Attention Center's
+`READY_UNPAID` tile `act()` navigates instead of no-op), then **M-6**
+(web refresh interceptor calling the already-real `POST auth/refresh`
+on a 401). Each its own commit, full gate, push.
