@@ -2,7 +2,7 @@
 
 A multi-tenant SaaS platform for running maintenance and service workshops. One codebase serves many workshops, each with its own staff, customers, branches, warehouses, inventory, pricing, and — critically — its own **shape**: a one-bay quick-service shop and a twelve-branch dealership network run the same code with different capabilities switched on.
 
-> **Status (2026-08-21, code-verified):** the foundation (data model, permissions, capability engine, auth, platform administration) and all 9 role-specific workspaces are built and largely real — 44 of 53 specified pages are complete, 6 are partial, and 3 have no implementation yet (a dedicated Access Denied page, Password Reset, and Data-Analyst exports). See [`docs/PAGE_INVENTORY.md`](docs/PAGE_INVENTORY.md) for the exact per-page state and [`docs/PHASE_MAP.md`](docs/PHASE_MAP.md) for the phase plan. Two things matter more than any remaining page right now: most of the API is tested only at the service layer, not through a real guarded HTTP request; and no country-specific billing/invoicing adapter exists yet, so no tenant can legally invoice in a real market today.
+> **Status (2026-09-02):** a 14-day launch sprint (Strategy B — the Quick-Service Vertical) built and proved a real, deployable golden journey — intake through delivery — end to end over real HTTP against real Postgres. **Read [`docs/LAUNCH_HANDOVER.md`](docs/LAUNCH_HANDOVER.md) first** — what the product actually does today, everything deliberately deferred, and every known gap, each traced to a passing test or marked not-proven. [`docs/PAGE_INVENTORY.md`](docs/PAGE_INVENTORY.md) and [`docs/PHASE_MAP.md`](docs/PHASE_MAP.md) still hold the fuller, pre-sprint page-by-page and phase-by-phase picture.
 
 ---
 
@@ -56,10 +56,16 @@ docs/            Specification, engineering charters, phase plan
 
 ## Getting started
 
-Full instructions, including three environment traps this project has actually hit, are in **[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)**.
+> ### ▶ **Start here if you need to run MOP locally: [`docs/MOP-OPERATIONS-RUNBOOK.md`](docs/MOP-OPERATIONS-RUNBOOK.md)**
+>
+> The complete operations manual — fresh-machine install, database startup, environment variables, starting and stopping the stack, seeded login credentials, the golden journey step by step, per-role runbooks, testing, backups, troubleshooting and recovery. Every command in it was checked against this repository, and the ones that were actually executed are marked as such.
+>
+> **Read its first two warnings before anything else.** On the machine this was written on, `docker compose up -d` does **not** work (Docker is not installed) and PostgreSQL is started by a script that lives outside this repository; and the repository is worked on by several agents across several branches at once, so `git status -sb` is the first command of any session.
+
+Shorter path, plus the three environment traps this project has actually hit: **[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)**.
 
 ```bash
-corepack enable && corepack pnpm install
+corepack enable && CI=true corepack pnpm install
 ```
 
 ```bash
@@ -71,6 +77,8 @@ corepack pnpm run doctor && corepack pnpm test
 ```
 
 `doctor` checks every environment failure mode encountered so far and tells you how to fix each one.
+
+> The `docker compose` line above is the **portable** path. If Docker is unavailable — as it is on the primary development machine — see [§5 of the runbook](docs/MOP-OPERATIONS-RUNBOOK.md#5-database-startup) for the user-space PostgreSQL alternative.
 
 ## Engineering standards
 
@@ -92,6 +100,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for conventions and [`docs/README.md`](
 
 | Start here | |
 |---|---|
+| [**`docs/MOP-OPERATIONS-RUNBOOK.md`**](docs/MOP-OPERATIONS-RUNBOOK.md) | **How to actually run, use, test, stop and recover MOP locally.** Start here if you need it running |
 | [`docs/VISION.md`](docs/VISION.md) | What MOP is, the architectural ideas, the hard problems |
 | [`docs/PHASE_MAP.md`](docs/PHASE_MAP.md) | The 21-phase plan and where the project currently is |
 | [`docs/PAGE_INVENTORY.md`](docs/PAGE_INVENTORY.md) | The canonical, current, per-page build status — the definition of "done" |
