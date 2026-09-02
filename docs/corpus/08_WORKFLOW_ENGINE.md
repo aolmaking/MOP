@@ -151,7 +151,7 @@ One physical event produces one domain event, which produces many consistent pro
 
 `OPERATION_EVENT_KEYS` declares **45 keys** grouped by emitting system, so "which events exist" has one written answer instead of being discovered by grepping for emit calls — which is how the previous implementation ended up with modules that quietly bypassed the pipeline altogether.
 
-⚠️ **The union is not enforced on the emit path.** `EmitOperationEventInput.eventKey` is typed `string`, not `OperationEventKey`, and the union type is imported only by its own spec. A typo is therefore **not** a compile error, and four undeclared keys are emitted today — `task.started`, `task.blocked`, `task.return_for_rework`, `customer_decision.recorded`. Gap G-EVT-01.
+⚠️ **The union is not enforced on the emit path.** `EmitOperationEventInput.eventKey` is typed `string`, not `OperationEventKey`, and the union type is imported only by its own spec. A typo is therefore **not** a compile error. Against the source: **45 declared, 27 emitted, only 9 in both** — Finance emits nine undeclared `finance.*` keys and Inventory eight undeclared `part_request.*` keys. Gaps G-EVT-01/02.
 
 ```ts
 DomainEventEnvelope {
@@ -159,7 +159,7 @@ DomainEventEnvelope {
 }
 ```
 
-`requestId` correlates an event with the HTTP request that caused it — which is what makes "reconstruct what happened" tractable rather than archaeological.
+⚠️ The declared `DomainEventEnvelope` (with `emittedBy` and `requestId`) is **never referenced in production code**; the real input type has neither field and `OperationEvent` has neither column. Correlating every projection from one press, out of stored data, is therefore not currently possible. Gap G-EVT-03.
 
 `emittedBy` is one of the six owning systems, so an event emitted by the wrong system is visible rather than plausible.
 

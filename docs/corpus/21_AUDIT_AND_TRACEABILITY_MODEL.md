@@ -83,11 +83,15 @@ Declared as one list so that *"which events exist"* has one written answer inste
 
 ### ⚠️ Two findings the declaration does not currently deliver
 
-**G-EVT-01 — the union is decorative on the emit path.** `EmitOperationEventInput.eventKey` is typed `string`. `OperationEventKey` is imported only by `contracts.spec.ts`. A typo is **not** a compile error, and four undeclared keys are emitted today: `task.started`, `task.blocked`, `task.return_for_rework`, `customer_decision.recorded`.
+**G-EVT-01 — two parallel vocabularies; the declared one is decorative on the emit path.** `EmitOperationEventInput.eventKey` is typed `string`; `OperationEventKey` is imported only by `contracts.spec.ts`. Against the source: **45 declared, 27 emitted, only 9 in both.** Finance emits nine `finance.*` keys and Inventory eight `part_request.*` keys, **none of them declared**, plus `task.started`.
 
-**G-EVT-02 — 26 of the 45 declared keys are never referenced in production code.** Some are honest vocabulary ahead of unbuilt features (billing clearance, debit notes). Others belong to flows that **are** built and simply do not emit: `stock.movement_recorded`, `chargeable_item.added`/`.removed`, `running_balance.updated`, `refund.requested`/`.approved`, `credit_note.issued`, `part.return_requested`/`.return_accepted`/`.return_rejected`, `workshop.frozen`/`.reactivated`, `permission.changed`, `platform_control.changed`. Those flows change state without emitting the event that would fan it out — a partial hole in the truth-propagation guarantee, not a missing feature.
+This has already produced a real customer-facing defect, recorded in `customer-safe-projection.service.ts`'s own comment: every canned customer message written against the declared keys was **unreachable**, and a customer saw the generic fallback instead. The applied fix maps *both* vocabularies, deliberately — renaming what the services emit is a **data migration**, because the emitted key is stored on every historical `OperationEvent` and `AuditLog` row and read back by reports and workflow health.
 
-### The envelope
+**G-EVT-02 — flows that emit nothing at all.** Separate from the naming divergence: `StockService.record()` writes the movement and the balance and emits no event. Likewise `chargeable_item.*`, `running_balance.updated`, `invoice_candidate.created`, `workshop.frozen`/`.reactivated`, `permission.changed`, `platform_control.changed`, `customer_decision.sent`/`.expired`, `task.finish_attempted`/`.finish_blocked`/`.sent_to_review`, `technician.assigned`. Accountability survives — each still writes its `AuditLog` row — but **propagation does not**.
+
+### ⚠️ G-EVT-03 — the designed envelope is not the persisted one
+
+`packages/shared/src/contracts/events.ts` declares:
 
 ```ts
 DomainEventEnvelope {
@@ -95,8 +99,13 @@ DomainEventEnvelope {
 }
 ```
 
-- **`emittedBy`** is one of the six owning systems, so an event emitted by the wrong system is visible rather than plausible.
-- **`requestId`** correlates an event with the HTTP request that caused it. This is what makes *"reconstruct what happened"* tractable rather than archaeological: one request id gathers every projection a single press produced.
+with `emittedBy` naming the owning system (so an event emitted by the wrong system would be visible rather than plausible) and `requestId` correlating an event with the HTTP request that caused it.
+
+**Neither field exists at runtime.** `DomainEventEnvelope` is **never referenced anywhere in production code**; the actual input type is `EmitOperationEventInput`, which has no `emittedBy` and no `requestId`, and the `OperationEvent` table has neither column.
+
+A `requestId` *is* generated per request in `apps/api/src/main.ts` and attached to the request object — but it is not threaded into the event or audit write. So **correlating every projection produced by one press, from stored data, is not currently possible**; reconstruction works record-by-record, through `targetType`/`targetId` and timestamps, which is materially weaker for a multi-system fan-out.
+
+This is the third instance of the same shape as G-EVT-01: a designed contract in `shared` that nothing on the write path is typed against.
 
 ## 5. Derived history — the reason this pays off
 
@@ -158,8 +167,8 @@ Filterable, with **inline diffs** from `before` / `after`. Verified live as a se
 | ~30 audit actions across every system | ✅ `[IMPLEMENTED]` |
 | 45-key event vocabulary declared in one place | ✅ `[IMPLEMENTED]` |
 | **Type enforcement of that vocabulary on the emit path** | ⚠️ G-EVT-01 — `eventKey: string`; 4 undeclared keys emitted today |
-| **Declared keys actually emitted** | ⚠️ G-EVT-02 — 19 of 45; several built flows emit nothing |
-| `requestId` correlation | ✅ `[IMPLEMENTED]` |
+| **Declared keys actually emitted** | ⚠️ 9 of 45. 18 undeclared keys are emitted instead (G-EVT-01); several built flows emit nothing at all (G-EVT-02) |
+| **`requestId` / `emittedBy` on stored events** | ❌ G-EVT-03 — the designed envelope is unused; neither column exists |
 | Reconstructed durations, loops, historical shape | ✅ `[INTEGRATED]` |
 | Orphaned-status-change integrity check | ✅ `[INTEGRATED]` |
 | Owner audit page with filters and diffs | ✅ `[VERIFIED]` |

@@ -197,7 +197,7 @@ Writing a document per subsystem forced a read of the code behind each claim, an
 `WAREHOUSE_REVIEWING`, `IN_TRANSIT`, `WAITING_TRANSFER`, `WAITING_SUPPLIER` have no graph edge and no writer, yet three services filter and count on them and the technician view carries customer-facing copy for all four.
 
 **The closed domain-event union is not enforced.**
-`eventKey` is typed `string`; `OperationEventKey` is imported only by its own spec. Four undeclared keys are emitted today, and **26 of the 45 declared keys are never emitted** — several belonging to flows that are built (stock movements, refunds, credit notes) and simply do not emit.
+`eventKey` is typed `string`; `OperationEventKey` is imported only by its own spec. Against the source: **45 declared, 27 emitted, only 9 in both** — Finance and Inventory each emit an entire undeclared vocabulary (`finance.*`, `part_request.*`), which has already made canned customer messages unreachable. Separately, some built flows emit nothing at all — several belonging to flows that are built (stock movements, refunds, credit notes) and simply do not emit.
 
 **Twenty of eighty permission keys have no production consumer**, ten of them by design (`PlatformGuard`, customer sessions) and ten genuinely orphaned.
 

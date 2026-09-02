@@ -97,7 +97,7 @@ Three properties make these contracts do real work:
 
 `OperationEventsService` is the **only** place fan-out happens. 45 declared keys; see doc 21 §4 for the full list.
 
-⚠️ Two caveats that matter before relying on this: the key list is **not type-enforced on the emit path** (`eventKey: string`), and **26 of the 45 are never referenced in production** — several of them belonging to flows that are built and simply do not emit. Gaps G-EVT-01/02.
+⚠️ Two caveats that matter before relying on this: the key list is **not type-enforced on the emit path** (`eventKey: string`), and there are effectively **two vocabularies** — 45 declared, 27 emitted, only 9 in both, with Finance and Inventory emitting entirely undeclared schemes. Separately, some built flows emit nothing at all. Gaps G-EVT-01/02.
 
 ### The worked example
 

@@ -116,22 +116,42 @@ Plus five checked only in tests: `finance.invoice.view` · `inventory.stock.view
 `workorders.branch.reassign_technician` is held by Branch Manager and there is **no reassignment endpoint or control anywhere.**
 **Status.** 🔴 Open.
 
-### G-EVT-01 · The domain-event union is decorative on the emit path · **NEW**
-**Impact.** `OPERATION_EVENT_KEYS` exists so that *"a typo is a compile error"* and *"which events exist has one answer"*. **Neither holds.** `EmitOperationEventInput.eventKey` is typed `string`, not `OperationEventKey`, and `OperationEventKey` is imported **only by its own spec** (`contracts.spec.ts`) — nothing in `apps/api` type-checks against it.
-**Evidence.** Four undeclared keys are emitted in production today: `task.started`, `task.blocked`, `task.return_for_rework`, `customer_decision.recorded`. A test fixture emits a fifth, `some_future.event_nobody_mapped`.
-**Root cause.** The union was defined in `shared`; the emit interface was written independently in `apps/api` and never narrowed to it.
-**Why it matters beyond tidiness.** This is precisely the **decorative abstraction** class that D-001 exists to prevent — a named structure that looks like it enforces something and does not. It is the same shape as v11.9's permission hierarchy that nothing iterated.
-**Resolution.** Type `eventKey` as `OperationEventKey`, then either declare the four keys in use or rename them to declared ones. One-line change plus whatever it surfaces.
+### G-EVT-01 · Two parallel event vocabularies; the declared one is decorative on the emit path · **NEW · S2**
+**Impact.** `OPERATION_EVENT_KEYS` exists so that *"a typo is a compile error"* and *"which events exist has one answer"*. **Neither holds, and the divergence is not a typo — it is a whole second vocabulary.**
+
+Exact reconciliation against the source (45 declared, 27 distinct literals reaching `events.emit`):
+
+| | Count | Detail |
+|---|---|---|
+| Declared **and** emitted | **9** | `work_order.created` · `work_order.status_changed` · `inspection.saved` · `fault.created` · `blocker.reported` · `blocker.resolved` · `task.completed` · `customer_decision.requested` · `customer_decision.responded` |
+| **Emitted but never declared** | **18** | The entire Finance vocabulary — `finance.{line_added,invoice_issued,payment_recorded,discount_requested,discount_approved,discount_rejected,refund_requested,refund_approved,refund_rejected}` — the entire Inventory vocabulary — `part_request.{created,issued,used,returned,return_requested,return_rejected,return_clarification_requested,return_clarified}` — plus `task.started` |
+| Declared but never emitted | **36** | Including `part.*`, `payment.recorded`, `invoice.issued`, `stock.movement_recorded`, `chargeable_item.*` |
+
+**Root cause.** `EmitOperationEventInput.eventKey` is typed `string`, not `OperationEventKey`, and `OperationEventKey` is imported **only by its own spec** (`contracts.spec.ts`). Nothing in `apps/api` type-checks against the union, so Finance and Inventory each grew their own naming scheme without anything noticing.
+
+**This has already caused a real customer-facing defect, and the code says so.** `customer-safe-projection.service.ts` carries a comment recording that every canned customer message written against the declared keys was **unreachable** — a customer would have seen the generic fallback instead of the sentence written for the occasion. The fix applied was to map *both* vocabularies in `SAFE_DEFAULTS`, with the reasoning written down: renaming what the services emit is a **data migration**, because the emitted key is stored on every historical `OperationEvent` and `AuditLog` row and read back by reports and workflow-health. That is the right call, and it means the divergence is now load-bearing on historical data.
+
+**Why it matters beyond tidiness.** This is the **decorative abstraction** class that D-001 exists to prevent — the same shape as v11.9's permission hierarchy that nothing iterated.
+
+**Resolution.** Not a one-line change, because of the historical data. Sequence: (1) type `eventKey` as `OperationEventKey`; (2) add the 18 emitted keys to the union so the type compiles against reality; (3) decide separately, as a migration, whether to converge the two schemes.
 **Status.** 🔴 Open.
 
-### G-EVT-02 · 26 of 45 declared event keys are never emitted · **NEW**
-**Impact.** Some are honest vocabulary ahead of unbuilt features (`invoice.cleared`, `debit_note.issued`, `asset.ownership_transferred`). **Others belong to flows that are built and simply do not emit:**
+### G-EVT-02 · Built flows that emit no domain event at all · **NEW · S2**
+**Impact.** Distinct from G-EVT-01's naming problem: these are flows that are built and emit **nothing**, under either vocabulary.
 
-`stock.movement_recorded` · `chargeable_item.added` / `.removed` · `running_balance.updated` · `invoice_candidate.created` · `refund.requested` / `.approved` · `credit_note.issued` · `part.unavailable` · `part.return_requested` / `.return_accepted` / `.return_rejected` · `workshop.frozen` / `.reactivated` · `permission.changed` · `platform_control.changed` · `customer_decision.sent` / `.expired` · `task.finish_attempted`
+`stock.movement_recorded` — **`StockService.record()` writes the movement and the balance and emits no event.** Also `chargeable_item.added`/`.removed`, `running_balance.updated`, `invoice_candidate.created`, `workshop.frozen`/`.reactivated`, `permission.changed`, `platform_control.changed`, `customer_decision.sent`/`.expired`, `task.finish_attempted`, `task.finish_blocked`, `task.sent_to_review`, `technician.assigned`.
 
-**Consequence.** Those flows change state **without emitting the event that would fan it out**, so the truth-propagation guarantee (doc 01 §4.4) holds for the paths that emit and not for these. A stock movement, a refund and a credit note happen without a domain event; anything downstream that would have subscribed sees nothing.
-**Root cause.** The vocabulary was declared up front (correctly); emission was added per feature and did not keep pace.
-**Resolution.** For each built-but-silent flow, emit at the existing write site inside the existing transaction. For the genuinely-future keys, leave them and let G-EVT-01's typing keep them honest.
+**Consequence.** The truth-propagation guarantee (doc 01 §4.4) holds for the paths that emit and not for these. Anything that would subscribe to a stock movement, a chargeable item or a tenant freeze sees nothing — which is why several of these are also invisible to Live View's event-kind summary and to the customer timeline.
+**Mitigating fact.** These flows still write their `AuditLog` row, so accountability is intact; it is *propagation* that is missing, not the record.
+**Resolution.** Emit at the existing write site, inside the existing transaction, for each built-but-silent flow.
+**Status.** 🔴 Open.
+
+### G-EVT-03 · The designed event envelope is not the persisted one · **NEW · S3**
+**Impact.** `DomainEventEnvelope` in `contracts/events.ts` declares `emittedBy` (the owning system) and `requestId` (correlation with the HTTP request that caused the event). **`DomainEventEnvelope` is never referenced anywhere in production code.** The real input type, `EmitOperationEventInput`, has neither field, and the `OperationEvent` table has neither column.
+**Evidence.** A `requestId` *is* generated per request in `apps/api/src/main.ts` and attached to the request object — but never threaded into the event or audit write.
+**Consequence.** **Correlating every projection produced by one press, from stored data, is not possible.** Reconstruction works record-by-record through `targetType`/`targetId` and timestamps, which is materially weaker for a multi-system fan-out — and fan-out correctness is the product's central claim.
+**Root cause.** Third instance of the same shape as G-EVT-01: a contract designed in `shared` that nothing on the write path is typed against.
+**Resolution.** Add `requestId` to `OperationEvent` and `AuditLog` (a migration and a thread-through from the request context). `emittedBy` is derivable from the owning service and is the cheaper half.
 **Status.** 🔴 Open.
 
 ### G-MODEL-01 · Eight Prisma models with no production access · **NEW**

@@ -225,8 +225,8 @@ Ordered array, actually iterated, deny-by-default, `locked` short-circuit, **pur
 | **F-11.1** Single audit writer, lint-enforced | ✅ |
 | **F-11.2** ~30 audit actions with actor type and risk level | ✅ |
 | **F-11.3** Owner audit page with filters and inline diffs | ✅ |
-| **F-11.4** 45-key domain event vocabulary | 🟡 — declared in one place, but **not type-enforced on the emit path**, and only 19 of 45 are actually emitted (G-EVT-01/02) |
-| **F-11.5** `requestId` correlation between events and requests | ✅ |
+| **F-11.4** 45-key domain event vocabulary | 🟡 — declared in one place, but **not type-enforced on the emit path**, with 45 declared, 27 emitted and **only 9 in both** — Finance and Inventory emit entire undeclared vocabularies (G-EVT-01/02) |
+| **F-11.5** `requestId` / `emittedBy` correlation on stored events | U0001f534 — designed in `DomainEventEnvelope`, **never implemented**; neither column exists (G-EVT-03) |
 | **F-11.6** **Rollback from the audit trail** | 🔴 |
 | **F-11.7** Workshop-timezone timestamps | 🔴 — the session does not carry the timezone |
 | **F-11.8** **Retention / archival** | 🔴 — `AuditLog` and `OperationEvent` grow without bound |

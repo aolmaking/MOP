@@ -71,7 +71,7 @@
 ## D-010 · A closed union of domain events, not free strings
 **Chosen.** 45 keys in `contracts/events.ts`, grouped by emitting system.
 **Why.** A typo should become a compile error, and *which events exist* should have one answer instead of being discovered by grepping for emit calls — which is how v11.9 ended up with modules that quietly bypassed the pipeline.
-**⚠️ Not currently realised.** `EmitOperationEventInput.eventKey` is typed `string`, and `OperationEventKey` is imported only by its own spec — so the union is **decorative on the emit path**, which is the exact failure class D-001 exists to prevent. Four undeclared keys are emitted today. The decision stands; the enforcement does not. Gaps G-EVT-01/02.
+**⚠️ Not currently realised.** `EmitOperationEventInput.eventKey` is typed `string`, and `OperationEventKey` is imported only by its own spec — so the union is **decorative on the emit path**, which is the exact failure class D-001 exists to prevent. 45 declared, 27 emitted, **only 9 in both**: Finance and Inventory each grew an undeclared vocabulary. The decision stands; the enforcement does not, and converging the two schemes is now a data migration because emitted keys are stored on historical rows. Gaps G-EVT-01/02.
 
 ## D-011 · Historical records are interpreted against the configuration in force at the time
 **Chosen.** `TenantCapability` and `WorkshopPolicy` are time-ranged; `PriceCatalogEntry` is effective-dated; `MessageTemplate` is immutable per version; `SpecializationEntry` pins its definition version.

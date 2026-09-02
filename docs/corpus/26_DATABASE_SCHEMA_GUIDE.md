@@ -4,7 +4,7 @@
 > **Purpose:** the schema's philosophy — ownership, constraints, cascades, indexes, migrations — and the rules a change to it must respect.
 > **Authority:** ARCHITECTURAL.
 > **Scope:** `packages/database/prisma/`.
-> **Last verified:** 2026-09-01 against commit `a8c8bb5`. 76 models, 33 enums, 31 migrations.
+> **Last verified:** 2026-09-01 against commit `a8c8bb5`. 77 models, 40 enums, 31 migrations.
 > **Source of truth:** `schema.prisma`, [`../DATABASE_STRATEGY.md`](../DATABASE_STRATEGY.md), [`../DATA_DICTIONARY.md`](../DATA_DICTIONARY.md).
 > **Related:** 06 (entity reference), 22 (invariants), 23 (concurrency).
 
@@ -93,7 +93,7 @@ Three shapes implement it, and picking the right one matters:
 
 ## 8. Enums as behaviour
 
-33 enums. The load-bearing ones — `WorkOrderStatus`, `PartRequestStatus`, `CustomerDecisionStatus` — must match their `WorkflowGraph.states` **exactly**, so a graph state can never drift from a storable status.
+40 enums. The load-bearing ones — `WorkOrderStatus`, `PartRequestStatus`, `CustomerDecisionStatus` — must match their `WorkflowGraph.states` **exactly**, so a graph state can never drift from a storable status.
 
 `WorkOrderStatus`'s 16 values were authored directly from the canonical spec's *Core Work Order Lifecycle* list. **The old schema was missing six of them** — which is precisely how a lifecycle ends up implemented as an if-chain across whichever services happened to need it.
 
@@ -155,7 +155,7 @@ For `StockMovement` that is correct — it is the ledger, and `replay()` depends
 
 | Element | Status |
 |---|---|
-| 76 models, 33 enums, tenant-scoped throughout | ✅ |
+| 77 models, 40 enums, tenant-scoped throughout | ✅ |
 | Restrict/cascade discipline | ✅ |
 | Never-negative stock enforced in the database | ✅ |
 | Payment idempotency as a unique constraint | ✅ |

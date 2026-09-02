@@ -3,7 +3,7 @@
 > **Document ID:** DOC-06
 > **Purpose:** every entity in MOP — what it is, which system owns it, what must always be true of it, and who writes it.
 > **Authority:** DESCRIPTIVE. `packages/database/prisma/schema.prisma` is authoritative.
-> **Scope:** 76 Prisma models and 33 enums.
+> **Scope:** 77 Prisma models and 40 enums.
 > **Last verified:** 2026-09-01 against commit `a8c8bb5`.
 > **Source of truth:** `packages/database/prisma/schema.prisma`, [`../DATA_DICTIONARY.md`](../DATA_DICTIONARY.md), [`../DATABASE_STRATEGY.md`](../DATABASE_STRATEGY.md).
 > **Related:** 07 (lifecycle), 09 (inventory), 10 (money), 22 (invariants), 26 (schema guide).

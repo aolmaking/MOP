@@ -3,7 +3,7 @@
 > **Document ID:** DOC-19
 > **Purpose:** every HTTP endpoint in the product, with its actor, its permission, the domain command behind it, and what it changes.
 > **Authority:** REFERENCE, derived. Extracted from the controller sources, not from a specification.
-> **Scope:** 30 controllers, 132 routes. Base path `/api/v1`.
+> **Scope:** 30 controllers, 170 routes. Base path `/api/v1`.
 > **Last verified:** 2026-09-01 against commit `a8c8bb5`.
 > **Related:** 16 (page × feature), 20 (permissions), 07 (the intents these commands send).
 
