@@ -216,3 +216,62 @@
   align-items: flex-start;
   gap: var(--space-3);
 }
+
+/* --- withdrawing an unanswered ask (M-3) ---------------------------- */
+
+/* Quieter than "Record answer": withdrawing is the rarer and more
+   final of the two, and should not compete for the same glance. */
+.row-cancel {
+  align-self: flex-start;
+  min-block-size: 2.25rem;
+  padding-inline: var(--space-3);
+  background: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.row-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.row-confirm-question {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.row-confirm-yes,
+.row-confirm-no {
+  min-block-size: 2.25rem;
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.row-confirm-yes {
+  background: var(--danger);
+  border: 1px solid var(--danger);
+  color: var(--on-accent);
+}
+
+.row-confirm-no {
+  background: none;
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+
+.band-error {
+  padding: var(--space-3) var(--space-4);
+  background: var(--danger-bg);
+  border-inline-start: 4px solid var(--danger);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}

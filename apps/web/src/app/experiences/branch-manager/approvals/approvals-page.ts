@@ -39,6 +39,41 @@ export class ApprovalsPage {
     this.load();
   }
 
+  /**
+   * Withdrawing an ask the customer never answered (M-3).
+   *
+   * Two taps, not one. Cancelling is not undoable and the customer may
+   * still be about to answer, so the row asks for confirmation in place
+   * rather than acting on a mis-tap -- the same reasoning that puts a
+   * reason behind every blocker.
+   */
+  protected readonly confirmingCancel = signal<string | null>(null);
+  protected readonly cancelling = signal<string | null>(null);
+  protected readonly cancelError = signal<string | null>(null);
+
+  protected askToCancel(requestId: string): void {
+    this.confirmingCancel.set(this.confirmingCancel() === requestId ? null : requestId);
+    this.cancelError.set(null);
+  }
+
+  protected confirmCancel(requestId: string): void {
+    this.cancelling.set(requestId);
+    this.cancelError.set(null);
+    this.api.cancelApproval(requestId).subscribe({
+      next: () => {
+        this.cancelling.set(null);
+        this.confirmingCancel.set(null);
+        // Re-read rather than dropping the row locally: cancelling frees
+        // the job to move, and what it moved to is the server's answer.
+        this.load();
+      },
+      error: (err: PresentedError) => {
+        this.cancelling.set(null);
+        this.cancelError.set(err.message ?? 'That did not go through.');
+      },
+    });
+  }
+
   protected openRecording(requestId: string): void {
     this.recording.set(requestId);
   }

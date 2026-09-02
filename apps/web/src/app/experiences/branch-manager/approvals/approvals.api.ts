@@ -62,6 +62,18 @@ export class ApprovalsApi {
     return this.http.post(`/api/v1/branch-manager/work-orders/${workOrderId}/deliver`, {});
   }
 
+  /**
+   * Withdraw an ask the customer never answered (M-3).
+   *
+   * The deadlock guard on the golden path: an unanswered decision holds
+   * the job at AWAITING_CUSTOMER_APPROVAL indefinitely, and read-computed
+   * expiry only helps once the deadline passes. This is the door out
+   * before then -- the car whose owner stopped answering the phone.
+   */
+  cancelApproval(requestId: string): Observable<{ ok: true }> {
+    return this.http.post<{ ok: true }>(`/api/v1/branch-manager/approvals/${requestId}/cancel`, {});
+  }
+
   delivery(): Observable<DeliveryBoard> {
     return this.http.get<DeliveryBoard>('/api/v1/branch-manager/delivery');
   }
