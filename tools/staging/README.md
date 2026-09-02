@@ -62,10 +62,37 @@ account can sign in through the edge · the session cookie comes back
 `Secure; HttpOnly; SameSite=Lax` · the session survives the proxy hop ·
 an anonymous request is refused.
 
+## Backups and the restore drill (M-10)
+
+```bash
+tools/staging/backup.sh mop_platform_dev /e/mop-fleet/backups
+tools/staging/restore-drill.sh <the-dump-it-printed> mop_restore_drill
+```
+
+`backup.sh` writes one dated custom-format dump with a `.sha256` beside
+it, and refuses to call anything under 1 KB a backup. `restore-drill.sh`
+verifies the checksum, rebuilds the dump into a throwaway database with
+`--exit-on-error`, and then checks the restored copy holds a real
+workshop — tables, tenants, accounts and migration history. Schema alone
+is not a restore: a dump that rebuilt 78 empty tables would satisfy every
+other check.
+
+Executed 2026-09-02: **78 tables, 2 tenants, 16 accounts, 20 work orders,
+31 migrations, restored in 2 seconds.**
+
+All three refusals were watched rather than assumed: a truncated dump
+fails the checksum and exits 1; a backup of an empty database is refused
+at 837 bytes; a schema-only dump restores cleanly and is still failed for
+having no tenants, no accounts and no migration history.
+
+What is still missing is scheduling and somewhere to put them: no cron,
+no rotation, no encryption, no offsite copy. Those need a host.
+
 ## What it does not prove
 
 No VPS, no public DNS, no certificate authority, no process supervisor,
-no automated redeploy, no backup or restore drill, no edge rate limiting.
-A browser will refuse the self-signed certificate outright, so the
-journey cannot be walked by hand here — the smoke suite is the evidence.
-M-9 and M-10 stay open on B-002 until there is a host to deploy to.
+no automated redeploy, no offsite or scheduled backups, no edge rate
+limiting. A browser will refuse the self-signed certificate outright, so
+the journey cannot be walked by hand here — the smoke suite is the
+evidence. M-9 stays open on B-002 until there is a host to deploy to;
+M-10's drill is done, its scheduling is not.
