@@ -23,6 +23,9 @@ import { DEFAULT_ROLE_PERMISSIONS, WORK_ORDER_GRAPH } from "@mop/shared";
 
 const prisma = new PrismaClient();
 
+/** The workshops `seed.ts` creates. Anything else is somebody's real work. */
+const DEMO_TENANT_SLUGS = ["apex-motors", "delta-quick"];
+
 const SCRYPT = { N: 131072, r: 8, p: 1, maxmem: 256 * 1024 * 1024 };
 
 function hashPassword(password: string): string {
@@ -68,7 +71,49 @@ const MANAGER_PERMISSIONS = [
 
 const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000);
 
+/**
+ * The demo seed writes fictional customers, cars and jobs. On a database
+ * that carries a real workshop, that is not fixture noise -- it is
+ * invented operational history sitting beside somebody's actual work,
+ * and the launch scope's acceptance criterion 6 exists to prevent it.
+ *
+ * So this refuses rather than trusting whoever typed the command to have
+ * checked. Two independent signals, because either alone is easy to get
+ * wrong: a production NODE_ENV, and the presence of any workshop this
+ * script did not create.
+ *
+ * `MOP_ALLOW_DEMO_SEED=yes` overrides it, for the one legitimate case of
+ * a demo environment that happens to run with NODE_ENV=production.
+ */
+async function refuseIfThisLooksReal(): Promise<boolean> {
+  if (process.env.MOP_ALLOW_DEMO_SEED === "yes") return false;
+
+  if (process.env.NODE_ENV === "production") {
+    console.error("Refusing to write demo data with NODE_ENV=production.");
+    console.error("Set MOP_ALLOW_DEMO_SEED=yes if this really is a demo environment.");
+    return true;
+  }
+
+  const foreign = await prisma.tenant.findFirst({
+    where: { slug: { notIn: DEMO_TENANT_SLUGS } },
+    select: { name: true, slug: true },
+  });
+  if (foreign) {
+    console.error(`Refusing: this database holds a workshop the demo seed did not create -- "${foreign.name}" (${foreign.slug}).`);
+    console.error("Demo jobs alongside a real workshop's jobs is exactly what acceptance criterion 6 forbids.");
+    console.error("Set MOP_ALLOW_DEMO_SEED=yes to override.");
+    return true;
+  }
+
+  return false;
+}
+
 async function main() {
+  if (await refuseIfThisLooksReal()) {
+    process.exitCode = 1;
+    return;
+  }
+
   const tenant = await prisma.tenant.findUnique({ where: { slug: TENANT_SLUG } });
   if (!tenant) {
     console.error(`No tenant "${TENANT_SLUG}". Run "corepack pnpm db:seed" first.`);
@@ -774,22 +819,30 @@ async function createStuckJobs(tenantId: string, branchId: string, technicianSta
       data: { tenantId, branchId, assetId: asset.id, customerId: customer.id, status, inspectionDeclined: false },
     });
 
-    // Write the lifecycle history this job would really have.
+    // NO lifecycle history is written for an open job, deliberately.
     //
-    // Creating a work order straight into IN_PROGRESS is not a state the
-    // product can reach: WorkOrderLifecycleService is the only writer of
-    // WorkOrder.status and it emits `work_order.status_changed` in the
-    // same transaction, so a seeded job with a status and no events looks
-    // -- correctly -- like something bypassed the lifecycle entirely.
-    // Workflow Health detects exactly that, and every demo workshop was
-    // opening with seven CRITICAL integrity violations that were fixture
-    // artefacts rather than anything wrong with the product.
+    // This used to replay a plausible path to the job's status, because
+    // Workflow Health correctly flags a work order whose status nothing
+    // ever transitioned it into, and every demo workshop opened with
+    // seven CRITICAL integrity violations that were fixture artefacts.
     //
-    // The detector is right, so the seed is what changes. This replays the
-    // real path to each job's status and records it in the same shape the
-    // service uses, which makes the seeded workshop indistinguishable
-    // from one that got there by being worked.
-    await recordLifecycleHistory(tenantId, workOrder.id, status);
+    // But making the detector quiet by forging the evidence it looks for
+    // is not honesty, it is a better forgery -- and it is exactly what
+    // the launch scope's acceptance criterion 6 forbids: "zero fabricated
+    // open-state lifecycle data anywhere reachable by the pilot". A
+    // seeded IN_PROGRESS job did not pass through
+    // AWAITING_CUSTOMER_APPROVAL, and writing an event saying it did is a
+    // lie told to every report, dossier and journey strip that reads
+    // those events.
+    //
+    // So the violations come back, and they are TRUE: these jobs really
+    // did bypass the lifecycle, because a seed is not a workshop. The one
+    // place history is still written is a CLOSED job (below), where the
+    // whole record is over and the replay describes something that
+    // genuinely finished rather than something still in flight.
+    //
+    // Restricting this to CLOSED is the Day-6 instruction in
+    // docs/14-DAY-LAUNCH-SCOPE.md, in those words.
 
     if (job.kind === "critical") {
       // Tier 1: liability, and it never decays. Should sit at the top even
