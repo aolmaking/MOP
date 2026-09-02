@@ -30,7 +30,11 @@ const KIND_LABELS: Readonly<Record<AttentionKind, string>> = {
  * next, not as what the system calls it.
  */
 const ACTION_LABELS: Readonly<Record<string, string>> = {
-  CHASE_CUSTOMER: 'Send reminder',
+  // Not "Send reminder". There is no messaging sender -- T4 is deferred --
+  // and a button offering to send one would promise something the
+  // product cannot do. Chasing is a phone call, and the approvals page
+  // is where the number is.
+  CHASE_CUSTOMER: 'Chase customer',
   ESCALATE_CRITICAL: 'Escalate',
   RESOLVE_BLOCKER: 'View blocker',
   CHECK_PARTS: 'Check parts',
@@ -124,15 +128,58 @@ export class AttentionCenter {
     return ACTION_LABELS[item.primaryAction] ?? 'Open';
   }
 
-  act(item: AttentionItem): void {
-    // Wired to real actions in 5.E, where the approvals and delivery
-    // surfaces exist. Left as a no-op rather than a fake success toast:
-    // a button that pretends to work is worse than one that does nothing.
-    void item;
+  /**
+   * Where the row's action actually happens.
+   *
+   * This was a no-op until the surfaces it needed existed -- honestly
+   * marked as one, which was the right call at the time and the wrong
+   * thing to leave behind now that they all do. Every destination below
+   * is a page a branch manager can reach and that performs the named
+   * action; nothing here mutates, so it is navigation rather than a
+   * button that pretends to have done something.
+   */
+  actionRoute(item: AttentionItem): readonly string[] {
+    switch (item.primaryAction) {
+      // The chase list, where the customer's phone number is on the row
+      // and an answer given by phone can be recorded.
+      case 'CHASE_CUSTOMER':
+        return ['/branch/approvals'];
+      // The delivery board, which names what is holding each car and now
+      // carries the Take payment link for the ones owing money.
+      case 'TAKE_PAYMENT':
+        return ['/branch/delivery'];
+      // Everything else is answered on the job itself: the blocker band,
+      // the unacknowledged critical, the parts, the assignment.
+      default:
+        return ['/branch/work-orders', item.workOrderId];
+    }
+  }
+
+  /**
+   * Narrow the queue to one kind.
+   *
+   * Client-side on purpose: the whole queue is already loaded, and a
+   * round trip to hide rows the browser is holding would be slower and
+   * could disagree with the counts beside it.
+   */
+  readonly filter = signal<AttentionKind | null>(null);
+
+  readonly visibleItems = computed(() => {
+    const kind = this.filter();
+    return kind === null ? this.items() : this.items().filter((item) => item.kind === kind);
+  });
+
+  kindLabel(kind: AttentionKind): string {
+    return KIND_LABELS[kind] ?? kind;
   }
 
   filterBy(kind: AttentionKind): void {
-    void kind;
+    // Tapping the active tile again clears it, so a mis-tap costs one tap.
+    this.filter.set(this.filter() === kind ? null : kind);
+  }
+
+  clearFilter(): void {
+    this.filter.set(null);
   }
 
   private load(): void {

@@ -301,3 +301,47 @@
   align-items: flex-start;
   gap: var(--space-3);
 }
+
+/* --- the row's action, and the queue filter ------------------------- */
+
+/* Styled as the secondary button it replaced: it does the same job, it
+   simply admits to being navigation. */
+.queue-act {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2.25rem;
+  padding-inline: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.watch-tile--active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.queue-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-block-end: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.queue-filter-clear {
+  min-block-size: 2rem;
+  padding-inline: var(--space-3);
+  background: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}

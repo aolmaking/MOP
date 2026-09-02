@@ -48,8 +48,17 @@
     }
 
     @case ('ready') {
+      @if (filter(); as kind) {
+        <!-- A filtered queue that does not say so is a queue that looks
+             empty for no reason. -->
+        <p class="queue-filter">
+          Showing only {{ kindLabel(kind) }}.
+          <button type="button" class="queue-filter-clear" (click)="clearFilter()">Show everything</button>
+        </p>
+      }
+
       <ul class="queue">
-        @for (item of items(); track item.id) {
+        @for (item of visibleItems(); track item.id) {
           <li class="queue-row" [class.queue-row--critical]="isCritical(item)">
             <div class="queue-main">
               <p class="queue-identity">
@@ -62,9 +71,9 @@
             </div>
 
             <div class="queue-actions">
-              <button appButton variant="secondary" size="small" (click)="act(item)">
-                {{ actionLabel(item) }}
-              </button>
+              <!-- A link, not a button: this navigates to where the
+                   action happens rather than claiming to have done it. -->
+              <a class="queue-act" [routerLink]="actionRoute(item)">{{ actionLabel(item) }}</a>
               <a class="queue-open" [routerLink]="['/branch/work-orders', item.workOrderId]">Open</a>
             </div>
           </li>
@@ -101,7 +110,13 @@
         <ul class="watch">
           @for (tile of watchList(); track tile.kind) {
             <li>
-              <button class="watch-tile" type="button" (click)="filterBy(tile.kind)">
+              <button
+                class="watch-tile"
+                type="button"
+                [class.watch-tile--active]="filter() === tile.kind"
+                [attr.aria-pressed]="filter() === tile.kind"
+                (click)="filterBy(tile.kind)"
+              >
                 <span class="watch-count">{{ tile.count }}</span>
                 <span class="watch-label">{{ tile.label }}</span>
               </button>

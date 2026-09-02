@@ -114,10 +114,19 @@ describe('AttentionCenter — ranking made visible', () => {
     expect(bdi?.textContent?.trim()).toBe('XYZ-987');
   });
 
+  /**
+   * Still the original point -- the action is named as what the MANAGER
+   * does, not as a status. The wording moved from "Send reminder" to
+   * "Chase customer" because there is no messaging sender (T4 is
+   * deferred) and the old label offered to send something the product
+   * cannot send. It is an anchor now rather than a button, because it
+   * navigates to where the chasing happens instead of claiming to have
+   * chased.
+   */
   it('offers the action that unsticks the job, phrased as what the manager does', () => {
     const { element } = render({ items: [item({ primaryAction: 'CHASE_CUSTOMER' })] });
 
-    expect(element.querySelector('.queue-actions button')?.textContent?.trim()).toBe('Send reminder');
+    expect(element.querySelector('.queue-actions .queue-act')?.textContent?.trim()).toBe('Chase customer');
   });
 });
 
@@ -147,5 +156,84 @@ describe('AttentionCenter — the watch list', () => {
 
     expect(element.textContent).toContain('Waiting on customers');
     expect(element.textContent).not.toContain('CUSTOMER_APPROVAL_WAITING');
+  });
+
+  describe('row actions actually go somewhere', () => {
+    const actionLink = (element: HTMLElement) =>
+      [...element.querySelectorAll('a.queue-act')][0] as HTMLAnchorElement | undefined;
+
+    /**
+     * This button was an explicit no-op for two phases -- honestly
+     * marked as one while the surfaces it needed were unbuilt, and left
+     * behind once they existed. Acceptance criterion 3 says every
+     * visible button on an operational page performs its action, and
+     * this is the manager's landing page.
+     */
+    it('sends a chase to the approvals list, where the phone number is', () => {
+      const { element } = render({ items: [item({ primaryAction: 'CHASE_CUSTOMER' })] });
+
+      expect(actionLink(element)?.getAttribute('href')).toBe('/branch/approvals');
+    });
+
+    it('sends a payment to the delivery board, which carries the Take payment link', () => {
+      const { element } = render({ items: [item({ primaryAction: 'TAKE_PAYMENT' })] });
+
+      expect(actionLink(element)?.getAttribute('href')).toBe('/branch/delivery');
+    });
+
+    it('sends everything else to the job itself', () => {
+      const { element } = render({ items: [item({ primaryAction: 'RESOLVE_BLOCKER', workOrderId: 'wo-7' })] });
+
+      expect(actionLink(element)?.getAttribute('href')).toBe('/branch/work-orders/wo-7');
+    });
+
+    /**
+     * There is no messaging sender -- T4 is deferred -- so a button
+     * offering to send a reminder promises something the product cannot
+     * do.
+     */
+    it('does not offer to send a reminder it cannot send', () => {
+      const { element } = render({ items: [item({ primaryAction: 'CHASE_CUSTOMER' })] });
+
+      expect(element.textContent).not.toContain('Send reminder');
+      expect(actionLink(element)?.textContent?.trim()).toBe('Chase customer');
+    });
+  });
+
+  describe('the watch tiles filter the queue', () => {
+    it('narrows to one kind, says so, and can be cleared', () => {
+      const { fixture, element } = render({
+        items: [item({ id: 'a', kind: 'WAITING_PARTS' }), item({ id: 'b', kind: 'READY_UNPAID', workOrderId: 'wo-2' })],
+        counts: { WAITING_PARTS: 1, READY_UNPAID: 1 },
+      });
+      expect(element.querySelectorAll('.queue-row').length).toBe(2);
+
+      const tile = [...element.querySelectorAll('.watch-tile')][0] as HTMLButtonElement;
+      tile.click();
+      fixture.detectChanges();
+
+      expect(element.querySelectorAll('.queue-row').length).toBe(1);
+      // A filtered queue that does not say so looks empty for no reason.
+      expect(element.querySelector('.queue-filter')).toBeTruthy();
+
+      (element.querySelector('.queue-filter-clear') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(element.querySelectorAll('.queue-row').length).toBe(2);
+    });
+
+    it('treats a second tap on the same tile as clearing it', () => {
+      const { fixture, element } = render({
+        items: [item({ id: 'a', kind: 'WAITING_PARTS' }), item({ id: 'b', kind: 'READY_UNPAID', workOrderId: 'wo-2' })],
+        counts: { WAITING_PARTS: 1, READY_UNPAID: 1 },
+      });
+
+      const tile = [...element.querySelectorAll('.watch-tile')][0] as HTMLButtonElement;
+      tile.click();
+      fixture.detectChanges();
+      tile.click();
+      fixture.detectChanges();
+
+      expect(element.querySelectorAll('.queue-row').length).toBe(2);
+    });
   });
 });
