@@ -1,3 +1,6 @@
+process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432/mop_platform_test?schema=public";
+
+import "reflect-metadata";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { ActionDeckService } from "./action-deck.service";
@@ -29,9 +32,11 @@ describe("Executive Reports Services Integration", () => {
     pipelineService = module.get(ReportsPipelineService);
     salesConversionService = module.get(ReportsSalesConversionService);
     prisma = module.get(PrismaService);
+    await prisma.$connect();
   });
 
   afterAll(async () => {
+    await prisma.$disconnect();
     await module.close();
   });
 
