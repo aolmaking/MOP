@@ -153,7 +153,11 @@ These are load-bearing. Changing one silently breaks a guarantee elsewhere.
 
 ## Documentation map
 
-Start at [`docs/README.md`](docs/README.md). The load-bearing ones:
+**Start at [`docs/LAUNCH_HANDOVER.md`](docs/LAUNCH_HANDOVER.md)** — what the product actually does today, what is deliberately deferred, and every known gap, each traced to a passing test or marked not-proven. Then [`docs/14-DAY-LAUNCH-SCOPE.md`](docs/14-DAY-LAUNCH-SCOPE.md) for the plan it is measured against. These are the current, living status documents — read them before anything below.
+
+[`docs/corpus/00_DOCUMENTATION_INDEX.md`](docs/corpus/00_DOCUMENTATION_INDEX.md) is a 41-document corpus covering the product, architecture and implementation state in depth, each claim labelled by stage (`[INTENDED]` … `[VERIFIED]`). Written before the launch-scope pivot above, so treat its status claims as dated relative to `LAUNCH_HANDOVER.md` — its product/architecture description is still the deeper reference for a single topic.
+
+Then [`docs/README.md`](docs/README.md). The load-bearing ones:
 
 | Document | For |
 |---|---|
@@ -161,6 +165,7 @@ Start at [`docs/README.md`](docs/README.md). The load-bearing ones:
 | `PHASE_MAP.md` | The 14-phase plan and current position |
 | `CAPABILITY_MODEL.md` | Smart delete, removal policies, the reachability guarantee |
 | `SYSTEMS.md` | System boundaries and cross-system contracts |
+| `HISTORY_MODULE.md` | Owner vs Technician vs Customer History, and the recommendation outcome model |
 | `SCENARIOS.md` | What must work, per capability profile, with a schema verdict each |
 | `DESIGN_LANGUAGE.md` · `UX_PRINCIPLES.md` | Why the interface looks and behaves as it does |
 | `DEVELOPMENT.md` | Setup and troubleshooting |
