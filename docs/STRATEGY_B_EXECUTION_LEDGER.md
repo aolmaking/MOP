@@ -56,7 +56,7 @@
 
 ## SHOULD ship (trim under pressure, in this order)
 
-S-1 Attention Center row actions wired · S-2 Security (server-side access TTL, refresh cap) · S-3 Owner Reports overview tab exposed · S-4 Decision expiry sweeper cron · S-5 Dossier polish for counter staff · S-6 Platform Reports Level 1 internal-only.
+S-1 Attention Center row actions wired (**DONE** — 2026-09-03, `CHASE_CUSTOMER` $\to$ `/branch/approvals`, `CHECK_PARTS` $\to$ `/inventory/requests`, `RESOLVE_BLOCKER`/`REASSIGN`/`REVIEW_OVERRUN` $\to$ `/branch/work-orders/:id`) · S-2 Security (server-side access TTL, refresh cap) · S-3 Owner Reports overview tab exposed · S-4 Decision expiry sweeper cron · S-5 Dossier polish for counter staff · S-6 Platform Reports Level 1 internal-only.
 
 All OPEN.
 

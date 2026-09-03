@@ -126,13 +126,20 @@ export class AttentionCenter {
   }
 
   act(item: AttentionItem): void {
-    // M-4: TAKE_PAYMENT is real -- the invoice id rides on the item
-    // specifically so this never has to re-derive it. The remaining
-    // actions (chase customer, resolve blocker, reassign, review overrun)
-    // are S-1's scope, not this one, and stay no-ops: a button that
-    // pretends to work is worse than one that does nothing.
     if (item.primaryAction === 'TAKE_PAYMENT' && item.invoiceId) {
       void this.router.navigate(['/branch/payments', item.invoiceId]);
+      return;
+    }
+    if (item.primaryAction === 'CHASE_CUSTOMER' || item.primaryAction === 'ESCALATE_CRITICAL') {
+      void this.router.navigate(['/branch/approvals']);
+      return;
+    }
+    if (item.primaryAction === 'CHECK_PARTS') {
+      void this.router.navigate(['/inventory/requests']);
+      return;
+    }
+    if (item.workOrderId) {
+      void this.router.navigate(['/branch/work-orders', item.workOrderId]);
       return;
     }
   }
