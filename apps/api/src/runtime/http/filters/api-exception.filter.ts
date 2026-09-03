@@ -1,5 +1,5 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from "@nestjs/common";
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import type { ApiErrorDto } from "@mop/shared";
 
 const STATUS_CODE_MAP: Record<number, string> = {
@@ -40,7 +40,8 @@ export class ApiExceptionFilter implements ExceptionFilter {
       return;
     }
 
-    this.logger.error(exception instanceof Error ? exception.stack : String(exception));
+    const requestId = (host.switchToHttp().getRequest<Request & { requestId?: string }>()).requestId ?? "unknown";
+    this.logger.error(`rid=${requestId} ${exception instanceof Error ? exception.stack : String(exception)}`);
     const error: ApiErrorDto = {
       code: "internal_error",
       message: "Something went wrong. Please try again.",

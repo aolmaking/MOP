@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+dist
+**/dist
+.angular
+.turbo
+.git
+.env
+.env.local
+coverage
+*.log
+*.tsbuildinfo
+packages/database/generated
+graphify-out/
+/MOP/
