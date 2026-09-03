@@ -28,6 +28,7 @@ export class InventoryShell {
     { label: 'Stock', route: '/inventory/stock' },
     { label: 'Returns', route: '/inventory/returns' },
     { label: 'Catalog', route: '/inventory/catalog' },
+    { label: 'Catalog Builder', route: '/inventory/catalog-builder' },
     { label: 'Reports', route: '/inventory/reports' },
   ];
 

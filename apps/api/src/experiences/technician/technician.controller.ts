@@ -8,8 +8,9 @@ import { WorkflowJourneyService } from "../../systems/operations/workflow-journe
 import { TechnicianWorkViewService } from "./technician-work-view.service";
 import { CustomerDecisionService } from "../../systems/customer/decision.service";
 import { PartRequestService } from "../../systems/inventory/part-request.service";
-import { CatalogService } from "../../systems/inventory/catalog.service";
-import { ReportBlockerDto, CreateFaultDto, RequestPartDto, RecordInspectionDto, CompleteTaskDto, RequestReturnDto, ClarificationDto, ExternalPartDto } from "./technician.dto";
+import { CatalogBrowseService } from "../../systems/inventory/catalog-browse.service";
+import { parseAttributeQuery } from "../../systems/inventory/inventory.controller";
+import { ReportBlockerDto, CreateFaultDto, RequestPartDto, RecordInspectionDto, CompleteTaskDto, RequestReturnDto, ClarificationDto, ExternalPartDto, SubmitCartDto } from "./technician.dto";
 import { RaiseDecisionDto } from "../../systems/customer/decision.dto";
 
 /**
@@ -28,7 +29,7 @@ export class TechnicianController {
     private readonly access: EffectiveAccessService,
     private readonly decisions: CustomerDecisionService,
     private readonly partRequests: PartRequestService,
-    private readonly catalog: CatalogService,
+    private readonly browse: CatalogBrowseService,
     private readonly journey: WorkflowJourneyService,
   ) {}
 
@@ -62,7 +63,12 @@ export class TechnicianController {
   async journeyFor(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
     await this.view.workCard(staffUserId, tenantId, id);
-    return this.journey.forWorkOrder(tenantId, id, "TECHNICIAN");
+    // The viewer is a permission ORACLE, not a session: the journey
+    // decides which moves the graph allows, this decides which of them
+    // this person may make, and neither has to know the other's rules.
+    return this.journey.forWorkOrder(tenantId, id, "TECHNICIAN", {
+      can: (permission) => this.access.can(session, permission),
+    });
   }
 
   /** "Previous history detected" -- P-81, docs/POLICY_DECISION_INVENTORY.md §8.B. */
@@ -177,16 +183,37 @@ export class TechnicianController {
   }
 
   /**
-   * The parts a technician may put on a job, POS-card style -- the same
-   * catalog Catalog Control writes, filtered to what a work order can
-   * use and never carrying cost (a technician has no reason to see
-   * margin). No ownership check: this is workshop-wide reference data,
-   * not this technician's own record.
+   * The parts catalogue, as something to shop rather than something to
+   * search.
+   *
+   * Categories, filters and filter values all come from what the
+   * inventory manager configured -- this endpoint has no taxonomy of its
+   * own, and adding a hardcoded "Vehicle Type" here would put the
+   * technician's page and the manager's page permanently out of step.
+   * The same `CatalogBrowseService.browse` answers the manager's
+   * preview, so what is previewed is literally what is served.
+   *
+   * No ownership check: this is workshop-wide reference data, not this
+   * technician's own record. Cost is not merely unread here -- a
+   * `BrowseCard` has no field for it.
    */
   @Get("parts-catalog")
-  async partsCatalog(@CurrentSession() session: SessionContext, @Query("q") q?: string) {
+  async partsCatalog(
+    @CurrentSession() session: SessionContext,
+    @Query("q") q?: string,
+    @Query("categoryId") categoryId?: string,
+    @Query("attributes") attributes?: string,
+    @Query("inStockOnly") inStockOnly?: string,
+    @Query("page") page?: string,
+  ) {
     const { tenantId } = await this.requireTechnician(session, "inventory.request.create");
-    return this.catalog.list(tenantId, { query: q, workOrderUsable: true, pageSize: 50 }, false);
+    return this.browse.browse(tenantId, {
+      query: q,
+      categoryId,
+      attributes: parseAttributeQuery(attributes),
+      inStockOnly: inStockOnly === "true",
+      page: page ? Number(page) : 1,
+    });
   }
 
   /**
@@ -208,6 +235,36 @@ export class TechnicianController {
     await this.view.workCard(staffUserId, tenantId, id);
     return this.partRequests.request(
       { tenantId, workOrderId: id, inventoryItemId: dto.inventoryItemId, quantity: dto.quantity, reason: dto.reason },
+      this.actor(session),
+    );
+  }
+
+  /**
+   * The cart, submitted.
+   *
+   * One request per line, in one transaction, under one `cartKey` --
+   * see `PartRequestService.requestMany` for why this is not a
+   * shopping-order entity and why the key is required rather than
+   * optional. Same permission and the same ownership check as the
+   * single-part path above: a cart is a faster way to ask for parts, not
+   * a way to ask for more of them.
+   */
+  @Post("work-orders/:id/parts/cart")
+  async submitCart(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: SubmitCartDto,
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "inventory.request.create");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.partRequests.requestMany(
+      {
+        tenantId,
+        workOrderId: id,
+        lines: dto.lines,
+        cartKey: dto.cartKey,
+        reason: dto.reason,
+      },
       this.actor(session),
     );
   }

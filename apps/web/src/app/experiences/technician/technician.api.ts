@@ -91,19 +91,114 @@ export interface AssetHistoryVisit {
 }
 
 /**
- * One card in the parts picker. Shaped by `CatalogService.toItem` --
- * `cost` is deliberately absent from this interface, not merely unread:
- * the technician endpoint never asks for it.
+ * One card in the parts catalog. Shaped by `CatalogBrowseService` --
+ * `cost` is absent from this interface because it is absent from the
+ * server's own `BrowseCard`, not merely unread here.
  */
 export interface PartCard {
   readonly id: string;
   readonly sku: string;
   readonly name: string;
-  readonly category: string | null;
+  readonly summary: string | null;
+  readonly imageUrl: string | null;
+  readonly categoryId: string | null;
+  readonly categoryName: string | null;
   /** Money as a string, always. */
   readonly sellingPrice: string;
   readonly stockTracked: boolean;
   readonly onHand: number;
+  readonly availability: 'IN_STOCK' | 'LOW' | 'OUT_OF_STOCK' | 'NOT_TRACKED';
+  /** Whatever the inventory manager configured, in their own words. */
+  readonly attributes: readonly { attributeId: string; label: string; valueLabel: string }[];
+}
+
+export interface PartCategoryNode {
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string;
+  readonly parentId: string | null;
+  readonly itemCount: number;
+  readonly children: readonly PartCategoryNode[];
+}
+
+export interface PartFilterOption {
+  readonly valueId: string;
+  readonly value: string;
+  readonly label: string;
+  readonly count: number;
+  readonly selected: boolean;
+}
+
+/**
+ * A filter the technician sees.
+ *
+ * Nothing in this app knows what "Vehicle Type" is, and that is the
+ * point: the inventory manager invented it, the server persisted it,
+ * and the page renders whatever comes back. A hardcoded filter here
+ * would go stale the moment a workshop configured a different one.
+ */
+export interface PartFilter {
+  readonly attributeId: string;
+  readonly key: string;
+  readonly label: string;
+  readonly options: readonly PartFilterOption[];
+}
+
+export interface PartsCatalogPage {
+  readonly categories: readonly PartCategoryNode[];
+  /** Empty until a category is chosen -- filters belong to a category. */
+  readonly filters: readonly PartFilter[];
+  readonly items: readonly PartCard[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+  readonly categoryId: string | null;
+  readonly query: string | null;
+}
+
+export interface CartSubmission {
+  readonly cartKey: string;
+  readonly requests: readonly { id: string; inventoryItemId: string; quantity: number; status: string }[];
+  /** True when the server recognised this basket and changed nothing. */
+  readonly replayed: boolean;
+}
+
+export interface CatalogBrowseQuery {
+  readonly q?: string;
+  readonly categoryId?: string;
+  /** attributeId -> chosen valueIds. */
+  readonly attributes?: Readonly<Record<string, readonly string[]>>;
+  readonly inStockOnly?: boolean;
+  readonly page?: number;
+}
+
+/**
+ * `attributeId:valueId,valueId;attributeId:valueId`.
+ *
+ * Shared with the inventory manager's preview client, and parsed by one
+ * function on the server -- see `parseAttributeQuery` in
+ * inventory.controller.ts for why the browse is a link rather than a
+ * body.
+ */
+export function encodeAttributeQuery(
+  attributes: Readonly<Record<string, readonly string[]>> | undefined,
+): string | undefined {
+  if (!attributes) return undefined;
+  const parts = Object.entries(attributes)
+    .filter(([, values]) => values.length > 0)
+    .map(([attributeId, values]) => `${attributeId}:${values.join(',')}`);
+  return parts.length > 0 ? parts.join(';') : undefined;
+}
+
+export function browseParams(query: CatalogBrowseQuery): Record<string, string> {
+  const params: Record<string, string> = {};
+  if (query.q?.trim()) params['q'] = query.q.trim();
+  if (query.categoryId) params['categoryId'] = query.categoryId;
+  const attributes = encodeAttributeQuery(query.attributes);
+  if (attributes) params['attributes'] = attributes;
+  if (query.inStockOnly) params['inStockOnly'] = 'true';
+  if (query.page && query.page > 1) params['page'] = String(query.page);
+  return params;
 }
 
 export interface AssetHistorySummary {
@@ -160,12 +255,30 @@ export class TechnicianApi {
     return this.http.post(`/api/v1/technician/work-orders/${workOrderId}/finish`, {});
   }
 
-  /** The workshop's own catalog, filtered to what a work order can use. */
-  partsCatalog(query?: string): Observable<{ items: PartCard[]; total: number; categories: string[] }> {
-    const suffix = query?.trim() ? `?q=${encodeURIComponent(query.trim())}` : '';
-    return this.http.get<{ items: PartCard[]; total: number; categories: string[] }>(
-      `/api/v1/technician/parts-catalog${suffix}`,
-    );
+  /**
+   * The workshop's own catalog, as configured by its inventory manager
+   * and filtered to what a work order can use.
+   */
+  partsCatalog(query: CatalogBrowseQuery = {}): Observable<PartsCatalogPage> {
+    return this.http.get<PartsCatalogPage>('/api/v1/technician/parts-catalog', { params: browseParams(query) });
+  }
+
+  /**
+   * The whole cart, in one call, under a key the client minted when the
+   * cart was opened. Submitting the same key twice returns the basket
+   * the first submit created rather than doubling the store's work.
+   */
+  submitCart(
+    workOrderId: string,
+    cartKey: string,
+    lines: readonly { inventoryItemId: string; quantity: number }[],
+    reason?: string,
+  ): Observable<CartSubmission> {
+    return this.http.post<CartSubmission>(`/api/v1/technician/work-orders/${workOrderId}/parts/cart`, {
+      cartKey,
+      lines,
+      ...(reason?.trim() ? { reason: reason.trim() } : {}),
+    });
   }
 
   requestPart(workOrderId: string, inventoryItemId: string, quantity: number, reason?: string): Observable<unknown> {

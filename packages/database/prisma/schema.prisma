@@ -379,6 +379,8 @@ model Tenant {
   policies                WorkshopPolicy[]
   messageTemplates        MessageTemplate[]
   customFieldDefinitions  CustomFieldDefinition[]
+  catalogCategories       CatalogCategory[]
+  catalogAttributes       CatalogAttribute[]
   configurationVersions   TenantConfigurationVersion[]
   controlSettings         ControlSetting[]
   rolePermissions         RolePermission[]
@@ -1281,8 +1283,13 @@ model InventoryItem {
   sku                    String
   name                   String
   itemType               String
-  category               String?
-  subcategory            String?
+  // The ONE taxonomy. Replaced the free-text `category`/`subcategory`
+  // pair in 20260902090000_catalog_taxonomy_and_attributes: two shapes of
+  // "which kind of thing is this" meant the inventory manager typed one
+  // and the technician browsed the other, with nothing keeping them
+  // agreeing. Nullable because an item may be catalogued before anyone
+  // has decided where it belongs.
+  catalogCategoryId      String?
   compatibleCategories   CategoryCode[]
   lowStockThreshold      Int            @default(0)
   criticalStockThreshold Int            @default(0)
@@ -1294,17 +1301,159 @@ model InventoryItem {
   barcode                String?
   supplier               String?
   notes                  String?
+  // Catalog presentation. A technician picks a part by sight before they
+  // read its name, so the picture is catalog data, not decoration.
+  imageUrl               String?
+  // The one line under the name on a card: "Ceramic, low dust". Distinct
+  // from `notes`, which is the storekeeper's own memo and is never shown
+  // to a technician.
+  summary                String?
   createdAt              DateTime       @default(now())
 
-  tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  stockBalances WarehouseStockBalance[]
-  partRequests  PartRequest[]
-  partLines     WorkOrderPartLine[]
-  movements     StockMovement[]
+  tenant          Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  catalogCategory CatalogCategory?              @relation(fields: [catalogCategoryId], references: [id], onDelete: SetNull)
+  attributeValues InventoryItemAttributeValue[]
+  stockBalances   WarehouseStockBalance[]
+  partRequests    PartRequest[]
+  partLines       WorkOrderPartLine[]
+  movements       StockMovement[]
 
   @@unique([tenantId, sku])
   @@index([tenantId])
+  @@index([tenantId, catalogCategoryId])
   @@map("inventory_items")
+}
+
+// ---------------------------------------------------------------------
+// CATALOG CONFIGURATION
+//
+// Configuration, not stock and not transactions. The inventory manager
+// builds this; the technician only ever reads it. A category exists
+// whether or not anything is on the shelf, which is why nothing here
+// carries a quantity.
+// ---------------------------------------------------------------------
+
+model CatalogCategory {
+  id       String @id @default(cuid())
+  tenantId String
+  name     String
+  // Stable across renames, because a renamed category must not orphan
+  // the items pointing at it or break a bookmarked filter.
+  slug String
+  // One level of nesting: "Brakes > Pads". Deeper trees were rejected --
+  // a technician navigating a phone at a car cannot drill four levels.
+  parentId    String?
+  description String?
+  sortOrder   Int     @default(0)
+  // Deactivated, never deleted: items keep pointing at it and past
+  // requests keep naming it. Hidden from the technician, still visible
+  // to the manager who has to move the items out.
+  isActive Boolean @default(true)
+  // A category the workshop uses internally but does not want in a
+  // technician's browse -- e.g. consumables bought in bulk and never
+  // requested per job.
+  technicianVisible Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant     Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent     CatalogCategory?           @relation("CatalogCategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children   CatalogCategory[]          @relation("CatalogCategoryTree")
+  attributes CatalogCategoryAttribute[]
+  items      InventoryItem[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, isActive])
+  @@index([parentId])
+  @@map("catalog_categories")
+}
+
+// A filter dimension the inventory manager invents: "Vehicle Type",
+// "Brand", "Engine Size".
+//
+// Deliberately NOT reusing CustomFieldDefinition. That table is additive
+// form capture: its values are copied into each record's own `fields`
+// JSON at fill time and are never queried back. A catalog filter is the
+// opposite -- it has to be indexable and joinable, because filtering the
+// catalog is the hot path a technician waits on.
+model CatalogAttribute {
+  id       String @id @default(cuid())
+  tenantId String
+  key      String
+  label    String
+  // Shown under the name on a product card, e.g. Brand and Engine Size
+  // on a brake pad. Filtering works either way; this decides what the
+  // card says.
+  showOnCard Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant     Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  values     CatalogAttributeValue[]
+  categories CatalogCategoryAttribute[]
+  assigned   InventoryItemAttributeValue[]
+
+  @@unique([tenantId, key])
+  @@index([tenantId, isActive])
+  @@map("catalog_attributes")
+}
+
+model CatalogAttributeValue {
+  id          String @id @default(cuid())
+  tenantId    String
+  attributeId String
+  value       String
+  label       String
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  attribute CatalogAttribute             @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  assigned  InventoryItemAttributeValue[]
+
+  @@unique([attributeId, value])
+  @@index([tenantId])
+  @@map("catalog_attribute_values")
+}
+
+// Which filters a category offers. Without this, every technician sees
+// every filter in the workshop -- including "Engine Size" while browsing
+// windscreen wipers.
+model CatalogCategoryAttribute {
+  id          String @id @default(cuid())
+  tenantId    String
+  categoryId  String
+  attributeId String
+  sortOrder   Int    @default(0)
+
+  category  CatalogCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  attribute CatalogAttribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, attributeId])
+  @@index([tenantId])
+  @@map("catalog_category_attributes")
+}
+
+// What a part actually IS, in the vocabulary above. One row per value,
+// so a part that fits both Toyota and Hyundai is two rows rather than a
+// JSON blob no index can reach.
+model InventoryItemAttributeValue {
+  id              String @id @default(cuid())
+  tenantId        String
+  inventoryItemId String
+  attributeId     String
+  valueId         String
+
+  inventoryItem InventoryItem         @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  attribute     CatalogAttribute      @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  value         CatalogAttributeValue @relation(fields: [valueId], references: [id], onDelete: Cascade)
+
+  @@unique([inventoryItemId, valueId])
+  @@index([tenantId, attributeId, valueId])
+  @@index([valueId])
+  @@map("inventory_item_attribute_values")
 }
 
 // Never-negative is enforced in BOTH places, and deliberately so:
@@ -1345,10 +1494,26 @@ model PartRequest {
   // which let one account close the loop with no second person ever
   // required to look at it).
   approvedById    String?
+  // Paired with `approvedById` for the same reason it exists: the
+  // journey has to be able to date "the store approved this", and
+  // `updatedAt` is the time of the LAST write, which for a request that
+  // was later issued and used is a different moment entirely.
+  approvedAt      DateTime?
   quantity        Int
   urgency         String            @default("normal")
   reason          String?
   status          PartRequestStatus @default(DRAFT)
+  // The cart this request came out of, when it came from one.
+  //
+  // A technician on a workshop phone taps Submit, the connection stalls,
+  // and they tap again -- without this, the store gets two of everything
+  // and has to work out which basket was real. The client mints the key
+  // once when the cart is opened, so both taps carry the same one and
+  // the second is answered with the requests the first created.
+  //
+  // Null for every request raised any other way, and Postgres treats
+  // NULLs as distinct, so the unique index below constrains carts only.
+  cartKey         String?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -1360,6 +1525,7 @@ model PartRequest {
   returnRequest PartReturnRequest?
   partLine      WorkOrderPartLine?
 
+  @@unique([tenantId, cartKey, inventoryItemId])
   @@index([tenantId, status])
   @@index([workOrderId])
   @@map("part_requests")
@@ -1473,6 +1639,14 @@ model PartReturnRequest {
   // to ask the technician, whether because nobody asked or because the
   // loop already closed.
   clarificationQuestion String?
+  // When the question was asked. Kept even after `clarificationQuestion`
+  // is cleared, because "the store asked something and the technician
+  // answered" is a real pair of events in the job's history, and
+  // nulling the question would otherwise erase the first half of it.
+  clarificationAskedAt  DateTime?
+  // When the technician answered it. The pair is what lets the journey
+  // show a clarification CYCLE rather than a single undated fact.
+  clarificationAnsweredAt DateTime?
 
   partRequest PartRequest @relation(fields: [partRequestId], references: [id], onDelete: Cascade)
 
@@ -1869,6 +2043,12 @@ model CustomerDecisionRequest {
   secureToken     String                 @unique
   whatsappMessage String?
   sentAt          DateTime?
+  // When the customer actually OPENED the link. The `VIEWED` status
+  // already recorded that they had, but not when -- so the journey could
+  // say "the customer has seen it" and not "since when", which is the
+  // half a branch manager chasing an answer actually needs. Null means
+  // they have not opened it, never "we did not record it".
+  viewedAt        DateTime?
   respondedAt     DateTime?
   expiresAt       DateTime?
   createdById     String

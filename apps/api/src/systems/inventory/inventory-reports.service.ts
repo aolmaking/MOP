@@ -125,7 +125,16 @@ export class InventoryReportsService {
 
     const items = await this.prisma.inventoryItem.findMany({
       where: { id: { in: [...byItem.keys()] } },
-      select: { id: true, name: true, sku: true, category: true },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        // Through the relation now that the free-text column is gone.
+        // The ROOT category is what this chart groups by: a manager
+        // reading "where does the money go" wants Brakes, not seven rows
+        // for its sub-categories.
+        catalogCategory: { select: { name: true, parent: { select: { name: true } } } },
+      },
     });
 
     const usage: UsageRow[] = items
@@ -141,7 +150,7 @@ export class InventoryReportsService {
 
     const byCategory = new Map<string, number>();
     for (const item of items) {
-      const category = item.category ?? "Uncategorised";
+      const category = item.catalogCategory?.parent?.name ?? item.catalogCategory?.name ?? "Uncategorised";
       byCategory.set(category, (byCategory.get(category) ?? 0) + (byItem.get(item.id)?.issued ?? 0));
     }
 

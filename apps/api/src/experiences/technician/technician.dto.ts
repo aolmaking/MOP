@@ -1,4 +1,16 @@
-import { IsEnum, IsInt, IsOptional, IsString, Length, Min } from "class-validator";
+import {
+  ArrayMaxSize,
+  ArrayNotEmpty,
+  IsArray,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Length,
+  Min,
+  ValidateNested,
+} from "class-validator";
+import { Type } from "class-transformer";
 import { BlockerReason, InspectionType, SeverityLevel } from "@mop/database";
 
 export class ReportBlockerDto {
@@ -46,6 +58,40 @@ export class RequestPartDto {
   @IsInt()
   @Min(1)
   quantity!: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 500)
+  reason?: string;
+}
+
+export class CartLineDto {
+  @IsString()
+  inventoryItemId!: string;
+
+  @IsInt()
+  @Min(1)
+  quantity!: number;
+}
+
+export class SubmitCartDto {
+  /**
+   * Minted by the client when the cart is opened and sent unchanged with
+   * every attempt, so a stalled submit that the technician taps again
+   * lands on the same basket instead of a second one. Required rather
+   * than optional: a duplicate part request is only ever noticed when
+   * somebody counts the shelf.
+   */
+  @IsString()
+  @Length(8, 64)
+  cartKey!: string;
+
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => CartLineDto)
+  lines!: CartLineDto[];
 
   @IsOptional()
   @IsString()

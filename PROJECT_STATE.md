@@ -2,8 +2,178 @@
 
 > **Purpose:** everything needed to continue MOP in a fresh session without the previous conversation.
 > **Companion:** [`CLAUDE.md`](./CLAUDE.md) holds permanent knowledge (architecture, rules, toolchain). This holds *where we are*.
-> **Last updated:** 2026-08-25, after Plan ceilings (`maxBranches`/`maxUsers`/`maxWarehouses`) gained ongoing enforcement. See the entry directly below for that, then the Data Analyst Export entry, then §0 (2026-08-22) for the policy engine mission, §11 for the older full session log.
+> **Last updated:** 2026-09-03 — the catalog-driven part request landed (section 0 below).
+> Previous entry: 2026-09-02 — two independent sessions built overlapping
+> implementations of the same 14-day launch mission on separate branches;
+> this entry records the reconciliation. **Read [`docs/LAUNCH_HANDOVER.md`](docs/LAUNCH_HANDOVER.md)
+> first** — it is the live, current status document going forward, not this file.
 > **Keep this current.** Update it at the end of any phase task, and before ending a long session.
+
+---
+
+## 0. The catalog-driven part request (2026-09-03)
+
+Technicians now ask the store for parts by **shopping a catalogue the
+inventory manager built**, rather than by filling in one form per part.
+
+### What changed, in one sentence each
+
+**One taxonomy, not two.** `InventoryItem.category`/`subcategory` were
+free text typed by the storekeeper and read by nobody who mattered; the
+technician's picker had no categories at all. Both columns are gone,
+replaced by `CatalogCategory` (one level of nesting, tenant-scoped,
+deactivatable, with a `technicianVisible` flag). The migration
+(`20260902090000_catalog_taxonomy_and_attributes`) backfills a real
+category row per distinct string per tenant before dropping the columns,
+so no workshop loses the taxonomy it had.
+
+**A filter vocabulary the manager invents.** `CatalogAttribute` +
+`CatalogAttributeValue` ("Vehicle Type" → Sedan/SUV/Truck),
+`CatalogCategoryAttribute` (which filters a category offers), and
+`InventoryItemAttributeValue` (what a part actually is). Deliberately
+NOT `CustomFieldDefinition`: that table is additive form capture whose
+values are copied into each record's own JSON and never queried back,
+whereas a catalog filter has to be indexable and joinable because
+filtering is the hot path a technician waits on.
+
+**One browse engine, two surfaces.** `CatalogBrowseService` answers both
+`GET /technician/parts-catalog` and `GET /inventory/catalog-preview`
+with the same method and the same arguments. The manager's "what the
+technician will see" panel is therefore not a mock-up — a
+`catalog-cart.http.spec.ts` case asserts the two responses are
+byte-identical for the same query. Two renderers was the obvious
+shortcut and the wrong one: a preview exists to catch a
+misconfiguration, and one drawn from local state proves nothing.
+
+**A cart, not a shopping-order subsystem.** `PartRequestService.requestMany`
+creates N ordinary `PartRequest` rows in one transaction, applies
+`REQUEST_PART` to the work order once, and is idempotent on a
+client-minted `cartKey` (unique index on `(tenantId, cartKey,
+inventoryItemId)`; NULLs stay distinct, so every request raised any
+other way is untouched). No order entity: the store approves, issues and
+returns each line independently and genuinely can diverge, so a wrapper
+would need keeping in step with N statuses and the store's queue would
+have two answers to "what is outstanding?".
+
+### Pages
+
+- `/inventory/catalog-builder` — categories, filters, filter values,
+  per-category filter assignment, and the live technician preview.
+- `/inventory/catalog` — the item editor now files a part under a
+  category and stamps it with the filter values that category (and its
+  parent) offers; `imageUrl` and `summary` are new catalog fields.
+- `/tech/card/:id/parts` — the technician's catalogue: search,
+  category chips with counts, dynamic filters with facet counts, product
+  cards, a persistent cart, one submit.
+
+### Three defects found by driving the real UI, not by the tests
+
+1. `<select [value]="…">` with `@for`-rendered options resolves to the
+   first option, because the options do not exist when the binding
+   applies. An item that *was* filed read "— not filed —" on open, and
+   saving would have unfiled it. Fixed with `[selected]` per option, in
+   both the item editor and the builder's parent picker.
+2. `distinctUntilChanged()` on a `Subject<void>` compares every emission
+   equal to the last, so the technician's search worked exactly once and
+   then froze on "Loading parts…". (The same pattern is still present on
+   two platform pages — see Known gaps.)
+3. `.visually-hidden` was never global; four components had each
+   re-declared it locally, so the fifth to use it rendered screen-reader
+   labels as visible body text. Now defined once in `styles.css`.
+
+### Proof
+
+- `apps/api/src/testing/catalog-cart.http.spec.ts` — 22 cases over real
+  HTTP and real Postgres: configuration, nesting refusals, cross-tenant
+  refusals, technician-cannot-author, dynamic filters per category,
+  AND-across/OR-within filter semantics, facet counts, search over the
+  configured vocabulary, preview≡technician, cart consolidation,
+  idempotent replay, whole-cart refusal on a foreign part, and the
+  existing loop (approve → issue → stock movement → receive → use →
+  billed once at the snapshotted price).
+- Browser journey run end to end on the demo tenant: manager created a
+  "Suspension" category and a "Position/Front/Rear" filter, attached it
+  to Brakes, stamped Front on the brake pads; the technician then saw
+  Position with a live count, filtered on it, searched "Toyota", built a
+  three-line cart, edited it, submitted, and the store approved and
+  issued — stock 21 → 19 with `beforeQty`/`afterQty` and a
+  `PartRequest` reference on the movement, then received, fitted, and
+  billed once at 1800.00.
+
+### Known gaps (genuine)
+
+- `reports-page.ts` and `workshops-page.ts` still carry defect (2)
+  above. Out of this sprint's scope and not browser-verified here, so
+  left as a flagged follow-up rather than an unverified edit.
+- Opening stock still has no endpoint — a catalogued part starts at zero
+  and the only way to put a balance on a shelf is a direct write. This
+  is the finding already recorded in `parts-loop.http.spec.ts`'s header,
+  unchanged by this work and now more visible, since a technician can
+  browse a part the store cannot actually stock through the product.
+- Category *ordering* is a `sortOrder` the API accepts but no page
+  exposes a control for; categories currently sort by name within their
+  level.
+
+## 0.1 Reconciling two independent sessions that built the same mission in parallel (2026-09-02)
+
+A chat session (this one) spent a full pass building "Strategy B" — the
+same 14-day quick-service-vertical launch plan — directly on `main`,
+producing M-1 (spine ignition), M-3 (decision VIEWED+cancel), M-4 (Take
+Payment reachability), M-5 (part returns), M-6 (session refresh), M-11
+(access logging), and unverified Dockerfiles for M-9, across 8 commits.
+
+Unknown to that session: a **separate multi-agent fleet** (worktrees at
+`E:\mop-fleet\w-a3`, `w-infra`, `w-int`, coordinated through
+`E:\mop-fleet\board\`, tracks `track/a2-frontend`/`track/a3-backend`/
+`infra/ci-fixes` integrating into a `develop` branch) had been building
+**the exact same launch plan** independently, from the same base commit
+(`a8c8bb5`), going substantially further: a real HTTP-level Honesty
+Harness (`apps/api/src/testing/*.http.spec.ts`), the parts-loop and
+decision-deadlock proven over HTTP, a contrast-profile walkthrough, real
+TLS staging over the LAN (no Docker available, so `tools/staging/`
+proxies a production-mode API instead — see D-002 in the board's
+`decisions.md`), an executed backup/restore drill, and — critically — a
+**more correct M-4**: the delivery board asks `FinanceService.settlement()`
+for whether an invoice is paid rather than reading `Invoice.balance`
+directly, avoiding a second source of truth for a question that gets a
+refund wrong if answered independently.
+
+Neither branch had been pushed to GitHub before this reconciliation.
+
+**Resolution:** `develop`'s implementation is authoritative wherever the
+two overlap — it is more thoroughly proven and, on inspection, more
+correct (the M-4 settlement question above; reusing `task.view_assigned`/
+`workorders.branch.view` rather than adding new permission keys for the
+same checks). This session's branch (`main`) is reconciled onto
+`develop`'s tip on a new branch, keeping only what `main` had that
+`develop` did not touch at all:
+
+- `docs/corpus/*` — the 41-document architecture/product corpus, restored
+  and cross-referenced from `CLAUDE.md` alongside `LAUNCH_HANDOVER.md`.
+- M-11, access logging (`accessLogMiddleware`, `ApiExceptionFilter`'s
+  `rid=` on a 500) — `develop` never built this.
+- `apps/api/Dockerfile`/`apps/web/Dockerfile`/`nginx.conf` — kept as a
+  documented, still-unverified alternative path to `develop`'s proven
+  `tools/staging/` approach, in case Docker ever becomes available on
+  this machine.
+
+Dropped, not merged: this session's own M-1/M-3/M-4/M-5/M-6 code and its
+`docs/STRATEGY_B_EXECUTION_LEDGER.md` (superseded by
+`docs/LAUNCH_HANDOVER.md`, which already accounts for the same items more
+accurately) and its new permission-manifest keys (unused once `develop`'s
+simpler permission reuse was adopted).
+
+Both `main` and `develop` on GitHub now point at this reconciled state —
+see the commit this entry ships with for the exact SHA. The fleet's own
+`E:\mop-fleet\w-int` worktree is now behind `origin/develop` by this
+reconciliation commit; a `git pull` there picks it up.
+
+**Lesson for future sessions, stated plainly:** before starting a large,
+open-ended mission on a repo, check `git branch -a` and any external
+coordination directory (`E:\mop-fleet\board\` here) for concurrent work
+*before* assuming `main` is the only truth. This session did not, and
+the cost was a full pass of now-superseded work — not wasted (the reading
+and reasoning transferred), but the code itself was redundant.
 
 ---
 

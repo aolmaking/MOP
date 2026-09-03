@@ -909,3 +909,25 @@ summary,
   border-color: var(--border-strong);
   color: var(--text-faint);
 }
+
+/*
+ * A label present for a screen reader and absent for an eye.
+ *
+ * Global because it was not: four components had each re-declared it
+ * locally, so the fifth to use the class rendered its labels as visible
+ * body text -- "Quantity of Front brake pad set" sitting in the middle
+ * of a technician's cart row. The per-component copies are identical to
+ * this and can go whenever someone is in those files anyway.
+ *
+ * `clip-path` rather than `display: none` or `width: 0`: both of those
+ * take the element out of the accessibility tree too, which removes the
+ * label instead of hiding it.
+ */
+.visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

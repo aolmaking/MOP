@@ -8,6 +8,19 @@ import { WorkOrderLifecycleService, type LifecycleActor } from "../operations/wo
 import { StockService } from "./stock.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 
+/**
+ * A cart line's ceiling. Not a business rule about stock -- the store
+ * decides that -- but a fat-finger guard: 999 brake discs is a held
+ * "+" button, and the store finding out by reading it is worse than the
+ * technician finding out by being refused.
+ */
+const MAX_CART_LINE_QUANTITY = 999;
+
+/** Prisma's unique-constraint code, without importing its error class. */
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { code?: string }).code === "P2002";
+}
+
 export interface RequestPartInput {
   readonly tenantId: string;
   readonly workOrderId: string;
@@ -16,6 +29,33 @@ export interface RequestPartInput {
   readonly taskId?: string;
   readonly reason?: string;
   readonly urgency?: string;
+}
+
+export interface CartLine {
+  readonly inventoryItemId: string;
+  readonly quantity: number;
+}
+
+export interface CartInput {
+  readonly tenantId: string;
+  readonly workOrderId: string;
+  readonly lines: readonly CartLine[];
+  /**
+   * Minted by the client when the cart is opened, so the same basket
+   * submitted twice is recognised as one. Required: a cart submit
+   * without one is a duplicate waiting to happen.
+   */
+  readonly cartKey: string;
+  readonly taskId?: string;
+  readonly reason?: string;
+  readonly urgency?: string;
+}
+
+export interface CartResult {
+  readonly cartKey: string;
+  readonly requests: readonly { id: string; inventoryItemId: string; quantity: number; status: PartRequestStatus }[];
+  /** True when this submit found an earlier one and changed nothing. */
+  readonly replayed: boolean;
 }
 
 export interface IssueInput {
@@ -112,6 +152,144 @@ export class PartRequestService {
     });
 
     return created;
+  }
+
+  /**
+   * A whole cart, submitted at once.
+   *
+   * This is the catalog experience's landing point in the domain, and it
+   * deliberately does NOT introduce a shopping-order entity. What the
+   * technician built is a basket of intentions; what the workshop runs
+   * on is N `PartRequest` rows, each of which the store approves, issues
+   * and returns independently -- exactly as it always has. An "order"
+   * wrapper would have to be kept in step with N request statuses that
+   * genuinely can diverge (two approved, one unavailable), and the
+   * store's queue would then have two answers to "what is outstanding?".
+   *
+   * Three things make it a cart rather than a loop over `request()`:
+   *
+   * 1. **One transaction.** Half a basket landing is worse than none:
+   *    the technician sees a partial submit and re-sends, and now the
+   *    store has three of one line and one of another.
+   * 2. **One work-order move.** `REQUEST_PART` is applied once at the
+   *    end rather than per line, so a five-line cart does not attempt
+   *    five identical transitions and log four failures.
+   * 3. **Idempotent on `cartKey`.** A second submit of the same basket
+   *    returns the requests the first one created. Without this, a
+   *    stalled connection on a workshop phone doubles the store's work,
+   *    and the duplicate is only visible once someone counts the shelf.
+   */
+  async requestMany(input: CartInput, actor: LifecycleActor): Promise<CartResult> {
+    const cartKey = input.cartKey.trim();
+    if (!cartKey) {
+      throw new BadRequestException({ code: "cart_key_required", message: "A cart submission needs its own key." });
+    }
+    if (input.lines.length === 0) {
+      throw new BadRequestException({ code: "cart_empty", message: "There is nothing in the cart." });
+    }
+
+    // Same item twice in one basket is one request for the sum, not two
+    // requests the store has to notice are the same part. Done before
+    // validation so the total is what gets range-checked.
+    const merged = new Map<string, number>();
+    for (const line of input.lines) {
+      if (!Number.isInteger(line.quantity) || line.quantity <= 0) {
+        throw new BadRequestException({ code: "quantity_invalid", message: "Ask for a whole number, at least one." });
+      }
+      merged.set(line.inventoryItemId, (merged.get(line.inventoryItemId) ?? 0) + line.quantity);
+    }
+    for (const [inventoryItemId, quantity] of merged) {
+      if (quantity > MAX_CART_LINE_QUANTITY) {
+        throw new BadRequestException({
+          code: "quantity_too_large",
+          message: `${MAX_CART_LINE_QUANTITY} is the most that can be asked for on one line. Split it or talk to the store.`,
+        });
+      }
+      if (!inventoryItemId) {
+        throw new BadRequestException({ code: "item_required", message: "A cart line needs a part." });
+      }
+    }
+
+    await this.requireInventory(input.tenantId);
+
+    const replay = await this.prisma.partRequest.findMany({
+      where: { tenantId: input.tenantId, cartKey },
+      select: { id: true, inventoryItemId: true, quantity: true, status: true },
+    });
+    if (replay.length > 0) {
+      return { cartKey, requests: replay, replayed: true };
+    }
+
+    // Every id checked against this tenant in one query, before anything
+    // is written. A cart carrying another workshop's part must fail as a
+    // whole -- creating the legitimate lines and dropping the foreign one
+    // would leave the technician staring at a basket that half arrived.
+    const items = await this.prisma.inventoryItem.findMany({
+      where: { tenantId: input.tenantId, id: { in: [...merged.keys()] }, workOrderUsable: true },
+      select: { id: true },
+    });
+    if (items.length !== merged.size) {
+      throw new BadRequestException({
+        code: "item_not_requestable",
+        message: "One of those parts is no longer in this workshop's catalogue.",
+      });
+    }
+
+    try {
+      const created = await this.prisma.$transaction(async (tx) => {
+        const requests: { id: string; inventoryItemId: string; quantity: number; status: PartRequestStatus }[] = [];
+
+        for (const [inventoryItemId, quantity] of merged) {
+          const request = await tx.partRequest.create({
+            data: {
+              tenantId: input.tenantId,
+              workOrderId: input.workOrderId,
+              taskId: input.taskId,
+              inventoryItemId,
+              requestedById: actor.accountId,
+              quantity,
+              reason: input.reason,
+              urgency: input.urgency ?? "normal",
+              cartKey,
+              status: "REQUESTED",
+            },
+            select: { id: true, inventoryItemId: true, quantity: true, status: true },
+          });
+
+          await this.emit(
+            tx,
+            input.tenantId,
+            "part_request.created",
+            request.id,
+            actor,
+            { workOrderId: input.workOrderId, inventoryItemId, quantity, cartKey },
+            input.workOrderId,
+          );
+
+          requests.push(request);
+        }
+
+        // Once, at the end. See (2) above.
+        await this.moveIfPossible(input.workOrderId, "REQUEST_PART", actor, tx);
+
+        return requests;
+      });
+
+      return { cartKey, requests: created, replayed: false };
+    } catch (error) {
+      // Two submits of the same cart racing each other: the unique index
+      // on (tenantId, cartKey, inventoryItemId) refuses the loser, and
+      // the honest answer is the basket the winner created -- not an
+      // error the technician cannot act on.
+      if (isUniqueViolation(error)) {
+        const settled = await this.prisma.partRequest.findMany({
+          where: { tenantId: input.tenantId, cartKey },
+          select: { id: true, inventoryItemId: true, quantity: true, status: true },
+        });
+        if (settled.length > 0) return { cartKey, requests: settled, replayed: true };
+      }
+      throw error;
+    }
   }
 
   /**
@@ -335,7 +513,16 @@ export class PartRequestService {
         // was resolved and a new one raised) may have been issued from a
         // different warehouse the second time, and the RETURN_PENDING
         // reversal must always match whichever movement is actually open.
-        update: { quantity, reason, resolvedAt: null, resolvedById: null, clarificationQuestion: null, warehouseId },
+        update: {
+          quantity,
+          reason,
+          resolvedAt: null,
+          resolvedById: null,
+          clarificationQuestion: null,
+          clarificationAskedAt: null,
+          clarificationAnsweredAt: null,
+          warehouseId,
+        },
       });
 
       await this.stock.record(
@@ -379,7 +566,13 @@ export class PartRequestService {
     await this.requireInventory(request.tenantId);
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.partReturnRequest.update({ where: { partRequestId }, data: { clarificationQuestion: question } });
+      await tx.partReturnRequest.update({
+        where: { partRequestId },
+        // `clarificationAskedAt` survives the question being cleared on
+        // reply -- the journey shows the ask and the answer as two dated
+        // events, and nulling the question alone would erase the first.
+        data: { clarificationQuestion: question, clarificationAskedAt: new Date(), clarificationAnsweredAt: null },
+      });
       await this.transition(tx, request, "RETURN_CLARIFICATION_REQUESTED", actor);
       await this.emit(tx, request.tenantId, "part_request.return_clarification_requested", partRequestId, actor, {
         question,
@@ -409,7 +602,7 @@ export class PartRequestService {
         // The question is answered, so it stops showing as outstanding;
         // the reply itself is folded into `reason`, which is what the
         // queue and the ledger both already read.
-        data: { clarificationQuestion: null, reason: response },
+        data: { clarificationQuestion: null, clarificationAnsweredAt: new Date(), reason: response },
       });
       await this.transition(tx, request, "RETURN_REQUESTED", actor);
       await this.emit(tx, request.tenantId, "part_request.return_clarified", partRequestId, actor, { response });
@@ -834,7 +1027,14 @@ export class PartRequestService {
 
     await this.prisma.$transaction(async (tx) => {
       await this.transition(tx, request, to, actor);
-      await this.emit(tx, request.tenantId, `part_request.${to.toLowerCase()}`, id, actor, payload);
+      await this.emit(
+        tx,
+        request.tenantId,
+        `part_request.${to.toLowerCase()}`,
+        id,
+        actor,
+        { ...payload, partRequestId: id, workOrderId: request.workOrderId },
+      );
     });
 
     return { id, status: to };
@@ -876,7 +1076,10 @@ export class PartRequestService {
       // Phase 19.A -- recorded only on the transition INTO approved, never
       // overwritten by a later transition, so `issue()` can always ask
       // "who approved this" regardless of how many steps happened since.
-      data: { status: to, ...(to === "APPROVED" ? { approvedById: actor.accountId } : {}) },
+      data: {
+        status: to,
+        ...(to === "APPROVED" ? { approvedById: actor.accountId, approvedAt: new Date() } : {}),
+      },
     });
 
     if (updated.count === 0) {
@@ -886,7 +1089,65 @@ export class PartRequestService {
       });
     }
 
+    await this.stampHandover(tx, request.id, to);
+
     request.status = to;
+  }
+
+  /**
+   * The moment a hand-over actually changed hands, recorded on the row it
+   * happened to.
+   *
+   * `IssuedItem` has carried `arrivedAt`, `receivedAt` and `usedAt` since
+   * the model was written, and until now **nothing set any of them** --
+   * while two places read them. Inventory Home survived only because it
+   * also filters on the request's status; the Owner's workflow-health
+   * check did not, so every part ever issued was reported as "arrival
+   * unconfirmed" forever (fixed alongside this, in
+   * `workflow-integrity.service.ts`).
+   *
+   * The columns are the only per-HAND-OVER record of when each step
+   * happened. `PartRequest.status` says where the request ended up and
+   * `updatedAt` says when it was last touched; neither can answer "when
+   * did the technician actually take this one", which is what the job's
+   * journey has to show and what a dispute turns on.
+   *
+   * Stamped here rather than in each caller because this is the single
+   * choke point every status change passes through -- including
+   * `resolveRejectedReturn`, which reaches USED without going through
+   * `move()` at all.
+   *
+   * `null` in the filter, not a blanket update: a request filled in two
+   * hand-overs and received once must not have the first hand-over's
+   * receipt time rewritten when the second is received. Whichever rows
+   * are still unanswered at this step are the ones this step answers.
+   *
+   * ARRIVED is deliberately NOT back-filled on receipt. The graph offers
+   * ISSUED -> RECEIVED_BY_TECHNICIAN directly for the in-house hand-over
+   * and its own comment says why: writing "an ARRIVED nobody witnessed"
+   * would put a false record in the ledger. A part collected off the
+   * shelf never travelled, and its `arrivedAt` stays null because
+   * nothing arrived.
+   */
+  private async stampHandover(
+    tx: Prisma.TransactionClient,
+    partRequestId: string,
+    to: PartRequestStatus,
+  ): Promise<void> {
+    const column =
+      to === "ARRIVED"
+        ? "arrivedAt"
+        : to === "RECEIVED_BY_TECHNICIAN"
+          ? "receivedAt"
+          : to === "USED"
+            ? "usedAt"
+            : null;
+    if (!column) return;
+
+    await tx.issuedItem.updateMany({
+      where: { partRequestId, [column]: null },
+      data: { [column]: new Date() },
+    });
   }
 
   /**

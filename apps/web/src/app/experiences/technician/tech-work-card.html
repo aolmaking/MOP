@@ -41,26 +41,16 @@
 
       @if (journey(); as j) {
         <!-- Where this job actually is, generated from the workshop's own
-             effective graph. A workshop without QC has no QC stage here. -->
-        <app-workflow-strip [journey]="j" />
-      }
+             effective graph. A workshop without QC has no QC stage here.
 
-      @if (primaryAction(); as action) {
-        <!-- The one thing this job is waiting for from this technician,
-             above everything else and impossible to miss. Which move it
-             is comes from the server's reading of the workshop's own
-             graph, so a shop that routes around inspection never sees
-             "Start inspection" here. -->
-        <section class="primary">
-          <button
-            class="tap tap--primary tap--wide"
-            type="button"
-            [disabled]="busy() !== null"
-            (click)="runPrimaryAction()"
-          >
-            {{ busy() === 'primary' ? '…' : action.label }}
-          </button>
-        </section>
+             The job-level move a technician can make lives INSIDE this,
+             in the "Now" panel, rather than in a section of its own: the
+             journey's actions are checked against both the graph AND
+             this technician's real permission, where the work card's own
+             `primaryAction` only ever asked the graph. Two buttons for
+             one move, one of which could be refused after the press, is
+             worse than one button that cannot be. -->
+        <app-workflow-strip [journey]="j" (act)="runJourneyAction($event)" />
       }
 
       <section class="history">
@@ -209,7 +199,10 @@
           >
             Record inspection
           </button>
-          <button class="tap" type="button" (click)="togglePartsPanel()">Need a part</button>
+          <!-- A page, not a panel. Asking for parts is browsing a
+               catalogue and building a basket, and that does not fit
+               beside a fault form on a phone. -->
+          <a class="tap" [routerLink]="['/tech', 'card', id(), 'parts']">Need parts</a>
           <button class="tap" type="button" (click)="panel.set(panel() === 'external' ? 'none' : 'external')">
             Part from outside
           </button>
@@ -249,18 +242,6 @@
               </button>
             </div>
           </div>
-        }
-
-        @if (panel() === 'parts') {
-          <!-- Cards, not a SKU box. Its own component since the Work
-               Card crossed the CSS budget; see parts-picker.ts. -->
-          <app-parts-picker
-            [catalog]="partsCatalog()"
-            [loading]="partsLoading()"
-            [busy]="busy() !== null"
-            (chosen)="requestPart($event)"
-            (uncatalogued)="blockOnUncataloguedPart()"
-          />
         }
 
         @if (panel() === 'external') {

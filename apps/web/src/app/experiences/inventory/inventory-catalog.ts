@@ -1,5 +1,5 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
-import { Subject, debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
+import { Subject, debounceTime, switchMap } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ErrorBanner } from '../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../ui/button/button.directive';
@@ -7,7 +7,14 @@ import { FormField } from '../../ui/form-field/form-field';
 import { ToastService } from '../../ui/toast/toast.service';
 import { OPERATING_CATEGORIES } from '@mop/shared';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
-import { InventoryApi, type CatalogDraft, type CatalogItem, type CatalogPage } from './inventory.api';
+import {
+  InventoryApi,
+  type CatalogConfiguration,
+  type CatalogDraft,
+  type CatalogItem,
+  type CatalogPage,
+  type ConfiguredAttribute,
+} from './inventory.api';
 import { DismissOnEscapeDirective } from '../../ui/dismiss-on-escape/dismiss-on-escape.directive';
 
 type State = 'loading' | 'ready' | 'empty' | 'no-results' | 'forbidden' | 'error';
@@ -59,6 +66,15 @@ export class InventoryCatalog {
   protected readonly categories = OPERATING_CATEGORIES;
 
   protected readonly page = signal<CatalogPage | null>(null);
+  /**
+   * The filter vocabulary, loaded once alongside the list.
+   *
+   * The item editor needs to know which filters the chosen category
+   * offers, and that is configuration this page reads rather than owns
+   * -- Catalog Builder writes it. Loading it here keeps the editor one
+   * dialog instead of a trip to another route and back.
+   */
+  protected readonly configuration = signal<CatalogConfiguration | null>(null);
   protected readonly state = signal<State>('loading');
   protected readonly error = signal<PresentedError | null>(null);
 
@@ -83,6 +99,64 @@ export class InventoryCatalog {
 
   protected readonly totalPages = computed(() => Math.max(1, Math.ceil((this.page()?.total ?? 0) / PAGE_SIZE)));
 
+  /** Categories, flattened with their parent's name for readability. */
+  protected readonly categoryOptions = computed(() => {
+    const config = this.configuration();
+    if (!config) return [] as { id: string; name: string }[];
+    const flatten = (
+      nodes: CatalogConfiguration['categories'],
+      prefix: string,
+    ): { id: string; name: string }[] =>
+      nodes.flatMap((node) => [
+        { id: node.id, name: prefix ? `${prefix} › ${node.name}` : node.name },
+        ...flatten(node.children, prefix ? `${prefix} › ${node.name}` : node.name),
+      ]);
+    return flatten(config.categories, '');
+  });
+
+  /**
+   * The filters the chosen category offers -- including the ones it
+   * inherits from its parent, since a technician browsing "Brakes" and
+   * one browsing "Brakes › Pads" both see the parent's filters.
+   */
+  protected readonly applicableFilters = computed<readonly ConfiguredAttribute[]>(() => {
+    const config = this.configuration();
+    const categoryId = this.draft().catalogCategoryId;
+    if (!config || !categoryId) return [];
+
+    const chain = new Set<string>();
+    const walk = (nodes: CatalogConfiguration['categories'], ancestors: string[]): void => {
+      for (const node of nodes) {
+        if (node.id === categoryId) {
+          for (const id of [...ancestors, node.id]) chain.add(id);
+          return;
+        }
+        walk(node.children, [...ancestors, node.id]);
+      }
+    };
+    walk(config.categories, []);
+
+    return config.attributes.filter(
+      (attribute) => attribute.isActive && attribute.usedByCategoryIds.some((id) => chain.has(id)),
+    );
+  });
+
+  protected hasValue(valueId: string): boolean {
+    return (this.draft().attributeValueIds ?? []).includes(valueId);
+  }
+
+  protected toggleValue(valueId: string): void {
+    this.draft.update((draft) => {
+      const current = draft.attributeValueIds ?? [];
+      return {
+        ...draft,
+        attributeValueIds: current.includes(valueId)
+          ? current.filter((id) => id !== valueId)
+          : [...current, valueId],
+      };
+    });
+  }
+
   private readonly refresh = new Subject<void>();
 
   constructor() {
@@ -93,7 +167,7 @@ export class InventoryCatalog {
         switchMap(() =>
           this.api.catalog({
             q: this.query().trim() || undefined,
-            category: this.category() || undefined,
+            categoryId: this.category() || undefined,
             stockTracked: this.trackedOnly() ? true : undefined,
             page: this.pageNumber(),
           }),
@@ -103,6 +177,13 @@ export class InventoryCatalog {
       .subscribe({ next: (page) => this.receive(page), error: (err: PresentedError) => this.fail(err) });
 
     this.fetchNow();
+
+    // Configuration changes far less often than the list, so it is
+    // fetched once rather than with every filter change.
+    this.api
+      .catalogConfiguration()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: (config) => this.configuration.set(config), error: () => this.configuration.set(null) });
   }
 
   protected onQuery(value: string): void {
@@ -142,9 +223,9 @@ export class InventoryCatalog {
       sku: item.sku,
       name: item.name,
       itemType: item.itemType,
-      category: item.category ?? undefined,
-      subcategory: item.subcategory ?? undefined,
+      catalogCategoryId: item.catalogCategoryId ?? undefined,
       compatibleCategories: [...item.compatibleCategories],
+      attributeValueIds: [...item.attributeValueIds],
       lowStockThreshold: item.lowStockThreshold,
       criticalStockThreshold: item.criticalStockThreshold,
       sellingPrice: item.sellingPrice,
@@ -157,6 +238,8 @@ export class InventoryCatalog {
       barcode: item.barcode ?? undefined,
       supplier: item.supplier ?? undefined,
       notes: item.notes ?? undefined,
+      imageUrl: item.imageUrl ?? undefined,
+      summary: item.summary ?? undefined,
     });
     this.editing.set(item.id);
   }
@@ -242,7 +325,7 @@ export class InventoryCatalog {
     this.api
       .catalog({
         q: this.query().trim() || undefined,
-        category: this.category() || undefined,
+        categoryId: this.category() || undefined,
         stockTracked: this.trackedOnly() ? true : undefined,
         page: this.pageNumber(),
       })

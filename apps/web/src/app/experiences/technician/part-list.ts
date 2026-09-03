@@ -16,7 +16,7 @@ export interface PartClarification {
  * The parts on this job, and what the technician can do about each.
  *
  * Split out of the Work Card when that component crossed the project's
- * 8 kB CSS budget for the second time -- the same remedy `parts-picker`
+ * 8 kB CSS budget for the second time -- the same remedy `parts-catalog`
  * used, and for the same reason: the budget is a real limit on how much
  * one screen may carry, not a number to raise when it is inconvenient.
  *

@@ -2,19 +2,16 @@ import { Component, DestroyRef, computed, inject, input, signal } from '@angular
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Identifier } from '../../ui/identifier/identifier';
-import { WorkflowStrip } from '../../domain/journey/workflow-strip';
-import { PartsPicker, type PartRequestChoice } from './parts-picker';
+import { WorkflowStrip, type JourneyAction } from '../../domain/journey/workflow-strip';
 import { PartList, type PartClarification, type PartReturn } from './part-list';
 import { pollJourney, type JourneyFeed } from '../../domain/journey/journey-poller';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import {
   TechnicianApi,
   type AssetHistorySummary,
-  type PartCard,
   type TechnicianTask,
   type WorkCard,
   type WorkCardPart,
-  type WorkCardPrimaryAction,
 } from './technician.api';
 
 type State = 'loading' | 'ready' | 'not-mine' | 'forbidden' | 'error';
@@ -47,7 +44,7 @@ const BLOCKER_REASONS = [
  */
 @Component({
   selector: 'app-tech-work-card',
-  imports: [RouterLink, Identifier, DatePipe, WorkflowStrip, PartsPicker, PartList],
+  imports: [RouterLink, Identifier, DatePipe, WorkflowStrip, PartList],
   templateUrl: './tech-work-card.html',
   styleUrl: './tech-work-card.css',
 })
@@ -77,7 +74,7 @@ export class TechWorkCard {
   protected readonly actionError = signal<string | null>(null);
 
   /** Which panel is open. Only one at a time -- this is a small screen. */
-  protected readonly panel = signal<'none' | 'blocker' | 'fault' | 'parts' | 'inspection' | 'external'>('none');
+  protected readonly panel = signal<'none' | 'blocker' | 'fault' | 'inspection' | 'external'>('none');
   protected readonly faultText = signal('');
   protected readonly inspectionNote = signal('');
   protected readonly faultSeverity = signal('MEDIUM');
@@ -97,38 +94,6 @@ export class TechWorkCard {
   protected readonly reasons = BLOCKER_REASONS;
 
   /**
-   * The parts picker. Cards, not a text box: a technician knows the part
-   * by sight and by price, and typing a SKU one-handed at a car is how
-   * the wrong part gets requested. Loaded on first open only -- the
-   * catalog does not change while somebody stands at a vehicle.
-   */
-  protected readonly partsCatalog = signal<readonly PartCard[] | null>(null);
-  protected readonly partsLoading = signal(false);
-  protected togglePartsPanel(): void {
-    const opening = this.panel() !== 'parts';
-    this.panel.set(opening ? 'parts' : 'none');
-    if (opening && this.partsCatalog() === null) {
-      this.partsLoading.set(true);
-      this.api.partsCatalog().subscribe({
-        next: (page) => {
-          this.partsLoading.set(false);
-          this.partsCatalog.set(page.items);
-        },
-        error: (err: PresentedError) => {
-          this.partsLoading.set(false);
-          this.partsCatalog.set([]);
-          this.actionError.set(err.message ?? "Couldn't load the parts catalogue.");
-        },
-      });
-    }
-  }
-
-  protected requestPart(choice: PartRequestChoice): void {
-    this.panel.set('none');
-    this.run('part', this.api.requestPart(this.id(), choice.part.id, choice.quantity));
-  }
-
-  /**
    * Only the parts still needing somebody -- settled ones are history.
    *
    * A part the technician could still send back counts as open even
@@ -140,27 +105,28 @@ export class TechWorkCard {
     () => this.card()?.parts.filter((part) => part.waitingOn !== 'NOBODY' || part.returnable) ?? [],
   );
 
-  /**
-   * The one job-level move, straight off the payload.
-   *
-   * Deliberately not computed from `card().status`: which move exists
-   * from which state is the workflow graph's business, and a workshop
-   * whose profile routes around inspection must not be offered it. The
-   * server already asked the graph; this reads the answer.
-   */
-  protected readonly primaryAction = computed<WorkCardPrimaryAction | null>(
-    () => this.card()?.primaryAction ?? null,
-  );
 
-  protected runPrimaryAction(): void {
-    const action = this.primaryAction();
-    if (!action) return;
-    this.run(
-      'primary',
-      action.intent === 'START_INSPECTION'
-        ? this.api.startInspection(this.id())
-        : this.api.startWork(this.id()),
-    );
+  /**
+   * A move offered by the journey, performed.
+   *
+   * Routed by the server's own action KEY rather than by reading the
+   * job's status here: which move is available from where is the
+   * workflow graph's business, and re-deriving it on the tablet is how
+   * the button and the endpoint come to disagree. An unrecognised key is
+   * ignored rather than guessed at -- a new server-side action reaches
+   * this client as nothing, never as the wrong request.
+   */
+  protected runJourneyAction(action: JourneyAction): void {
+    switch (action.key) {
+      case 'start_inspection':
+        this.run('primary', this.api.startInspection(this.id()));
+        return;
+      case 'start_work':
+        this.run('primary', this.api.startWork(this.id()));
+        return;
+      default:
+        return;
+    }
   }
 
   protected receivePart(part: WorkCardPart): void {
@@ -209,16 +175,6 @@ export class TechWorkCard {
     this.externalPartName.set('');
     this.externalQuantity.set('1');
     this.run('external', this.api.addExternalPart(this.id(), name, provenance, quantity));
-  }
-
-  /**
-   * The part isn't in the catalogue. Falls back to the blocker, which is
-   * what this whole panel replaced for catalogued parts -- a technician
-   * still has to be able to say "I'm stuck without a part" for one the
-   * workshop has never stocked.
-   */
-  protected blockOnUncataloguedPart(): void {
-    this.reportBlocker('WAITING_PART');
   }
 
   /** Loaded lazily, on request -- not every job has history, and most visits are a single one. */

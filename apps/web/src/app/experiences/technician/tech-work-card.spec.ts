@@ -1,3 +1,5 @@
+import { journeyFixture } from '../../domain/journey/journey.fixture';
+import type { PresentedJourney } from '../../domain/journey/workflow-strip';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
@@ -22,7 +24,15 @@ function card(overrides: Partial<WorkCard> = {}): WorkCard {
   };
 }
 
-async function render(result: WorkCard | { error: unknown }) {
+async function render(
+  result: WorkCard | { error: unknown },
+  /**
+   * The journey the server would return alongside the card. Its own
+   * fixture, because the job-level action a technician can take lives
+   * there now rather than on the card.
+   */
+  options: { journey?: PresentedJourney } = {},
+) {
   const api = {
     workCard: vi.fn(() => ('error' in result ? throwError(() => result.error) : of(result))),
     startTask: vi.fn(() => of({})),
@@ -30,7 +40,7 @@ async function render(result: WorkCard | { error: unknown }) {
     reportBlocker: vi.fn(() => of({})),
     createFault: vi.fn(() => of({})),
     partsCatalog: vi.fn(() => of({ items: [], total: 0, categories: [] })),
-    journey: vi.fn(() => of({ stages: [], finished: false, waiting: false, blocked: false, headline: 'This job is yours to move.', happened: null, next: null, waitingOn: null, history: [] })),
+    journey: vi.fn(() => of(options.journey ?? journeyFixture({ headline: 'This job is yours to move.' }))),
     requestPart: vi.fn(() => of({})),
     receivePart: vi.fn(() => of({})),
     usePart: vi.fn(() => of({})),
@@ -194,35 +204,40 @@ describe('TechWorkCard', () => {
     expect(api.completeTask).toHaveBeenCalledWith('t1', undefined);
   });
 
+  /**
+   * The job-level move now comes from the JOURNEY's action list rather
+   * than the work card's own `primaryAction`, because only the journey's
+   * version has asked both questions -- does the workshop's graph allow
+   * this move from here, AND does this technician hold the permission.
+   * The card's version only ever asked the graph, so it could offer a
+   * button the controller then refused.
+   */
   describe('the one job-level move', () => {
     it("renders the action the server named, in the server's words", async () => {
-      const { element } = await render(
-        card({ status: 'REGISTERED', primaryAction: { intent: 'START_INSPECTION', label: 'Start inspection' } }),
-      );
+      const { element } = await render(card({ status: 'REGISTERED' }), {
+        journey: journeyFixture({
+          actions: [{ key: 'start_inspection', label: 'Start inspection', hint: 'Waiting on you.' }],
+        }),
+      });
 
-      expect(element.querySelector('.primary')?.textContent).toContain('Start inspection');
+      expect(element.querySelector('.now-actions')?.textContent).toContain('Start inspection');
     });
 
-    it('calls the endpoint that matches the intent, not the status', async () => {
-      const { api, element } = await render(
-        card({ status: 'APPROVED_FOR_WORK', primaryAction: { intent: 'START_WORK', label: 'Start work' } }),
-      );
+    it('calls the endpoint that matches the action key, not the status', async () => {
+      const { api, element } = await render(card({ status: 'APPROVED_FOR_WORK' }), {
+        journey: journeyFixture({ actions: [{ key: 'start_work', label: 'Start work', hint: null }] }),
+      });
 
-      (element.querySelector('.primary button') as HTMLButtonElement).click();
+      (element.querySelector('.now-action') as HTMLButtonElement).click();
 
       expect(api.startWork).toHaveBeenCalledWith('wo1');
       expect(api.startInspection).not.toHaveBeenCalled();
     });
 
-    /**
-     * The whole reason this comes off the payload. A card that decided
-     * for itself from `status` would offer a move the workshop's graph
-     * has routed away, and the press would be refused after the fact.
-     */
     it('shows nothing when the server says there is no move for this technician', async () => {
-      const { element } = await render(card({ status: 'READY_FOR_QC', primaryAction: null }));
+      const { element } = await render(card({ status: 'READY_FOR_QC' }));
 
-      expect(element.querySelector('.primary')).toBeNull();
+      expect(element.querySelector('.now-actions')).toBeNull();
     });
   });
 

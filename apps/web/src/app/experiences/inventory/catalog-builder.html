@@ -1,0 +1,383 @@
+<header class="page-head">
+  <div>
+    <h1 class="page-title">Catalog Builder</h1>
+    <p class="page-sub">
+      Categories, the filters each one offers, and the words a technician will see. Parts and prices live on
+      Catalog.
+    </p>
+  </div>
+</header>
+
+@if (state() === 'forbidden') {
+  <p class="note">You do not have access to catalog configuration.</p>
+} @else if (state() === 'error') {
+  <app-error-banner [error]="error()" (dismissed)="error.set(null)" />
+  <button appButton variant="secondary" (click)="load()">Try again</button>
+} @else if (state() === 'loading') {
+  <p class="note" aria-busy="true">Loading configuration…</p>
+} @else {
+  @if (formError(); as message) {
+    <p class="form-error" role="alert">{{ message }}</p>
+  }
+
+  <div class="builder">
+    <!-- ---------------------------------------------------------- -->
+    <section class="panel" aria-labelledby="categories-heading">
+      <header class="panel-head">
+        <h2 class="panel-title" id="categories-heading">Categories</h2>
+        <button appButton variant="primary" size="small" (click)="newCategory()">New category</button>
+      </header>
+
+      @if (config()!.uncategorisedItemCount > 0) {
+        <p class="warn">
+          {{ config()!.uncategorisedItemCount }} parts are not filed under any category. A technician browsing by
+          category will not find them.
+        </p>
+      }
+
+      @if (categoryOpen()) {
+        <div class="editor">
+          <app-form-field label="Name" [required]="true">
+            <input
+              type="text"
+              [value]="categoryForm().name"
+              (input)="patchCategory('name', $any($event.target).value)"
+            />
+          </app-form-field>
+
+          <app-form-field label="Sits inside" hint="Leave empty for a top-level category. One level only.">
+            <!-- `[selected]` per option rather than `[value]` on the
+                 select: @for renders the options in the same pass, so a
+                 value set on the select before they exist silently falls
+                 back to the first one -- which would show a sub-category
+                 as top-level and re-parent it on save. -->
+            <select (change)="patchCategory('parentId', $any($event.target).value)">
+              <option value="" [selected]="!categoryForm().parentId">— top level —</option>
+              @for (parent of parentOptions(); track parent.id) {
+                <option [value]="parent.id" [selected]="parent.id === categoryForm().parentId">{{ parent.name }}</option>
+              }
+            </select>
+          </app-form-field>
+
+          <app-form-field label="Description" hint="Optional. Not shown to technicians.">
+            <input
+              type="text"
+              [value]="categoryForm().description"
+              (input)="patchCategory('description', $any($event.target).value)"
+            />
+          </app-form-field>
+
+          <label class="check">
+            <input
+              type="checkbox"
+              [checked]="categoryForm().isActive"
+              (change)="patchCategory('isActive', $any($event.target).checked)"
+            />
+            Active
+          </label>
+
+          <label class="check">
+            <input
+              type="checkbox"
+              [checked]="categoryForm().technicianVisible"
+              (change)="patchCategory('technicianVisible', $any($event.target).checked)"
+            />
+            Technicians can browse this
+          </label>
+
+          <div class="editor-actions">
+            <button appButton variant="primary" [disabled]="saving()" (click)="saveCategory()">
+              {{ saving() ? 'Saving…' : 'Save category' }}
+            </button>
+            <button appButton variant="ghost" (click)="categoryOpen.set(false)">Cancel</button>
+          </div>
+        </div>
+      }
+
+      @if (flatCategories().length === 0) {
+        <p class="note">No categories yet. A technician browsing parts will see nothing to tap.</p>
+      }
+
+      <ul class="rows">
+        @for (entry of flatCategories(); track entry.node.id) {
+          <li class="row" [class.row--child]="entry.depth > 0">
+            <div class="row-main">
+              <p class="row-name">
+                {{ entry.node.name }}
+                @if (!entry.node.isActive) {
+                  <span class="tag tag--off">inactive</span>
+                }
+                @if (!entry.node.technicianVisible) {
+                  <span class="tag tag--off">hidden from technicians</span>
+                }
+              </p>
+              <p class="row-meta">
+                {{ entry.node.itemCount }} parts ·
+                {{ entry.node.attributeIds.length }} filters
+              </p>
+            </div>
+
+            <div class="row-actions">
+              <button appButton variant="ghost" size="small" (click)="editCategory(entry.node)">Edit</button>
+              <button appButton variant="secondary" size="small" (click)="openAssignment(entry.node)">
+                Filters
+              </button>
+            </div>
+
+            @if (assigningTo() === entry.node.id) {
+              <div class="assign">
+                <p class="assign-hint">
+                  A technician browsing {{ entry.node.name }} sees only these. Nothing else in the workshop.
+                </p>
+                @if (attributes().length === 0) {
+                  <p class="note">No filters exist yet. Create one on the right first.</p>
+                }
+                <div class="assign-chips">
+                  @for (attribute of attributes(); track attribute.id) {
+                    <button
+                      class="chip"
+                      type="button"
+                      [class.chip--on]="isAssigned(attribute.id)"
+                      [attr.aria-pressed]="isAssigned(attribute.id)"
+                      (click)="toggleAssignment(attribute.id)"
+                    >
+                      {{ attribute.label }}
+                    </button>
+                  }
+                </div>
+                <div class="editor-actions">
+                  <button appButton variant="primary" size="small" [disabled]="saving()" (click)="saveAssignment()">
+                    {{ saving() ? 'Saving…' : 'Save filters' }}
+                  </button>
+                  <button appButton variant="ghost" size="small" (click)="assigningTo.set(null)">Cancel</button>
+                </div>
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    </section>
+
+    <!-- ---------------------------------------------------------- -->
+    <section class="panel" aria-labelledby="filters-heading">
+      <header class="panel-head">
+        <h2 class="panel-title" id="filters-heading">Filters</h2>
+        <button appButton variant="primary" size="small" (click)="newAttribute()">New filter</button>
+      </header>
+
+      <p class="panel-sub">
+        The questions a technician can ask about a part — Vehicle Type, Brand, Engine Size, whatever this workshop
+        actually needs. Give each one its values, then attach it to the categories it belongs to.
+      </p>
+
+      @if (attributeOpen()) {
+        <div class="editor">
+          <app-form-field label="Name" [required]="true">
+            <input
+              type="text"
+              [value]="attributeForm().label"
+              (input)="patchAttribute('label', $any($event.target).value)"
+            />
+          </app-form-field>
+
+          <label class="check">
+            <input
+              type="checkbox"
+              [checked]="attributeForm().showOnCard"
+              (change)="patchAttribute('showOnCard', $any($event.target).checked)"
+            />
+            Print it on the part's card
+          </label>
+
+          <label class="check">
+            <input
+              type="checkbox"
+              [checked]="attributeForm().isActive"
+              (change)="patchAttribute('isActive', $any($event.target).checked)"
+            />
+            Active
+          </label>
+
+          <div class="editor-actions">
+            <button appButton variant="primary" [disabled]="saving()" (click)="saveAttribute()">
+              {{ saving() ? 'Saving…' : 'Save filter' }}
+            </button>
+            <button appButton variant="ghost" (click)="attributeOpen.set(false)">Cancel</button>
+          </div>
+        </div>
+      }
+
+      @if (attributes().length === 0) {
+        <p class="note">No filters yet.</p>
+      }
+
+      <ul class="rows">
+        @for (attribute of attributes(); track attribute.id) {
+          <li class="row">
+            <div class="row-main">
+              <p class="row-name">
+                {{ attribute.label }}
+                @if (!attribute.isActive) {
+                  <span class="tag tag--off">inactive</span>
+                }
+              </p>
+              <p class="row-meta">
+                {{ attribute.values.length }} values · used by {{ attribute.usedByCategoryIds.length }} categories
+              </p>
+
+              <div class="values">
+                @for (value of attribute.values; track value.id) {
+                  <button
+                    class="chip chip--value"
+                    type="button"
+                    [class.chip--off]="!value.isActive"
+                    [title]="value.itemCount + ' parts carry this'"
+                    (click)="toggleValue(value.id, value.label, value.isActive)"
+                  >
+                    {{ value.label }}
+                    <span class="chip-count">{{ value.itemCount }}</span>
+                  </button>
+                }
+              </div>
+
+              @if (valueFor() === attribute.id) {
+                <div class="value-add">
+                  <input
+                    type="text"
+                    placeholder="e.g. Sedan"
+                    [value]="valueLabel()"
+                    (input)="valueLabel.set($any($event.target).value)"
+                    (keydown.enter)="addValue()"
+                  />
+                  <button appButton variant="primary" size="small" [disabled]="saving()" (click)="addValue()">
+                    Add value
+                  </button>
+                </div>
+              }
+            </div>
+
+            <div class="row-actions">
+              <button appButton variant="ghost" size="small" (click)="editAttribute(attribute)">Edit</button>
+              <button appButton variant="secondary" size="small" (click)="openValueFor(attribute.id)">
+                {{ valueFor() === attribute.id ? 'Done' : 'Add value' }}
+              </button>
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
+  </div>
+
+  <!-- ------------------------------------------------------------ -->
+  <section class="panel panel--preview" aria-labelledby="preview-heading">
+    <header class="panel-head">
+      <h2 class="panel-title" id="preview-heading">What the technician will see</h2>
+      @if (previewLoading()) {
+        <span class="note-inline" aria-busy="true">Loading…</span>
+      }
+    </header>
+
+    <p class="panel-sub">
+      Not a mock-up. This asks the same endpoint the technician's page asks, so anything hidden from them is hidden
+      here too.
+    </p>
+
+    <label class="preview-search">
+      <span class="visually-hidden">Search the preview</span>
+      <input
+        type="search"
+        placeholder="Search as a technician would"
+        [value]="previewQuery()"
+        (input)="onPreviewQuery($any($event.target).value)"
+      />
+    </label>
+
+    <div class="assign-chips">
+      <button
+        class="chip"
+        type="button"
+        [class.chip--on]="previewCategoryId() === null"
+        (click)="previewCategory(null)"
+      >
+        All
+      </button>
+      @for (category of preview()?.categories ?? []; track category.id) {
+        <button
+          class="chip"
+          type="button"
+          [class.chip--on]="previewCategoryId() === category.id"
+          (click)="previewCategory(category.id)"
+        >
+          {{ category.name }} <span class="chip-count">{{ category.itemCount }}</span>
+        </button>
+      }
+    </div>
+
+    @if ((preview()?.filters ?? []).length > 0) {
+      <div class="preview-filters">
+        @for (filter of preview()!.filters; track filter.attributeId) {
+          <div class="preview-filter">
+            <p class="filter-label">{{ filter.label }}</p>
+            <div class="assign-chips">
+              @for (option of filter.options; track option.valueId) {
+                <button
+                  class="chip"
+                  type="button"
+                  [class.chip--on]="option.selected"
+                  [disabled]="option.count === 0 && !option.selected"
+                  (click)="previewFilter(filter.attributeId, option.valueId)"
+                >
+                  {{ option.label }} <span class="chip-count">{{ option.count }}</span>
+                </button>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    } @else if (previewCategoryId() !== null) {
+      <p class="warn">
+        This category offers no filters. A technician browsing it can only search and scroll — attach filters to it
+        on the left.
+      </p>
+    }
+
+    @if ((preview()?.items ?? []).length === 0) {
+      <p class="note">Nothing here for a technician to pick.</p>
+    } @else {
+      <ul class="preview-grid">
+        @for (item of preview()!.items; track item.id) {
+          <li class="preview-card">
+            <div class="preview-image" aria-hidden="true">
+              @if (item.imageUrl) {
+                <img [src]="item.imageUrl" alt="" loading="lazy" />
+              } @else {
+                <span class="preview-initial">{{ item.name.charAt(0) }}</span>
+              }
+            </div>
+            <p class="preview-name">{{ item.name }}</p>
+            @if (item.summary) {
+              <p class="preview-summary">{{ item.summary }}</p>
+            }
+            @if (item.attributes.length > 0) {
+              <ul class="preview-specs">
+                @for (spec of item.attributes; track spec.attributeId) {
+                  <li>{{ spec.label }}: {{ spec.valueLabel }}</li>
+                }
+              </ul>
+            }
+            <p class="preview-meta">
+              <span>{{ item.sellingPrice }}</span>
+              <span class="preview-stock">
+                @switch (item.availability) {
+                  @case ('NOT_TRACKED') { not counted }
+                  @case ('OUT_OF_STOCK') { none on the shelf }
+                  @default { {{ item.onHand }} on the shelf }
+                }
+              </span>
+            </p>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+}

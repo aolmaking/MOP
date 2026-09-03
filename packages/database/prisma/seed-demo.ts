@@ -138,6 +138,7 @@ async function main() {
   await clearDemoWork(tenant.id);
   await createStuckJobs(tenant.id, branch.id, technician.staffUserId);
   await ensurePartsCatalog(tenant.id);
+  await ensureCatalogStructure(tenant.id);
   await createFinancialHistory(tenant.id, branch.id);
   await issuePartsToFinishedJobs(tenant.id);
 
@@ -1220,6 +1221,144 @@ const DEMO_CONSUMABLE = {
   criticalStockThreshold: 3,
   perJob: 1,
 };
+
+/**
+ * The catalog's structure: what a technician browses, and the questions
+ * they can ask about it.
+ *
+ * Seeded because an empty structure makes the technician's catalog look
+ * broken rather than unconfigured -- and because a demo with categories
+ * but no filters would not exercise the one thing this feature is for.
+ * Every value here is ordinary workshop vocabulary; none of it is known
+ * to the application, which reads it back the same way it would read a
+ * real workshop's own.
+ */
+const DEMO_CATEGORIES: readonly { slug: string; name: string; parent?: string; filters: readonly string[] }[] = [
+  { slug: "brakes", name: "Brakes", filters: ["vehicle-type", "brand"] },
+  { slug: "brakes-pads", name: "Pads & discs", parent: "brakes", filters: ["vehicle-type", "brand"] },
+  { slug: "engine", name: "Engine", filters: ["vehicle-type", "brand", "engine-size"] },
+  { slug: "filters", name: "Filters", filters: ["vehicle-type", "brand"] },
+  { slug: "electrical", name: "Electrical", filters: ["vehicle-type", "brand"] },
+  { slug: "fluids", name: "Fluids", filters: ["vehicle-type"] },
+];
+
+const DEMO_ATTRIBUTES: readonly { key: string; label: string; values: readonly string[] }[] = [
+  { key: "vehicle-type", label: "Vehicle Type", values: ["Sedan", "SUV", "Truck"] },
+  { key: "brand", label: "Brand", values: ["Toyota", "Hyundai", "BMW"] },
+  { key: "engine-size", label: "Engine Size", values: ["1.4", "1.6", "2.0"] },
+];
+
+/** sku -> where it is filed, what it is, and how it reads on a card. */
+const DEMO_PART_CONFIGURATION: Readonly<
+  Record<string, { category: string; summary: string; attributes: Readonly<Record<string, string>> }>
+> = {
+  "BRK-PAD-F": {
+    category: "brakes-pads",
+    summary: "Ceramic, low dust",
+    attributes: { "vehicle-type": "Sedan", brand: "Toyota" },
+  },
+  "ALT-12V": {
+    category: "electrical",
+    summary: "90A, remanufactured",
+    attributes: { "vehicle-type": "SUV", brand: "Hyundai" },
+  },
+  "OIL-5W30": {
+    category: "fluids",
+    summary: "Fully synthetic, sold by the litre",
+    attributes: { "vehicle-type": "Sedan" },
+  },
+  "FLT-AIR": {
+    category: "filters",
+    summary: "Paper element",
+    attributes: { "vehicle-type": "Sedan", brand: "Toyota" },
+  },
+  "TRB-KIT": {
+    category: "engine",
+    summary: "Complete rebuild kit with gaskets",
+    attributes: { "vehicle-type": "Truck", brand: "BMW", "engine-size": "2.0" },
+  },
+  "FLD-DOT4": {
+    category: "brakes",
+    summary: "DOT 4, 500ml",
+    attributes: { "vehicle-type": "SUV" },
+  },
+};
+
+async function ensureCatalogStructure(tenantId: string): Promise<void> {
+  const attributeIds = new Map<string, string>();
+  const valueIds = new Map<string, string>();
+
+  for (const [index, definition] of DEMO_ATTRIBUTES.entries()) {
+    const attribute = await prisma.catalogAttribute.upsert({
+      where: { tenantId_key: { tenantId, key: definition.key } },
+      update: { label: definition.label, sortOrder: index },
+      create: { tenantId, key: definition.key, label: definition.label, sortOrder: index },
+    });
+    attributeIds.set(definition.key, attribute.id);
+
+    for (const [order, label] of definition.values.entries()) {
+      const value = label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const row = await prisma.catalogAttributeValue.upsert({
+        where: { attributeId_value: { attributeId: attribute.id, value } },
+        update: { label, sortOrder: order },
+        create: { tenantId, attributeId: attribute.id, value, label, sortOrder: order },
+      });
+      valueIds.set(`${definition.key}|${label}`, row.id);
+    }
+  }
+
+  const categoryIds = new Map<string, string>();
+  for (const [index, definition] of DEMO_CATEGORIES.entries()) {
+    const category = await prisma.catalogCategory.upsert({
+      where: { tenantId_slug: { tenantId, slug: definition.slug } },
+      update: {
+        name: definition.name,
+        sortOrder: index,
+        parentId: definition.parent ? (categoryIds.get(definition.parent) ?? null) : null,
+      },
+      create: {
+        tenantId,
+        slug: definition.slug,
+        name: definition.name,
+        sortOrder: index,
+        parentId: definition.parent ? (categoryIds.get(definition.parent) ?? null) : null,
+      },
+    });
+    categoryIds.set(definition.slug, category.id);
+
+    // Replaced rather than added to, so re-seeding after a filter is
+    // renamed does not leave the old attachment behind.
+    await prisma.catalogCategoryAttribute.deleteMany({ where: { tenantId, categoryId: category.id } });
+    await prisma.catalogCategoryAttribute.createMany({
+      data: definition.filters
+        .map((key, order) => ({ tenantId, categoryId: category.id, attributeId: attributeIds.get(key)!, sortOrder: order }))
+        .filter((row) => Boolean(row.attributeId)),
+    });
+  }
+
+  for (const [sku, configuration] of Object.entries(DEMO_PART_CONFIGURATION)) {
+    const item = await prisma.inventoryItem.findFirst({ where: { tenantId, sku }, select: { id: true } });
+    if (!item) continue;
+
+    await prisma.inventoryItem.update({
+      where: { id: item.id },
+      data: {
+        catalogCategoryId: categoryIds.get(configuration.category) ?? null,
+        summary: configuration.summary,
+      },
+    });
+
+    await prisma.inventoryItemAttributeValue.deleteMany({ where: { tenantId, inventoryItemId: item.id } });
+    for (const [key, label] of Object.entries(configuration.attributes)) {
+      const attributeId = attributeIds.get(key);
+      const valueId = valueIds.get(`${key}|${label}`);
+      if (!attributeId || !valueId) continue;
+      await prisma.inventoryItemAttributeValue.create({
+        data: { tenantId, inventoryItemId: item.id, attributeId, valueId },
+      });
+    }
+  }
+}
 
 async function ensurePartsCatalog(tenantId: string): Promise<void> {
   const warehouse = await prisma.warehouse.findFirst({ where: { tenantId }, orderBy: { code: "asc" } });

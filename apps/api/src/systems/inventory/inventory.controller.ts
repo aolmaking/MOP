@@ -7,6 +7,14 @@ import { InventoryViewService } from "./inventory-view.service";
 import { PartRequestService } from "./part-request.service";
 import { IssueDto, RejectReturnDto, RequestClarificationDto, ReturnDto, WarehouseStatusDto } from "./inventory.dto";
 import { CatalogItemDto } from "./catalog.dto";
+import {
+  CatalogAttributeDto,
+  CatalogAttributeValueDto,
+  CatalogCategoryDto,
+  CategoryAttributesDto,
+} from "./catalog-config.dto";
+import { CatalogConfigService } from "./catalog-config.service";
+import { CatalogBrowseService } from "./catalog-browse.service";
 import { InventoryHomeService } from "./inventory-home.service";
 import { CatalogService } from "./catalog.service";
 import { InventoryReportsService } from "./inventory-reports.service";
@@ -30,6 +38,8 @@ export class InventoryController {
     private readonly catalog: CatalogService,
     private readonly reports: InventoryReportsService,
     private readonly warehouses: WarehouseService,
+    private readonly catalogConfig: CatalogConfigService,
+    private readonly browse: CatalogBrowseService,
   ) {}
 
   /** Daily triage. Counts are per warehouse, never blended. */
@@ -43,7 +53,7 @@ export class InventoryController {
   async catalogList(
     @CurrentSession() session: SessionContext,
     @Query("q") query?: string,
-    @Query("category") category?: string,
+    @Query("categoryId") categoryId?: string,
     @Query("stockTracked") stockTracked?: string,
     @Query("page") page?: string,
   ) {
@@ -52,12 +62,119 @@ export class InventoryController {
       tenantId,
       {
         query,
-        category,
+        // "none" is a real filter, not an absent one: the manager's most
+        // common catalog job is finding what nobody has filed yet.
+        categoryId: categoryId && categoryId !== "none" ? categoryId : undefined,
+        uncategorised: categoryId === "none",
         stockTracked: stockTracked === undefined ? undefined : stockTracked === "true",
         page: page ? Number(page) : 1,
       },
       await this.maySeeCost(session),
     );
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Catalog configuration -- the vocabulary the technician browses.
+   *
+   * All of it behind `inventory.catalog.manage`, which TECHNICIAN does
+   * not hold by default and this controller never grants: the manager
+   * builds the catalog, the technician consumes it.
+   * ---------------------------------------------------------------- */
+
+  @Get("catalog-config")
+  async catalogConfiguration(@CurrentSession() session: SessionContext) {
+    const tenantId = await this.require(session, "inventory.catalog.manage");
+    return this.catalogConfig.configuration(tenantId);
+  }
+
+  @Post("catalog-config/categories")
+  async createCategory(@CurrentSession() session: SessionContext, @Body() dto: CatalogCategoryDto) {
+    const tenantId = await this.require(session, "inventory.catalog.manage");
+    return this.catalogConfig.createCategory(tenantId, dto);
+  }
+
+  @Post("catalog-config/categories/:id")
+  async updateCategory(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: CatalogCategoryDto,
+  ) {
+    const tenantId = await this.require(session, "inventory.catalog.manage");
+    return this.catalogConfig.updateCategory(tenantId, id, dto);
+  }
+
+  @Post("catalog-config/categories/:id/attributes")
+  async setCategoryAttributes(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: CategoryAttributesDto,
+  ) {
+    const tenantId = await this.require(session, "inventory.catalog.manage");
+    return this.catalogConfig.setCategoryAttributes(tenantId, id, dto.attributeIds);
+  }
+
+  @Post("catalog-config/attributes")
+  async createAttribute(@CurrentSession() session: SessionContext, @Body() dto: CatalogAttributeDto) {
+    const tenantId = await this.require(session, "inventory.catalog.manage");
+    return this.catalogConfig.createAttribute(tenantId, dto);
+  }
+
+  @Post("catalog-config/attributes/:id")
+  async updateAttribute(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: CatalogAttributeDto,
+  ) {
+    const tenantId = await this.require(session, "inventory.catalog.manage");
+    return this.catalogConfig.updateAttribute(tenantId, id, dto);
+  }
+
+  @Post("catalog-config/attributes/:id/values")
+  async addAttributeValue(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: CatalogAttributeValueDto,
+  ) {
+    const tenantId = await this.require(session, "inventory.catalog.manage");
+    return this.catalogConfig.addAttributeValue(tenantId, id, dto);
+  }
+
+  @Post("catalog-config/attribute-values/:id")
+  async updateAttributeValue(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: CatalogAttributeValueDto,
+  ) {
+    const tenantId = await this.require(session, "inventory.catalog.manage");
+    return this.catalogConfig.updateAttributeValue(tenantId, id, dto);
+  }
+
+  /**
+   * "This is what the technician will see."
+   *
+   * The same `CatalogBrowseService.browse` the technician endpoint
+   * calls, with the same arguments -- not a second renderer that agrees
+   * with it today. A preview whose only job is catching a
+   * misconfiguration is worthless if it can be configured wrong in a way
+   * the preview itself hides.
+   */
+  @Get("catalog-preview")
+  async catalogPreview(
+    @CurrentSession() session: SessionContext,
+    @Query("q") query?: string,
+    @Query("categoryId") categoryId?: string,
+    @Query("attributes") attributes?: string,
+    @Query("inStockOnly") inStockOnly?: string,
+    @Query("page") page?: string,
+  ) {
+    const tenantId = await this.require(session, "inventory.catalog.manage");
+    return this.browse.browse(tenantId, {
+      query,
+      categoryId,
+      attributes: parseAttributeQuery(attributes),
+      inStockOnly: inStockOnly === "true",
+      page: page ? Number(page) : 1,
+    });
   }
 
   @Get("catalog/:id")
@@ -252,4 +369,26 @@ export class InventoryController {
     }
     return session.tenantId;
   }
+}
+
+/**
+ * `attributes=<attributeId>:<valueId>,<valueId>;<attributeId>:<valueId>`
+ *
+ * A flat string rather than repeated query params or a JSON blob,
+ * because this is what makes a filtered browse a link somebody can send:
+ * "the two Toyota sedan pads, look". Both the technician endpoint and
+ * the manager's preview parse it the same way, from this one function --
+ * a preview that read filters differently from the page it previews
+ * would be the exact lie the preview exists to prevent.
+ */
+export function parseAttributeQuery(raw: string | undefined): Record<string, string[]> | undefined {
+  if (!raw) return undefined;
+  const parsed: Record<string, string[]> = {};
+  for (const group of raw.split(";")) {
+    const [attributeId, values] = group.split(":");
+    if (!attributeId || !values) continue;
+    const valueIds = values.split(",").map((value) => value.trim()).filter(Boolean);
+    if (valueIds.length > 0) parsed[attributeId.trim()] = valueIds;
+  }
+  return Object.keys(parsed).length > 0 ? parsed : undefined;
 }

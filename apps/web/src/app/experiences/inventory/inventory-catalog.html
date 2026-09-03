@@ -24,10 +24,14 @@
       @if (p.categories.length > 0) {
         <label class="filter">
           <span class="visually-hidden">Category</span>
-          <select class="filter-input" [value]="category()" (change)="onCategory($any($event.target).value)">
-            <option value="">All categories</option>
-            @for (name of p.categories; track name) {
-              <option [value]="name">{{ name }}</option>
+          <select class="filter-input" (change)="onCategory($any($event.target).value)">
+            <option value="" [selected]="category() === ''">All categories</option>
+            <!-- The one a manager reaches for most: parts nobody has
+                 filed, which a technician browsing by category cannot
+                 find at all. -->
+            <option value="none" [selected]="category() === 'none'">Not filed anywhere</option>
+            @for (entry of p.categories; track entry.id) {
+              <option [value]="entry.id" [selected]="category() === entry.id">{{ entry.name }}</option>
             }
           </select>
         </label>
@@ -91,7 +95,7 @@
                 <tr>
                   <td class="cell-name">{{ item.name }}</td>
                   <td class="cell-mono">{{ item.sku }}</td>
-                  <td>{{ item.category ?? '—' }}</td>
+                  <td>{{ item.categoryName ?? '—' }}</td>
                   <td class="col-num cell-mono">{{ item.sellingPrice }}</td>
                   @if (maySeeCost()) {
                     <td class="col-num cell-mono">{{ item.cost ?? '—' }}</td>
@@ -176,23 +180,61 @@
           </app-form-field>
         </div>
 
-        <div class="editor-row">
-          <app-form-field label="Category">
-            <input
-              type="text"
-              [value]="draft().category ?? ''"
-              (input)="patch('category', $any($event.target).value)"
-            />
-          </app-form-field>
+        <app-form-field
+          label="Category"
+          hint="Where a technician will find it. Categories are built on Catalog Builder."
+        >
+          <!-- `[selected]` per option, not `[value]` on the select: the
+               options are rendered by @for in the same change-detection
+               pass, so a value set on the select before they exist falls
+               back to the first option. The symptom was an item that IS
+               filed reading "not filed" the moment you opened it, and
+               saving would then have unfiled it. -->
+          <select (change)="patch('catalogCategoryId', $any($event.target).value)">
+            <option value="" [selected]="!draft().catalogCategoryId">— not filed —</option>
+            @for (entry of categoryOptions(); track entry.id) {
+              <option [value]="entry.id" [selected]="entry.id === draft().catalogCategoryId">{{ entry.name }}</option>
+            }
+          </select>
+        </app-form-field>
 
-          <app-form-field label="Subcategory">
-            <input
-              type="text"
-              [value]="draft().subcategory ?? ''"
-              (input)="patch('subcategory', $any($event.target).value)"
-            />
-          </app-form-field>
-        </div>
+        <!-- The filter values this part carries. Only the filters the
+             chosen category actually offers are shown: stamping "Engine
+             Size" on a windscreen wiper is a value nothing will ever
+             filter by, and offering it invites exactly that. -->
+        @if (applicableFilters().length > 0) {
+          <fieldset class="chips">
+            <legend class="chips-legend">Filters</legend>
+            <p class="chips-hint">What a technician filtering this category will match on.</p>
+            @for (filter of applicableFilters(); track filter.id) {
+              <p class="chips-hint">{{ filter.label }}</p>
+              <div class="chips-row">
+                @for (value of filter.values; track value.id) {
+                  <button
+                    type="button"
+                    class="chip"
+                    [attr.aria-pressed]="hasValue(value.id)"
+                    (click)="toggleValue(value.id)"
+                  >
+                    {{ value.label }}
+                  </button>
+                }
+              </div>
+            }
+          </fieldset>
+        } @else if (draft().catalogCategoryId) {
+          <p class="chips-hint">
+            This category offers no filters yet. Attach some on Catalog Builder.
+          </p>
+        }
+
+        <app-form-field label="One-line description" hint="Shown under the name on the technician's card.">
+          <input type="text" [value]="draft().summary ?? ''" (input)="patch('summary', $any($event.target).value)" />
+        </app-form-field>
+
+        <app-form-field label="Image URL" hint="A technician recognises a part by sight before they read its name.">
+          <input type="text" [value]="draft().imageUrl ?? ''" (input)="patch('imageUrl', $any($event.target).value)" />
+        </app-form-field>
 
         <fieldset class="chips">
           <legend class="chips-legend">Fits</legend>

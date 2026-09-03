@@ -52,6 +52,9 @@
     "transform": {
       "^.+\\.ts$": "ts-jest"
     },
+    "setupFiles": [
+      "<rootDir>/testing/jest-env.ts"
+    ],
     "moduleFileExtensions": [
       "ts",
       "js",

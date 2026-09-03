@@ -301,6 +301,15 @@ export const routes: Routes = [
         loadComponent: () => import('./experiences/inventory/inventory-catalog').then((m) => m.InventoryCatalog),
       },
       {
+        // The catalog's STRUCTURE, as distinct from its items:
+        // categories, the filter vocabulary, which filters each category
+        // offers, and a preview of the technician's own browse. Its own
+        // route because it is configuration -- a manager visits it when
+        // the catalogue's shape changes, not when a price does.
+        path: 'catalog-builder',
+        loadComponent: () => import('./experiences/inventory/catalog-builder').then((m) => m.CatalogBuilder),
+      },
+      {
         path: 'reports',
         loadComponent: () => import('./experiences/inventory/inventory-reports').then((m) => m.InventoryReportsPage),
       },
@@ -335,6 +344,15 @@ export const routes: Routes = [
       {
         path: 'card/:id',
         loadComponent: () => import('./experiences/technician/tech-work-card').then((m) => m.TechWorkCard),
+      },
+      {
+        // Asking the store for parts: browse the workshop's own
+        // catalogue, filter it by whatever the inventory manager
+        // configured, build a basket, send it once. A page rather than a
+        // panel on the card -- shopping does not fit beside a fault form
+        // on a phone.
+        path: 'card/:id/parts',
+        loadComponent: () => import('./experiences/technician/parts-catalog').then((m) => m.PartsCatalog),
       },
     ],
   },

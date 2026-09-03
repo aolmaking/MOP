@@ -1,0 +1,257 @@
+<section class="catalog" [class.catalog--cart-open]="cartOpen()">
+  <header class="catalog-head">
+    <a class="card-back" [routerLink]="['/tech', 'card', id()]">← Back to the job</a>
+    <h1 class="catalog-title">Parts</h1>
+  </header>
+
+  <label class="catalog-search">
+    <span class="visually-hidden">Search parts</span>
+    <input
+      type="search"
+      inputmode="search"
+      placeholder="Search parts, brands, part numbers"
+      [value]="query()"
+      (input)="onQuery($any($event.target).value)"
+    />
+  </label>
+
+  @if (state() === 'forbidden') {
+    <p class="catalog-note">You are not allowed to ask the store for parts.</p>
+  } @else if (state() === 'unconfigured') {
+    <p class="catalog-note">
+      This workshop has not set up a parts catalogue yet. Ask the inventory manager to add categories and parts.
+    </p>
+  } @else {
+    <!-- Categories come from the server. Nothing here knows their names. -->
+    <div class="chips" role="group" aria-label="Categories">
+      <button
+        class="chip"
+        type="button"
+        [class.chip--on]="categoryId() === null"
+        [attr.aria-pressed]="categoryId() === null"
+        (click)="chooseCategory(null)"
+      >
+        All
+      </button>
+      @for (entry of categoryChips(); track entry.node.id) {
+        <button
+          class="chip"
+          type="button"
+          [class.chip--on]="categoryId() === entry.node.id"
+          [class.chip--child]="entry.depth > 0"
+          [attr.aria-pressed]="categoryId() === entry.node.id"
+          (click)="chooseCategory(entry.node.id)"
+        >
+          {{ entry.node.name }}
+          <span class="chip-count">{{ entry.node.itemCount }}</span>
+        </button>
+      }
+    </div>
+
+    <!-- Dynamic. Every one of these was invented by the inventory
+         manager; this template has no idea what they mean. -->
+    @if (filters().length > 0) {
+      <div class="filters">
+        @for (filter of filters(); track filter.attributeId) {
+          <div class="filter">
+            <p class="filter-label">{{ filter.label }}</p>
+            <div class="filter-values">
+              @for (option of filter.options; track option.valueId) {
+                <button
+                  class="chip chip--filter"
+                  type="button"
+                  [class.chip--on]="option.selected"
+                  [attr.aria-pressed]="option.selected"
+                  [disabled]="option.count === 0 && !option.selected"
+                  (click)="toggleFilterValue(filter.attributeId, option.valueId)"
+                >
+                  {{ option.label }}
+                  <span class="chip-count">{{ option.count }}</span>
+                </button>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    <div class="catalog-bar">
+      <button
+        class="chip"
+        type="button"
+        [class.chip--on]="inStockOnly()"
+        [attr.aria-pressed]="inStockOnly()"
+        (click)="toggleInStock()"
+      >
+        On the shelf only
+      </button>
+      @if (activeFilterCount() > 0) {
+        <button class="chip" type="button" (click)="clearFilters()">Clear filters</button>
+      }
+      <span class="catalog-total" aria-live="polite">{{ total() }} parts</span>
+    </div>
+
+    @if (submitted(); as count) {
+      <p class="catalog-sent" role="status">
+        Sent to the store — {{ count }} {{ count === 1 ? 'request' : 'requests' }}. They will approve and issue.
+      </p>
+    }
+
+    @if (error(); as message) {
+      <p class="catalog-error" role="alert">{{ message }}</p>
+    }
+
+    @if (state() === 'loading') {
+      <p class="catalog-note" aria-busy="true">Loading parts…</p>
+    } @else if (state() === 'no-results') {
+      <p class="catalog-note">
+        Nothing matches that. Try a different category, or clear the filters.
+        <a class="card-back" [routerLink]="['/tech', 'card', id()]">Not stocked at all? Go back and say you're blocked.</a>
+      </p>
+    } @else if (state() === 'empty') {
+      <p class="catalog-note">There are no parts in this workshop's catalogue yet.</p>
+    } @else if (state() === 'error') {
+      <p class="catalog-note">The catalogue could not be loaded.</p>
+    } @else {
+      <ul class="grid">
+        @for (item of items(); track item.id) {
+          <li class="product">
+            <div class="product-image" aria-hidden="true">
+              @if (item.imageUrl) {
+                <img [src]="item.imageUrl" [alt]="''" loading="lazy" />
+              } @else {
+                <span class="product-initial">{{ item.name.charAt(0) }}</span>
+              }
+            </div>
+
+            <div class="product-body">
+              <p class="product-name">{{ item.name }}</p>
+              @if (item.summary) {
+                <p class="product-summary">{{ item.summary }}</p>
+              }
+
+              <!-- Whatever the manager marked as worth showing. -->
+              @if (item.attributes.length > 0) {
+                <ul class="product-specs">
+                  @for (spec of item.attributes; track spec.attributeId) {
+                    <li><span class="spec-label">{{ spec.label }}</span> {{ spec.valueLabel }}</li>
+                  }
+                </ul>
+              }
+
+              <p class="product-meta">
+                <span class="product-price">{{ item.sellingPrice }}</span>
+                <span
+                  class="product-stock"
+                  [class.product-stock--out]="item.availability === 'OUT_OF_STOCK'"
+                  [class.product-stock--low]="item.availability === 'LOW'"
+                >
+                  @switch (item.availability) {
+                    @case ('NOT_TRACKED') { Not counted }
+                    @case ('OUT_OF_STOCK') { None on the shelf }
+                    @case ('LOW') { {{ item.onHand }} left }
+                    @default { {{ item.onHand }} on the shelf }
+                  }
+                </span>
+              </p>
+            </div>
+
+            @if (inCart(item) > 0) {
+              <div class="quantity">
+                <button class="tap tap--quantity" type="button" [attr.aria-label]="'One fewer ' + item.name" (click)="add(item, -1)">
+                  −
+                </button>
+                <span class="quantity-value" aria-live="polite">{{ inCart(item) }}</span>
+                <button class="tap tap--quantity" type="button" [attr.aria-label]="'One more ' + item.name" (click)="add(item, 1)">
+                  +
+                </button>
+              </div>
+            } @else {
+              <button class="tap tap--add" type="button" (click)="add(item, 1)">Add</button>
+            }
+
+            <!-- Said, not blocked. The store can order it in, and a
+                 technician who cannot ask for an out-of-stock part
+                 simply phones instead, off the record. -->
+            @if (item.availability === 'OUT_OF_STOCK') {
+              <p class="product-warn">The store will have to order this.</p>
+            }
+          </li>
+        }
+      </ul>
+
+      @if (totalPages() > 1) {
+        <div class="pager">
+          <button class="tap" type="button" [disabled]="page()!.page <= 1" (click)="goToPage(page()!.page - 1)">
+            Previous
+          </button>
+          <span class="pager-label">Page {{ page()!.page }} of {{ totalPages() }}</span>
+          <button class="tap" type="button" [disabled]="page()!.page >= totalPages()" (click)="goToPage(page()!.page + 1)">
+            Next
+          </button>
+        </div>
+      }
+    }
+  }
+</section>
+
+<!-- The basket. Always reachable while there is something in it: a cart
+     a technician has to go looking for is a cart they submit late. -->
+@if (cartCount() > 0) {
+  <button class="cart-tab tap" type="button" (click)="toggleCart()" [attr.aria-expanded]="cartOpen()">
+    <span class="cart-tab-count">{{ cartCount() }}</span>
+    {{ cartOpen() ? 'Hide request' : 'Review request' }}
+  </button>
+}
+
+@if (cartOpen()) {
+  <aside class="cart" aria-label="Request cart">
+    <header class="cart-head">
+      <h2 class="cart-title">Request</h2>
+      <button class="tap cart-close" type="button" (click)="toggleCart()">Close</button>
+    </header>
+
+    <ul class="cart-lines">
+      @for (line of cart(); track line.item.id) {
+        <li class="cart-line">
+          <div class="cart-line-body">
+            <p class="cart-line-name">{{ line.item.name }}</p>
+            <p class="cart-line-sku">{{ line.item.sku }}</p>
+            @if (line.item.stockTracked && line.item.onHand < line.quantity) {
+              <p class="cart-line-warn">Only {{ line.item.onHand }} on the shelf — the store will order the rest.</p>
+            }
+          </div>
+
+          <div class="quantity">
+            <button class="tap tap--quantity" type="button" [attr.aria-label]="'One fewer ' + line.item.name" (click)="add(line.item, -1)">
+              −
+            </button>
+            <label class="quantity-input">
+              <span class="visually-hidden">Quantity of {{ line.item.name }}</span>
+              <input
+                type="number"
+                inputmode="numeric"
+                min="0"
+                max="999"
+                [value]="line.quantity"
+                (change)="setQuantity(line.item, $any($event.target).value)"
+              />
+            </label>
+            <button class="tap tap--quantity" type="button" [attr.aria-label]="'One more ' + line.item.name" (click)="add(line.item, 1)">
+              +
+            </button>
+          </div>
+
+          <button class="tap cart-remove" type="button" (click)="remove(line.item)">Remove</button>
+        </li>
+      }
+    </ul>
+
+    <p class="cart-total">{{ cartCount() }} items across {{ cartLines() }} {{ cartLines() === 1 ? 'part' : 'parts' }}</p>
+
+    <button class="tap tap--primary tap--wide" type="button" [disabled]="submitting()" (click)="submit()">
+      {{ submitting() ? 'Sending…' : 'Send to the store' }}
+    </button>
+    <button class="tap cart-empty" type="button" [disabled]="submitting()" (click)="emptyCart()">Empty the cart</button>
+  </aside>
+}

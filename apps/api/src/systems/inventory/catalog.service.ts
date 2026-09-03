@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@mop/database";
 import { PrismaService } from "../../runtime/database/prisma.service";
 
@@ -7,8 +7,9 @@ export interface CatalogItem {
   readonly sku: string;
   readonly name: string;
   readonly itemType: string;
-  readonly category: string | null;
-  readonly subcategory: string | null;
+  /** The configured category, or null while nobody has filed it. */
+  readonly catalogCategoryId: string | null;
+  readonly categoryName: string | null;
   readonly compatibleCategories: readonly string[];
   readonly lowStockThreshold: number;
   readonly criticalStockThreshold: number;
@@ -22,6 +23,10 @@ export interface CatalogItem {
   readonly barcode: string | null;
   readonly supplier: string | null;
   readonly notes: string | null;
+  readonly imageUrl: string | null;
+  readonly summary: string | null;
+  /** The configured filter values stamped on this part. */
+  readonly attributeValueIds: readonly string[];
   /** Summed across warehouses purely for the list column. */
   readonly onHand: number;
 }
@@ -29,12 +34,19 @@ export interface CatalogItem {
 export interface CatalogPage {
   readonly items: readonly CatalogItem[];
   readonly total: number;
-  readonly categories: readonly string[];
+  /**
+   * The workshop's configured categories, flat, for the list's own
+   * filter control. The full tree with its filter assignments lives on
+   * the configuration endpoint -- this is the picker, not the editor.
+   */
+  readonly categories: readonly { id: string; name: string; parentId: string | null; isActive: boolean }[];
 }
 
 export interface CatalogFilters {
   readonly query?: string;
-  readonly category?: string;
+  readonly categoryId?: string;
+  /** "none" is a real choice: the items nobody has filed yet. */
+  readonly uncategorised?: boolean;
   readonly stockTracked?: boolean;
   readonly workOrderUsable?: boolean;
   readonly page?: number;
@@ -45,8 +57,7 @@ export interface CatalogInput {
   readonly sku: string;
   readonly name: string;
   readonly itemType: string;
-  readonly category?: string;
-  readonly subcategory?: string;
+  readonly catalogCategoryId?: string | null;
   readonly compatibleCategories?: readonly string[];
   readonly lowStockThreshold?: number;
   readonly criticalStockThreshold?: number;
@@ -58,6 +69,14 @@ export interface CatalogInput {
   readonly barcode?: string;
   readonly supplier?: string;
   readonly notes?: string;
+  readonly imageUrl?: string;
+  readonly summary?: string;
+  /**
+   * The filter values this part carries, set as a whole. Replacing the
+   * set rather than patching it is what makes "I removed Toyota" a
+   * thing the manager can actually do in one save.
+   */
+  readonly attributeValueIds?: readonly string[];
 }
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -94,7 +113,11 @@ export class CatalogService {
 
     const where: Prisma.InventoryItemWhereInput = {
       tenantId,
-      ...(filters.category ? { category: filters.category } : {}),
+      ...(filters.uncategorised
+        ? { catalogCategoryId: null }
+        : filters.categoryId
+          ? { catalogCategoryId: filters.categoryId }
+          : {}),
       ...(filters.stockTracked !== undefined ? { stockTracked: filters.stockTracked } : {}),
       ...(filters.workOrderUsable !== undefined ? { workOrderUsable: filters.workOrderUsable } : {}),
       ...(query
@@ -114,28 +137,35 @@ export class CatalogService {
         orderBy: { name: "asc" },
         skip: (page - 1) * pageSize,
         take: pageSize,
-        include: { stockBalances: { select: { availableQty: true } } },
+        include: {
+          catalogCategory: { select: { id: true, name: true } },
+          attributeValues: { select: { valueId: true } },
+          stockBalances: { select: { availableQty: true } },
+        },
       }),
       this.prisma.inventoryItem.count({ where }),
-      this.prisma.inventoryItem.findMany({
-        where: { tenantId, category: { not: null } },
-        select: { category: true },
-        distinct: ["category"],
-        take: 100,
+      this.prisma.catalogCategory.findMany({
+        where: { tenantId },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        select: { id: true, name: true, parentId: true, isActive: true },
       }),
     ]);
 
     return {
       items: rows.map((row) => this.toItem(row, maySeeCost)),
       total,
-      categories: categories.map((row) => row.category).filter((c): c is string => c !== null).sort(),
+      categories,
     };
   }
 
   async get(tenantId: string, id: string, maySeeCost: boolean): Promise<CatalogItem> {
     const row = await this.prisma.inventoryItem.findFirst({
       where: { id, tenantId },
-      include: { stockBalances: { select: { availableQty: true } } },
+      include: {
+        catalogCategory: { select: { id: true, name: true } },
+        attributeValues: { select: { valueId: true } },
+        stockBalances: { select: { availableQty: true } },
+      },
     });
     if (!row) throw new NotFoundException({ code: "item_not_found", message: "That item is not in this workshop." });
     return this.toItem(row, maySeeCost);
@@ -143,10 +173,29 @@ export class CatalogService {
 
   async create(tenantId: string, input: CatalogInput, maySeeCost: boolean): Promise<CatalogItem> {
     await this.requireFreeSku(tenantId, input.sku);
+    await this.requireOwnedCategory(tenantId, input.catalogCategoryId);
+    const values = await this.requireOwnedValues(tenantId, input.attributeValueIds);
 
-    const row = await this.prisma.inventoryItem.create({
-      data: this.toData(tenantId, input),
-      include: { stockBalances: { select: { availableQty: true } } },
+    const row = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.inventoryItem.create({ data: this.toData(tenantId, input) });
+      if (values.length > 0) {
+        await tx.inventoryItemAttributeValue.createMany({
+          data: values.map((value) => ({
+            tenantId,
+            inventoryItemId: created.id,
+            attributeId: value.attributeId,
+            valueId: value.id,
+          })),
+        });
+      }
+      return tx.inventoryItem.findUniqueOrThrow({
+        where: { id: created.id },
+        include: {
+          catalogCategory: { select: { id: true, name: true } },
+          attributeValues: { select: { valueId: true } },
+          stockBalances: { select: { availableQty: true } },
+        },
+      });
     });
 
     return this.toItem(row, maySeeCost);
@@ -158,11 +207,37 @@ export class CatalogService {
       throw new NotFoundException({ code: "item_not_found", message: "That item is not in this workshop." });
     }
     if (input.sku !== existing.sku) await this.requireFreeSku(tenantId, input.sku);
+    await this.requireOwnedCategory(tenantId, input.catalogCategoryId);
+    const values = await this.requireOwnedValues(tenantId, input.attributeValueIds);
 
-    const row = await this.prisma.inventoryItem.update({
-      where: { id },
-      data: this.toData(tenantId, input),
-      include: { stockBalances: { select: { availableQty: true } } },
+    const row = await this.prisma.$transaction(async (tx) => {
+      await tx.inventoryItem.update({ where: { id }, data: this.toData(tenantId, input) });
+
+      // Replaced wholesale, and only when the caller said something
+      // about attributes at all: an update that omits the field is
+      // editing a price, not silently stripping the part's filters.
+      if (input.attributeValueIds !== undefined) {
+        await tx.inventoryItemAttributeValue.deleteMany({ where: { tenantId, inventoryItemId: id } });
+        if (values.length > 0) {
+          await tx.inventoryItemAttributeValue.createMany({
+            data: values.map((value) => ({
+              tenantId,
+              inventoryItemId: id,
+              attributeId: value.attributeId,
+              valueId: value.id,
+            })),
+          });
+        }
+      }
+
+      return tx.inventoryItem.findUniqueOrThrow({
+        where: { id },
+        include: {
+          catalogCategory: { select: { id: true, name: true } },
+          attributeValues: { select: { valueId: true } },
+          stockBalances: { select: { availableQty: true } },
+        },
+      });
     });
 
     return this.toItem(row, maySeeCost);
@@ -186,14 +261,47 @@ export class CatalogService {
     }
   }
 
+  /**
+   * A category id from another workshop is refused, not ignored. Filing
+   * a part under someone else's category would be a tenancy leak
+   * disguised as a typo, and silently nulling it would leave the manager
+   * looking at an item they believe they filed.
+   */
+  private async requireOwnedCategory(tenantId: string, categoryId: string | null | undefined): Promise<void> {
+    if (!categoryId) return;
+    const owned = await this.prisma.catalogCategory.count({ where: { id: categoryId, tenantId } });
+    if (owned === 0) {
+      throw new BadRequestException({ code: "category_not_found", message: "That category is not in this workshop." });
+    }
+  }
+
+  private async requireOwnedValues(
+    tenantId: string,
+    valueIds: readonly string[] | undefined,
+  ): Promise<{ id: string; attributeId: string }[]> {
+    const wanted = [...new Set(valueIds ?? [])];
+    if (wanted.length === 0) return [];
+
+    const rows = await this.prisma.catalogAttributeValue.findMany({
+      where: { tenantId, id: { in: wanted } },
+      select: { id: true, attributeId: true },
+    });
+    if (rows.length !== wanted.length) {
+      throw new BadRequestException({
+        code: "attribute_value_not_found",
+        message: "One of those filter values is not in this workshop.",
+      });
+    }
+    return rows;
+  }
+
   private toData(tenantId: string, input: CatalogInput) {
     return {
       tenantId,
       sku: input.sku.trim(),
       name: input.name.trim(),
       itemType: input.itemType,
-      category: input.category?.trim() || null,
-      subcategory: input.subcategory?.trim() || null,
+      catalogCategoryId: input.catalogCategoryId || null,
       // Entered once for every category it fits, never duplicated per
       // category -- the spec is explicit about this.
       compatibleCategories: (input.compatibleCategories ?? []) as never,
@@ -207,6 +315,8 @@ export class CatalogService {
       barcode: input.barcode?.trim() || null,
       supplier: input.supplier?.trim() || null,
       notes: input.notes?.trim() || null,
+      imageUrl: input.imageUrl?.trim() || null,
+      summary: input.summary?.trim() || null,
     };
   }
 
@@ -216,8 +326,9 @@ export class CatalogService {
       sku: string;
       name: string;
       itemType: string;
-      category: string | null;
-      subcategory: string | null;
+      catalogCategoryId: string | null;
+      catalogCategory: { id: string; name: string } | null;
+      attributeValues: { valueId: string }[];
       compatibleCategories: string[];
       lowStockThreshold: number;
       criticalStockThreshold: number;
@@ -229,6 +340,8 @@ export class CatalogService {
       barcode: string | null;
       supplier: string | null;
       notes: string | null;
+      imageUrl: string | null;
+      summary: string | null;
       stockBalances: { availableQty: number }[];
     },
     maySeeCost: boolean,
@@ -238,8 +351,8 @@ export class CatalogService {
       sku: row.sku,
       name: row.name,
       itemType: row.itemType,
-      category: row.category,
-      subcategory: row.subcategory,
+      catalogCategoryId: row.catalogCategoryId,
+      categoryName: row.catalogCategory?.name ?? null,
       compatibleCategories: row.compatibleCategories,
       lowStockThreshold: row.lowStockThreshold,
       criticalStockThreshold: row.criticalStockThreshold,
@@ -253,6 +366,9 @@ export class CatalogService {
       barcode: row.barcode,
       supplier: row.supplier,
       notes: row.notes,
+      imageUrl: row.imageUrl,
+      summary: row.summary,
+      attributeValueIds: row.attributeValues.map((entry) => entry.valueId),
       // money-lint-ok: a count of physical objects, not a currency amount.
       onHand: row.stockBalances.reduce((sum, balance) => sum + balance.availableQty, 0),
     };

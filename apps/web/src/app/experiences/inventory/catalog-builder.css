@@ -1,0 +1,377 @@
+/*
+ * Catalog Builder.
+ *
+ * Two authoring panels side by side and the preview underneath, at full
+ * width. That arrangement is the argument the page makes: categories and
+ * filters are edited against each other (a filter is created to be
+ * attached to a category, in one sitting), and the preview is the
+ * consequence of both, so it reads last and reads wide.
+ *
+ * On a narrow desk the columns stack. The preview never moves above the
+ * things it previews -- a result shown before its cause reads as an
+ * unrelated widget.
+ */
+
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-inline-size: 100rem;
+}
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding-block-end: var(--space-3);
+  border-block-end: 1px solid var(--text);
+}
+
+.page-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.page-sub,
+.panel-sub {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  max-inline-size: 60ch;
+}
+
+.builder {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(24rem, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.panel-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.note,
+.warn,
+.form-error {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.note {
+  background: var(--surface-raised);
+  color: var(--text-muted);
+}
+
+.note-inline {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.warn {
+  background: var(--warning-bg);
+  color: var(--text);
+}
+
+.form-error {
+  background: var(--danger-bg);
+  color: var(--text);
+}
+
+/* --- editors -------------------------------------------------------- */
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+}
+
+.editor input[type='text'],
+.editor select {
+  inline-size: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--text-base);
+}
+
+.editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+}
+
+/* --- rows ----------------------------------------------------------- */
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+}
+
+.row--child {
+  /* A sub-category is inset, not merely smaller: the relationship is
+     structural and the eye reads indentation as containment. */
+  margin-inline-start: var(--space-5);
+}
+
+.row-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-inline-size: 12rem;
+}
+
+.row-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.row-meta {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.tag {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  text-transform: lowercase;
+}
+
+.tag--off {
+  background: var(--neutral-badge-bg);
+  color: var(--neutral-badge);
+}
+
+/* --- chips ---------------------------------------------------------- */
+
+.assign,
+.value-add,
+.values,
+.assign-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.assign {
+  flex-direction: column;
+  inline-size: 100%;
+  padding: var(--space-3);
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+}
+
+.assign-hint,
+.filter-label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: var(--text-sm);
+}
+
+.chip--on {
+  background: var(--accent-muted);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.chip--off {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.chip:disabled {
+  opacity: 0.45;
+}
+
+.chip-count {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.value-add input {
+  flex: 1;
+  min-inline-size: 8rem;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--text-base);
+}
+
+/* --- preview -------------------------------------------------------- */
+
+.panel--preview {
+  background: var(--surface-raised);
+}
+
+.preview-search input {
+  inline-size: 100%;
+  max-inline-size: 26rem;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--text-base);
+}
+
+.preview-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.preview-filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.preview-image {
+  display: grid;
+  place-items: center;
+  block-size: 4.5rem;
+  overflow: hidden;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+}
+
+.preview-image img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.preview-initial {
+  color: var(--text-faint);
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.preview-name {
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.preview-summary,
+.preview-specs,
+.preview-stock {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.preview-specs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.preview-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
