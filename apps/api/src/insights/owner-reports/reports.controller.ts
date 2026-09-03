@@ -80,28 +80,37 @@ export class ReportsController {
   @Get("labor")
   async getLabor(
     @CurrentSession() session: SessionContext,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
     @Query("branchId") branchId?: string,
+    @Query("groupBy") groupBy?: string,
   ) {
     const tenantId = await this.require(session);
-    return this.wrap(() => this.labor.build(tenantId, { branchId }));
+    return this.wrap(() => this.labor.build(tenantId, { from, to, branchId, groupBy }));
   }
 
   @Get("pipeline")
   async getPipeline(
     @CurrentSession() session: SessionContext,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
     @Query("branchId") branchId?: string,
+    @Query("groupBy") groupBy?: string,
   ) {
     const tenantId = await this.require(session);
-    return this.wrap(() => this.pipeline.build(tenantId, { branchId }));
+    return this.wrap(() => this.pipeline.build(tenantId, { from, to, branchId, groupBy }));
   }
 
   @Get("sales-conversion")
   async getSalesConversion(
     @CurrentSession() session: SessionContext,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
     @Query("branchId") branchId?: string,
+    @Query("groupBy") groupBy?: string,
   ) {
     const tenantId = await this.require(session);
-    return this.wrap(() => this.salesConversion.build(tenantId, { branchId }));
+    return this.wrap(() => this.salesConversion.build(tenantId, { from, to, branchId, groupBy }));
   }
 
   @Get("inventory")

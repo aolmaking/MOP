@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import type { Observable } from 'rxjs';
+import type { LaborTriadDto, PipelineSankeyDto, SalesWaterfallDto } from '@mop/shared';
 
 export interface ReportRangeParams {
   readonly from?: string;
@@ -210,22 +211,16 @@ export class ReportsApi {
     });
   }
 
-  labor(branchId?: string): Observable<unknown> {
-    return this.http.get<unknown>('/api/v1/organization/reports/labor', {
-      params: branchId ? { branchId } : {},
-    });
+  labor(params: ReportRangeParams): Observable<LaborTriadDto> {
+    return this.http.get<LaborTriadDto>('/api/v1/organization/reports/labor', { params: toHttpParams(params) });
   }
 
-  pipeline(branchId?: string): Observable<unknown> {
-    return this.http.get<unknown>('/api/v1/organization/reports/pipeline', {
-      params: branchId ? { branchId } : {},
-    });
+  pipeline(params: ReportRangeParams): Observable<PipelineSankeyDto> {
+    return this.http.get<PipelineSankeyDto>('/api/v1/organization/reports/pipeline', { params: toHttpParams(params) });
   }
 
-  salesConversion(branchId?: string): Observable<unknown> {
-    return this.http.get<unknown>('/api/v1/organization/reports/sales-conversion', {
-      params: branchId ? { branchId } : {},
-    });
+  salesConversion(params: ReportRangeParams): Observable<SalesWaterfallDto> {
+    return this.http.get<SalesWaterfallDto>('/api/v1/organization/reports/sales-conversion', { params: toHttpParams(params) });
   }
 
   overview(params: ReportRangeParams): Observable<OverviewReport> {

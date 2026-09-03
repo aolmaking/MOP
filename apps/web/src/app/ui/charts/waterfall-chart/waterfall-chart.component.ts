@@ -50,13 +50,16 @@ import type { SalesWaterfallDto } from '@mop/shared';
               <span class="bar-label">Unrealized Revenue Gap (Declined Work)</span>
               <span class="bar-val bar-val--danger">\${{ d.unrealizedRevenueGap }}</span>
             </div>
-            <div class="bar-fill bar-fill--danger" style="width: 22%"></div>
+            <div class="bar-fill bar-fill--danger" [style.width.%]="d.totalConversionPct ? 100 - d.totalConversionPct : 0"></div>
           </div>
         </div>
 
         <div class="advisor-grid">
           <h4 class="advisor-title">Service Advisor Conversion Scorecards</h4>
           <div class="advisor-cards">
+            @if (d.advisorScorecards.length === 0) {
+              <p style="color: #64748b; font-size: 0.875rem; padding: 0.5rem 0;">No advisor estimate decisions recorded in this date range.</p>
+            }
             @for (adv of d.advisorScorecards; track adv.advisorId) {
               <div class="advisor-card">
                 <span class="adv-name">{{ adv.displayName }}</span>

@@ -74,22 +74,22 @@
         @case ('labor') {
           @if (laborData(); as data) {
             <div class="sections-container" style="display: flex; flex-direction: column; gap: 1.5rem;">
-              <app-scatter-matrix [technicians]="$any(data).technicians" />
+              <app-scatter-matrix [technicians]="data.technicians" />
             </div>
           }
         }
         @case ('pipeline') {
           @if (pipelineData(); as data) {
             <div class="sections-container" style="display: flex; flex-direction: column; gap: 1.5rem;">
-              <app-sankey-chart [nodes]="$any(data).nodes" />
-              <app-bay-gantt [bays]="$any(data).bayOccupancy" />
+              <app-sankey-chart [nodes]="data.nodes" />
+              <app-bay-gantt [bays]="data.bayOccupancy" />
             </div>
           }
         }
         @case ('sales-conversion') {
           @if (salesData(); as data) {
             <div class="sections-container" style="display: flex; flex-direction: column; gap: 1.5rem;">
-              <app-waterfall-chart [data]="$any(data)" />
+              <app-waterfall-chart [data]="data" />
             </div>
           }
         }

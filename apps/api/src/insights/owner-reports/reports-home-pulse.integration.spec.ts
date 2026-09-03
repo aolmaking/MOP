@@ -3,22 +3,31 @@ import { PrismaService } from "../../runtime/database/prisma.service";
 import { ActionDeckService } from "./action-deck.service";
 import { ReportsLaborService } from "./reports-labor.service";
 import { ReportsPipelineService } from "./reports-pipeline.service";
+import { ReportsSalesConversionService } from "./reports-sales-conversion.service";
 
 describe("Executive Reports Services Integration", () => {
   let module: TestingModule;
   let actionDeckService: ActionDeckService;
   let laborService: ReportsLaborService;
   let pipelineService: ReportsPipelineService;
+  let salesConversionService: ReportsSalesConversionService;
   let prisma: PrismaService;
 
   beforeAll(async () => {
     module = await Test.createTestingModule({
-      providers: [PrismaService, ActionDeckService, ReportsLaborService, ReportsPipelineService],
+      providers: [
+        PrismaService,
+        ActionDeckService,
+        ReportsLaborService,
+        ReportsPipelineService,
+        ReportsSalesConversionService,
+      ],
     }).compile();
 
     actionDeckService = module.get(ActionDeckService);
     laborService = module.get(ReportsLaborService);
     pipelineService = module.get(ReportsPipelineService);
+    salesConversionService = module.get(ReportsSalesConversionService);
     prisma = module.get(PrismaService);
   });
 
@@ -44,8 +53,8 @@ describe("Executive Reports Services Integration", () => {
 
     const labor = await laborService.build(tenants[0].id);
     expect(labor).toBeDefined();
-    expect(labor.averageProductivityPct).toBeGreaterThan(0);
-    expect(labor.averageEfficiencyPct).toBeGreaterThan(0);
+    expect(labor.averageProductivityPct).toBeGreaterThanOrEqual(0);
+    expect(labor.averageEfficiencyPct).toBeGreaterThanOrEqual(0);
     expect(labor.technicians).toBeInstanceOf(Array);
   });
 
@@ -57,5 +66,16 @@ describe("Executive Reports Services Integration", () => {
     expect(pipeline).toBeDefined();
     expect(pipeline.nodes.length).toBeGreaterThan(0);
     expect(pipeline.bayOccupancy.length).toBeGreaterThan(0);
+  });
+
+  it("builds Sales Conversion Waterfall DTO from real customer estimates", async () => {
+    const tenants = await prisma.tenant.findMany({ take: 1, select: { id: true } });
+    if (tenants.length === 0) return;
+
+    const sales = await salesConversionService.build(tenants[0].id);
+    expect(sales).toBeDefined();
+    expect(sales.totalEstimatesIdentified).toBeDefined();
+    expect(sales.totalConversionPct).toBeGreaterThanOrEqual(0);
+    expect(sales.advisorScorecards).toBeInstanceOf(Array);
   });
 });

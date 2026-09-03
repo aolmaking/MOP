@@ -57,6 +57,8 @@ import { ScatterMatrixComponent } from '../../../ui/charts/scatter-matrix/scatte
 import { BayGanttComponent } from '../../../ui/charts/bay-gantt/bay-gantt.component';
 import { WaterfallChartComponent } from '../../../ui/charts/waterfall-chart/waterfall-chart.component';
 
+import type { LaborTriadDto, PipelineSankeyDto, SalesWaterfallDto } from '@mop/shared';
+
 @Component({
   selector: 'app-reports-page',
   imports: [
@@ -92,9 +94,9 @@ export class ReportsPage {
   protected readonly overview = signal<OverviewReport | null>(null);
   protected readonly operations = signal<OperationsReport | null>(null);
   protected readonly financial = signal<FinancialReport | null>(null);
-  protected readonly laborData = signal<unknown | null>(null);
-  protected readonly pipelineData = signal<unknown | null>(null);
-  protected readonly salesData = signal<unknown | null>(null);
+  protected readonly laborData = signal<LaborTriadDto | null>(null);
+  protected readonly pipelineData = signal<PipelineSankeyDto | null>(null);
+  protected readonly salesData = signal<SalesWaterfallDto | null>(null);
   protected readonly inventory = signal<InventoryAnalyticsReport | null>(null);
   protected readonly customers = signal<CustomersReport | null>(null);
 
@@ -165,7 +167,7 @@ export class ReportsPage {
         break;
       case 'labor':
         this.api
-          .labor()
+          .labor(params)
           .pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: (r) => {
@@ -177,7 +179,7 @@ export class ReportsPage {
         break;
       case 'pipeline':
         this.api
-          .pipeline()
+          .pipeline(params)
           .pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: (r) => {
@@ -189,7 +191,7 @@ export class ReportsPage {
         break;
       case 'sales-conversion':
         this.api
-          .salesConversion()
+          .salesConversion(params)
           .pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: (r) => {

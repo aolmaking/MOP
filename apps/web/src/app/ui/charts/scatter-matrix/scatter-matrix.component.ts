@@ -38,6 +38,9 @@ import type { TechnicianTriadMember } from '@mop/shared';
       </div>
 
       <div class="tech-list">
+        @if (technicians().length === 0) {
+          <p style="color: #64748b; font-size: 0.875rem; padding: 0.5rem 0;">No technician tasks recorded in this date range.</p>
+        }
         @for (tech of technicians(); track tech.technicianId) {
           <div class="tech-chip" [class]="'tech-chip--' + tech.performanceQuadrant.toLowerCase()">
             <span class="tech-name">{{ tech.displayName }}</span>
