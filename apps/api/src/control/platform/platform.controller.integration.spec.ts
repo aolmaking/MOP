@@ -112,9 +112,6 @@ describe("PlatformController (integration, real HTTP)", () => {
       ownerFullName: "New Owner",
       ownerEmail: `new-owner-${suffix}@example.com`,
       ownerPhone: "+201234567890",
-      allowedBranchesStart: 1,
-      allowedUsersStart: 5,
-      allowedWarehousesStart: 1,
       starterBuilderTemplate: "DEFAULT",
       initialStatus: "ACTIVE",
       // Inventory is on by default -- an absent capability row means
@@ -137,7 +134,7 @@ describe("PlatformController (integration, real HTTP)", () => {
 
     expect(res.status).toBe(201);
     expect(res.body.tenant.name).toBe(`HTTP Test Workshop ${suffix}`);
-    expect(res.body.inviteLink).toContain("/invite/accept?token=");
+    expect(res.body.ownerInvitation.link).toContain("/invite/accept?token=");
     tenantIdsToClean.push(res.body.tenant.id);
 
     const auditRow = await prisma.auditLog.findFirst({
@@ -191,14 +188,14 @@ describe("PlatformController (integration, real HTTP)", () => {
     expect(res.status).toBe(400);
   });
 
-  it("seeds a real starter service card when a starter specialization profile is chosen (Phase 17.A)", async () => {
+  it("seeds a real starter service card when a specialization pack is chosen", async () => {
     const cookieHeader = await login(platformEmail, "platform-password-123");
     const suffix = `${Date.now()}-quick`;
 
     const res = await request(app.getHttpServer())
       .post("/api/v1/platform/workshops")
       .set("Cookie", cookieHeader)
-      .send({ ...workshopPayload(suffix), starterSpecializationProfile: "QUICK_SERVICE" });
+      .send({ ...workshopPayload(suffix), specializationPacks: ["QUICK_SERVICE"] });
 
     expect(res.status).toBe(201);
     tenantIdsToClean.push(res.body.tenant.id);
@@ -212,7 +209,7 @@ describe("PlatformController (integration, real HTTP)", () => {
     await prisma.specializationDefinition.deleteMany({ where: { tenantId: res.body.tenant.id } });
   });
 
-  it("seeds nothing when no starter specialization profile is chosen -- NONE is not a stub, it is a real empty result", async () => {
+  it("seeds nothing when no specialization pack is chosen -- an empty choice is a real empty result, not a stub", async () => {
     const cookieHeader = await login(platformEmail, "platform-password-123");
     const suffix = `${Date.now()}-none`;
 

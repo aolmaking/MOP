@@ -40,7 +40,7 @@ function completeDraft(overrides: Partial<WorkshopDraft> = {}): WorkshopDraft {
       primaryCategory: "CARS",
     },
     owner: { ownerFullName: "Sara Hassan", ownerEmail: "sara@example.com", ownerPhone: "+201234567890" },
-    plan: { planId: "plan-1", initialStatus: "TRIAL", enableDemoData: false },
+    plan: { planId: "plan-1", initialStatus: "TRIAL" },
     branches: [{ name: "Main", code: "MAIN", city: "Cairo" }],
     ...overrides,
   };

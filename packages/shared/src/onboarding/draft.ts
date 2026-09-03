@@ -73,7 +73,6 @@ export interface WorkshopOwnerDraft {
 export interface WorkshopPlanDraft {
   readonly planId: string;
   readonly initialStatus: string;
-  readonly enableDemoData: boolean;
 }
 
 /**
@@ -133,7 +132,7 @@ export function emptyDraft(): WorkshopDraft {
       primaryCategory: "",
     },
     owner: { ownerFullName: "", ownerEmail: "", ownerPhone: "" },
-    plan: { planId: "", initialStatus: "TRIAL", enableDemoData: false },
+    plan: { planId: "", initialStatus: "TRIAL" },
     capabilities: {},
     specializationPacks: [],
     policies: {},

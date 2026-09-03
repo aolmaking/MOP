@@ -112,11 +112,26 @@ export interface ProvisioningStep {
   readonly detail: string;
 }
 
+/**
+ * Where the owner's invitation stands, as the server is willing to state it.
+ *
+ * Only CREATED is representable, and `deliveryMethod` says MANUAL_HANDOFF,
+ * because MOP has no email or SMS sender -- a screen implying a message was
+ * sent would be the same defect as a gate hardcoded to true. `link` is the
+ * raw token and is returned exactly once; only its hash is stored.
+ */
+export interface OwnerInvitationState {
+  readonly state: 'CREATED';
+  readonly deliveryMethod: 'MANUAL_HANDOFF';
+  readonly email: string;
+  readonly expiresAt: string;
+  readonly link: string;
+}
+
 export interface CreateWorkshopResponse {
   readonly tenant: { id: string; name: string; slug: string };
   readonly steps: readonly ProvisioningStep[];
-  readonly inviteLink: string;
-  readonly demoDataEnqueued: boolean;
+  readonly ownerInvitation: OwnerInvitationState;
 }
 
 @Injectable({ providedIn: 'root' })

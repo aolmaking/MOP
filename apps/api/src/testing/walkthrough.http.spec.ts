@@ -161,9 +161,6 @@ describe("Walkthrough (real HTTP, real Postgres)", () => {
         ownerFullName: "Walkthrough Owner",
         ownerEmail: `owner-${SUFFIX}@mop.local`,
         ownerPhone: "+201234567890",
-        allowedBranchesStart: 1,
-        allowedUsersStart: 5,
-        allowedWarehousesStart: 1,
         starterBuilderTemplate: "MINIMAL",
         initialStatus: "ACTIVE",
         // The launch shape (M-7), not the implicit twelve-capability
@@ -187,11 +184,11 @@ describe("Walkthrough (real HTTP, real Postgres)", () => {
     // Surfaced directly rather than emailed, because no mail delivery
     // exists and the service says so honestly. This is the pattern F-005
     // asks StaffService.invite() to follow.
-    expect(res.body.inviteLink).toMatch(/token=/);
+    expect(res.body.ownerInvitation.link).toMatch(/token=/);
 
     tenantId = res.body.tenant.id;
     ownerEmail = `owner-${SUFFIX}@mop.local`;
-    inviteToken = String(res.body.inviteLink).split("token=")[1];
+    inviteToken = String(res.body.ownerInvitation.link).split("token=")[1];
 
     const branch = await booted.prisma.branch.findFirstOrThrow({
       where: { tenantId },

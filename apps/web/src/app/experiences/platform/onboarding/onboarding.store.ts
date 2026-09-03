@@ -342,14 +342,15 @@ export class OnboardingStore {
   /**
    * The draft as the creation endpoint wants it.
    *
-   * The three "soft target" numbers the older payload carried are derived
-   * from what was actually configured rather than typed separately --
-   * they were only ever a promise about the same structure this draft now
-   * declares outright, and two places to say one thing is how they drift.
+   * The three "soft target" numbers the older payload carried are gone
+   * rather than derived: they were only ever a promise about the same
+   * structure this draft now declares outright, and two places to say one
+   * thing is how they drift. The API validates with
+   * `forbidNonWhitelisted`, so a field CreateWorkshopDto has dropped is
+   * not a harmless extra -- it is a 400 on the whole submission.
    */
   toCreatePayload(): Record<string, unknown> {
     const draft = this._draft();
-    const limits = this._planLimits();
 
     return {
       planId: draft.plan.planId,
@@ -365,18 +366,11 @@ export class OnboardingStore {
       ownerFullName: draft.owner.ownerFullName,
       ownerEmail: draft.owner.ownerEmail,
       ownerPhone: draft.owner.ownerPhone,
-      allowedBranchesStart: Math.max(1, Math.min(draft.branches.length || 1, limits?.maxBranches ?? 1)),
-      // One seat per role that has work in this workshop, bounded by the
-      // plan. A real starting figure derived from the shape, rather than
-      // a number typed on a separate screen that could contradict it.
-      allowedUsersStart: Math.max(1, Math.min(this.facts().activeRoles.length, limits?.maxUsers ?? 1)),
-      allowedWarehousesStart: Math.min(draft.warehouses.length, limits?.maxWarehouses ?? 0),
       // Kept because Builder Control still reads it as the workshop's
       // starting module set. Derived rather than asked: a template is a
       // shorthand for a capability shape, and the capability shape is now
       // stated outright one stage earlier.
       starterBuilderTemplate: this.starterTemplate(),
-      enableDemoData: draft.plan.enableDemoData,
       initialStatus: draft.plan.initialStatus,
       capabilities: draft.capabilities,
       policies: draft.policies,

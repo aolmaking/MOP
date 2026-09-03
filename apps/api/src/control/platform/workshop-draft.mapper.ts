@@ -35,7 +35,6 @@ export function draftFromDto(dto: CreateWorkshopDto): WorkshopDraft {
     plan: {
       planId: dto.planId,
       initialStatus: dto.initialStatus,
-      enableDemoData: dto.enableDemoData === true,
     },
     capabilities: (dto.capabilities ?? {}) as CapabilityProfile,
     specializationPacks: dto.specializationPacks ?? [],

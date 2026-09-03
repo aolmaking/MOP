@@ -23,12 +23,32 @@ const work = new TechnicianWorkService(asService, events, lifecycle, policies);
 
 describe("W3-A3-010 external-part billing", () => {
   it("CUSTOMER_SUPPLIED creates line with 0 price, not warranted, no stock movement", async () => {
-    const tenant = await prisma.tenant.findFirstOrThrow({ select: { id: true } });
-    const branch = await prisma.branch.findFirstOrThrow({ where: { tenantId: tenant.id }, select: { id: true } });
-    const customer = await prisma.customer.findFirstOrThrow({ where: { tenantId: tenant.id }, select: { id: true } });
-    const asset = await prisma.asset.findFirstOrThrow({ where: { tenantId: tenant.id }, select: { id: true } });
+    // A tenant that actually holds the three rows a work order needs.
+    //
+    // This used to take `tenant.findFirstOrThrow()` and then look for a
+    // branch, a customer and an asset inside whatever came back. On a
+    // test database carrying the workshops the HTTP suites leave behind,
+    // the first tenant is regularly one with no customers at all, and the
+    // test then failed on its own fixture rather than on the behaviour it
+    // exists to prove. Asking for the tenant BY the rows required picks a
+    // usable one by construction.
+    const tenant = await prisma.tenant.findFirstOrThrow({
+      where: { branches: { some: {} }, customers: { some: {} }, assets: { some: {} } },
+      select: {
+        id: true,
+        branches: { take: 1, select: { id: true } },
+        customers: { take: 1, select: { id: true } },
+        assets: { take: 1, select: { id: true } },
+      },
+    });
     const workOrder = await prisma.workOrder.create({
-      data: { tenantId: tenant.id, branchId: branch.id, assetId: asset.id, customerId: customer.id, status: "IN_PROGRESS" },
+      data: {
+        tenantId: tenant.id,
+        branchId: tenant.branches[0].id,
+        assetId: tenant.assets[0].id,
+        customerId: tenant.customers[0].id,
+        status: "IN_PROGRESS",
+      },
       select: { id: true, tenantId: true },
     });
     const line = await work.addExternalPartLine(workOrder.id, { name: "Customer Brake Pad", provenance: "CUSTOMER_SUPPLIED", quantity: 2 }, { accountId: "test", displayName: "Test", actorType: "TENANT_STAFF" });

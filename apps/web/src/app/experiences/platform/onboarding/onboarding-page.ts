@@ -148,7 +148,7 @@ export class OnboardingPage implements OnInit {
     try {
       const result = await firstValueFrom(this.api.publish(this.store.toCreatePayload()));
       this.publishedSteps.set(result.steps);
-      this.created.set({ ...result.tenant, inviteLink: result.inviteLink });
+      this.created.set({ ...result.tenant, inviteLink: result.ownerInvitation.link });
       await this.revealSteps(result.steps.length);
       this.phase.set('READY');
     } catch (error) {

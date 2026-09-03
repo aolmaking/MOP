@@ -2,17 +2,14 @@ import { Type } from "class-transformer";
 import {
   ArrayMaxSize,
   IsArray,
-  IsBoolean,
   IsEmail,
   IsEnum,
   IsIn,
-  IsInt,
   IsObject,
   IsOptional,
   IsString,
   Length,
   Matches,
-  Min,
   ValidateIf,
   ValidateNested,
 } from "class-validator";
@@ -24,7 +21,6 @@ import {
   INITIAL_STATUSES,
   SPECIALIZATION_PACK_KEYS,
   STARTER_BUILDER_TEMPLATES,
-  STARTER_SPECIALIZATION_PROFILES,
 } from "@mop/shared";
 import type { CapabilityKey, CapabilityStatus } from "@mop/shared";
 
@@ -178,38 +174,11 @@ export class CreateWorkshopDto {
   @Matches(/^\+[1-9]\d{1,14}$/)
   ownerPhone!: string;
 
-  // "Soft targets" per spec -- validated against the plan's ceilings at
-  // submit time but not persisted to any column (real branches/users/
-  // warehouses are created later, by the Owner, in Organization & Access).
-  @IsInt()
-  @Min(1)
-  allowedBranchesStart!: number;
-
-  @IsInt()
-  @Min(1)
-  allowedUsersStart!: number;
-
-  @IsInt()
-  @Min(0)
-  allowedWarehousesStart!: number;
-
   @IsIn(STARTER_BUILDER_TEMPLATES)
   starterBuilderTemplate!: (typeof STARTER_BUILDER_TEMPLATES)[number];
 
-  @IsOptional()
-  @IsBoolean()
-  enableDemoData?: boolean;
-
   @IsIn(INITIAL_STATUSES)
   initialStatus!: (typeof INITIAL_STATUSES)[number];
-
-  // Phase 17.A's original two-profile field. Kept so an existing caller
-  // (and the integration tests written against it) still works, and so
-  // the change to `specializationPacks` below is additive rather than a
-  // breaking rename. A request may send either; both are seeded.
-  @IsOptional()
-  @IsIn(STARTER_SPECIALIZATION_PROFILES)
-  starterSpecializationProfile?: (typeof STARTER_SPECIALIZATION_PROFILES)[number];
 
   // -----------------------------------------------------------------
   // The workshop's actual shape

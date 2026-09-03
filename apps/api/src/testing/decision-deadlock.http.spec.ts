@@ -103,9 +103,6 @@ describe("Decision deadlock (real HTTP, real Postgres)", () => {
         ownerFullName: "Deadlock Owner",
         ownerEmail: `owner-${SUFFIX}@mop.local`,
         ownerPhone: "+201234567890",
-        allowedBranchesStart: 1,
-        allowedUsersStart: 10,
-        allowedWarehousesStart: 1,
         starterBuilderTemplate: "MINIMAL",
         initialStatus: "ACTIVE",
         branches: [{ name: "Main Branch", code: "MAIN", city: "Cairo" }],
@@ -117,7 +114,7 @@ describe("Decision deadlock (real HTTP, real Postgres)", () => {
 
     await http(booted)
       .post("/api/v1/auth/invite/accept")
-      .send({ token: String(created.body.inviteLink).split("token=")[1], password: OWNER_PASSWORD });
+      .send({ token: String(created.body.ownerInvitation.link).split("token=")[1], password: OWNER_PASSWORD });
 
     branchId = (await booted.prisma.branch.findFirstOrThrow({ where: { tenantId }, select: { id: true } })).id;
     managerSession = await staff("BRANCH_MANAGER", "Deadlock Manager");

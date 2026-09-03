@@ -104,9 +104,6 @@ describe("Catalog-driven part requests (real HTTP, real Postgres)", () => {
         ownerFullName: `Catalog ${tag} Owner`,
         ownerEmail: `owner-${tag}-${SUFFIX}@mop.local`,
         ownerPhone: "+201234567890",
-        allowedBranchesStart: 1,
-        allowedUsersStart: 10,
-        allowedWarehousesStart: 1,
         starterBuilderTemplate: "MINIMAL",
         initialStatus: "ACTIVE",
         branches: [{ name: "Main Branch", code: "MAIN", city: "Cairo" }],
@@ -118,7 +115,7 @@ describe("Catalog-driven part requests (real HTTP, real Postgres)", () => {
     const tenantId = created.body.tenant.id as string;
     await http(booted)
       .post("/api/v1/auth/invite/accept")
-      .send({ token: String(created.body.inviteLink).split("token=")[1], password: OWNER_PASSWORD });
+      .send({ token: String(created.body.ownerInvitation.link).split("token=")[1], password: OWNER_PASSWORD });
 
     const branchId = (await booted.prisma.branch.findFirstOrThrow({ where: { tenantId }, select: { id: true } })).id;
     const warehouseId = (await booted.prisma.warehouse.findFirstOrThrow({ where: { tenantId }, select: { id: true } }))

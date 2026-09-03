@@ -8,7 +8,6 @@ import {
   modulesForProfile,
   grantsForResponsibilities,
   policyDefinition,
-  specializationPack,
   validateDraft,
   type CapabilityKey,
   type CapabilityProfile,
@@ -86,19 +85,33 @@ export interface ProvisioningStep {
   readonly detail: string;
 }
 
+/**
+ * Where the owner's invitation actually stands, said plainly.
+ *
+ * Three states are conceivable -- created, delivered, accepted -- and MOP
+ * can only ever report two of them, because it has no email or SMS
+ * sender. So `deliveryMethod` is `MANUAL_HANDOFF` and nothing anywhere
+ * claims a message was sent. When a sender exists, DELIVERED becomes a
+ * state something can actually set; until then a screen that implied it
+ * would be the same defect as a gate hardcoded to true.
+ *
+ * `link` is the raw token, returned once. Only its SHA-256 is stored, so
+ * this response is the single opportunity to hand it over -- which is
+ * why `reissueOwnerInvite` exists rather than the link being irrecoverable.
+ */
+export interface OwnerInvitationState {
+  readonly state: "CREATED";
+  readonly deliveryMethod: "MANUAL_HANDOFF";
+  readonly email: string;
+  readonly expiresAt: Date;
+  readonly link: string;
+}
+
 export interface CreateWorkshopResult {
   tenant: Tenant;
   /** What the transaction actually did, in the order it did it. */
   steps: ProvisioningStep[];
-  /**
-   * The raw invite link, valid once. Real email delivery doesn't exist
-   * yet (same honestly-labeled gap as the WhatsApp decision-link flow --
-   * see technician.md's Ask Customer Panel), so the caller surfaces this
-   * directly instead of pretending an email was sent. Never persisted or
-   * retrievable again after this response.
-   */
-  inviteLink: string;
-  demoDataEnqueued: boolean;
+  ownerInvitation: OwnerInvitationState;
 }
 
 @Injectable()
@@ -116,27 +129,7 @@ export class PlatformService {
    * neither does.
    */
   async createWorkshop(dto: CreateWorkshopDto, creator: WorkshopCreator): Promise<CreateWorkshopResult> {
-    // Global email uniqueness is deliberately an application-level check
-    // here, not a schema-wide unique constraint: Account.email stays
-    // unique per-tenant (@@unique([tenantId, email])), which is a real,
-    // separately-justified design (the same person can legitimately hold
-    // staff accounts at more than one tenant -- see AuthService's
-    // MultipleAccountsError). This check only blocks *creating a brand
-    // new* owner with an email that's already registered anywhere, which
-    // is what the spec actually asks for ("Platform accounts and this new
-    // owner account share the same email space at signup time") without
-    // narrowing the platform's broader multi-tenant email model.
-    const existingAccount = await this.prisma.account.findFirst({ where: { email: dto.ownerEmail } });
-    if (existingAccount) {
-      throw new ConflictException({
-        code: "email_already_registered",
-        message: "This email is already associated with an account.",
-        details: { field: "ownerEmail" },
-      });
-    }
-
     const plan = await this.prisma.plan.findUniqueOrThrow({ where: { id: dto.planId } });
-    this.assertWithinPlanLimits(dto, plan);
 
     // The same function the browser previewed this draft with, run again
     // here against the plan's real ceilings. A client-side check the
@@ -154,12 +147,17 @@ export class PlatformService {
     // value the user themselves chose and needs to change.
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const { tenant, steps } = await this.attemptCreateWorkshop(dto, creator, rawInviteToken);
+        const { tenant, steps, inviteExpiresAt } = await this.attemptCreateWorkshop(dto, creator, rawInviteToken);
         return {
           tenant,
           steps,
-          inviteLink: `/invite/accept?token=${rawInviteToken}`,
-          demoDataEnqueued: dto.enableDemoData === true,
+          ownerInvitation: {
+            state: "CREATED",
+            deliveryMethod: "MANUAL_HANDOFF",
+            email: dto.ownerEmail,
+            expiresAt: inviteExpiresAt,
+            link: `/invite/accept?token=${rawInviteToken}`,
+          },
         };
       } catch (error) {
         const isRegistrationCodeCollision =
@@ -180,9 +178,53 @@ export class PlatformService {
     dto: CreateWorkshopDto,
     creator: WorkshopCreator,
     rawInviteToken: string,
-  ): Promise<{ tenant: Tenant; steps: ProvisioningStep[] }> {
+  ): Promise<{ tenant: Tenant; steps: ProvisioningStep[]; inviteExpiresAt: Date }> {
+    const inviteExpiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+
     return this.prisma.$transaction(async (tx) => {
       const steps: ProvisioningStep[] = [];
+
+        // Owner-email uniqueness, serialised.
+        //
+        // Global email uniqueness is deliberately NOT a schema-wide unique
+        // constraint: `Account.email` is unique per-tenant
+        // (@@unique([tenantId, email])) because the same person can
+        // legitimately hold staff accounts at more than one workshop --
+        // AuthService's MultipleAccountsError exists for exactly that. So
+        // the "this address is already registered" rule that governs
+        // *creating a brand new owner* has to be enforced in code.
+        //
+        // Enforced in code, a read-then-write is a race: two super admins
+        // creating two workshops for the same person at the same instant
+        // both read "free" and both write. Postgres will not stop them,
+        // and the second workshop's owner then cannot sign in without
+        // disambiguation. The advisory lock closes it -- taken on the
+        // normalised address, held for the transaction, released on commit
+        // or rollback. The second transaction waits, then sees the row.
+        //
+        // Namespaced (the first argument) so it cannot collide with any
+        // other advisory lock this product might take later.
+        const normalizedOwnerEmail = dto.ownerEmail.trim().toLowerCase();
+        // `$executeRaw`, not `$queryRaw`: pg_advisory_xact_lock() returns
+        // void, and Prisma cannot deserialize a void column -- reading
+        // this statement as a result set fails the whole transaction with
+        // "Failed to deserialize column of type 'void'", which turned
+        // every workshop creation into a 500. Nothing here wants a row
+        // back; it wants the lock held.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(4210, hashtext(${normalizedOwnerEmail}))`;
+
+        const existingAccount = await tx.account.findFirst({
+          where: { email: { equals: normalizedOwnerEmail, mode: "insensitive" } },
+          select: { id: true },
+        });
+        if (existingAccount) {
+          throw new ConflictException({
+            code: "email_already_registered",
+            message: "This email is already associated with an account.",
+            details: { field: "ownerEmail" },
+          });
+        }
+
         const tenant = await tx.tenant.create({
           data: {
             name: dto.name,
@@ -307,7 +349,7 @@ export class PlatformService {
             passwordHash: null,
             status: "INVITED",
             inviteTokenHash: sha256(rawInviteToken),
-            inviteTokenExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+            inviteTokenExpiresAt: inviteExpiresAt,
           },
         });
 
@@ -471,7 +513,7 @@ export class PlatformService {
           detail: `Recorded against ${creator.displayName}, at high risk level, with the full configuration attached.`,
         });
 
-      return { tenant, steps };
+      return { tenant, steps, inviteExpiresAt };
     });
   }
 
@@ -496,33 +538,6 @@ export class PlatformService {
   async isOwnerEmailAvailable(email: string): Promise<boolean> {
     const existing = await this.prisma.account.findFirst({ where: { email } });
     return !existing;
-  }
-
-  private assertWithinPlanLimits(
-    dto: CreateWorkshopDto,
-    plan: { maxBranches: number; maxUsers: number; maxWarehouses: number },
-  ): void {
-    if (dto.allowedBranchesStart > plan.maxBranches) {
-      throw new ConflictException({
-        code: "exceeds_plan_limit",
-        message: `Selected plan does not allow more than ${plan.maxBranches} branch(es).`,
-        details: { field: "allowedBranchesStart" },
-      });
-    }
-    if (dto.allowedUsersStart > plan.maxUsers) {
-      throw new ConflictException({
-        code: "exceeds_plan_limit",
-        message: `Selected plan does not allow more than ${plan.maxUsers} user(s).`,
-        details: { field: "allowedUsersStart" },
-      });
-    }
-    if (dto.allowedWarehousesStart > plan.maxWarehouses) {
-      throw new ConflictException({
-        code: "exceeds_plan_limit",
-        message: `Selected plan does not allow more than ${plan.maxWarehouses} warehouse(s).`,
-        details: { field: "allowedWarehousesStart" },
-      });
-    }
   }
 
   /**
@@ -637,10 +652,6 @@ export class PlatformService {
    * create -- a promise it can only make honestly if this loop is the
    * thing that fulfils it, reading the same list.
    *
-   * The two original profile keys still work: a caller that sends
-   * `starterSpecializationProfile: "QUICK_SERVICE"` gets the QUICK_SERVICE
-   * pack, because the pack keys were chosen to match. `NONE` seeds
-   * nothing, as before.
    */
   private async seedStarterSpecializations(
     tx: Prisma.TransactionClient,
@@ -648,10 +659,6 @@ export class PlatformService {
     dto: CreateWorkshopDto,
   ): Promise<string[]> {
     const packKeys = new Set(dto.specializationPacks ?? []);
-    const legacyProfile = dto.starterSpecializationProfile;
-    if (legacyProfile && legacyProfile !== "NONE" && specializationPack(legacyProfile)) {
-      packKeys.add(legacyProfile);
-    }
     if (packKeys.size === 0) return [];
 
     const definitions = definitionsSeededBy([...packKeys]);
@@ -799,11 +806,6 @@ export class PlatformService {
         name: warehouse.name,
         branchCodes: warehouse.branchCodes,
       })),
-      softTargets: {
-        branches: dto.allowedBranchesStart,
-        users: dto.allowedUsersStart,
-        warehouses: dto.allowedWarehousesStart,
-      },
     };
   }
 

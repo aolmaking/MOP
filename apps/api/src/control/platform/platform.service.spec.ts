@@ -34,6 +34,21 @@ describe("PlatformService", () => {
     };
   }
 
+  /**
+   * The owner-email check runs INSIDE the transaction now, behind a
+   * Postgres advisory lock, so the mock has to answer as the transaction
+   * client rather than as the outer Prisma client.
+   */
+  function createTxMockWithAccount(existingAccount: unknown = null) {
+    const tx = createTxMock() as ReturnType<typeof createTxMock> & {
+      $executeRaw: jest.Mock;
+      account: { create: jest.Mock; findFirst: jest.Mock };
+    };
+    tx.$executeRaw = jest.fn().mockResolvedValue(0);
+    tx.account.findFirst = jest.fn().mockResolvedValue(existingAccount);
+    return tx;
+  }
+
   function createPrismaMock(tx: ReturnType<typeof createTxMock>, overrides: { existingAccount?: unknown } = {}) {
     return {
       $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(tx)),
@@ -58,9 +73,6 @@ describe("PlatformService", () => {
       ownerFullName: "New Owner",
       ownerEmail: "owner@example.com",
       ownerPhone: "+201234567890",
-      allowedBranchesStart: 1,
-      allowedUsersStart: 5,
-      allowedWarehousesStart: 1,
       starterBuilderTemplate: "DEFAULT",
       initialStatus: "ACTIVE",
       // Inventory is on unless a capability row says otherwise, so this
@@ -74,7 +86,7 @@ describe("PlatformService", () => {
   }
 
   it("creates the tenant, its configuration, an INVITED owner account with no password, and the owner staff profile, all inside one transaction", async () => {
-    const tx = createTxMock();
+    const tx = createTxMockWithAccount();
     const prisma = createPrismaMock(tx);
     const auditService = { record: jest.fn().mockResolvedValue({}) } as unknown as AuditService;
     const service = new PlatformService(prisma, auditService, createSpecializationServiceMock());
@@ -107,7 +119,7 @@ describe("PlatformService", () => {
   });
 
   it("generates a real invite token, stores only its hash, and returns the raw token exactly once", async () => {
-    const tx = createTxMock();
+    const tx = createTxMockWithAccount();
     const prisma = createPrismaMock(tx);
     const auditService = { record: jest.fn().mockResolvedValue({}) } as unknown as AuditService;
     const service = new PlatformService(prisma, auditService, createSpecializationServiceMock());
@@ -117,13 +129,16 @@ describe("PlatformService", () => {
     const accountCall = (tx.account.create as jest.Mock).mock.calls[0][0];
     const storedHash: string = accountCall.data.inviteTokenHash;
     expect(storedHash).toMatch(/^[0-9a-f]{64}$/); // sha256 hex digest, not a raw token
-    expect(result.inviteLink).toMatch(/^\/invite\/accept\?token=[0-9a-f]{64}$/);
-    const rawToken = result.inviteLink.split("token=")[1];
+    expect(result.ownerInvitation.link).toMatch(/^\/invite\/accept\?token=[0-9a-f]{64}$/);
+    const rawToken = result.ownerInvitation.link.split("token=")[1];
+    expect(result.ownerInvitation.state).toBe("CREATED");
+    // Nothing here claims a message was sent, because nothing sends one.
+    expect(result.ownerInvitation.deliveryMethod).toBe("MANUAL_HANDOFF");
     expect(storedHash).not.toBe(rawToken); // the hash is never the raw token itself
   });
 
   it("seeds a baseline RolePermission and RolePage row for every one of the 7 tenant-staff roles, not just the owner's", async () => {
-    const tx = createTxMock();
+    const tx = createTxMockWithAccount();
     const prisma = createPrismaMock(tx);
     const auditService = { record: jest.fn().mockResolvedValue({}) } as unknown as AuditService;
     const service = new PlatformService(prisma, auditService, createSpecializationServiceMock());
@@ -144,33 +159,50 @@ describe("PlatformService", () => {
     expect(seededRoles.has("TECHNICIAN")).toBe(true);
   });
 
-  it("rejects with 409 before ever starting the transaction when the owner email is already registered anywhere", async () => {
-    const tx = createTxMock();
-    const prisma = createPrismaMock(tx, { existingAccount: { id: "existing-1" } });
+  it("takes the advisory lock and refuses with 409 when the owner email is already registered anywhere", async () => {
+    const tx = createTxMockWithAccount({ id: "existing-1" });
+    const prisma = createPrismaMock(tx);
     const auditService = { record: jest.fn().mockResolvedValue({}) } as unknown as AuditService;
     const service = new PlatformService(prisma, auditService, createSpecializationServiceMock());
 
     await expect(service.createWorkshop(createDto(), { accountId: "platform-1", displayName: "Platform Admin" })).rejects.toBeInstanceOf(
       ConflictException,
     );
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    // The lock is taken BEFORE the read, and nothing is written after the
+    // refusal. That ordering is the whole reason this check moved inside
+    // the transaction rather than staying a read-then-write race two
+    // concurrent super admins could both win.
+    expect(tx.$executeRaw).toHaveBeenCalled();
+    expect(tx.tenant.create).not.toHaveBeenCalled();
   });
 
-  it("rejects when a soft-target start count exceeds the selected plan's ceiling", async () => {
-    const tx = createTxMock();
+  it("rejects before the transaction when the draft asks for more branches than the plan allows", async () => {
+    const tx = createTxMockWithAccount();
     const prisma = createPrismaMock(tx);
     (prisma.plan.findUniqueOrThrow as jest.Mock).mockResolvedValue({ id: "plan-1", maxBranches: 1, maxUsers: 20, maxWarehouses: 5 });
     const auditService = { record: jest.fn().mockResolvedValue({}) } as unknown as AuditService;
     const service = new PlatformService(prisma, auditService, createSpecializationServiceMock());
 
+    // Measured against the branches the draft actually creates, not
+    // against a soft target typed on a form and persisted nowhere --
+    // those three fields were removed precisely because nothing
+    // downstream ever read them.
     await expect(
-      service.createWorkshop(createDto({ allowedBranchesStart: 3 }), { accountId: "platform-1", displayName: "Platform Admin" }),
-    ).rejects.toBeInstanceOf(ConflictException);
+      service.createWorkshop(
+        createDto({
+          branches: [
+            { name: "Main", code: "MAIN" },
+            { name: "Second", code: "SECOND" },
+          ],
+        }),
+        { accountId: "platform-1", displayName: "Platform Admin" },
+      ),
+    ).rejects.toBeTruthy();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("records a HIGH-risk audit entry naming the real creator, inside the same transaction", async () => {
-    const tx = createTxMock();
+    const tx = createTxMockWithAccount();
     const prisma = createPrismaMock(tx);
     const auditService = { record: jest.fn().mockResolvedValue({}) } as unknown as AuditService;
     const service = new PlatformService(prisma, auditService, createSpecializationServiceMock());
