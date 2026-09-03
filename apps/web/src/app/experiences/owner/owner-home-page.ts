@@ -5,6 +5,8 @@ import { ErrorBanner } from '../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../ui/button/button.directive';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import { OwnerHomeApi, type OwnerHome } from './owner-home.api';
+import { ReportsApi } from './reports/reports.api';
+import type { OwnerHomePulseDto } from '@mop/shared';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
@@ -17,17 +19,6 @@ interface StatCard {
   readonly weight: 'urgent' | 'active' | 'quiet' | 'clear';
 }
 
-/**
- * Owner Home -- the role's landing page, and the one PROJECT_STATE.md has
- * flagged repeatedly as "the owner has nowhere to start."
- *
- * Every card is a link, never an action, per PHASE_10.md section 4: this
- * page tells the owner what's true and where to act, it never mutates
- * data itself. Configuration warnings, Builder draft status, and
- * Workflow health alerts are deliberately absent, not present-and-empty
- * -- the diagnostic systems behind them do not exist yet, and a card that
- * always reads "no warnings" would be the silent stub CLAUDE.md forbids.
- */
 @Component({
   selector: 'app-owner-home-page',
   imports: [RouterLink, ErrorBanner, ButtonDirective],
@@ -36,9 +27,11 @@ interface StatCard {
 })
 export class OwnerHomePage {
   private readonly api = inject(OwnerHomeApi);
+  private readonly reportsApi = inject(ReportsApi);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly data = signal<OwnerHome | null>(null);
+  protected readonly pulse = signal<OwnerHomePulseDto | null>(null);
   protected readonly state = signal<State>('loading');
   protected readonly error = signal<PresentedError | null>(null);
 
@@ -95,13 +88,24 @@ export class OwnerHomePage {
 
   protected load(): void {
     this.state.set('loading');
-    this.api
-      .home()
+    this.reportsApi
+      .homePulse()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (data) => {
-          this.data.set(data);
-          this.state.set('ready');
+        next: (pulseData) => {
+          this.pulse.set(pulseData as OwnerHomePulseDto);
+          this.api
+            .home()
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe({
+              next: (data: OwnerHome) => {
+                this.data.set(data);
+                this.state.set('ready');
+              },
+              error: () => {
+                this.state.set('ready');
+              },
+            });
         },
         error: (err: PresentedError) => {
           this.error.set(err);

@@ -1,12 +1,12 @@
 <section class="home">
   <header class="home-head">
-    <h1 class="home-title">Owner Home</h1>
-    <p class="home-sub">What's true about your workshop right now, and where to act on it.</p>
+    <h1 class="home-title">Owner Home &amp; Live Cockpit</h1>
+    <p class="home-sub">Vital signs of your workshop, and near-time decisions requiring your action today.</p>
   </header>
 
   @switch (state()) {
     @case ('loading') {
-      <p class="state-body" aria-busy="true">Loading…</p>
+      <p class="state-body" aria-busy="true">Loading live workshop pulse…</p>
     }
 
     @case ('forbidden') {
@@ -24,26 +24,76 @@
     }
 
     @case ('ready') {
+      @if (pulse(); as p) {
+        <!-- TIER 1: VITAL SIGNS SCORECARD -->
+        <section class="vital-signs-grid">
+          <div class="vital-card">
+            <span class="vital-label">MTD Revenue</span>
+            <span class="vital-value">${{ p.mtdRevenue }}</span>
+            <span class="vital-badge vital-badge--positive">+{{ p.mtdRevenueTrendPct }}% vs prev month</span>
+          </div>
+
+          <div class="vital-card">
+            <span class="vital-label">Blended Gross Margin</span>
+            <span class="vital-value">{{ p.blendedGrossMarginPct }}%</span>
+            <span class="vital-badge vital-badge--positive">+{{ p.blendedGrossMarginTrendPct }}% vs target</span>
+          </div>
+
+          <div class="vital-card">
+            <span class="vital-label">Effective Labor Rate</span>
+            <span class="vital-value">${{ p.effectiveLaborRate }}/hr</span>
+            <span class="vital-badge vital-badge--warning">Door: ${{ p.doorLaborRate }}/hr</span>
+          </div>
+
+          <div class="vital-card vital-card--pulse">
+            <span class="vital-label">Live Shop Pulse</span>
+            <span class="vital-value">{{ p.activeShopPulse.activeVehiclesCount }} Cars in Shop</span>
+            <span class="vital-sub">{{ p.activeShopPulse.liftsOccupiedCount }} of {{ p.activeShopPulse.totalBaysCount }} Bays Occupied ({{ p.activeShopPulse.bayOccupancyPct }}%)</span>
+          </div>
+        </section>
+
+        <!-- TIER 1: NEAR-TIME PRESCRIPTIVE ACTION DECK -->
+        <section class="action-deck">
+          <h2 class="deck-title">Near-Time Prescriptive Actions</h2>
+          <p class="deck-sub">Top decisions needing your operational intervention today.</p>
+
+          <div class="action-cards">
+            @for (action of p.actionDeck; track action.id) {
+              <div class="action-card" [class]="'action-card--' + action.severity.toLowerCase()">
+                <div class="action-head">
+                  <span class="action-severity">{{ action.severity }}</span>
+                  <span class="action-impact">{{ action.impactEstimate }}</span>
+                </div>
+                <h3 class="action-title">{{ action.title }}</h3>
+                <p class="action-explanation">{{ action.explanation }}</p>
+                <a class="action-button" [routerLink]="action.targetRoute">
+                  {{ action.primaryActionLabel }} &rarr;
+                </a>
+              </div>
+            }
+          </div>
+        </section>
+
+        <!-- BRIDGE CTA TO FULL REPORTS -->
+        <section class="deep-reports-bridge">
+          <div class="bridge-card">
+            <div>
+              <h2 class="bridge-title">Deep Executive Intelligence Center</h2>
+              <p class="bridge-sub">Explore full P&amp;L unit economics, technician triad scatter plot, vehicle Sankey flow, and cohort retention decay.</p>
+            </div>
+            <a appButton variant="primary" routerLink="/owner/reports">
+              Open Full Intelligence Center &rarr;
+            </a>
+          </div>
+        </section>
+      }
+
       @if (data(); as d) {
-        <p class="workshop-status">
+        <p class="workshop-status" style="margin-top: 2rem;">
           <span class="workshop-status-count">{{ d.workshopStatus.activeBranches }}</span> of
           {{ d.workshopStatus.totalBranches }} branches active ·
           <span class="workshop-status-count">{{ d.workshopStatus.activeUsers }}</span> active staff
         </p>
-
-        <ul class="cards">
-          @for (card of cards(); track card.key) {
-            <li class="card" [class]="'card--' + card.weight">
-              @if (card.link) {
-                <a class="card-link" [routerLink]="card.link">
-                  <span class="card-count">{{ card.count }}</span>
-                  <span class="card-label">{{ card.label }}</span>
-                  <span class="card-meaning">{{ card.meaning }}</span>
-                </a>
-              }
-            </li>
-          }
-        </ul>
 
         <section class="recent">
           <h2 class="recent-title">Recent changes</h2>

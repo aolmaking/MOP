@@ -204,6 +204,30 @@ export interface CustomersReport {
 export class ReportsApi {
   private readonly http = inject(HttpClient);
 
+  homePulse(branchId?: string): Observable<unknown> {
+    return this.http.get<unknown>('/api/v1/organization/reports/home-pulse', {
+      params: branchId ? { branchId } : {},
+    });
+  }
+
+  labor(branchId?: string): Observable<unknown> {
+    return this.http.get<unknown>('/api/v1/organization/reports/labor', {
+      params: branchId ? { branchId } : {},
+    });
+  }
+
+  pipeline(branchId?: string): Observable<unknown> {
+    return this.http.get<unknown>('/api/v1/organization/reports/pipeline', {
+      params: branchId ? { branchId } : {},
+    });
+  }
+
+  salesConversion(branchId?: string): Observable<unknown> {
+    return this.http.get<unknown>('/api/v1/organization/reports/sales-conversion', {
+      params: branchId ? { branchId } : {},
+    });
+  }
+
   overview(params: ReportRangeParams): Observable<OverviewReport> {
     return this.http.get<OverviewReport>('/api/v1/organization/reports/overview', { params: toHttpParams(params) });
   }

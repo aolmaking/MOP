@@ -9,13 +9,15 @@ import { ReportsOperationsService } from "./reports-operations.service";
 import { ReportsFinancialService } from "./reports-financial.service";
 import { ReportsInventoryService } from "./reports-inventory.service";
 import { ReportsCustomersService } from "./reports-customers.service";
+import { ActionDeckService } from "./action-deck.service";
+import { ReportsLaborService } from "./reports-labor.service";
+import { ReportsPipelineService } from "./reports-pipeline.service";
+import { ReportsSalesConversionService } from "./reports-sales-conversion.service";
 
 /**
  * Owner's Reports & Analytics. Distinct from `insights/analyst-reporting/`
  * (Data Analyst's company-wide report) and `control/platform/reports/` (Platform
- * Super Admin's view of this workshop as a customer of MOP) -- three
- * different audiences reading overlapping data through different scoping
- * and permission rules, not one report reused three ways.
+ * Super Admin's view of this workshop as a customer of MOP).
  */
 @Module({
   imports: [DatabaseModule, AuthModule, AccessModule, InventoryModule],
@@ -26,6 +28,10 @@ import { ReportsCustomersService } from "./reports-customers.service";
     ReportsFinancialService,
     ReportsInventoryService,
     ReportsCustomersService,
+    ActionDeckService,
+    ReportsLaborService,
+    ReportsPipelineService,
+    ReportsSalesConversionService,
   ],
 })
 export class ReportsModule {}

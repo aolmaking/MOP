@@ -71,6 +71,28 @@
             <app-financial-section [data]="data" />
           }
         }
+        @case ('labor') {
+          @if (laborData(); as data) {
+            <div class="sections-container" style="display: flex; flex-direction: column; gap: 1.5rem;">
+              <app-scatter-matrix [technicians]="$any(data).technicians" />
+            </div>
+          }
+        }
+        @case ('pipeline') {
+          @if (pipelineData(); as data) {
+            <div class="sections-container" style="display: flex; flex-direction: column; gap: 1.5rem;">
+              <app-sankey-chart [nodes]="$any(data).nodes" />
+              <app-bay-gantt [bays]="$any(data).bayOccupancy" />
+            </div>
+          }
+        }
+        @case ('sales-conversion') {
+          @if (salesData(); as data) {
+            <div class="sections-container" style="display: flex; flex-direction: column; gap: 1.5rem;">
+              <app-waterfall-chart [data]="$any(data)" />
+            </div>
+          }
+        }
         @case ('inventory') {
           @if (inventory(); as data) {
             <app-inventory-section [data]="data" />

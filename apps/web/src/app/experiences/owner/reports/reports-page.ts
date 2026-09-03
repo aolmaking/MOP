@@ -19,13 +19,16 @@ import { FinancialSection } from './sections/financial-section';
 import { InventorySection } from './sections/inventory-section';
 import { CustomersSection } from './sections/customers-section';
 
-type Tab = 'overview' | 'operations' | 'financial' | 'inventory' | 'customers';
+type Tab = 'overview' | 'operations' | 'financial' | 'labor' | 'pipeline' | 'sales-conversion' | 'inventory' | 'customers';
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
 const TABS: readonly { key: Tab; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'operations', label: 'Operations' },
   { key: 'financial', label: 'Financial' },
+  { key: 'labor', label: 'Labor & Techs' },
+  { key: 'pipeline', label: 'Pipeline & Bays' },
+  { key: 'sales-conversion', label: 'Sales Waterfall' },
   { key: 'inventory', label: 'Inventory' },
   { key: 'customers', label: 'Customers' },
 ];
@@ -49,9 +52,27 @@ function defaultFrom(): string {
  * answer, sharing the same date-range/branch filter bar so a comparison
  * made on one tab means the same thing on the next.
  */
+import { SankeyChartComponent } from '../../../ui/charts/sankey-chart/sankey-chart.component';
+import { ScatterMatrixComponent } from '../../../ui/charts/scatter-matrix/scatter-matrix.component';
+import { BayGanttComponent } from '../../../ui/charts/bay-gantt/bay-gantt.component';
+import { WaterfallChartComponent } from '../../../ui/charts/waterfall-chart/waterfall-chart.component';
+
 @Component({
   selector: 'app-reports-page',
-  imports: [FormsModule, ErrorBanner, ButtonDirective, OverviewSection, OperationsSection, FinancialSection, InventorySection, CustomersSection],
+  imports: [
+    FormsModule,
+    ErrorBanner,
+    ButtonDirective,
+    OverviewSection,
+    OperationsSection,
+    FinancialSection,
+    InventorySection,
+    CustomersSection,
+    SankeyChartComponent,
+    ScatterMatrixComponent,
+    BayGanttComponent,
+    WaterfallChartComponent,
+  ],
   templateUrl: './reports-page.html',
   styleUrl: './reports-page.css',
 })
@@ -71,6 +92,9 @@ export class ReportsPage {
   protected readonly overview = signal<OverviewReport | null>(null);
   protected readonly operations = signal<OperationsReport | null>(null);
   protected readonly financial = signal<FinancialReport | null>(null);
+  protected readonly laborData = signal<unknown | null>(null);
+  protected readonly pipelineData = signal<unknown | null>(null);
+  protected readonly salesData = signal<unknown | null>(null);
   protected readonly inventory = signal<InventoryAnalyticsReport | null>(null);
   protected readonly customers = signal<CustomersReport | null>(null);
 
@@ -134,6 +158,42 @@ export class ReportsPage {
           .subscribe({
             next: (r) => {
               this.financial.set(r);
+              onReady();
+            },
+            error: onError,
+          });
+        break;
+      case 'labor':
+        this.api
+          .labor()
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe({
+            next: (r) => {
+              this.laborData.set(r);
+              onReady();
+            },
+            error: onError,
+          });
+        break;
+      case 'pipeline':
+        this.api
+          .pipeline()
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe({
+            next: (r) => {
+              this.pipelineData.set(r);
+              onReady();
+            },
+            error: onError,
+          });
+        break;
+      case 'sales-conversion':
+        this.api
+          .salesConversion()
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe({
+            next: (r) => {
+              this.salesData.set(r);
               onReady();
             },
             error: onError,

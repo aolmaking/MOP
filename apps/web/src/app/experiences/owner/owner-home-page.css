@@ -1,188 +1,216 @@
-/*
- * Owner Home. Every card is a link, never an action -- clicking one
- * takes the owner to the page that can actually change the number, this
- * page never mutates anything itself.
- */
-
 .home {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  max-width: 72rem;
+  gap: 1.5rem;
 }
 
 .home-head {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--text);
+  gap: 0.25rem;
 }
 
 .home-title {
-  color: var(--white);
-  font-size: var(--text-md);
-  font-weight: 600;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-heading, #0f172a);
 }
 
 .home-sub {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+  color: var(--text-muted, #64748b);
+  font-size: 0.875rem;
 }
 
-.workshop-status {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-}
-
-.workshop-status-count {
-  color: var(--white);
-  font-weight: 600;
-}
-
-/* --- cards ------------------------------------------------------------ */
-
-.cards {
+/* Tier 1 Vital Signs Scorecard */
+.vital-signs-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
 }
 
-.card {
-  border-inline-start: 3px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-}
-
-.card-link {
+.vital-card {
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 0.5rem;
+  padding: 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-4);
-  color: inherit;
+  gap: 0.375rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.vital-card--pulse {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #ffffff;
+  border-color: #334155;
+}
+
+.vital-card--pulse .vital-label,
+.vital-card--pulse .vital-sub {
+  color: #94a3b8;
+}
+
+.vital-card--pulse .vital-value {
+  color: #38bdf8;
+}
+
+.vital-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #64748b);
+}
+
+.vital-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-heading, #0f172a);
+  line-height: 1.1;
+}
+
+.vital-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  width: fit-content;
+}
+
+.vital-badge--positive {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.vital-badge--warning {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+/* Tier 1 Action Deck */
+.action-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.deck-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-heading, #0f172a);
+}
+
+.deck-sub {
+  font-size: 0.875rem;
+  color: var(--text-muted, #64748b);
+  margin-top: -0.5rem;
+}
+
+.action-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.action-card {
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-inline-start: 4px solid #64748b;
+  background: var(--bg-card, #ffffff);
+  border-top: 1px solid var(--border, #e2e8f0);
+  border-end: 1px solid var(--border, #e2e8f0);
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+
+.action-card--critical {
+  border-inline-start-color: #ef4444;
+  background: #fef2f2;
+}
+
+.action-card--warning {
+  border-inline-start-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.action-card--opportunity {
+  border-inline-start-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.action-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.action-severity {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.action-impact {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.action-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.action-explanation {
+  font-size: 0.8125rem;
+  color: #334155;
+  line-height: 1.4;
+}
+
+.action-button {
+  margin-top: 0.5rem;
+  display: inline-block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #2563eb;
   text-decoration: none;
 }
 
-.card-count {
-  color: var(--white);
-  font-size: var(--text-lg);
+.action-button:hover {
+  text-decoration: underline;
+}
+
+/* Deep Intelligence Bridge */
+.deep-reports-bridge {
+  background: linear-gradient(90deg, #1e1b4b 0%, #312e81 100%);
+  color: #ffffff;
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+}
+
+.bridge-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.bridge-title {
+  font-size: 1.125rem;
   font-weight: 700;
 }
 
-.card-label {
-  color: var(--text);
-  font-size: var(--text-sm);
-  font-weight: 600;
+.bridge-sub {
+  font-size: 0.875rem;
+  color: #c7d2fe;
 }
-
-.card-meaning {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
-/* Weight carries the same edge-colour language as every other priority
-   signal in the product -- urgent gets the red, active a neutral accent,
-   quiet nothing extra, clear the calmest border of all. */
-.card--urgent {
-  border-inline-start-color: var(--danger);
-}
-
-.card--active {
-  border-inline-start-color: var(--brand);
-}
-
-.card--clear {
-  border-inline-start-color: var(--success, var(--border));
-}
-
-/* --- recent changes ---------------------------------------------------- */
 
 .recent {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border);
-}
-
-.recent-title {
-  color: var(--white);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-label);
-}
-
-.recent-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.recent-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  font-size: var(--text-sm);
-}
-
-.recent-actor {
-  color: var(--white);
-  font-weight: 600;
-}
-
-.recent-action {
-  color: var(--text-muted);
-}
-
-.recent-when {
-  margin-inline-start: auto;
-  color: var(--text-faint);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
-
-.recent-more {
-  align-self: flex-start;
-  color: var(--brand-text);
-  font-size: var(--text-sm);
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
-}
-
-/* --- states -------------------------------------------------------- */
-
-.state {
-  padding: var(--space-5) 0;
-  padding-inline-start: var(--space-4);
-  border-inline-start: 3px solid var(--border-strong);
-  max-inline-size: 42rem;
-}
-
-.state-title {
-  color: var(--white);
-  font-size: var(--text-md);
-  font-weight: 600;
-}
-
-.state-body {
-  margin-block-start: var(--space-2);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
-}
-
-.state-error {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-3);
+  margin-top: 1rem;
 }

@@ -8,14 +8,14 @@ import { ReportsOperationsService } from "./reports-operations.service";
 import { ReportsFinancialService } from "./reports-financial.service";
 import { ReportsInventoryService } from "./reports-inventory.service";
 import { ReportsCustomersService } from "./reports-customers.service";
+import { ActionDeckService } from "./action-deck.service";
+import { ReportsLaborService } from "./reports-labor.service";
+import { ReportsPipelineService } from "./reports-pipeline.service";
+import { ReportsSalesConversionService } from "./reports-sales-conversion.service";
 
 /**
  * Owner's Reports & Analytics (docs/detailed-specs/tenant-owner.md).
- * Every section shares the same date-range/branch query shape
- * (date-range.util.ts) and the same permission (`reports.owner.view`) --
- * "report visibility control" (a per-role, per-tab toggle) is not built
- * yet, same reason as Pricing's "Who Can Handle Money": it needs the
- * platform-lock-respecting mechanism, deserving its own pass.
+ * Serves Tier 1 (Home Pulse & Action Deck) and Tier 2 (Deep Intelligence Center).
  */
 @Controller("organization/reports")
 @UseGuards(SessionGuard)
@@ -26,8 +26,21 @@ export class ReportsController {
     private readonly financial: ReportsFinancialService,
     private readonly inventory: ReportsInventoryService,
     private readonly customers: ReportsCustomersService,
+    private readonly actionDeck: ActionDeckService,
+    private readonly labor: ReportsLaborService,
+    private readonly pipeline: ReportsPipelineService,
+    private readonly salesConversion: ReportsSalesConversionService,
     private readonly access: EffectiveAccessService,
   ) {}
+
+  @Get("home-pulse")
+  async getHomePulse(
+    @CurrentSession() session: SessionContext,
+    @Query("branchId") branchId?: string,
+  ) {
+    const tenantId = await this.require(session);
+    return this.wrap(() => this.actionDeck.buildHomePulse(tenantId, branchId));
+  }
 
   @Get("overview")
   async getOverview(
@@ -46,9 +59,6 @@ export class ReportsController {
     @Query("from") from?: string,
     @Query("to") to?: string,
     @Query("branchId") branchId?: string,
-    // Operations buckets its volume series by this exactly as Financial
-    // buckets its trend. Omitting it here silently pinned the Owner's
-    // day/week/month control to day on this tab only.
     @Query("groupBy") groupBy?: string,
   ) {
     const tenantId = await this.require(session);
@@ -65,6 +75,33 @@ export class ReportsController {
   ) {
     const tenantId = await this.require(session);
     return this.wrap(() => this.financial.build(tenantId, { from, to, branchId, groupBy }));
+  }
+
+  @Get("labor")
+  async getLabor(
+    @CurrentSession() session: SessionContext,
+    @Query("branchId") branchId?: string,
+  ) {
+    const tenantId = await this.require(session);
+    return this.wrap(() => this.labor.build(tenantId, { branchId }));
+  }
+
+  @Get("pipeline")
+  async getPipeline(
+    @CurrentSession() session: SessionContext,
+    @Query("branchId") branchId?: string,
+  ) {
+    const tenantId = await this.require(session);
+    return this.wrap(() => this.pipeline.build(tenantId, { branchId }));
+  }
+
+  @Get("sales-conversion")
+  async getSalesConversion(
+    @CurrentSession() session: SessionContext,
+    @Query("branchId") branchId?: string,
+  ) {
+    const tenantId = await this.require(session);
+    return this.wrap(() => this.salesConversion.build(tenantId, { branchId }));
   }
 
   @Get("inventory")
