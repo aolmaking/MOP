@@ -45,6 +45,43 @@ into team review and then QC before the money
 (`walkthrough-contrast.http.spec.ts`). That is the capability engine
 deciding, not a hardcoded path.
 
+### The live journey (added 2026-09-03)
+
+Every one of those moves is now visible, as it happens, to the three
+people who care: the technician holding the spanner, the team leader
+chasing the job, and the customer waiting for the car. One work order has
+one journey; the same projection serves all three, in three vocabularies,
+so they can never be told different stories about the same repair.
+
+It is a **projection, not a store**. There is no journey event table:
+every event is read back from the record that already proves it happened
+and is dated by that record's own timestamp — the inspection row, the
+hand-over row, the payment row. Nothing is inferred from current status,
+so a job sitting in WAITING_PARTS with no part request on it shows no
+"part requested" event. The workflow remains the only state machine; the
+journey reads, interprets and projects it, and never decides.
+
+Proven over real HTTP in `apps/api/src/testing/journey.http.spec.ts` (12
+scenarios) — intake through CLOSED with a parts loop in the middle,
+asserting at every transition that the event appeared, carried the
+record's own timestamp, and that the previous stages stayed historical —
+and in `journey-events.integration.spec.ts` (8) for the projection rules
+themselves. Three concurrent cars keep three separate journeys; a
+technician with no assignment, a team leader outside the roster, and
+another workshop's manager are all refused, the last two as not-found so
+the ids cannot be enumerated. The customer's copy is missing the internal
+events rather than rewording them: 17 events where staff see 23, with no
+staff name, no warehouse and no shop-floor reason anywhere in it.
+
+Verified in a browser on all three surfaces against one real work order:
+the strip auto-scrolls to where the car actually is, the "Now" panel
+gives since / duration / who is owed / why / what next, the history
+renders in order with real actors, and issuing a part from a separate
+session moved the open journey from "Waiting for parts / 23 events" to
+"In progress / 25 events" with no page reload. The manager's one offered
+action moved the job for real and then disappeared, because the server
+stopped offering a move that was no longer available.
+
 ---
 
 ## 2. Deferred by the plan — nothing here is broken, all of it is switched off
@@ -114,10 +151,60 @@ customer who goes quiet strands the job with no way out at all. Leaving
 it IN_PROGRESS keeps M-3's withdraw guard working. Closing it needs a
 staff exit from that state, which is a workflow-graph change.
 
-### 3.4 "The customer opened the link" is a state, not a time
+**The live journey does not paper over this.** WAITING_CUSTOMER has full
+labels in all three vocabularies and would draw correctly the moment
+something moved a job there — but nothing does, so the journey shows what
+is actually true: the work order reads IN_PROGRESS, and the outstanding
+decision appears as an unanswered `decision.asked` in the history and as
+"a customer decision is still outstanding" on the headline. A strip that
+invented a WAITING_CUSTOMER stage the workflow had never entered would be
+the second state machine the journey exists not to be.
 
-`CustomerDecisionRequest` has no `viewedAt` column. A manager can see
-*that* a decision was seen, never *when*. Noted in the walkthrough.
+### 3.4 ~~"The customer opened the link" is a state, not a time~~ — FIXED 2026-09-03
+
+`CustomerDecisionRequest` now has `viewedAt`, written in the same update
+that sets the `VIEWED` status (`CustomerDecisionService.read`), so the
+journey can say *when* the customer opened the request and not only that
+they did. Two sibling columns were added for the same reason and are
+covered by the same migration
+(`20260903090000_journey_event_timestamps`): `PartRequest.approvedAt`,
+because `updatedAt` on a request that was later issued and used is a
+different moment entirely, and
+`PartReturnRequest.clarificationAskedAt`/`clarificationAnsweredAt`, so a
+clarification cycle reads as the pair of dated events it actually is.
+Proven in `journey.http.spec.ts` — the event's timestamp is asserted
+equal to the column, not merely present.
+
+### 3.4b Three write-only fields and a permanently-wrong health check — FIXED 2026-09-03
+
+Found while building the journey, all three the same shape: a field that
+something reads and nothing writes.
+
+`IssuedItem.arrivedAt`, `receivedAt` and `usedAt` have existed since the
+model was written and **nothing ever set any of them**, while two places
+read them. The technician's "I've got it" and "it's fitted" moved the
+request's status and left the hand-over row undated, so the only
+per-hand-over record of when each step happened was permanently null.
+`PartRequestService` now stamps them at the single transition choke point
+every path goes through — including `resolveRejectedReturn`, which
+reaches USED without going through `move()`.
+
+The consequence was worse than a missing timestamp. The Owner's
+workflow-health check `PART_ARRIVAL_UNCONFIRMED` filtered on
+`arrivedAt: null` with **no status filter**, so it reported every part
+the workshop had ever issued — fitted months ago, on closed jobs — as an
+unconfirmed arrival, forever. That page filled with permanent noise,
+which is how a real warning stops being read. It is now scoped to
+requests genuinely still in transit; the filter is still required even
+with the stamping, because the graph deliberately lets an in-house
+hand-over go ISSUED -> RECEIVED_BY_TECHNICIAN without writing "an ARRIVED
+nobody witnessed".
+
+Separately, the customer's journey used to be scoped through
+`currentService` — the list of jobs in a *live* status — so a customer
+watching their repair was refused with a 403 the moment it closed, on the
+one screen whose whole purpose is telling them it finished. Access is now
+scoped by ownership of the work order, which is the actual question.
 
 ### 3.5 Nothing is pushed, so CI has never been observed green
 

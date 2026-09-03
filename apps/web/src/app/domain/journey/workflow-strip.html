@@ -6,8 +6,9 @@
     [class.journey--done]="j.finished"
     [class.journey--compact]="compact()"
   >
-    <!-- Where are we, and why. Somebody scanning this wants "whose move
-         is it" before they want the diagram. -->
+    <!-- LAYER 1 — where are we. Somebody scanning this wants "whose move
+         is it" before they want the diagram, so the sentence sits above
+         the strip rather than beneath it. -->
     <header class="journey-head">
       <p class="journey-headline">{{ j.headline }}</p>
 
@@ -15,107 +16,180 @@
         <p class="journey-owner">
           <span class="journey-owner-label">Waiting on</span>
           <span class="journey-owner-who">{{ owner.who }}</span>
-          @if (waitingFor(); as elapsed) {
+          @if (waitingElapsed(); as elapsed) {
             <span class="journey-owner-since">{{ elapsed }}</span>
           }
         </p>
       }
     </header>
 
-    <ol class="stages">
-      @for (stage of j.stages; track stage.status) {
-        <li
-          class="stage"
-          [class.stage--done]="stage.state === 'DONE'"
-          [class.stage--current]="stage.state === 'CURRENT'"
-          [class.stage--waiting]="stage.state === 'WAITING'"
-          [class.stage--blocked]="stage.state === 'BLOCKED'"
-          [class.stage--ahead]="stage.state === 'AHEAD'"
-          [class.stage--open]="isOpen(stage)"
-          [attr.aria-current]="stage.state === 'CURRENT' || stage.state === 'WAITING' || stage.state === 'BLOCKED' ? 'step' : null"
-        >
-          <!-- A button only where there is something behind it. A control
-               that does nothing when pressed teaches people not to press. -->
-          @if (stage.facts.length > 0) {
-            <button
-              class="stage-main stage-main--pressable"
-              type="button"
-              [attr.aria-expanded]="isOpen(stage)"
-              (click)="toggleStage(stage)"
-            >
-              <span class="stage-mark" aria-hidden="true">{{ mark(stage) }}</span>
-              <span class="stage-body">
+    <!-- Horizontal by default and at every width. On a narrow screen it
+         SCROLLS rather than stacking: the sequence left-to-right IS the
+         chronology, and turning it into a vertical pile on a phone would
+         destroy the one thing the strip exists to show. -->
+    <!-- `tabindex` because the rail scrolls: a keyboard user on a narrow
+         screen must be able to reach the stages that are off to the side
+         without a pointer. -->
+    <div #rail class="stages-rail" role="group" aria-label="Journey" tabindex="0">
+      <ol class="stages">
+        @for (stage of j.stages; track stage.status) {
+          <li
+            class="stage"
+            [class.stage--done]="stage.state === 'DONE'"
+            [class.stage--current]="stage.state === 'CURRENT'"
+            [class.stage--waiting]="stage.state === 'WAITING'"
+            [class.stage--blocked]="stage.state === 'BLOCKED'"
+            [class.stage--ahead]="stage.state === 'AHEAD'"
+            [class.stage--open]="isOpen(stage)"
+            [attr.aria-current]="
+              stage.state === 'CURRENT' || stage.state === 'WAITING' || stage.state === 'BLOCKED' ? 'step' : null
+            "
+          >
+            <!-- A button only where there is something behind it. A control
+                 that does nothing when pressed teaches people not to press. -->
+            @if (stage.facts.length > 0) {
+              <button
+                class="stage-main stage-main--pressable"
+                type="button"
+                [attr.aria-expanded]="isOpen(stage)"
+                (click)="toggleStage(stage)"
+              >
+                <span class="stage-mark" aria-hidden="true">{{ mark(stage) }}</span>
                 <span class="stage-label">{{ stage.label }}</span>
-                @if (stage.detail) {
-                  <span class="stage-detail">{{ stage.detail }}</span>
-                }
-              </span>
-              @if (stage.at) {
-                <span class="stage-when">{{ when(stage.at) }}</span>
-              }
-              <span class="visually-hidden">{{ spoken(stage) }}</span>
-            </button>
-          } @else {
-            <span class="stage-main">
-              <span class="stage-mark" aria-hidden="true">{{ mark(stage) }}</span>
-              <span class="stage-body">
+                <span class="stage-when">{{ stage.at ? when(stage.at) : '' }}</span>
+                <span class="visually-hidden">{{ spoken(stage) }}</span>
+              </button>
+            } @else {
+              <span class="stage-main">
+                <span class="stage-mark" aria-hidden="true">{{ mark(stage) }}</span>
                 <span class="stage-label">{{ stage.label }}</span>
-                @if (stage.detail) {
-                  <span class="stage-detail">{{ stage.detail }}</span>
-                }
+                <span class="stage-when">{{ stage.at ? when(stage.at) : '' }}</span>
+                <span class="visually-hidden">{{ spoken(stage) }}</span>
               </span>
-              @if (stage.at) {
-                <span class="stage-when">{{ when(stage.at) }}</span>
-              }
-              <span class="visually-hidden">{{ spoken(stage) }}</span>
-            </span>
-          }
+            }
+          </li>
+        }
+      </ol>
+    </div>
 
-          @if (isOpen(stage)) {
-            <dl class="stage-facts">
-              @for (fact of stage.facts; track fact.label) {
-                <div class="fact">
-                  <dt class="fact-label">{{ fact.label }}</dt>
-                  <dd class="fact-value">{{ fact.value }}</dd>
-                </div>
-              }
-            </dl>
+    <!-- The facts drawer sits UNDER the rail, not inside it: opening a
+         panel inside a horizontally scrolling row puts the content
+         somewhere the reader has to go looking for. -->
+    @for (stage of j.stages; track stage.status) {
+      @if (isOpen(stage)) {
+        <div class="stage-open">
+          <p class="stage-open-title">
+            {{ stage.label }}
+            @if (stage.at) {
+              <span class="stage-open-when">{{ when(stage.at) }}</span>
+            }
+          </p>
+          @if (stage.detail) {
+            <p class="stage-open-detail">{{ stage.detail }}</p>
           }
-        </li>
-      }
-    </ol>
-
-    @if (!compact()) {
-      <!-- What happened, and what happens next. The two questions a
-           strip alone cannot answer. -->
-      @if (j.happened || j.next) {
-        <div class="narrative">
-          @if (j.happened) {
-            <p class="narrative-line narrative-line--past">{{ j.happened }}</p>
-          }
-          @if (j.next) {
-            <p class="narrative-line narrative-line--next">{{ j.next }}</p>
-          }
+          <dl class="stage-facts">
+            @for (fact of stage.facts; track fact.label) {
+              <div class="fact">
+                <dt class="fact-label">{{ fact.label }}</dt>
+                <dd class="fact-value">{{ fact.value }}</dd>
+              </div>
+            }
+          </dl>
         </div>
       }
+    }
 
-      @if (j.history.length > 0) {
-        <!-- Secondary on purpose: the full log is depth, not the summary. -->
+    @if (!compact()) {
+      <!-- LAYER 2 — the current stage, in full. Where, since when, for how
+           long, why, and what has to happen for it to move. -->
+      <section class="now" [class.now--blocked]="j.blocked" [class.now--waiting]="j.waiting">
+        <h3 class="now-title">
+          <span class="now-title-label">Now</span>
+          <span class="now-title-stage">{{ j.current.label }}</span>
+        </h3>
+
+        <dl class="now-grid">
+          @if (j.current.since) {
+            <div class="now-cell">
+              <dt class="now-key">Since</dt>
+              <dd class="now-value">{{ fullWhen(j.current.since) }}</dd>
+            </div>
+          }
+          @if (forElapsed(); as elapsed) {
+            <div class="now-cell">
+              <dt class="now-key">In this stage</dt>
+              <dd class="now-value">{{ elapsed }}</dd>
+            </div>
+          }
+          @if (j.current.waitingOn) {
+            <div class="now-cell">
+              <dt class="now-key">Waiting on</dt>
+              <dd class="now-value">{{ j.current.waitingOn }}</dd>
+            </div>
+          }
+          @if (waitingElapsed(); as elapsed) {
+            <div class="now-cell">
+              <dt class="now-key">Waiting</dt>
+              <dd class="now-value">{{ elapsed }}</dd>
+            </div>
+          }
+        </dl>
+
+        @if (j.current.reason) {
+          <p class="now-reason">{{ j.current.reason }}</p>
+        }
+        @if (j.current.next) {
+          <p class="now-next">{{ j.current.next }}</p>
+        }
+
+        <!-- LAYER 2b — only actions the SERVER confirmed are both allowed
+             and currently valid. An empty list means there is genuinely
+             nothing for this reader to do, which is a real answer. -->
+        @if (j.actions.length > 0) {
+          <div class="now-actions">
+            @for (action of j.actions; track action.key) {
+              <button class="now-action" type="button" [title]="action.hint ?? ''" (click)="run(action)">
+                {{ action.label }}
+              </button>
+            }
+          </div>
+        }
+      </section>
+
+      @if (j.happened) {
+        <p class="narrative-line narrative-line--past">{{ j.happened }}</p>
+      }
+
+      <!-- LAYER 3 — what actually happened. Secondary on purpose: the log
+           is depth, not the summary, and it is the strip that answers the
+           first question somebody has. -->
+      @if (events().length > 0) {
         <button
           class="history-toggle"
           type="button"
           [attr.aria-expanded]="historyOpen()"
           (click)="historyOpen.set(!historyOpen())"
         >
-          {{ historyOpen() ? 'Hide history' : 'Show history (' + j.history.length + ')' }}
+          {{ historyOpen() ? 'Hide history' : 'Show history (' + events().length + ')' }}
         </button>
 
         @if (historyOpen()) {
           <ol class="history">
-            @for (entry of j.history; track $index) {
-              <li class="history-entry">
-                <span class="history-when">{{ when(entry.at) }}</span>
-                <span class="history-what">{{ entry.message }}</span>
+            @for (event of events(); track event.kind + event.at + $index; let i = $index) {
+              @if (newDay(event, i)) {
+                <li class="history-day">{{ dayOf(event.at) }}</li>
+              }
+              <li class="history-entry" [attr.data-kind]="event.kind">
+                <span class="history-when">{{ fullWhen(event.at) }}</span>
+                <span class="history-body">
+                  <span class="history-what">{{ event.message }}</span>
+                  @if (event.detail) {
+                    <span class="history-detail">{{ event.detail }}</span>
+                  }
+                </span>
+                @if (event.actor) {
+                  <span class="history-actor">{{ event.actor }}</span>
+                }
               </li>
             }
           </ol>

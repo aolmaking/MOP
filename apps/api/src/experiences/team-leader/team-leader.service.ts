@@ -277,21 +277,7 @@ export class TeamLeaderService {
    * assignments (P-81, docs/POLICY_DECISION_INVENTORY.md §8.B).
    */
   async vehicleHistory(tenantId: string, managedTechnicianIds: readonly string[], workOrderId: string) {
-    if (managedTechnicianIds.length === 0) {
-      throw new NotFoundException({ code: "work_order_not_found", message: "That job is not in your team." });
-    }
-
-    const covered = await this.prisma.task.findFirst({
-      where: {
-        tenantId,
-        workOrderId,
-        assignments: { some: { staffUserId: { in: [...managedTechnicianIds] } } },
-      },
-      select: { workOrderId: true },
-    });
-    if (!covered) {
-      throw new NotFoundException({ code: "work_order_not_found", message: "That job is not in your team." });
-    }
+    await this.requireInTeam(tenantId, managedTechnicianIds, workOrderId);
 
     const workOrder = await this.prisma.workOrder.findFirst({
       where: { id: workOrderId, tenantId },
@@ -302,6 +288,42 @@ export class TeamLeaderService {
     }
 
     return this.assetHistory.build(tenantId, workOrder.assetId, workOrderId);
+  }
+
+  /**
+   * Is this job in this Team Leader's roster at all?
+   *
+   * Scope is a TASK ASSIGNMENT to one of the technicians they manage --
+   * never `branchScope`, because a Team Leader may manage technicians
+   * across branches and must see all of them, and only them. Extracted
+   * so every read reaching a single work order asks the same question:
+   * two surfaces answering "is this mine" separately is how one of them
+   * ends up looser than the other.
+   *
+   * A job outside the roster reads as NOT FOUND, not as forbidden -- a
+   * distinguishable refusal would let a Team Leader enumerate which
+   * work-order ids exist in the rest of the workshop.
+   */
+  async requireInTeam(
+    tenantId: string,
+    managedTechnicianIds: readonly string[],
+    workOrderId: string,
+  ): Promise<void> {
+    const refuse = (): never => {
+      throw new NotFoundException({ code: "work_order_not_found", message: "That job is not in your team." });
+    };
+
+    if (managedTechnicianIds.length === 0) refuse();
+
+    const covered = await this.prisma.task.findFirst({
+      where: {
+        tenantId,
+        workOrderId,
+        assignments: { some: { staffUserId: { in: [...managedTechnicianIds] } } },
+      },
+      select: { workOrderId: true },
+    });
+    if (!covered) refuse();
   }
 
   /** Team Leader's own report, never the company-wide version (Phase 12). */

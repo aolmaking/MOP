@@ -161,9 +161,18 @@ export class CustomerDecisionService {
   async read(token: string): Promise<PublicDecision> {
     const request = await this.resolve(token);
     if (request.status === "SENT") {
-      await this.prisma.customerDecisionRequest.update({ where: { id: request.id }, data: { status: "VIEWED" } });
+      // `viewedAt` alongside the status, in the same write: the journey
+      // shows "the customer opened this, N hours ago", and a status with
+      // no timestamp can only ever answer the first half.
+      const viewedAt = new Date();
+      await this.prisma.customerDecisionRequest.update({
+        where: { id: request.id },
+        data: { status: "VIEWED", viewedAt },
+      });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (request as any).status = "VIEWED";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (request as any).viewedAt = viewedAt;
     }
     return this.present(request, await this.pricingVisible(request.tenantId), await this.approvalWeight(request.tenantId));
   }

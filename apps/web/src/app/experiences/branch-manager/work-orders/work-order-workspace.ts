@@ -5,7 +5,7 @@ import { Identifier } from '../../../ui/identifier/identifier';
 import { ErrorBanner } from '../../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../../ui/button/button.directive';
 import { DossierDrawer } from '../../../domain/dossier/dossier-drawer';
-import { WorkflowStrip } from '../../../domain/journey/workflow-strip';
+import { WorkflowStrip, type JourneyAction } from '../../../domain/journey/workflow-strip';
 import { pollJourney, type JourneyFeed } from '../../../domain/journey/journey-poller';
 import type { PresentedError } from '../../../runtime/http/error.interceptor';
 import { WorkOrdersApi, type WorkOrderDetail } from './work-orders.api';
@@ -111,20 +111,27 @@ export class WorkOrderWorkspace {
    * it and never moved, because the technician raised it and nobody
    * pressed anything since.
    *
-   * Offered whenever the job is not already with the customer. Whether
-   * the move is actually available is the graph's answer, not this
-   * page's guess -- a refusal comes back as the workshop's own sentence
-   * and is shown verbatim rather than translated into a nicer one.
+   * Reached through the journey's own action list, which is the only
+   * place that has asked BOTH questions: does the workshop's graph allow
+   * this move from here, and does this manager hold the permission. This
+   * page used to decide for itself from the status alone -- an
+   * approximation that offered the button on jobs the graph would refuse.
    */
   protected readonly requestingApproval = signal(false);
   protected readonly approvalError = signal<string | null>(null);
 
-  protected readonly canOfferApproval = computed(() => {
-    const status = this.detail()?.status;
-    return status !== undefined && status !== 'AWAITING_CUSTOMER_APPROVAL' && status !== 'CLOSED' && status !== 'CANCELLED';
-  });
+  /**
+   * An action the server offered, performed.
+   *
+   * Routed by the server's action KEY. An unrecognised key does nothing
+   * rather than guessing: a new server-side action reaches an old client
+   * as nothing, never as the wrong request.
+   */
+  protected runJourneyAction(action: JourneyAction): void {
+    if (action.key === 'request_approval') this.requestApproval();
+  }
 
-  protected requestApproval(): void {
+  private requestApproval(): void {
     this.requestingApproval.set(true);
     this.approvalError.set(null);
     this.api.requestApproval(this.id()).subscribe({

@@ -1,3 +1,4 @@
+import { journeyFixture } from '../../domain/journey/journey.fixture';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
@@ -20,7 +21,7 @@ function render(response: readonly CurrentServiceItem[] | { readonly error: unkn
     // The strip loads per job; failing it must not break the page, which
     // is why the component swallows the error -- stub it so the tests
     // exercise the succeeding path rather than that fallback.
-    journey: () => of({ stages: [], finished: false, waiting: false, blocked: false, headline: 'Your vehicle is being worked on.', happened: null, next: null, waitingOn: null, history: [] }),
+    journey: () => of(journeyFixture({ headline: 'Your vehicle is being worked on.' })),
   };
   TestBed.configureTestingModule({
     providers: [provideRouter([]), { provide: CustomerPortalApi, useValue: api }],

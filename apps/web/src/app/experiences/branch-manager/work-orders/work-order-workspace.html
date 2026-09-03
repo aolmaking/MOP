@@ -89,8 +89,19 @@
         @if (journey(); as j) {
           <!-- Same projection the technician and the customer read, in the
                manager's vocabulary: the headline names who owns the delay,
-               because unsticking it is their job. -->
-          <app-workflow-strip [journey]="j" />
+               because unsticking it is their job.
+
+               "Ask the customer" is offered from INSIDE this, because the
+               journey's actions are the only ones checked against both
+               the workshop's graph and this manager's real permission.
+               The button that used to sit further down this page decided
+               for itself, from the status alone, and could therefore be
+               refused after the press. -->
+          <app-workflow-strip [journey]="j" (act)="runJourneyAction($event)" />
+
+          @if (approvalError(); as message) {
+            <p class="band-error" role="alert">{{ message }}</p>
+          }
         }
 
         @if (reviewStage(); as stage) {
@@ -244,28 +255,6 @@
             }
           }
 
-          @if (canOfferApproval()) {
-            <!-- The manager's explicit door to "ask the customer", for the
-                 job that has a priced recommendation on it and never
-                 moved. Whether the move exists from here is the graph's
-                 answer: a refusal comes back as the workshop's own
-                 sentence and is shown exactly as written. -->
-            <div class="band-actions">
-              <button
-                appButton
-                variant="secondary"
-                type="button"
-                [disabled]="requestingApproval()"
-                (click)="requestApproval()"
-              >
-                {{ requestingApproval() ? 'Asking…' : 'Ask the customer to approve' }}
-              </button>
-            </div>
-
-            @if (approvalError(); as message) {
-              <p class="band-error" role="alert">{{ message }}</p>
-            }
-          }
         </section>
 
         <!-- ── the vehicle ─────────────────────────────────────────── -->

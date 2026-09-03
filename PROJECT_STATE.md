@@ -11,6 +11,103 @@
 
 ---
 
+## 0. The live Work Order Journey — one car, one journey, three audiences (2026-09-03)
+
+The product now answers, on every role surface and from real records:
+where is this vehicle, what has happened, when, what are we waiting for,
+why, what happens next, and who may act.
+
+**The decision that shaped everything else: a projection, not a store.**
+There is no `JourneyEvent` table. `JourneyEventsService`
+(`apps/api/src/systems/operations/journey-events.service.ts`) assembles
+~28 event kinds by reading back the records that already prove each thing
+happened, dated by those records' own timestamps. A second event log
+would have been a second source of truth about the same repair, and the
+two would eventually have disagreed.
+
+Because both an `OperationEvent` row and a record column can often date
+the same happening, **the sources are split by kind and never overlap**:
+the event spine supplies status changes, task starts/completions and
+blockers (a `Task` has no `startedAt`); the records supply the decision
+cycle, the whole parts loop, the invoice and the payments, because those
+carry per-hand-over timestamps no event duplicates and join to the work
+order by a real foreign key rather than a JSON payload. Inspections and
+findings were moved from the spine onto their own rows after a test
+caught the event landing 11ms after the record it described — records
+date records.
+
+Ordering is total and stable: time, then a **causal** tie-break (the
+thing that caused a status change sorts before it), then the source row's
+id. Two reads of one job give the same story.
+
+The contract lives in `packages/shared/src/operations/journey-contract.ts`
+so both sides of the wire share one definition — the web app used to
+re-declare it and the two drifted. It adds a `current` panel (since,
+duration in server-measured minutes, who is owed and since when, why,
+what next), the `events` list, and `actions`.
+
+**Actions are checked twice.** The graph half comes from
+`availableIntents`; the authorization half from the viewer's real
+permission, passed in by the controller as an oracle so a `systems/`
+service never reaches into `identity/`. The technician work card's own
+`primaryAction` and the manager workspace's "Ask the customer" each asked
+only the graph, so either could offer a button the controller then
+refused; both now come from the journey.
+
+Team Leader had no journey at all and now has one, scoped to the managed
+technician roster (never `branchScope`) and refused as not-found so ids
+cannot be enumerated.
+
+### Three defects found on the way, all the same shape
+
+A field something reads and nothing writes.
+
+- `IssuedItem.arrivedAt`/`receivedAt`/`usedAt` have existed since the
+  model was written and **nothing ever set any of them**, while two
+  places read them. Now stamped at the single transition choke point in
+  `PartRequestService` — including `resolveRejectedReturn`, which reaches
+  USED without going through `move()`.
+- Consequently the Owner's `PART_ARRIVAL_UNCONFIRMED` health check, which
+  filtered `arrivedAt: null` with no status filter, reported every part
+  the workshop had ever issued as an unconfirmed arrival, forever. Now
+  scoped to requests genuinely still in transit — still required even
+  with the stamping, because the graph deliberately lets an in-house
+  hand-over skip ARRIVED rather than write one nobody witnessed.
+- The customer's journey was scoped through `currentService`, so it 403'd
+  the moment their job closed — on the one screen whose purpose is to say
+  it finished. Now scoped by ownership of the work order.
+
+Three timestamp columns were added
+(`20260903090000_journey_event_timestamps`) for the three events no
+existing record could date honestly: `CustomerDecisionRequest.viewedAt`,
+`PartRequest.approvedAt`, and the `PartReturnRequest` clarification pair.
+That closes `LAUNCH_HANDOVER.md` §3.4.
+
+### Proof
+
+`apps/api/src/testing/journey.http.spec.ts` (12) drives intake → CLOSED
+over real HTTP with a parts loop in the middle, asserting each event's
+timestamp equals the column that produced it, plus three-audience
+agreement and cross-technician / cross-team / cross-tenant refusal.
+`journey-events.integration.spec.ts` (8) covers the projection rules.
+
+Browser-verified on one real job across all three surfaces: the strip
+auto-scrolls to where the car actually is (it did not, and on a phone the
+current stage sat off-screen — the one question the strip exists to
+answer); the history renders in order with real actors; issuing a part
+from a separate session took the open journey from "Waiting for parts /
+23 events" to "In progress / 25 events" with no reload; and the manager's
+one offered action moved the job for real and then disappeared. The
+customer's copy of that job carries 17 events where staff see 23, with no
+staff name, no warehouse and no shop-floor reason anywhere in it.
+
+**Deliberately not fixed:** the `ASK_CUSTOMER`/`WAITING_CUSTOMER` dead
+edge (`LAUNCH_HANDOVER.md` §3.3). The journey shows the truth — the job
+reads IN_PROGRESS with the outstanding decision in its history — rather
+than inventing a stage the workflow never entered.
+
+---
+
 ## 0. The catalog-driven part request (2026-09-03)
 
 Technicians now ask the store for parts by **shopping a catalogue the

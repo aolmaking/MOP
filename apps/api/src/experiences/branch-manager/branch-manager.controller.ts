@@ -197,7 +197,9 @@ export class BranchManagerController {
       { tenantId: session.tenantId as string, branchScope: session.branchScope },
       id,
     );
-    return this.journey.forWorkOrder(session.tenantId as string, id, "MANAGER");
+    return this.journey.forWorkOrder(session.tenantId as string, id, "MANAGER", {
+      can: (permission) => this.access.can(session, permission),
+    });
   }
 
   /**

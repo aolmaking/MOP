@@ -95,8 +95,19 @@ describe("WorkflowIntegrityService", () => {
     const item = await prisma.inventoryItem.create({
       data: { tenantId, sku: `SKU-${SUFFIX}`, name: "Filter", itemType: "PART", sellingPrice: 50 },
     });
+    // ISSUED, not the default DRAFT. A request with a hand-over against
+    // it is by definition not a draft, and the check now asks whether
+    // the request is genuinely still out there -- so a fixture in an
+    // impossible state would prove nothing about the real one.
     const partRequest = await prisma.partRequest.create({
-      data: { tenantId, workOrderId: wo.id, inventoryItemId: item.id, requestedById: "staff-1", quantity: 1 },
+      data: {
+        tenantId,
+        workOrderId: wo.id,
+        inventoryItemId: item.id,
+        requestedById: "staff-1",
+        quantity: 1,
+        status: "ISSUED",
+      },
     });
     await prisma.issuedItem.create({
       data: {
@@ -112,6 +123,55 @@ describe("WorkflowIntegrityService", () => {
 
     const report = await integrity.build(tenantId);
     expect(report.issues.some((i) => i.type === "PART_ARRIVAL_UNCONFIRMED")).toBe(true);
+  });
+
+  /**
+   * The bug this check had for its whole life.
+   *
+   * `arrivedAt` was written by nothing at all, and this check had no
+   * status filter, so every part the workshop had ever issued -- fitted
+   * months ago, on a closed job -- was reported as "arrival unconfirmed"
+   * forever. The Owner's workflow-health page filled with permanent
+   * noise, which is how a real warning stops being read.
+   *
+   * A part that reached the technician has had the arrival question
+   * answered by a later fact, whether or not anybody pressed "arrived" --
+   * and the graph deliberately lets an in-house hand-over skip ARRIVED
+   * rather than write one nobody witnessed.
+   */
+  it("does not flag a part the technician already has, even with no arrival recorded", async () => {
+    const wo = await prisma.workOrder.create({ data: { tenantId, branchId, assetId, customerId, status: "IN_PROGRESS" } });
+    const item = await prisma.inventoryItem.create({
+      data: { tenantId, sku: `SKU-FITTED-${SUFFIX}`, name: "Fitted pad", itemType: "PART", sellingPrice: 50 },
+    });
+    const partRequest = await prisma.partRequest.create({
+      data: {
+        tenantId,
+        workOrderId: wo.id,
+        inventoryItemId: item.id,
+        requestedById: "staff-1",
+        quantity: 1,
+        status: "USED",
+      },
+    });
+    const fitted = await prisma.issuedItem.create({
+      data: {
+        tenantId,
+        partRequestId: partRequest.id,
+        warehouseId,
+        quantity: 1,
+        issuedById: "staff-1",
+        issuedAt: new Date(Date.now() - 30 * 60 * 60 * 1000),
+        arrivedAt: null,
+        receivedAt: new Date(Date.now() - 29 * 60 * 60 * 1000),
+        usedAt: new Date(Date.now() - 28 * 60 * 60 * 1000),
+      },
+    });
+
+    const report = await integrity.build(tenantId);
+    expect(
+      report.issues.some((i) => i.type === "PART_ARRIVAL_UNCONFIRMED" && i.entityId === fitted.id),
+    ).toBe(false);
   });
 
   it("does not flag a part issued recently, within the threshold", async () => {

@@ -4,6 +4,8 @@ import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { WorkOrderWorkspace } from './work-order-workspace';
 import { WorkOrdersApi, type WorkOrderDetail } from './work-orders.api';
+import { journeyFixture } from '../../../domain/journey/journey.fixture';
+import type { PresentedJourney } from '../../../domain/journey/workflow-strip';
 
 function detail(overrides: Partial<WorkOrderDetail> = {}): WorkOrderDetail {
   return {
@@ -24,10 +26,19 @@ function detail(overrides: Partial<WorkOrderDetail> = {}): WorkOrderDetail {
   };
 }
 
-async function render(result: WorkOrderDetail | { error: unknown }) {
+/**
+ * "Ask the customer" is offered by the JOURNEY now, not by this page
+ * reading the status. Only the journey's action list has asked both
+ * halves -- whether the workshop's graph allows the move from here, and
+ * whether this manager holds the permission -- so a test that wants the
+ * button supplies a journey that offers it.
+ */
+const askAction = { key: 'request_approval', label: 'Ask the customer', hint: null };
+
+async function render(result: WorkOrderDetail | { error: unknown }, options: { journey?: PresentedJourney } = {}) {
   const api = {
     detail: () => ('error' in result ? throwError(() => result.error) : of(result)),
-    journey: () => of({ stages: [], finished: false, waiting: false, blocked: false, headline: 'Moving normally.', happened: null, next: null, waitingOn: null, history: [] }),
+    journey: () => of(options.journey ?? journeyFixture()),
     createTask: vi.fn(() => of({ id: 't9', title: 'Wiper blades', status: 'ASSIGNED', updatedAt: new Date().toISOString(), blockers: [] })),
     requestApproval: vi.fn(() => of({ workOrderId: 'wo1', status: 'AWAITING_CUSTOMER_APPROVAL' })),
     advance: vi.fn(() => of({})),
@@ -216,7 +227,9 @@ describe('WorkOrderWorkspace', () => {
      * own graph actually has.
      */
     it("shows the workflow's own refusal when the move is not available", async () => {
-      const { api, fixture, element } = await render(detail());
+      const { api, fixture, element } = await render(detail(), {
+        journey: journeyFixture({ actions: [askAction] }),
+      });
       api.requestApproval.mockReturnValueOnce(
         throwError(() => ({
           httpStatus: 409,
@@ -225,7 +238,7 @@ describe('WorkOrderWorkspace', () => {
         })),
       );
 
-      press(element, 'Ask the customer to approve').click();
+      press(element, 'Ask the customer').click();
       fixture.detectChanges();
 
       expect(element.querySelector('.band-error')?.textContent).toContain(
@@ -233,8 +246,16 @@ describe('WorkOrderWorkspace', () => {
       );
     });
 
+    /**
+     * The whole point of moving this onto the journey: the page no longer
+     * decides for itself. A job already with the customer has no
+     * REQUEST_APPROVAL edge, so the server offers no action, so there is
+     * no button -- rather than a button that would be refused.
+     */
     it('does not offer to ask a customer who is already being asked', async () => {
-      const { element } = await render(detail({ status: 'AWAITING_CUSTOMER_APPROVAL' }));
+      const { element } = await render(detail({ status: 'AWAITING_CUSTOMER_APPROVAL' }), {
+        journey: journeyFixture({ actions: [] }),
+      });
 
       expect([...element.querySelectorAll('button')].some((b) => b.textContent?.includes('Ask the customer'))).toBe(false);
     });

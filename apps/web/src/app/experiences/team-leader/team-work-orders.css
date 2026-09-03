@@ -100,3 +100,47 @@
   color: var(--text-muted);
   font-size: var(--text-base);
 }
+
+/* --- the per-row journey ------------------------------------------- */
+
+.col-open {
+  inline-size: 1%;
+  white-space: nowrap;
+}
+
+.row-toggle {
+  min-block-size: 2.25rem;
+  padding-inline: var(--space-3);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.row-toggle:hover {
+  color: var(--text);
+}
+
+.row-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.row--open {
+  background: var(--surface-raised);
+}
+
+/* The journey spans the whole table so the strip gets the full width it
+   needs. Padding rather than a nested card: the row IS the container. */
+.row-journey > td {
+  padding: var(--space-3);
+  background: var(--surface-raised);
+}
+
+.row-journey-loading {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}

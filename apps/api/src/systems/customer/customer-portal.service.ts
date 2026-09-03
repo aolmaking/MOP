@@ -149,6 +149,28 @@ export class CustomerPortalService {
     }));
   }
 
+  /**
+   * Is this work order this customer's own?
+   *
+   * ANY status, deliberately. Access is a question about whose car it is,
+   * not about whether the job is still running -- and the two were
+   * conflated: the journey endpoint scoped itself through
+   * `currentService`, so a customer watching their repair was refused the
+   * moment it closed. The last thing their journey is for is telling them
+   * it finished, and the page broke exactly then.
+   *
+   * Scoped by `customerId` AND `tenantId` in the query, so a work-order
+   * id from another customer -- or another workshop -- is simply not
+   * theirs. The id in the URL is never the capability; the session is.
+   */
+  async ownsWorkOrder(tenantId: string, customerId: string, workOrderId: string): Promise<boolean> {
+    const mine = await this.prisma.workOrder.findFirst({
+      where: { id: workOrderId, tenantId, customerId },
+      select: { id: true },
+    });
+    return mine !== null;
+  }
+
   async invoiceStatus(tenantId: string, customerId: string): Promise<readonly InvoiceStatusRow[]> {
     const rows = await this.prisma.invoice.findMany({
       where: { tenantId, workOrder: { customerId } },
