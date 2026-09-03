@@ -12,6 +12,7 @@ import {
   CatalogAttributeValueDto,
   CatalogCategoryDto,
   CategoryAttributesDto,
+  ReorderDto,
 } from "./catalog-config.dto";
 import { CatalogConfigService } from "./catalog-config.service";
 import { CatalogBrowseService } from "./catalog-browse.service";
@@ -91,6 +92,40 @@ export class InventoryController {
   async createCategory(@CurrentSession() session: SessionContext, @Body() dto: CatalogCategoryDto) {
     const tenantId = await this.require(session, "inventory.catalog.manage");
     return this.catalogConfig.createCategory(tenantId, dto);
+  }
+
+  /**
+   * The order a technician reads, set by the person who knows the shop.
+   *
+   * Three groups, three endpoints, because "which siblings" differs:
+   * categories share a parent, filters are workshop-wide, and values
+   * belong to one filter.
+   *
+   * Declared ABOVE `categories/:id` and `attributes/:id` deliberately.
+   * Nest matches routes in declaration order, so a parameterised route
+   * declared first swallows every literal segment after it -- `reorder`
+   * would arrive as an id and 404 as a missing category.
+   */
+  @Post("catalog-config/categories/reorder")
+  async reorderCategories(@CurrentSession() session: SessionContext, @Body() dto: ReorderDto) {
+    const tenantId = await this.require(session, "inventory.catalog.manage");
+    return this.catalogConfig.reorderCategories(tenantId, dto.parentId ?? null, dto.orderedIds);
+  }
+
+  @Post("catalog-config/attributes/reorder")
+  async reorderAttributes(@CurrentSession() session: SessionContext, @Body() dto: ReorderDto) {
+    const tenantId = await this.require(session, "inventory.catalog.manage");
+    return this.catalogConfig.reorderAttributes(tenantId, dto.orderedIds);
+  }
+
+  @Post("catalog-config/attributes/:id/values/reorder")
+  async reorderAttributeValues(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: ReorderDto,
+  ) {
+    const tenantId = await this.require(session, "inventory.catalog.manage");
+    return this.catalogConfig.reorderAttributeValues(tenantId, id, dto.orderedIds);
   }
 
   @Post("catalog-config/categories/:id")

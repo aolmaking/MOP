@@ -115,9 +115,36 @@
                 {{ entry.node.itemCount }} parts ·
                 {{ entry.node.attributeIds.length }} filters
               </p>
+              <!-- The manager's own note about this category. It was
+                   writable and shown nowhere, which is a field nobody
+                   can check they filled in correctly. -->
+              @if (entry.node.description) {
+                <p class="row-note">{{ entry.node.description }}</p>
+              }
             </div>
 
             <div class="row-actions">
+              <!-- Up/down, not drag: this is read at a desk, moves are
+                   one position at a time, and a keyboard can reach a
+                   button. -->
+              <button
+                class="move"
+                type="button"
+                [attr.aria-label]="'Move ' + entry.node.name + ' up'"
+                [disabled]="saving() || !canMoveCategory(entry.node, -1)"
+                (click)="moveCategory(entry.node, -1)"
+              >
+                ↑
+              </button>
+              <button
+                class="move"
+                type="button"
+                [attr.aria-label]="'Move ' + entry.node.name + ' down'"
+                [disabled]="saving() || !canMoveCategory(entry.node, 1)"
+                (click)="moveCategory(entry.node, 1)"
+              >
+                ↓
+              </button>
               <button appButton variant="ghost" size="small" (click)="editCategory(entry.node)">Edit</button>
               <button appButton variant="secondary" size="small" (click)="openAssignment(entry.node)">
                 Filters
@@ -227,16 +254,36 @@
 
               <div class="values">
                 @for (value of attribute.values; track value.id) {
-                  <button
-                    class="chip chip--value"
-                    type="button"
-                    [class.chip--off]="!value.isActive"
-                    [title]="value.itemCount + ' parts carry this'"
-                    (click)="toggleValue(value.id, value.label, value.isActive)"
-                  >
-                    {{ value.label }}
-                    <span class="chip-count">{{ value.itemCount }}</span>
-                  </button>
+                  <span class="value">
+                    <button
+                      class="chip chip--value"
+                      type="button"
+                      [class.chip--off]="!value.isActive"
+                      [title]="value.itemCount + ' parts carry this'"
+                      (click)="toggleValue(value.id, value.label, value.isActive)"
+                    >
+                      {{ value.label }}
+                      <span class="chip-count">{{ value.itemCount }}</span>
+                    </button>
+                    <button
+                      class="move move--tight"
+                      type="button"
+                      [attr.aria-label]="'Move ' + value.label + ' earlier'"
+                      [disabled]="saving() || !canMoveValue(attribute, value.id, -1)"
+                      (click)="moveValue(attribute, value.id, -1)"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      class="move move--tight"
+                      type="button"
+                      [attr.aria-label]="'Move ' + value.label + ' later'"
+                      [disabled]="saving() || !canMoveValue(attribute, value.id, 1)"
+                      (click)="moveValue(attribute, value.id, 1)"
+                    >
+                      ›
+                    </button>
+                  </span>
                 }
               </div>
 
@@ -257,6 +304,24 @@
             </div>
 
             <div class="row-actions">
+              <button
+                class="move"
+                type="button"
+                [attr.aria-label]="'Move ' + attribute.label + ' up'"
+                [disabled]="saving() || !canMoveAttribute(attribute, -1)"
+                (click)="moveAttribute(attribute, -1)"
+              >
+                ↑
+              </button>
+              <button
+                class="move"
+                type="button"
+                [attr.aria-label]="'Move ' + attribute.label + ' down'"
+                [disabled]="saving() || !canMoveAttribute(attribute, 1)"
+                (click)="moveAttribute(attribute, 1)"
+              >
+                ↓
+              </button>
               <button appButton variant="ghost" size="small" (click)="editAttribute(attribute)">Edit</button>
               <button appButton variant="secondary" size="small" (click)="openValueFor(attribute.id)">
                 {{ valueFor() === attribute.id ? 'Done' : 'Add value' }}

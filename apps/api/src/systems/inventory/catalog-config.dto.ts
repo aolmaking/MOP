@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsInt, IsOptional, IsString, Length, Min } from "class-validator";
+import { ArrayNotEmpty, IsArray, IsBoolean, IsInt, IsOptional, IsString, Length, Min } from "class-validator";
 
 /**
  * The inventory manager's catalog vocabulary, over the wire.
@@ -46,6 +46,26 @@ export class CategoryAttributesDto {
   @IsArray()
   @IsString({ each: true })
   attributeIds!: string[];
+}
+
+/**
+ * A whole sibling group, in the order it should read.
+ *
+ * The list rather than one row's new number: sending a single
+ * `sortOrder` is how two categories end up sharing a position and the
+ * order silently reverts to alphabetical.
+ */
+export class ReorderDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  orderedIds!: string[];
+
+  /** Which sibling group. Absent or null means the top level. */
+  @IsOptional()
+  @IsString()
+  @Length(1, 40)
+  parentId?: string | null;
 }
 
 export class CatalogAttributeDto {

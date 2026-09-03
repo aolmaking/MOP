@@ -162,6 +162,26 @@ export class InventoryApi {
     return this.http.post(`/api/v1/inventory/catalog-config/categories/${id}/attributes`, { attributeIds });
   }
 
+  /**
+   * The order a technician reads. Sends the whole sibling group, not one
+   * row's new position -- a single number is how two rows end up sharing
+   * one and the order quietly reverts to alphabetical.
+   */
+  reorderCategories(parentId: string | null, orderedIds: readonly string[]): Observable<unknown> {
+    return this.http.post('/api/v1/inventory/catalog-config/categories/reorder', {
+      orderedIds,
+      ...(parentId ? { parentId } : {}),
+    });
+  }
+
+  reorderAttributes(orderedIds: readonly string[]): Observable<unknown> {
+    return this.http.post('/api/v1/inventory/catalog-config/attributes/reorder', { orderedIds });
+  }
+
+  reorderAttributeValues(attributeId: string, orderedIds: readonly string[]): Observable<unknown> {
+    return this.http.post(`/api/v1/inventory/catalog-config/attributes/${attributeId}/values/reorder`, { orderedIds });
+  }
+
   createAttribute(draft: AttributeDraft): Observable<unknown> {
     return this.http.post('/api/v1/inventory/catalog-config/attributes', draft);
   }

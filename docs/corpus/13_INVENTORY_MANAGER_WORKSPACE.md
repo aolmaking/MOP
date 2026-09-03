@@ -203,3 +203,18 @@ its parent offer** — so a wiper blade is never offered "Engine Size".
 sight before they read its name, and `summary` is the one line under
 the name on their card (distinct from `notes`, which stays the
 storekeeper's own memo and is never shown).
+
+### A.5 Ordering
+
+Categories, filters and filter values each carry a `sortOrder` that the
+technician's browse honours, and Catalog Builder sets it with up/down
+controls. Alphabetical is a stranger's guess: a workshop that does
+brakes all day wants Brakes first.
+
+Each move sends the **whole sibling group**, not one row's new number —
+a single number is how two rows end up sharing a position and the order
+silently reverts. A list that omits a sibling, repeats one, or carries
+one from another workshop is refused (`reorder_mismatch`) rather than
+half-applied: it means the page is working from a stale picture, and
+ordering the rest would leave the missing row wherever it was with
+nothing to show anything went wrong.

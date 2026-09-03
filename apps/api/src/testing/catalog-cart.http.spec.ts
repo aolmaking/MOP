@@ -296,6 +296,115 @@ describe("Catalog-driven part requests (real HTTP, real Postgres)", () => {
     expect(filters.attributeIds).toEqual([vehicleTypeId]);
   }, 120_000);
 
+  it("the order the manager sets is the order the technician reads", async () => {
+    // Alphabetically this is Brakes, Filters. The shop does brakes all
+    // day and wants them second here purely to prove the order is the
+    // manager's and not the collation's.
+    const config = await http(booted).get("/api/v1/inventory/catalog-config").set("Cookie", shop.storekeeper.cookie);
+    expectCode(config, 200);
+    const topLevel = config.body.categories.map((c: { id: string }) => c.id);
+    expect(topLevel).toContain(brakesId);
+    expect(topLevel).toContain(filtersCategoryId);
+
+    const reversed = [...topLevel].reverse();
+    expectCode(
+      await http(booted)
+        .post("/api/v1/inventory/catalog-config/categories/reorder")
+        .set("Cookie", shop.storekeeper.cookie)
+        .send({ orderedIds: reversed }),
+      201,
+    );
+
+    const browse = await http(booted).get("/api/v1/technician/parts-catalog").set("Cookie", shop.technician.cookie);
+    expectCode(browse, 200);
+    const visible = browse.body.categories.map((c: { id: string }) => c.id);
+    // Only the technician-visible ones come back, so compare the two
+    // that are definitely in both lists rather than the whole array.
+    expect(visible.indexOf(filtersCategoryId)).toBeLessThan(visible.indexOf(brakesId));
+
+    // Put it back, so later assertions read the original order.
+    expectCode(
+      await http(booted)
+        .post("/api/v1/inventory/catalog-config/categories/reorder")
+        .set("Cookie", shop.storekeeper.cookie)
+        .send({ orderedIds: topLevel }),
+      201,
+    );
+  }, 120_000);
+
+  it("filter values keep the order the manager gave them, not the alphabet", async () => {
+    // SUV before Sedan: alphabetically wrong on purpose.
+    expectCode(
+      await http(booted)
+        .post(`/api/v1/inventory/catalog-config/attributes/${vehicleTypeId}/values/reorder`)
+        .set("Cookie", shop.storekeeper.cookie)
+        .send({ orderedIds: [suvId, sedanId] }),
+      201,
+    );
+
+    const browse = await http(booted)
+      .get("/api/v1/technician/parts-catalog")
+      .query({ categoryId: brakesId })
+      .set("Cookie", shop.technician.cookie);
+    expectCode(browse, 200);
+
+    const vehicleType = browse.body.filters.find((f: { attributeId: string }) => f.attributeId === vehicleTypeId);
+    expect(vehicleType.options.map((o: { valueId: string }) => o.valueId)).toEqual([suvId, sedanId]);
+
+    expectCode(
+      await http(booted)
+        .post(`/api/v1/inventory/catalog-config/attributes/${vehicleTypeId}/values/reorder`)
+        .set("Cookie", shop.storekeeper.cookie)
+        .send({ orderedIds: [sedanId, suvId] }),
+      201,
+    );
+  }, 120_000);
+
+  it("a partial or foreign reorder is refused rather than half-applied", async () => {
+    // One id missing: the client is working from a stale picture, and
+    // ordering the rest would leave the missing row wherever it was with
+    // nothing to show anything went wrong.
+    expectCode(
+      await http(booted)
+        .post(`/api/v1/inventory/catalog-config/attributes/${vehicleTypeId}/values/reorder`)
+        .set("Cookie", shop.storekeeper.cookie)
+        .send({ orderedIds: [sedanId] }),
+      400,
+      "reorder_mismatch",
+    );
+
+    // And the same id twice, which would otherwise silently drop one.
+    expectCode(
+      await http(booted)
+        .post(`/api/v1/inventory/catalog-config/attributes/${vehicleTypeId}/values/reorder`)
+        .set("Cookie", shop.storekeeper.cookie)
+        .send({ orderedIds: [sedanId, sedanId] }),
+      400,
+      "reorder_mismatch",
+    );
+
+    const foreign = await createAttribute(neighbour, "Next Door Dimension");
+    const foreignValue = await addValue(neighbour, foreign, "Whatever");
+    expectCode(
+      await http(booted)
+        .post(`/api/v1/inventory/catalog-config/attributes/${vehicleTypeId}/values/reorder`)
+        .set("Cookie", shop.storekeeper.cookie)
+        .send({ orderedIds: [sedanId, foreignValue] }),
+      400,
+      "reorder_mismatch",
+    );
+
+    // A technician may not reorder anything at all.
+    expectCode(
+      await http(booted)
+        .post("/api/v1/inventory/catalog-config/categories/reorder")
+        .set("Cookie", shop.technician.cookie)
+        .send({ orderedIds: [brakesId] }),
+      403,
+      "forbidden",
+    );
+  }, 120_000);
+
   it("parts are filed and stamped with the configured values", async () => {
     padItemId = await createItem(shop, {
       sku: `PAD-${SUFFIX}`,

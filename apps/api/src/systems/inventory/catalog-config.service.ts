@@ -255,6 +255,91 @@ export class CatalogConfigService {
     return { categoryId, attributeIds: wanted };
   }
 
+  /**
+   * The order a technician sees, set by the person who knows the shop.
+   *
+   * Alphabetical is a stranger's guess. A workshop that does brakes all
+   * day wants Brakes first, and until this existed `sortOrder` was a
+   * column three read paths honoured and nothing could write -- the
+   * exact write-only configuration this codebase treats as a defect.
+   *
+   * Takes the whole sibling list rather than one row's new position.
+   * Sending a single row's number is how two categories end up sharing
+   * `sortOrder: 2` and the order goes back to being the planner's whim;
+   * assigning 0..n-1 across the set in one transaction cannot tie.
+   */
+  async reorderCategories(tenantId: string, parentId: string | null, orderedIds: readonly string[]) {
+    const siblings = await this.prisma.catalogCategory.findMany({
+      where: { tenantId, parentId },
+      select: { id: true },
+    });
+    this.requireSameSet(siblings.map((row) => row.id), orderedIds, "category");
+
+    await this.prisma.$transaction(
+      orderedIds.map((id, index) =>
+        this.prisma.catalogCategory.update({ where: { id }, data: { sortOrder: index } }),
+      ),
+    );
+
+    return { parentId, orderedIds: [...orderedIds] };
+  }
+
+  async reorderAttributes(tenantId: string, orderedIds: readonly string[]) {
+    const all = await this.prisma.catalogAttribute.findMany({ where: { tenantId }, select: { id: true } });
+    this.requireSameSet(all.map((row) => row.id), orderedIds, "filter");
+
+    await this.prisma.$transaction(
+      orderedIds.map((id, index) =>
+        this.prisma.catalogAttribute.update({ where: { id }, data: { sortOrder: index } }),
+      ),
+    );
+
+    return { orderedIds: [...orderedIds] };
+  }
+
+  async reorderAttributeValues(tenantId: string, attributeId: string, orderedIds: readonly string[]) {
+    const attribute = await this.prisma.catalogAttribute.findFirst({
+      where: { id: attributeId, tenantId },
+      select: { id: true },
+    });
+    if (!attribute) throw new NotFoundException({ code: "attribute_not_found", message: "That filter is not in this workshop." });
+
+    const values = await this.prisma.catalogAttributeValue.findMany({
+      where: { tenantId, attributeId },
+      select: { id: true },
+    });
+    this.requireSameSet(values.map((row) => row.id), orderedIds, "filter value");
+
+    await this.prisma.$transaction(
+      orderedIds.map((id, index) =>
+        this.prisma.catalogAttributeValue.update({ where: { id }, data: { sortOrder: index } }),
+      ),
+    );
+
+    return { attributeId, orderedIds: [...orderedIds] };
+  }
+
+  /**
+   * A reorder must name every sibling exactly once.
+   *
+   * Refused rather than reconciled: a list that is missing one, or
+   * carries one from another workshop, means the client is working from
+   * a stale picture, and quietly ordering the rest would leave the
+   * missing row wherever it happened to be with no sign anything went
+   * wrong.
+   */
+  private requireSameSet(actual: readonly string[], given: readonly string[], noun: string): void {
+    const unique = new Set(given);
+    const known = new Set(actual);
+    const sameSize = unique.size === given.length && unique.size === known.size;
+    if (!sameSize || [...unique].some((id) => !known.has(id))) {
+      throw new BadRequestException({
+        code: "reorder_mismatch",
+        message: `Reordering needs every ${noun} in the group, listed once each.`,
+      });
+    }
+  }
+
   /* ---------------------------------------------------------------- *
    * Filter definitions and their values
    * ---------------------------------------------------------------- */

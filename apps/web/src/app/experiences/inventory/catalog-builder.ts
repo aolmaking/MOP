@@ -185,6 +185,77 @@ export class CatalogBuilder {
     });
   }
 
+  /* --- ordering ----------------------------------------------------- *
+   *
+   * Up/down rather than drag: this list is read on a desk, the moves are
+   * one position at a time in practice, and a keyboard can reach a
+   * button. Each move sends the whole sibling group, so two rows can
+   * never end up sharing a position.
+   * ------------------------------------------------------------------ */
+
+  /** The ordered ids of the group this category sits in. */
+  private siblingsOf(category: ConfiguredCategory): string[] {
+    const config = this.config();
+    if (!config) return [];
+    if (!category.parentId) return config.categories.map((node) => node.id);
+
+    const findChildren = (nodes: readonly ConfiguredCategory[]): string[] => {
+      for (const node of nodes) {
+        if (node.id === category.parentId) return node.children.map((child) => child.id);
+        const deeper = findChildren(node.children);
+        if (deeper.length > 0) return deeper;
+      }
+      return [];
+    };
+    return findChildren(config.categories);
+  }
+
+  /** Returns null when the move would fall off either end. */
+  private shifted(ids: readonly string[], id: string, delta: number): string[] | null {
+    const from = ids.indexOf(id);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= ids.length) return null;
+    const next = [...ids];
+    next.splice(to, 0, ...next.splice(from, 1));
+    return next;
+  }
+
+  protected canMoveCategory(category: ConfiguredCategory, delta: number): boolean {
+    return this.shifted(this.siblingsOf(category), category.id, delta) !== null;
+  }
+
+  protected moveCategory(category: ConfiguredCategory, delta: number): void {
+    const next = this.shifted(this.siblingsOf(category), category.id, delta);
+    if (!next) return;
+    this.run(this.api.reorderCategories(category.parentId, next), () => {
+      this.toast.show(`${category.name} moved.`, 'success');
+    });
+  }
+
+  protected canMoveAttribute(attribute: ConfiguredAttribute, delta: number): boolean {
+    return this.shifted(this.attributes().map((a) => a.id), attribute.id, delta) !== null;
+  }
+
+  protected moveAttribute(attribute: ConfiguredAttribute, delta: number): void {
+    const next = this.shifted(this.attributes().map((a) => a.id), attribute.id, delta);
+    if (!next) return;
+    this.run(this.api.reorderAttributes(next), () => {
+      this.toast.show(`${attribute.label} moved.`, 'success');
+    });
+  }
+
+  protected canMoveValue(attribute: ConfiguredAttribute, valueId: string, delta: number): boolean {
+    return this.shifted(attribute.values.map((v) => v.id), valueId, delta) !== null;
+  }
+
+  protected moveValue(attribute: ConfiguredAttribute, valueId: string, delta: number): void {
+    const next = this.shifted(attribute.values.map((v) => v.id), valueId, delta);
+    if (!next) return;
+    this.run(this.api.reorderAttributeValues(attribute.id, next), () => {
+      this.toast.show('Filter values reordered.', 'success');
+    });
+  }
+
   /* --- filters ------------------------------------------------------ */
 
   protected newAttribute(): void {

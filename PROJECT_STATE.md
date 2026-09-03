@@ -114,6 +114,29 @@ have two answers to "what is outstanding?".
   exposes a control for; categories currently sort by name within their
   level.
 
+### Closed the same day
+
+Category and filter **ordering** was the third gap on this list: three
+read paths honoured `sortOrder` and nothing could write it, so the
+technician's chip rail and filter panel were stuck alphabetical.
+`POST .../categories/reorder`, `.../attributes/reorder` and
+`.../attributes/:id/values/reorder` each take the whole sibling group
+and assign 0..n-1 in one transaction — a single row's new number is how
+two rows end up sharing a position and the order quietly reverts. A
+partial, duplicated or foreign list is refused (`reorder_mismatch`)
+rather than half-applied. Up/down controls on Catalog Builder; proven by
+three more cases in `catalog-cart.http.spec.ts` and in the browser
+(moved Fluids above Electrical and SUV after Truck, both of which the
+technician's own endpoint then read back).
+
+The category `description` was the same shape of defect in miniature —
+writable, and rendered nowhere — and now shows under the category name.
+
+One route trap worth remembering: `categories/reorder` had to be
+declared **above** `categories/:id`. Nest matches in declaration order,
+so a parameterised route declared first swallows every literal segment
+after it and `reorder` arrives as a category id.
+
 ## 0.1 Reconciling two independent sessions that built the same mission in parallel (2026-09-02)
 
 A chat session (this one) spent a full pass building "Strategy B" — the

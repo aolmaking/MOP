@@ -195,6 +195,48 @@
   gap: var(--space-2);
 }
 
+/*
+ * Reorder controls. Square, quiet, and the same height as the small
+ * buttons beside them -- they are used in bursts of two or three taps
+ * and must not out-shout Edit, which is the destructive-ish one.
+ */
+.move {
+  display: inline-grid;
+  place-items: center;
+  min-inline-size: 1.75rem;
+  min-block-size: 1.75rem;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--text-base);
+  line-height: 1;
+}
+
+.move:disabled {
+  opacity: 0.35;
+}
+
+.move--tight {
+  min-inline-size: 1.25rem;
+  min-block-size: 1.25rem;
+  font-size: var(--text-xs);
+}
+
+/* Chip and its two nudges travel together when the row wraps. */
+.value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.row-note {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
 .tag {
   padding: 0 var(--space-2);
   border-radius: var(--radius-pill);
