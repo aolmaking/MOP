@@ -68,6 +68,7 @@ export class TechnicianWorkService {
     actor: LifecycleActor,
     assignToStaffUserId?: string,
     serviceKey?: string,
+    decisionItemId?: string,
   ) {
     const workOrder = await this.requireWorkOrder(workOrderId);
 
@@ -88,9 +89,50 @@ export class TechnicianWorkService {
       }
     }
 
+    // Planning work AGAINST an approved recommendation is what makes
+    // "was this recommendation performed?" answerable later from domain
+    // evidence rather than from a string comparison. Three things are
+    // checked, and each of them is a different lie the history would
+    // otherwise be able to tell:
+    //
+    //   - the item must belong to THIS work order, or a job could claim
+    //     to be carrying out a recommendation made on another vehicle;
+    //   - it must be APPROVED, because planning work against something
+    //     the customer declined or has not answered would show up in
+    //     history as work they agreed to;
+    //   - it must exist in this tenant, for the usual reason.
+    if (decisionItemId) {
+      const item = await this.prisma.customerDecisionItem.findFirst({
+        where: {
+          id: decisionItemId,
+          tenantId: workOrder.tenantId,
+          decisionRequest: { workOrderId },
+        },
+        select: { decision: true },
+      });
+      if (!item) {
+        throw new BadRequestException({
+          code: "recommendation_not_on_this_job",
+          message: "That recommendation does not belong to this job.",
+        });
+      }
+      if (item.decision !== "APPROVED") {
+        throw new BadRequestException({
+          code: "recommendation_not_approved",
+          message: "That recommendation has not been approved by the customer.",
+        });
+      }
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const task = await tx.task.create({
-        data: { tenantId: workOrder.tenantId, workOrderId, title, serviceKey: serviceKey ?? null },
+        data: {
+          tenantId: workOrder.tenantId,
+          workOrderId,
+          title,
+          serviceKey: serviceKey ?? null,
+          decisionItemId: decisionItemId ?? null,
+        },
       });
 
       if (assignToStaffUserId) {

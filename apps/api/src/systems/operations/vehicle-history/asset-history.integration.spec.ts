@@ -9,6 +9,7 @@ import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { AssetHistoryService } from "./asset-history.service";
 import { TechnicianWorkViewService } from "../../../experiences/technician/technician-work-view.service";
+import { WorkshopHistoryService } from "../history/workshop-history.service";
 import { WorkOrderLifecycleService } from "../work-order-lifecycle.service";
 import { CapabilityResolutionService } from "../../../control/capabilities/capability-resolution.service";
 import { GateEvaluatorService } from "../gate-evaluator.service";
@@ -46,6 +47,7 @@ const techView = new TechnicianWorkViewService(
   asService,
   lifecycle,
   history,
+  new WorkshopHistoryService(asService, history),
   policiesForTest,
   new CapabilityResolutionService(asService),
 );
@@ -220,6 +222,6 @@ describe("TechnicianWorkViewService.vehicleHistory -- authorization boundary", (
     await prisma.workOrderAssignment.create({ data: { tenantId, workOrderId: workOrder.id, staffUserId: tech.id } });
 
     const report = await techView.vehicleHistory(tech.id, tenantId, workOrder.id);
-    expect(report.assetId).toBe(asset.id);
+    expect(report.asset.id).toBe(asset.id);
   });
 });

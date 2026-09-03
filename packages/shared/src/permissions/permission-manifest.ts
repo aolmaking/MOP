@@ -89,6 +89,13 @@ const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: "blocker.report", module: "OPERATIONS" },
   { key: "notes.create", module: "OPERATIONS" },
 
+  // Operational history -- the workshop's memory of what happened to
+  // every customer and vehicle. OPERATIONS rather than AUDIT on purpose:
+  // AUDIT answers "who changed the system", this answers "what happened
+  // to the car", and a workshop that switched one off expecting the
+  // other would lose the wrong thing.
+  { key: "history.workshop.view", module: "OPERATIONS" },
+
   // Finance
   { key: "finance.configuration.manage", module: "FINANCE" },
   { key: "finance.running_invoice.add_line", module: "FINANCE" },

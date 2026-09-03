@@ -41,7 +41,12 @@ export class OwnerShell {
     { label: 'Pricing', route: '/owner/pricing' },
     { label: 'Reports', route: '/owner/reports' },
     { label: 'Workflow Health', route: '/owner/workflow-health' },
-    { label: 'History', route: '/owner/audit' },
+    // Two different products, two different entries. History is what
+    // happened to customers and their vehicles; Audit is what changed
+    // about the system. This rail used to point the word "History" at
+    // the audit page, which is how the two get confused for one.
+    { label: 'History', route: '/owner/history' },
+    { label: 'Audit & Changes', route: '/owner/audit' },
   ]);
 
   async logout(): Promise<void> {

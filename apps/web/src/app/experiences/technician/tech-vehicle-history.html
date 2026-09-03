@@ -1,0 +1,169 @@
+<!--
+  The vehicle's memory, arranged around the decision this
+  technician is about to make. Headings and counts first, the
+  detail one tap behind them: a technician standing at a car needs
+  the SHAPE of the history in seconds, and a wall of every finding
+  is how the useful one gets missed.
+-->
+<section class="history">
+  <button type="button" class="history-toggle" (click)="toggleVehicleHistory()">
+    @if (vehicleHistoryOpen()) {
+      Hide vehicle history
+    } @else {
+      ⚠ Check vehicle history
+    }
+  </button>
+
+  @if (vehicleHistoryOpen()) {
+    @if (vehicleHistoryLoading()) {
+      <p class="history-loading" aria-busy="true">Loading history…</p>
+    } @else if (vehicleHistory(); as h) {
+      @if (h.priorVisits === 0) {
+        <p class="history-empty">
+          This vehicle has never been here before. Nothing from the past can help with today's job.
+        </p>
+      } @else {
+        <p class="history-summary">
+          {{ h.priorVisits }} previous visit{{ h.priorVisits === 1 ? '' : 's' }}
+          @if (h.visitsExamined < h.priorVisits) {
+            <span class="history-owner-note">showing the most recent {{ h.visitsExamined }}</span>
+          }
+          @if (h.hasPriorOwnerHistory) {
+            <span class="history-owner-note">includes visits from before the current owner</span>
+          }
+        </p>
+
+        <!-- Agreed and never delivered. Raised above everything
+             else, because it is the likeliest explanation for a
+             complaint that has come back. -->
+        @if (h.unresolved.length > 0) {
+          <div class="history-alert">
+            <p class="history-alert-title">Agreed before and not done</p>
+            @for (item of h.unresolved; track item.id) {
+              <p class="history-alert-line">{{ item.name }} — {{ item.outcomeLabel }}</p>
+            }
+          </div>
+        }
+
+        <div class="history-group">
+          <p class="history-group-title">
+            Previous complaints
+            <span class="history-count">{{ h.previousComplaints.length }}</span>
+          </p>
+          @if (h.previousComplaints.length === 0) {
+            <p class="history-empty">No complaint was recorded on any previous visit.</p>
+          }
+          @for (complaint of preview(h.previousComplaints, 'complaints'); track complaint.workOrderId) {
+            <div class="history-item">
+              <p class="history-item-main">{{ complaint.text }}</p>
+              <p class="history-item-meta">
+                {{ shortDate(complaint.at) }} · {{ label(complaint.status) }}
+                @if (!complaint.sameOwnerAsCurrent) {
+                  · previous owner
+                }
+              </p>
+            </div>
+          }
+          @if (hasMore(h.previousComplaints, 'complaints')) {
+            <button type="button" class="history-more" (click)="toggleList('complaints')">
+              View all {{ h.previousComplaints.length }}
+            </button>
+          } @else if (h.previousComplaints.length > 3) {
+            <button type="button" class="history-more" (click)="toggleList('complaints')">Show fewer</button>
+          }
+        </div>
+
+        <div class="history-group">
+          <p class="history-group-title">
+            Previous inspection findings
+            <span class="history-count">{{ h.previousFindings.length }}</span>
+          </p>
+          @if (h.previousFindings.length === 0) {
+            <p class="history-empty">No previous inspection recorded a fault.</p>
+          }
+          @for (finding of preview(h.previousFindings, 'findings'); track finding.id) {
+            <div class="history-item">
+              <p class="history-item-main">
+                <span class="history-severity" [class]="'history-severity--' + finding.severity.toLowerCase()">
+                  {{ label(finding.severity) }}
+                </span>
+                {{ finding.description }}
+              </p>
+              @if (finding.recommendedService) {
+                <p class="history-item-line">Suggested then: {{ finding.recommendedService }}</p>
+              }
+              @if (finding.inspectionNote) {
+                <p class="history-item-line">{{ finding.inspectionNote }}</p>
+              }
+              <p class="history-item-meta">
+                {{ shortDate(finding.at) }}
+                @if (finding.inspectionType) {
+                  · {{ label(finding.inspectionType) }} inspection
+                }
+                @if (!finding.sameOwnerAsCurrent) {
+                  · previous owner
+                }
+              </p>
+            </div>
+          }
+          @if (hasMore(h.previousFindings, 'findings')) {
+            <button type="button" class="history-more" (click)="toggleList('findings')">
+              View all {{ h.previousFindings.length }}
+            </button>
+          } @else if (h.previousFindings.length > 3) {
+            <button type="button" class="history-more" (click)="toggleList('findings')">Show fewer</button>
+          }
+        </div>
+
+        <div class="history-group">
+          <p class="history-group-title">
+            Previous recommendations
+            <span class="history-count">{{ h.previousRecommendations.length }}</span>
+          </p>
+          @if (h.previousRecommendations.length === 0) {
+            <p class="history-empty">Nothing was ever put to this customer about this vehicle.</p>
+          }
+          @for (recommendation of preview(h.previousRecommendations, 'recommendations'); track recommendation.id) {
+            <div class="history-item">
+              <button type="button" class="history-rec" (click)="toggleRecommendation(recommendation)">
+                <span class="history-outcome" [class]="'history-outcome--' + outcomeTone(recommendation)">
+                  {{ recommendation.outcomeLabel }}
+                </span>
+                <span class="history-item-main">{{ recommendation.name }}</span>
+              </button>
+              @if (openRecommendation() === recommendation.id) {
+                <div class="history-detail">
+                  <p class="history-item-line">{{ recommendation.explanation }}</p>
+                  @if (recommendation.linkedTasks.length > 0) {
+                    @for (task of recommendation.linkedTasks; track task.id) {
+                      <p class="history-item-line">Work: {{ task.title }} — {{ label(task.status) }}</p>
+                    }
+                  } @else {
+                    <p class="history-item-line">No work on that job was linked to it.</p>
+                  }
+                  <!-- Every status here is checkable rather than
+                       merely trusted. -->
+                  <ol class="history-evidence">
+                    @for (item of recommendation.evidence; track $index) {
+                      <li>
+                        <span class="history-evidence-when">{{ item.at ? shortDate(item.at) : 'not dated' }}</span>
+                        <span>{{ item.text }}</span>
+                      </li>
+                    }
+                  </ol>
+                </div>
+              }
+            </div>
+          }
+          @if (hasMore(h.previousRecommendations, 'recommendations')) {
+            <button type="button" class="history-more" (click)="toggleList('recommendations')">
+              View all {{ h.previousRecommendations.length }}
+            </button>
+          } @else if (h.previousRecommendations.length > 3) {
+            <button type="button" class="history-more" (click)="toggleList('recommendations')">Show fewer</button>
+          }
+        </div>
+      }
+    }
+  }
+</section>

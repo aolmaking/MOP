@@ -1164,6 +1164,23 @@ model Task {
   // Null for ad-hoc work. A workshop is allowed to do something that is
   // not in its catalogue, and free-text `title` remains the fallback.
   serviceKey  String?
+  // Which approved customer recommendation this task carries out, when it
+  // carries one out.
+  //
+  // The link exists because "was this recommendation performed?" has no
+  // other honest answer. A CustomerDecisionItem records what the customer
+  // agreed to; a Task records what the workshop actually did; without a
+  // stored relationship between them the only way to connect the two is
+  // to compare free text, and a history that says "COMPLETED" on the
+  // strength of a string match is exactly the silent lie the whole
+  // product exists to avoid. Null for ordinary work that was never a
+  // recommendation, which is most tasks.
+  //
+  // Not unique: one approved item can legitimately need several tasks
+  // ("Replace front brake discs" as a strip, a fit and a road test), and
+  // partial completion across them is a real state history must be able
+  // to report.
+  decisionItemId String?
   status      TaskStatus @default(ASSIGNED)
   // TIME_TRACKING (packages/shared/src/policies/registry.ts). Minutes the
   // technician reports at completion, whole minutes because that is the
@@ -1178,12 +1195,17 @@ model Task {
   updatedAt   DateTime   @updatedAt
 
   workOrder   WorkOrder        @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  // SetNull rather than Cascade: a cancelled decision request must not
+  // delete the record of work the workshop actually performed.
+  decisionItem CustomerDecisionItem? @relation(fields: [decisionItemId], references: [id], onDelete: SetNull)
   subtasks    Subtask[]
   assignments TaskAssignment[]
   blockers    TaskBlocker[]
 
   @@index([tenantId, status])
   @@index([workOrderId])
+  // Answers "what was done about this recommendation" without a scan.
+  @@index([decisionItemId])
   // Answers "how much battery-replacement work did we do" without a scan.
   @@index([tenantId, serviceKey])
   @@map("tasks")
@@ -2080,6 +2102,10 @@ model CustomerDecisionItem {
   decidedAt           DateTime?
 
   decisionRequest CustomerDecisionRequest @relation(fields: [decisionRequestId], references: [id], onDelete: Cascade)
+  // The work planned to carry this recommendation out. Empty for an item
+  // nobody has planned yet -- which history reports as "approved, no work
+  // linked" rather than guessing either way.
+  tasks           Task[]
 
   @@index([decisionRequestId])
   @@map("customer_decision_items")

@@ -419,69 +419,6 @@
   inline-size: 70%;
   block-size: var(--tech-text-xl);
 }
-
-.history {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin-block-end: var(--space-3);
-}
-
-.history-toggle {
-  min-block-size: var(--tap);
-  padding-inline: var(--space-3);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font-size: var(--tech-text-sm);
-  font-weight: 600;
-  text-align: start;
-  cursor: pointer;
-}
-
-.history-loading,
-.history-empty {
-  color: var(--text-muted);
-  font-size: var(--tech-text-sm);
-}
-
-.history-summary {
-  color: var(--text);
-  font-size: var(--tech-text-sm);
-  font-weight: 600;
-}
-
-.history-owner-note {
-  color: var(--text-faint);
-  font-weight: 400;
-}
-
-.history-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.history-visit {
-  padding: var(--space-2) var(--space-3);
-  background: var(--surface);
-  border-inline-start: 3px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-
-.history-visit-head {
-  color: var(--text-muted);
-  font-size: var(--tech-text-sm);
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.history-line {
-  color: var(--text);
-  font-size: var(--tech-text-sm);
-}
-
 /* --- parts on the job ---------------------------------------------- */
 /*
  * Distinct from the picker above: this is what has already been asked

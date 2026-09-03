@@ -72,21 +72,59 @@ export interface WorkCard {
   readonly primaryAction: WorkCardPrimaryAction | null;
 }
 
-export interface AssetHistoryVisit {
+/**
+ * What became of a recommendation, and why the history says so.
+ *
+ * Notice what is NOT here: no price, no labour, no total. The server
+ * omits those keys entirely for a technician rather than blanking them,
+ * so there is nothing on this path for a template to leak.
+ */
+export type RecommendationOutcome =
+  | 'AWAITING_CUSTOMER'
+  | 'DECLINED'
+  | 'EXPIRED'
+  | 'CANCELLED'
+  | 'APPROVED_NO_WORK_LINKED'
+  | 'APPROVED_PLANNED'
+  | 'APPROVED_IN_PROGRESS'
+  | 'PARTIALLY_PERFORMED'
+  | 'PERFORMED'
+  | 'NOT_PERFORMED';
+
+export interface HistoryRecommendation {
+  readonly id: string;
   readonly workOrderId: string;
+  readonly name: string;
+  readonly explanation: string;
+  readonly importance: string;
+  readonly decision: string;
+  readonly decidedAt: string | null;
+  readonly outcome: RecommendationOutcome;
+  readonly outcomeLabel: string;
+  readonly evidence: readonly { readonly at: string | null; readonly text: string }[];
+  readonly linkedTasks: readonly { readonly id: string; readonly title: string; readonly status: string }[];
+}
+
+export interface HistoryFinding {
+  readonly id: string;
+  readonly workOrderId: string;
+  readonly at: string;
+  readonly code: string | null;
+  readonly description: string;
+  readonly severity: string;
+  readonly recommendedService: string | null;
+  readonly inspectionId: string | null;
+  readonly inspectionType: string | null;
+  readonly inspectionNote: string | null;
+  readonly sameOwnerAsCurrent: boolean;
+}
+
+export interface HistoryComplaint {
+  readonly workOrderId: string;
+  readonly at: string;
+  readonly text: string;
   readonly status: string;
-  readonly createdAt: string;
   readonly closedAt: string | null;
-  readonly complaint: string | null;
-  readonly inspections: readonly { readonly type: string; readonly note: string | null; readonly createdAt: string }[];
-  readonly faults: readonly {
-    readonly code: string | null;
-    readonly description: string;
-    readonly severity: string;
-    readonly recommendedService: string | null;
-  }[];
-  readonly partsUsed: readonly { readonly name: string; readonly quantity: number }[];
-  readonly decisions: readonly { readonly name: string; readonly decision: string }[];
   readonly sameOwnerAsCurrent: boolean;
 }
 
@@ -201,12 +239,32 @@ export function browseParams(query: CatalogBrowseQuery): Record<string, string> 
   return params;
 }
 
-export interface AssetHistorySummary {
-  readonly assetId: string;
-  readonly identifier: string | null;
-  readonly totalPriorVisits: number;
+/**
+ * The vehicle's history, arranged around the decision the technician is
+ * about to make -- not the owner's complete record, which is a different
+ * product for a different question.
+ */
+export interface TechnicianHistoryBrief {
+  readonly workOrderId: string;
+  readonly asset: {
+    readonly id: string;
+    readonly category: string;
+    readonly identifier: string | null;
+    readonly plateNumber: string | null;
+    readonly vin: string | null;
+  };
+  readonly currentComplaint: string | null;
+  readonly currentInspectionDeclined: boolean;
+  readonly priorVisits: number;
+  /** How many of `priorVisits` the lists below were built from. */
+  readonly visitsExamined: number;
   readonly hasPriorOwnerHistory: boolean;
-  readonly visits: readonly AssetHistoryVisit[];
+  readonly previousComplaints: readonly HistoryComplaint[];
+  readonly previousFindings: readonly HistoryFinding[];
+  readonly previousRecommendations: readonly HistoryRecommendation[];
+  /** Agreed and not delivered. The reason this surface exists. */
+  readonly unresolved: readonly HistoryRecommendation[];
+  readonly generatedAt: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -225,8 +283,8 @@ export class TechnicianApi {
     return this.http.get<WorkCard>(`/api/v1/technician/work-orders/${id}`);
   }
 
-  vehicleHistory(workOrderId: string): Observable<AssetHistorySummary> {
-    return this.http.get<AssetHistorySummary>(`/api/v1/technician/work-orders/${workOrderId}/vehicle-history`);
+  vehicleHistory(workOrderId: string): Observable<TechnicianHistoryBrief> {
+    return this.http.get<TechnicianHistoryBrief>(`/api/v1/technician/work-orders/${workOrderId}/vehicle-history`);
   }
 
   startTask(taskId: string): Observable<unknown> {

@@ -477,6 +477,7 @@ export class BranchManagerController {
       { accountId: session.accountId, displayName: session.displayName, actorType: "TENANT_STAFF" },
       dto.assignToStaffUserId,
       dto.serviceKey,
+      dto.decisionItemId,
     );
   }
 

@@ -11,6 +11,8 @@ import { CapabilityResolutionService } from "../../control/capabilities/capabili
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 import { WorkOrderLifecycleService } from "../../systems/operations/work-order-lifecycle.service";
 import { AssetHistoryService } from "../../systems/operations/vehicle-history/asset-history.service";
+import { WorkshopHistoryService } from "../../systems/operations/history/workshop-history.service";
+import type { TechnicianHistoryBrief } from "../../systems/operations/history/workshop-history.types";
 
 export interface TechnicianJob {
   readonly workOrderId: string;
@@ -158,6 +160,7 @@ export class TechnicianWorkViewService {
     private readonly prisma: PrismaService,
     private readonly lifecycle: WorkOrderLifecycleService,
     private readonly assetHistory: AssetHistoryService,
+    private readonly workshopHistory: WorkshopHistoryService,
     private readonly policies: PolicyResolutionService,
     private readonly capabilities: CapabilityResolutionService,
   ) {}
@@ -339,12 +342,20 @@ export class TechnicianWorkViewService {
 
   /**
    * "Previous history detected" (docs/POLICY_DECISION_INVENTORY.md
-   * §8.B, P-81) -- reuses the same ownership check `workCard` already
-   * does (a technician can only pull history for a job actually
-   * assigned to them), then hands off to the shared, role-agnostic
-   * history builder.
+   * §8.B, P-81) -- what this vehicle has been through, arranged around
+   * the decision the technician is about to make.
+   *
+   * Reuses the exact ownership check `workCard` already does: a
+   * technician can only pull history for a job actually assigned to
+   * them, and the asset id is read from the job THEY are assigned to
+   * rather than accepted from the caller. A route that took an assetId
+   * would let any technician read any vehicle in the workshop.
+   *
+   * The projection itself comes from the shared history service, which
+   * omits money entirely for this reader -- the price fields are absent
+   * from the response, not blanked in the template.
    */
-  async vehicleHistory(staffUserId: string, tenantId: string, workOrderId: string) {
+  async vehicleHistory(staffUserId: string, tenantId: string, workOrderId: string): Promise<TechnicianHistoryBrief> {
     const workOrder = await this.prisma.workOrder.findFirst({
       where: {
         id: workOrderId,
@@ -360,7 +371,7 @@ export class TechnicianWorkViewService {
       throw new NotFoundException({ code: "work_order_not_found", message: "That job is not assigned to you." });
     }
 
-    return this.assetHistory.build(tenantId, workOrder.assetId, workOrderId);
+    return this.workshopHistory.technicianBrief(tenantId, workOrder.assetId, workOrderId);
   }
 
   /**

@@ -39,6 +39,9 @@ function build(options: {
     prisma as never,
     lifecycle as never,
     assetHistory as never,
+    // Unit-scope: the work card never reaches history, so this is a
+    // placeholder rather than a stub with behaviour to keep in sync.
+    {} as never,
     policies as never,
     capabilities as never,
   );

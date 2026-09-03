@@ -71,7 +71,15 @@ export class TechnicianController {
     });
   }
 
-  /** "Previous history detected" -- P-81, docs/POLICY_DECISION_INVENTORY.md §8.B. */
+  /**
+   * The vehicle's decision-support history -- P-81,
+   * docs/POLICY_DECISION_INVENTORY.md §8.B.
+   *
+   * Deliberately NOT the owner's history record: same underlying truth,
+   * arranged around "what do I need to know before I decide", and with
+   * no money in it at all. Scope is the technician's own assignment,
+   * resolved from the session, never from the URL.
+   */
   @Get("work-orders/:id/vehicle-history")
   async vehicleHistory(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
@@ -151,7 +159,14 @@ export class TechnicianController {
   ) {
     await this.requireTechnician(session, "inspection.full.create");
     return this.work.createFault(
-      { workOrderId: id, description: dto.description, severity: dto.severity },
+      {
+        workOrderId: id,
+        description: dto.description,
+        severity: dto.severity,
+        code: dto.code,
+        recommendedService: dto.recommendedService,
+        inspectionId: dto.inspectionId,
+      },
       this.actor(session),
     );
   }

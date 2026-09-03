@@ -1,0 +1,421 @@
+<div class="scrim" (click)="closed.emit()"></div>
+
+<aside
+  class="record"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="history-record-title"
+  appDismissOnEscape
+  (dismissed)="closed.emit()"
+>
+  <header class="head">
+    <div>
+      <h2 class="title" id="history-record-title">Complete history</h2>
+      @if (record(); as r) {
+        <p class="sub">
+          <mop-identifier [value]="identifier() ?? '—'" />
+          <span class="sub-sep">·</span>{{ r.customer.fullName }}
+          <span class="sub-sep">·</span>{{ r.totalVisits }} {{ r.totalVisits === 1 ? 'visit' : 'visits' }}
+        </p>
+      }
+    </div>
+    <button type="button" class="close" (click)="closed.emit()" aria-label="Close complete history">✕</button>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="state" aria-busy="true">Loading the whole record…</p>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('ready') {
+      @if (record(); as r) {
+        <!-- Who and what, before any of the history. -->
+        <section class="band">
+          <h3 class="band-title">Customer and vehicle</h3>
+          <div class="facts">
+            <div class="fact">
+              <span class="fact-label">Customer</span>
+              <span class="fact-value">{{ r.customer.fullName }}</span>
+            </div>
+            <div class="fact">
+              <span class="fact-label">Phone</span>
+              <span class="fact-value"><mop-identifier [value]="r.customer.phone" /></span>
+            </div>
+            <div class="fact">
+              <span class="fact-label">Vehicle</span>
+              <span class="fact-value">{{ label(r.asset.category) }}</span>
+            </div>
+            <div class="fact">
+              <span class="fact-label">Plate</span>
+              <span class="fact-value"><mop-identifier [value]="r.asset.plateNumber ?? '—'" /></span>
+            </div>
+            @if (r.asset.vin) {
+              <div class="fact">
+                <span class="fact-label">VIN / chassis</span>
+                <span class="fact-value"><mop-identifier [value]="r.asset.vin" /></span>
+              </div>
+            }
+            @if (r.asset.serialNumber) {
+              <div class="fact">
+                <span class="fact-label">Serial</span>
+                <span class="fact-value"><mop-identifier [value]="r.asset.serialNumber" /></span>
+              </div>
+            }
+            <div class="fact">
+              <span class="fact-label">First visit</span>
+              <span class="fact-value">{{ onlyDate(r.firstVisitAt) }}</span>
+            </div>
+            <div class="fact">
+              <span class="fact-label">Last visit</span>
+              <span class="fact-value">{{ onlyDate(r.lastVisitAt) }}</span>
+            </div>
+          </div>
+
+          @if (!r.isCurrentOwner) {
+            <!-- Stated rather than left to be inferred from dates: this
+                 person no longer owns the vehicle, and the visits below
+                 are theirs alone. -->
+            <p class="note">
+              This customer no longer owns this vehicle.
+              @if (r.ownershipEndedAt) {
+                Ownership ended {{ onlyDate(r.ownershipEndedAt) }}.
+              }
+            </p>
+          }
+          @if (r.otherOwnerVisits > 0) {
+            <p class="note">
+              This vehicle made {{ r.otherOwnerVisits }} further
+              {{ r.otherOwnerVisits === 1 ? 'visit' : 'visits' }} under a different owner. Those visits belong to that
+              customer's history, not this one.
+            </p>
+          }
+        </section>
+
+        @if (r.visits.length === 0) {
+          <p class="state">This vehicle has never been booked in under this customer.</p>
+        }
+
+        <!-- One entry per real visit, newest first. -->
+        @for (visit of r.visits; track visit.workOrderId) {
+          <section class="visit" [class.visit--open]="isVisitOpen(visit)">
+            <button type="button" class="visit-head" (click)="toggleVisit(visit)" [attr.aria-expanded]="isVisitOpen(visit)">
+              <span class="visit-when">{{ onlyDate(visit.openedAt) }}</span>
+              <span class="visit-status">{{ label(visit.status) }}</span>
+              <span class="visit-complaint">{{ visit.complaint ?? 'No complaint was recorded' }}</span>
+              <span class="visit-chevron" aria-hidden="true">{{ isVisitOpen(visit) ? '−' : '+' }}</span>
+            </button>
+
+            @if (isVisitOpen(visit)) {
+              <div class="visit-body">
+                <!-- 1. The visit itself -->
+                <div class="facts facts--tight">
+                  <div class="fact">
+                    <span class="fact-label">Opened</span>
+                    <span class="fact-value">{{ when(visit.openedAt) }}</span>
+                  </div>
+                  <div class="fact">
+                    <span class="fact-label">Closed</span>
+                    <span class="fact-value">{{ when(visit.closedAt) }}</span>
+                  </div>
+                  @if (visit.branchName) {
+                    <div class="fact">
+                      <span class="fact-label">Branch</span>
+                      <span class="fact-value">{{ visit.branchName }}</span>
+                    </div>
+                  }
+                  @if (visit.staff.length > 0) {
+                    <div class="fact">
+                      <span class="fact-label">Worked on by</span>
+                      <span class="fact-value">{{ visit.staff[0].fullName }}@if (visit.staff.length > 1) { +{{ visit.staff.length - 1 }} }</span>
+                    </div>
+                  }
+                </div>
+
+                @if (!visit.sameOwnerAsCurrent) {
+                  <p class="note">This visit happened before the current owner took the vehicle on.</p>
+                }
+
+                <!-- 2. What the customer said, on THIS visit -->
+                <div class="section">
+                  <h4 class="section-title">What the customer reported</h4>
+                  @if (visit.complaint) {
+                    <p class="quote">{{ visit.complaint }}</p>
+                  } @else {
+                    <p class="empty">No complaint was recorded at intake.</p>
+                  }
+                  @if (visit.inspectionDeclined) {
+                    <p class="note">The customer declined an inspection and asked for named work only.</p>
+                  }
+                </div>
+
+                <!-- 3. Inspection -->
+                <div class="section">
+                  <h4 class="section-title">Inspection</h4>
+                  @if (visit.inspections.length === 0) {
+                    <p class="empty">No inspection was recorded on this visit.</p>
+                  }
+                  @for (inspection of visit.inspections; track inspection.id) {
+                    <div class="entry">
+                      <p class="entry-head">
+                        {{ label(inspection.type) }} inspection
+                        <span class="entry-meta">{{ when(inspection.at) }}</span>
+                        @if (inspection.technicianName) {
+                          <span class="entry-meta">· {{ inspection.technicianName }}</span>
+                        }
+                        @if (inspection.odometerOrHours) {
+                          <span class="entry-meta">· {{ inspection.odometerOrHours }}</span>
+                        }
+                      </p>
+                      @if (inspection.note) {
+                        <p class="quote">{{ inspection.note }}</p>
+                      }
+                      @if (fieldPairs(inspection.fields).length > 0) {
+                        <dl class="fields">
+                          @for (pair of fieldPairs(inspection.fields); track pair.key) {
+                            <div class="field">
+                              <dt>{{ pair.key }}</dt>
+                              <dd>{{ pair.value }}</dd>
+                            </div>
+                          }
+                        </dl>
+                      }
+                    </div>
+                  }
+                </div>
+
+                <!-- 4. Findings -->
+                <div class="section">
+                  <h4 class="section-title">Findings</h4>
+                  @if (visit.findings.length === 0) {
+                    <p class="empty">Nothing was recorded as faulty on this visit.</p>
+                  }
+                  @for (finding of visit.findings; track finding.id) {
+                    <div class="entry">
+                      <p class="entry-head">
+                        <span class="severity" [class]="'severity--' + finding.severity.toLowerCase()">{{ label(finding.severity) }}</span>
+                        {{ finding.description }}
+                        @if (finding.code) {
+                          <span class="entry-meta">· {{ finding.code }}</span>
+                        }
+                      </p>
+                      @if (finding.recommendedService) {
+                        <p class="entry-line">Technician suggested: {{ finding.recommendedService }}</p>
+                      }
+                      <p class="entry-meta">{{ when(finding.at) }}</p>
+                    </div>
+                  }
+                </div>
+
+                <!-- 5. Recommendations, and what actually became of them -->
+                <div class="section">
+                  <h4 class="section-title">Recommendations and customer decisions</h4>
+                  @if (visit.recommendations.length === 0) {
+                    <p class="empty">Nothing was put to the customer on this visit.</p>
+                  }
+                  @for (recommendation of visit.recommendations; track recommendation.id) {
+                    <div class="entry">
+                      <p class="entry-head">
+                        <span class="outcome" [class]="'outcome--' + tone(recommendation.outcome)">{{ recommendation.outcomeLabel }}</span>
+                        {{ recommendation.name }}
+                        @if (recommendation.total) {
+                          <span class="entry-money">{{ recommendation.total }}</span>
+                        }
+                      </p>
+                      <p class="entry-line">{{ recommendation.explanation }}</p>
+                      @if (recommendation.linkedTasks.length > 0) {
+                        <p class="entry-line">
+                          Work planned for it:
+                          @for (task of recommendation.linkedTasks; track task.id) {
+                            <span class="task-chip">{{ task.title }} — {{ label(task.status) }}</span>
+                          }
+                        </p>
+                      } @else {
+                        <p class="entry-line entry-line--muted">No work on this job was linked to this recommendation.</p>
+                      }
+                      <!-- Every status here has to be checkable, not
+                           merely trusted. This is where it is checked. -->
+                      <button type="button" class="evidence-toggle" (click)="toggleEvidence(recommendation)">
+                        {{ isEvidenceOpen(recommendation) ? 'Hide the evidence' : 'Why does it say that?' }}
+                      </button>
+                      @if (isEvidenceOpen(recommendation)) {
+                        <ol class="evidence">
+                          @for (item of recommendation.evidence; track $index) {
+                            <li>
+                              <span class="evidence-when">{{ item.at ? when(item.at) : 'no timestamp recorded' }}</span>
+                              <span class="evidence-text">{{ item.text }}</span>
+                            </li>
+                          }
+                        </ol>
+                      }
+                    </div>
+                  }
+                </div>
+
+                <!-- 6. Work performed -->
+                <div class="section">
+                  <h4 class="section-title">Work performed</h4>
+                  @if (visit.operations.length === 0) {
+                    <p class="empty">No work was ever planned on this visit.</p>
+                  }
+                  @for (operation of visit.operations; track operation.id) {
+                    <div class="entry entry--row">
+                      <span class="op-status" [class.op-status--done]="operation.status === 'DONE'">{{ label(operation.status) }}</span>
+                      <span class="op-title">{{ operation.title }}</span>
+                      @if (operation.fromRecommendationId) {
+                        <span class="op-flag">from a recommendation</span>
+                      }
+                      @if (operation.actualMinutes !== null) {
+                        <span class="entry-meta">{{ operation.actualMinutes }} min</span>
+                      }
+                      @for (blocker of operation.blockers; track $index) {
+                        <span class="op-blocker">blocked: {{ label(blocker.reason) }}</span>
+                      }
+                    </div>
+                  }
+                </div>
+
+                <!-- 7. Parts -->
+                <div class="section">
+                  <h4 class="section-title">Parts</h4>
+                  @if (visit.parts.length === 0) {
+                    <p class="empty">No parts were fitted on this visit.</p>
+                  }
+                  @for (part of visit.parts; track $index) {
+                    <div class="entry entry--row">
+                      <span class="op-title">{{ part.name }} × {{ part.quantity }}</span>
+                      <span class="entry-meta">{{ label(part.provenance) }}</span>
+                      @if (part.requestStatus) {
+                        <span class="entry-meta">· store: {{ label(part.requestStatus) }}</span>
+                      }
+                      @if (part.issuedQuantity > 0) {
+                        <span class="entry-meta">· {{ part.issuedQuantity }} issued</span>
+                      }
+                      @if (part.usedAt) {
+                        <span class="entry-meta">· fitted {{ onlyDate(part.usedAt) }}</span>
+                      }
+                      <span class="entry-money">{{ part.charged }}</span>
+                    </div>
+                  }
+                </div>
+
+                <!-- 8. Money, exactly as Finance recorded it -->
+                <div class="section">
+                  <h4 class="section-title">Money</h4>
+                  @if (visit.money.invoiceNumber) {
+                    <div class="facts facts--tight">
+                      <div class="fact">
+                        <span class="fact-label">Invoice</span>
+                        <span class="fact-value"><mop-identifier [value]="visit.money.invoiceNumber" /></span>
+                      </div>
+                      <div class="fact">
+                        <span class="fact-label">Issued</span>
+                        <span class="fact-value">{{ onlyDate(visit.money.issuedAt) }}</span>
+                      </div>
+                      <div class="fact">
+                        <span class="fact-label">Total</span>
+                        <span class="fact-value money">{{ visit.money.total }}</span>
+                      </div>
+                      <div class="fact">
+                        <span class="fact-label">Paid</span>
+                        <span class="fact-value money">{{ visit.money.paid }}</span>
+                      </div>
+                      <div class="fact">
+                        <span class="fact-label">Outstanding</span>
+                        <span class="fact-value money" [class.money--owing]="visit.money.outstanding !== '0.00'">
+                          {{ visit.money.outstanding }}
+                        </span>
+                      </div>
+                      @if (visit.money.discount !== '0.00') {
+                        <div class="fact">
+                          <span class="fact-label">Discount</span>
+                          <span class="fact-value money">{{ visit.money.discount }}</span>
+                        </div>
+                      }
+                      @if (visit.money.tax !== '0.00') {
+                        <div class="fact">
+                          <span class="fact-label">Tax</span>
+                          <span class="fact-value money">{{ visit.money.tax }}</span>
+                        </div>
+                      }
+                    </div>
+
+                    @if (visit.money.lines.length > 0) {
+                      <table class="lines">
+                        <thead>
+                          <tr>
+                            <th scope="col">Line</th>
+                            <th scope="col">Qty</th>
+                            <th scope="col" class="numeric">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          @for (line of visit.money.lines; track $index) {
+                            <tr>
+                              <td>{{ line.name }}</td>
+                              <td>{{ line.quantity }}</td>
+                              <td class="numeric money">{{ line.total }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    }
+
+                    @if (visit.money.payments.length > 0) {
+                      <p class="section-sub">Payments</p>
+                      @for (payment of visit.money.payments; track payment.id) {
+                        <div class="entry entry--row">
+                          <span class="op-title money">{{ payment.amount }}</span>
+                          <span class="entry-meta">{{ label(payment.method) }} · {{ label(payment.status) }}</span>
+                          <span class="entry-meta">{{ when(payment.at) }}</span>
+                        </div>
+                      }
+                    } @else {
+                      <p class="empty">No payment has been recorded against this invoice.</p>
+                    }
+                  } @else if (visit.money.runningTotal) {
+                    <p class="entry-line">
+                      Not invoiced yet. The running total so far is
+                      <span class="money">{{ visit.money.runningTotal }}</span>.
+                    </p>
+                  } @else {
+                    <p class="empty">Nothing has been charged on this visit.</p>
+                  }
+                </div>
+
+                <!-- 9. The lifecycle, from the event log -->
+                <div class="section">
+                  <h4 class="section-title">How the visit progressed</h4>
+                  @if (visit.lifecycle.length === 0) {
+                    <p class="empty">No stage change was recorded for this visit.</p>
+                  }
+                  <ol class="lifecycle">
+                    @for (step of visit.lifecycle; track $index) {
+                      <li>
+                        <span class="evidence-when">{{ when(step.at) }}</span>
+                        <span class="evidence-text">{{ label(step.from) }} → {{ label(step.to) }}</span>
+                      </li>
+                    }
+                  </ol>
+                  <p class="entry-meta">
+                    {{ visit.events.length }} recorded {{ visit.events.length === 1 ? 'event' : 'events' }} on this visit.
+                  </p>
+                </div>
+              </div>
+            }
+          </section>
+        }
+
+        <footer class="foot">
+          <p class="entry-meta">Read from the workshop's own records at {{ when(r.generatedAt) }}.</p>
+        </footer>
+      }
+    }
+  }
+</aside>

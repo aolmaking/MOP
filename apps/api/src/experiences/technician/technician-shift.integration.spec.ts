@@ -28,6 +28,7 @@ import { AuditService } from "../../audit/audit.service";
 import { AttentionQueueService } from "../branch-manager/attention-queue.service";
 import { TechnicianWorkViewService } from "./technician-work-view.service";
 import { AssetHistoryService } from "../../systems/operations/vehicle-history/asset-history.service";
+import { WorkshopHistoryService } from "../../systems/operations/history/workshop-history.service";
 import type { PrismaService } from "../../runtime/database/prisma.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 
@@ -56,10 +57,12 @@ const lifecycle = new WorkOrderLifecycleService(
 );
 const intake = new IntakeService(asService, events, lifecycle);
 const techWork = new TechnicianWorkService(asService, events, lifecycle, policiesForTest);
+const assetHistoryForTest = new AssetHistoryService(asService);
 const techView = new TechnicianWorkViewService(
   asService,
   lifecycle,
-  new AssetHistoryService(asService),
+  assetHistoryForTest,
+  new WorkshopHistoryService(asService, assetHistoryForTest),
   policiesForTest,
   new CapabilityResolutionService(asService),
 );

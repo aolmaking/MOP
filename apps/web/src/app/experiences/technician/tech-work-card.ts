@@ -1,18 +1,12 @@
-import { Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Identifier } from '../../ui/identifier/identifier';
 import { WorkflowStrip, type JourneyAction } from '../../domain/journey/workflow-strip';
 import { PartList, type PartClarification, type PartReturn } from './part-list';
+import { TechVehicleHistory } from './tech-vehicle-history';
 import { pollJourney, type JourneyFeed } from '../../domain/journey/journey-poller';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
-import {
-  TechnicianApi,
-  type AssetHistorySummary,
-  type TechnicianTask,
-  type WorkCard,
-  type WorkCardPart,
-} from './technician.api';
+import { TechnicianApi, type TechnicianTask, type WorkCard, type WorkCardPart } from './technician.api';
 
 type State = 'loading' | 'ready' | 'not-mine' | 'forbidden' | 'error';
 
@@ -44,7 +38,7 @@ const BLOCKER_REASONS = [
  */
 @Component({
   selector: 'app-tech-work-card',
-  imports: [RouterLink, Identifier, DatePipe, WorkflowStrip, PartList],
+  imports: [RouterLink, Identifier, WorkflowStrip, PartList, TechVehicleHistory],
   templateUrl: './tech-work-card.html',
   styleUrl: './tech-work-card.css',
 })
@@ -177,13 +171,31 @@ export class TechWorkCard {
     this.run('external', this.api.addExternalPart(this.id(), name, provenance, quantity));
   }
 
-  /** Loaded lazily, on request -- not every job has history, and most visits are a single one. */
-  protected readonly vehicleHistory = signal<AssetHistorySummary | null>(null);
-  protected readonly vehicleHistoryOpen = signal(false);
-  protected readonly vehicleHistoryLoading = signal(false);
-
   constructor() {
-    queueMicrotask(() => this.load());
+    // Keyed on the route id, not run once.
+    //
+    // Angular reuses this component when only the `:id` parameter
+    // changes, so a one-shot load in the constructor left the previous
+    // car's card, parts and history on screen after navigating from one
+    // job to another. On a workshop tablet that is not a cosmetic bug:
+    // it is a technician reading the wrong vehicle's parts and blockers
+    // while holding a different car's key. The history panel below keys
+    // itself off the same id for the same reason.
+    effect(() => {
+      const id = this.id();
+      if (!id) return;
+      untracked(() => this.reset());
+      untracked(() => this.load());
+    });
+  }
+
+  /** Everything that belongs to ONE job, cleared before another is loaded. */
+  private reset(): void {
+    this.card.set(null);
+    this.state.set('loading');
+    this.busy.set(null);
+    this.actionError.set(null);
+    this.panel.set('none');
   }
 
   protected load(): void {
@@ -359,18 +371,4 @@ export class TechWorkCard {
     return value.toLowerCase().replace(/_/g, ' ');
   }
 
-  protected toggleVehicleHistory(): void {
-    const opening = !this.vehicleHistoryOpen();
-    this.vehicleHistoryOpen.set(opening);
-    if (opening && !this.vehicleHistory()) {
-      this.vehicleHistoryLoading.set(true);
-      this.api.vehicleHistory(this.id()).subscribe({
-        next: (summary) => {
-          this.vehicleHistoryLoading.set(false);
-          this.vehicleHistory.set(summary);
-        },
-        error: () => this.vehicleHistoryLoading.set(false),
-      });
-    }
-  }
 }

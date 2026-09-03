@@ -106,6 +106,34 @@ export class CreateFaultDto {
 
   @IsEnum(SeverityLevel)
   severity!: SeverityLevel;
+
+  /**
+   * The workshop's own fault code, when it uses them.
+   *
+   * `Fault.code`, `Fault.recommendedService` and `Fault.inspectionId` are
+   * all written by `TechnicianWorkService.createFault` and were all
+   * unreachable: the service took them, the DTO did not offer them, so
+   * the only fault a technician could actually record was a bare
+   * description. The history module is what made that visible -- it
+   * reports "what did the last technician recommend" from
+   * `recommendedService`, and the column was empty for every fault in
+   * the product.
+   */
+  @IsOptional()
+  @IsString()
+  @Length(1, 50)
+  code?: string;
+
+  /** What the technician thinks should be done about it, in their words. */
+  @IsOptional()
+  @IsString()
+  @Length(1, 500)
+  recommendedService?: string;
+
+  /** The inspection this came out of, so a finding can be read back beside it. */
+  @IsOptional()
+  @IsString()
+  inspectionId?: string;
 }
 
 export class RequestReturnDto {
