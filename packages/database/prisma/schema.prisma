@@ -327,8 +327,8 @@ model Plan {
 }
 
 model Tenant {
-  id   String @id @default(cuid())
-  name String
+  id                       String       @id @default(cuid())
+  name                     String
   // Lowercased mirror of `name`, maintained by application code on write.
   // Prisma's schema DSL has no expression/functional index (Postgres
   // supports `UNIQUE (lower(name))` directly, but not through @@unique),
@@ -344,8 +344,8 @@ model Tenant {
   city                     String
   businessType             String
   primaryCategory          CategoryCode
-  currency                 String       // ISO 4217, e.g. "EGP", "USD", "AED" -- one currency per workshop
-  timezone                 String       // IANA identifier, e.g. "Africa/Cairo" -- all timestamps stored in UTC, converted for display using this
+  currency                 String // ISO 4217, e.g. "EGP", "USD", "AED" -- one currency per workshop
+  timezone                 String // IANA identifier, e.g. "Africa/Cairo" -- all timestamps stored in UTC, converted for display using this
   // Phase 18.D -- two clocks, never conflated. `archivedAt` is when the
   // tenant stopped being a live subscription; `retentionUntil` is when
   // the platform's LEGAL obligation to keep the data ends, which can
@@ -392,10 +392,10 @@ model Tenant {
   stakeholders            TenantStakeholder[]
   groupMemberships        TenantGroupMember[]
   liveViewSessions        PlatformLiveViewSession[]
+  workflowIssueAcks       WorkflowIssueAcknowledgement[]
 
   @@index([status])
   @@map("tenants")
-  workflowIssueAcks WorkflowIssueAcknowledgement[]
 }
 
 // Platform + tenant-level overrides that sit above everything else in the
@@ -492,18 +492,18 @@ model Account {
   // e.g. a new workshop owner) and cleared the moment the invite is
   // redeemed. The raw token is never stored, only this hash, matching the
   // same pattern session secrets already use (see auth/token.util.ts).
-  inviteTokenHash      String?
-  inviteTokenExpiresAt DateTime?
+  inviteTokenHash             String?
+  inviteTokenExpiresAt        DateTime?
   // Password reset is distinct from invite activation: an invited account
   // is not active yet, while a reset is recovery for an existing account.
   // The raw reset token is never stored, only this hash.
   passwordResetTokenHash      String?
   passwordResetTokenExpiresAt DateTime?
 
-  tenant   Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  staff    StaffUser?
-  customer Customer?
-  sessions Session[]
+  tenant            Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staff             StaffUser?
+  customer          Customer?
+  sessions          Session[]
   analystSavedViews AnalystSavedView[]
 
   // A stakeholder relationship to OTHER tenants, distinct from `tenant`
@@ -554,16 +554,16 @@ model Session {
 }
 
 model StaffUser {
-  id             String         @id @default(cuid())
-  accountId      String         @unique
-  tenantId       String
-  fullName       String
-  role           StaffRole
-  branchScope    String[]
-  warehouseScope String[]
-  categoryScope  CategoryCode[]
-  isActive       Boolean        @default(true)
-  lockedAt       DateTime?
+  id                String                 @id @default(cuid())
+  accountId         String                 @unique
+  tenantId          String
+  fullName          String
+  role              StaffRole
+  branchScope       String[]
+  warehouseScope    String[]
+  categoryScope     CategoryCode[]
+  isActive          Boolean                @default(true)
+  lockedAt          DateTime?
   // Phase 19.D -- a third state between "active" and the platform-wide
   // tenant freeze, which Workshop 5 scenario 24 found is the only lever
   // that previously existed and is far too large a hammer for a single
@@ -572,7 +572,7 @@ model StaffUser {
   restrictionStatus StaffRestrictionStatus @default(NONE)
   restrictedAt      DateTime?
   restrictedReason  String?
-  createdAt      DateTime       @default(now())
+  createdAt         DateTime               @default(now())
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -695,7 +695,7 @@ enum SpecializationFieldType {
 // "show me its diagnostic forms" -- it changes nothing about how a
 // definition is stored or validated.
 model SpecializationDefinition {
-  id        String                    @id @default(cuid())
+  id        String             @id @default(cuid())
   tenantId  String
   category  CategoryCode
   kind      SpecializationKind
@@ -706,13 +706,13 @@ model SpecializationDefinition {
   // pattern capability profiles use for historical interpretation, per
   // this phase's own "open question" about editing a card after 200 have
   // already been filled in.
-  version   Int                       @default(1)
-  isActive  Boolean                   @default(true)
+  version   Int                @default(1)
+  isActive  Boolean            @default(true)
   // Array of { key, label, type: SpecializationFieldType, unit?, enumOptions?, required }.
   // Deliberately Json, not a child table: a field list is authored and
   // read as one unit, never queried field-by-field across definitions.
   fields    Json
-  createdAt DateTime                  @default(now())
+  createdAt DateTime           @default(now())
 
   entries SpecializationEntry[]
 
@@ -1145,10 +1145,10 @@ model WorkOrderAssignment {
 }
 
 model Task {
-  id          String     @id @default(cuid())
-  tenantId    String
-  workOrderId String
-  title       String
+  id             String     @id @default(cuid())
+  tenantId       String
+  workOrderId    String
+  title          String
   // Which catalogued service this task performs, when it performs one.
   //
   // Stored as PriceCatalogEntry.itemKey rather than as a foreign key to a
@@ -1163,7 +1163,7 @@ model Task {
   //
   // Null for ad-hoc work. A workshop is allowed to do something that is
   // not in its catalogue, and free-text `title` remains the fallback.
-  serviceKey  String?
+  serviceKey     String?
   // Which approved customer recommendation this task carries out, when it
   // carries one out.
   //
@@ -1181,7 +1181,7 @@ model Task {
   // partial completion across them is a real state history must be able
   // to report.
   decisionItemId String?
-  status      TaskStatus @default(ASSIGNED)
+  status         TaskStatus @default(ASSIGNED)
   // TIME_TRACKING (packages/shared/src/policies/registry.ts). Minutes the
   // technician reports at completion, whole minutes because that is the
   // granularity the Work Card's control actually offers -- not derived
@@ -1190,17 +1190,29 @@ model Task {
   // Null under OFF (the field is never written) and under OPTIONAL when
   // the technician chose not to record it; REQUIRED refuses completion
   // without it.
-  actualMinutes Int?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  actualMinutes  Int?
+  // When a technician actually picked this task up.
+  //
+  // The left-hand side of "did this repair start before the inspection
+  // was finished, or before the customer agreed to it?" -- a question the
+  // ordering check in GateEvaluatorService has to answer and, until this
+  // field existed, could not. `updatedAt` is not a substitute: it moves
+  // again on completion, on a blocker, on rework, so a job that started
+  // legally and was touched later would read as having started later.
+  //
+  // Null for tasks created before this was recorded, and for tasks nobody
+  // has started yet. Those two are distinguishable by `status`.
+  startedAt      DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
-  workOrder   WorkOrder        @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workOrder    WorkOrder             @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
   // SetNull rather than Cascade: a cancelled decision request must not
   // delete the record of work the workshop actually performed.
   decisionItem CustomerDecisionItem? @relation(fields: [decisionItemId], references: [id], onDelete: SetNull)
-  subtasks    Subtask[]
-  assignments TaskAssignment[]
-  blockers    TaskBlocker[]
+  subtasks     Subtask[]
+  assignments  TaskAssignment[]
+  blockers     TaskBlocker[]
 
   @@index([tenantId, status])
   @@index([workOrderId])
@@ -1267,10 +1279,34 @@ model Inspection {
   odometerOrHours Decimal?       @db.Decimal(12, 2)
   fields          Json
   note            String?
+  // The inspection as a piece of WORK, not only as a set of findings.
+  //
+  // MOP's authorization boundary is "a Task exists only for work the
+  // effective workflow already authorized", which makes Inspection the
+  // one vehicle for diagnostic work performed BEFORE that authorization
+  // exists. That only holds up if an inspection can say when it started
+  // and when it finished: without `completedAt` there is no way to refuse
+  // an inspection written after the repair it was supposed to justify,
+  // and "the customer's car was diagnosed for 40 minutes" is a fact the
+  // workshop cannot bill, staff, or measure.
+  //
+  // `startedAt` defaults rather than being nullable because an inspection
+  // row is only ever created by a technician who is doing one. Null
+  // `completedAt` is the honest representation of an inspection still in
+  // progress, and is what the ordering check treats as "not yet done".
+  startedAt       DateTime       @default(now())
+  completedAt     DateTime?
+  // Minutes the technician reports, on the same TIME_TRACKING policy and
+  // for the same reason as Task.actualMinutes -- diagnostic labour is
+  // labour, and a workshop that tracks time on repairs but cannot see
+  // what diagnosis costs is measuring half its floor.
+  actualMinutes   Int?
   createdAt       DateTime       @default(now())
 
-  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
-  faults    Fault[]
+  workOrder    WorkOrder     @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  faults       Fault[]
+  // Parts consumed by the diagnosis itself. See PartRequest.inspectionId.
+  partRequests PartRequest[]
 
   @@index([workOrderId])
   @@map("inspections")
@@ -1288,8 +1324,10 @@ model Fault {
   customerApprovalRequired Boolean       @default(true)
   createdAt                DateTime      @default(now())
 
-  workOrder  WorkOrder   @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
-  inspection Inspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  workOrder     WorkOrder              @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  inspection    Inspection?            @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  // What was recommended to the customer about this finding.
+  decisionItems CustomerDecisionItem[]
 
   @@index([workOrderId])
   @@map("faults")
@@ -1356,21 +1394,21 @@ model InventoryItem {
 // ---------------------------------------------------------------------
 
 model CatalogCategory {
-  id       String @id @default(cuid())
-  tenantId String
-  name     String
+  id                String   @id @default(cuid())
+  tenantId          String
+  name              String
   // Stable across renames, because a renamed category must not orphan
   // the items pointing at it or break a bookmarked filter.
-  slug String
+  slug              String
   // One level of nesting: "Brakes > Pads". Deeper trees were rejected --
   // a technician navigating a phone at a car cannot drill four levels.
-  parentId    String?
-  description String?
-  sortOrder   Int     @default(0)
+  parentId          String?
+  description       String?
+  sortOrder         Int      @default(0)
   // Deactivated, never deleted: items keep pointing at it and past
   // requests keep naming it. Hidden from the technician, still visible
   // to the manager who has to move the items out.
-  isActive Boolean @default(true)
+  isActive          Boolean  @default(true)
   // A category the workshop uses internally but does not want in a
   // technician's browse -- e.g. consumables bought in bulk and never
   // requested per job.
@@ -1399,10 +1437,10 @@ model CatalogCategory {
 // opposite -- it has to be indexable and joinable, because filtering the
 // catalog is the hot path a technician waits on.
 model CatalogAttribute {
-  id       String @id @default(cuid())
-  tenantId String
-  key      String
-  label    String
+  id         String   @id @default(cuid())
+  tenantId   String
+  key        String
+  label      String
   // Shown under the name on a product card, e.g. Brand and Engine Size
   // on a brake pad. Filtering works either way; this decides what the
   // card says.
@@ -1412,7 +1450,7 @@ model CatalogAttribute {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  tenant     Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant     Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   values     CatalogAttributeValue[]
   categories CatalogCategoryAttribute[]
   assigned   InventoryItemAttributeValue[]
@@ -1423,7 +1461,7 @@ model CatalogAttribute {
 }
 
 model CatalogAttributeValue {
-  id          String @id @default(cuid())
+  id          String   @id @default(cuid())
   tenantId    String
   attributeId String
   value       String
@@ -1432,7 +1470,7 @@ model CatalogAttributeValue {
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
 
-  attribute CatalogAttribute             @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  attribute CatalogAttribute              @relation(fields: [attributeId], references: [id], onDelete: Cascade)
   assigned  InventoryItemAttributeValue[]
 
   @@unique([attributeId, value])
@@ -1508,6 +1546,20 @@ model PartRequest {
   tenantId        String
   workOrderId     String
   taskId          String?
+  // The diagnosis this part was consumed by, when no authorized task
+  // exists yet.
+  //
+  // Under the inspection-first boundary a PartRequest must belong to
+  // authorized work -- but a diagnosis legitimately consumes things (a
+  // test cartridge, a diagnostic seal) before any repair has been agreed.
+  // Without this column that case had two bad answers: refuse it, or open
+  // a hole big enough to fit every unauthorized part through. Naming the
+  // inspection keeps the request attached to real, permitted work.
+  //
+  // Mutually exclusive with `taskId` in practice, not by constraint: a
+  // request is raised for one or the other, and both null is a job-level
+  // request on an already-authorized order.
+  inspectionId    String?
   inventoryItemId String
   requestedById   String
   // Phase 19.A -- who approved it, so `issue()` can refuse the same
@@ -1542,6 +1594,9 @@ model PartRequest {
   tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   workOrder     WorkOrder          @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
   inventoryItem InventoryItem      @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  // SetNull, not Cascade: deleting an inspection must never delete the
+  // record of stock that actually left the shelf.
+  inspection    Inspection?        @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
   // Many: one request can be filled in more than one hand-over.
   issuedItems   IssuedItem[]
   returnRequest PartReturnRequest?
@@ -1564,32 +1619,32 @@ model PartRequest {
 // whose whole purpose is to reference stock, or fake inventory rows for
 // parts the workshop never owned.
 model WorkOrderPartLine {
-  id          String         @id @default(cuid())
-  tenantId    String
-  workOrderId String
-  taskId      String?
-  provenance  PartProvenance
+  id                String         @id @default(cuid())
+  tenantId          String
+  workOrderId       String
+  taskId            String?
+  provenance        PartProvenance
   // Set only when provenance is INVENTORY. Null for anything the workshop
   // did not supply from its own stock.
-  inventoryItemId String?
+  inventoryItemId   String?
   // Free text for non-inventory parts, where there is no catalogue row to
   // name them.
-  name        String
-  quantity    Int            @default(1)
+  name              String
+  quantity          Int            @default(1)
   // What the customer is charged for the part itself. Zero for
   // CUSTOMER_SUPPLIED -- the labour is charged separately, on its own line.
-  sellingPrice Decimal       @db.Decimal(12, 2) @default(0)
+  sellingPrice      Decimal        @default(0) @db.Decimal(12, 2)
   // Null unless the workshop actually paid for it. Never set for
   // CUSTOMER_SUPPLIED, and never exposed to the customer.
-  cost        Decimal?       @db.Decimal(12, 2)
+  cost              Decimal?       @db.Decimal(12, 2)
   // Recorded explicitly rather than inferred from provenance, because it
   // is the fact a warranty dispute turns on and must survive any later
   // change to how provenance is interpreted.
-  workshopWarranted Boolean  @default(true)
+  workshopWarranted Boolean        @default(true)
   // Links back to the inventory flow when there is one.
-  partRequestId String?      @unique
-  addedById   String
-  createdAt   DateTime       @default(now())
+  partRequestId     String?        @unique
+  addedById         String
+  createdAt         DateTime       @default(now())
 
   workOrder     WorkOrder      @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
   inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
@@ -1603,7 +1658,7 @@ model WorkOrderPartLine {
 model IssuedItem {
   id String @id @default(cuid())
 
-  tenantId String
+  tenantId      String
   // Deliberately NOT unique -- see docs/phases/PHASE_7.md section 2 and
   // SCENARIOS.md 3.5. One request, many issues: "3 requested, 2 issued,
   // 1 issued tomorrow" is one thing the technician asked for and two
@@ -1638,15 +1693,15 @@ model IssuedItem {
 }
 
 model PartReturnRequest {
-  id            String    @id @default(cuid())
-  tenantId      String
-  partRequestId String    @unique
-  quantity      Int
-  reason        String?
-  requestedById String
-  createdAt     DateTime  @default(now())
-  resolvedAt    DateTime?
-  resolvedById  String?
+  id                      String    @id @default(cuid())
+  tenantId                String
+  partRequestId           String    @unique
+  quantity                Int
+  reason                  String?
+  requestedById           String
+  createdAt               DateTime  @default(now())
+  resolvedAt              DateTime?
+  resolvedById            String?
   // The warehouse requestReturn() opened the RETURN_PENDING movement
   // against. Read back by completeReturn()/rejectReturn() to reverse
   // that SAME movement -- a caller-supplied warehouseId at accept time
@@ -1654,18 +1709,18 @@ model PartReturnRequest {
   // shelf, but it is never the right choice for which warehouse's
   // returnPendingQty gets decremented; those are two different
   // questions a single parameter cannot safely answer both of.
-  warehouseId   String
+  warehouseId             String
   // The inventory manager's open question, set by Request Clarification
   // and cleared the moment the technician replies or the request is
   // finally accepted/rejected -- null means there is nothing outstanding
   // to ask the technician, whether because nobody asked or because the
   // loop already closed.
-  clarificationQuestion String?
+  clarificationQuestion   String?
   // When the question was asked. Kept even after `clarificationQuestion`
   // is cleared, because "the store asked something and the technician
   // answered" is a real pair of events in the job's history, and
   // nulling the question would otherwise erase the first half of it.
-  clarificationAskedAt  DateTime?
+  clarificationAskedAt    DateTime?
   // When the technician answered it. The pair is what lets the journey
   // show a clarification CYCLE rather than a single undated fact.
   clarificationAnsweredAt DateTime?
@@ -1829,11 +1884,11 @@ model RunningInvoiceLine {
 
   runningInvoice RunningInvoice @relation(fields: [runningInvoiceId], references: [id], onDelete: Cascade)
 
-  @@index([runningInvoiceId])
   // One line per operational source, per running invoice. The uniqueness
   // is what makes the reconciliation idempotent rather than additive --
   // without it, every call to jobTotal() would bill the part again.
   @@unique([runningInvoiceId, sourceType, sourceId])
+  @@index([runningInvoiceId])
   @@map("running_invoice_lines")
 }
 
@@ -1929,21 +1984,21 @@ model DiscountRequest {
 }
 
 model RefundRequest {
-  id            String              @id @default(cuid())
-  tenantId      String
-  invoiceId     String
-  amount        Decimal             @db.Decimal(12, 2)
-  reason        String
+  id             String               @id @default(cuid())
+  tenantId       String
+  invoiceId      String
+  amount         Decimal              @db.Decimal(12, 2)
+  reason         String
   // Phase 19.C -- a routine reversal and remediation of a disputed or
   // fraudulent charge carry different audit, reporting, and potential
   // legal-disclosure weight; today's `reason` free-text field cannot be
   // relied on to distinguish them at scale.
   reasonCategory RefundReasonCategory @default(ROUTINE)
-  status        RefundRequestStatus @default(PENDING)
-  requestedById String
-  decidedById   String?
-  createdAt     DateTime            @default(now())
-  decidedAt     DateTime?
+  status         RefundRequestStatus  @default(PENDING)
+  requestedById  String
+  decidedById    String?
+  createdAt      DateTime             @default(now())
+  decidedAt      DateTime?
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
 
@@ -1957,15 +2012,15 @@ model RefundRequest {
 // directly. Phase 8 created this table and never wrote it; Phase 9 wires
 // it to the refund approval flow.
 model CreditNote {
-  id               String   @id @default(cuid())
-  tenantId         String
-  invoiceId        String
+  id                String   @id @default(cuid())
+  tenantId          String
+  invoiceId         String
   billingDocumentId String?
-  creditNoteNumber String?
-  amount           Decimal  @db.Decimal(12, 2)
-  reason           String
-  issuedById       String
-  createdAt        DateTime @default(now())
+  creditNoteNumber  String?
+  amount            Decimal  @db.Decimal(12, 2)
+  reason            String
+  issuedById        String
+  createdAt         DateTime @default(now())
 
   invoice         Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
   billingDocument BillingDocument? @relation(fields: [billingDocumentId], references: [id], onDelete: SetNull)
@@ -1996,16 +2051,16 @@ enum BillingDocumentStatus {
 // never re-read from Invoice later -- the same reason
 // InvoiceLine.lockedUnitPrice exists, applied one level up.
 model BillingDocument {
-  id                 String                 @id @default(cuid())
+  id                 String                @id @default(cuid())
   tenantId           String
-  invoiceId          String                 @unique
+  invoiceId          String                @unique
   documentNumber     String
   adapterName        String
-  status             BillingDocumentStatus  @default(PENDING)
+  status             BillingDocumentStatus @default(PENDING)
   qrPayload          String?
   clearanceReference String?
   snapshot           Json
-  createdAt          DateTime               @default(now())
+  createdAt          DateTime              @default(now())
 
   invoice     Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
   creditNotes CreditNote[]
@@ -2090,6 +2145,31 @@ model CustomerDecisionItem {
   id                  String                       @id @default(cuid())
   tenantId            String
   decisionRequestId   String
+  // The finding this recommendation answers.
+  //
+  // Inspection -> Fault -> Recommendation -> Task -> Invoice is the chain
+  // history has to walk to say "we found this, we proposed this, you
+  // agreed to this, we did this, we charged this". `Fault.inspectionId`
+  // and `Task.decisionItemId` already carried their links; this was the
+  // one missing hop, and without it the connection between a finding and
+  // the recommendation made about it was a comparison of free text --
+  // exactly the silent lie Task.decisionItemId's own comment was written
+  // to prevent, one step earlier in the same chain.
+  //
+  // Null for a recommendation that came from somewhere other than a
+  // recorded finding, which is legitimate: a customer can ask for a
+  // service nobody diagnosed.
+  faultId             String?
+  // Which catalogued service this recommendation proposes.
+  //
+  // The same stable business key `Task.serviceKey` uses, and stored for
+  // the same reason: the catalogue is effective-dated, so a row id would
+  // pin a version of a price rather than the identity of a service. With
+  // it, "the customer approved THIS service" survives into the task that
+  // performs it. Null for a proposal the catalogue does not carry --
+  // `price`/`laborPrice`/`total` remain the frozen commercial truth
+  // either way, and are never re-read from the catalogue.
+  serviceKey          String?
   name                String
   explanation         String
   importance          SeverityLevel
@@ -2106,8 +2186,14 @@ model CustomerDecisionItem {
   // nobody has planned yet -- which history reports as "approved, no work
   // linked" rather than guessing either way.
   tasks           Task[]
+  // SetNull: a deleted finding must not delete the record of what the
+  // customer was told and what they agreed to.
+  fault           Fault?                  @relation(fields: [faultId], references: [id], onDelete: SetNull)
 
   @@index([decisionRequestId])
+  // Answers "what was recommended about this finding" without a scan --
+  // the read the recommendation-outcome projection makes per finding.
+  @@index([faultId])
   @@map("customer_decision_items")
 }
 
@@ -2353,29 +2439,29 @@ model MessageTemplate {
 // whatever definition existed at fill time, and archiving a definition
 // here never touches those already-stored values.
 model CustomFieldDefinition {
-  id            String   @id @default(cuid())
-  tenantId      String
-  formKey       String
-  fieldKey      String
-  label         String
-  fieldType     String
+  id              String         @id @default(cuid())
+  tenantId        String
+  formKey         String
+  fieldKey        String
+  label           String
+  fieldType       String
   // For fieldType = SELECT: array of { key, label }. Null otherwise.
-  options       Json?
+  options         Json?
   // Empty array means "all categories this workshop operates."
-  categoryScope CategoryCode[]
+  categoryScope   CategoryCode[]
   // Which staff roles fill this field in. Empty means any role that can
   // reach the form at all.
-  roleScope     String[]
-  customerVisible Boolean @default(false)
-  reportable    Boolean  @default(false)
-  required      Boolean  @default(false)
-  order         Int      @default(0)
+  roleScope       String[]
+  customerVisible Boolean        @default(false)
+  reportable      Boolean        @default(false)
+  required        Boolean        @default(false)
+  order           Int            @default(0)
   // Archived, never deleted -- past records that captured a value under
   // this definition keep showing it, tagged (archived field). Restoring
   // un-archives it back into the live form at the same `order`.
-  isArchived    Boolean  @default(false)
-  createdById   String
-  createdAt     DateTime @default(now())
+  isArchived      Boolean        @default(false)
+  createdById     String
+  createdAt       DateTime       @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -2464,20 +2550,20 @@ model PlatformLiveViewSession {
 /// stops being detected is resolved by definition rather than by anyone
 /// remembering to close it.
 model WorkflowIssueAcknowledgement {
-  id          String                 @id @default(cuid())
+  id          String              @id @default(cuid())
   tenantId    String
   /// `${type}:${entityType}:${entityId}` -- stable across scans.
   fingerprint String
   issueType   String
   entityType  String
   entityId    String
-  status      WorkflowIssueStatus    @default(ACKNOWLEDGED)
+  status      WorkflowIssueStatus @default(ACKNOWLEDGED)
   /// Why it was acknowledged or escalated. Required by the service, not the schema.
   note        String?
   actorId     String
   actorName   String
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 

@@ -1,7 +1,9 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import {
   WORK_ORDER_GRAPH,
+  canStillReach,
   canTransition,
+  isTerminal,
   resolveIntent,
   type GateResult,
   type WorkflowIntent,
@@ -20,6 +22,23 @@ export interface LifecycleActor {
   readonly displayName: string;
   readonly actorType: "SYSTEM" | "PLATFORM" | "TENANT_STAFF" | "CUSTOMER";
 }
+
+/**
+ * What to tell someone whose job is not authorized for work yet, keyed by
+ * the move that would authorize it.
+ *
+ * Ordered by how early the move sits in the journey, because a job can
+ * legitimately offer more than one (REGISTERED under CUSTOMER_MAY_DECLINE
+ * offers both START_INSPECTION and REQUEST_APPROVAL) and the first
+ * unfinished step is the one the person in front of the car should hear
+ * about. Written here rather than derived from the intent name for the
+ * same reason the technician's part wording is: an enum is not a sentence.
+ */
+const NEXT_STEP = {
+  START_INSPECTION: "Start and record the inspection before any repair work.",
+  REQUEST_APPROVAL: "Ask the customer to approve the work before starting it.",
+  APPROVE: "This job still needs approval before work can start.",
+} as const;
 
 export interface TransitionResult {
   readonly workOrderId: string;
@@ -102,7 +121,7 @@ export class WorkOrderLifecycleService {
         workOrderId,
         routed.transition.gates,
         profile,
-        target === "CLOSED" ? "DELIVERY" : "FINISH",
+        target === "CLOSED" ? "DELIVERY" : target === "APPROVED_FOR_WORK" ? "AUTHORIZATION" : "FINISH",
       );
 
       if (!gateResult.passed) {
@@ -210,6 +229,82 @@ export class WorkOrderLifecycleService {
     return facts;
   }
 
+  /**
+   * The one answer to "may operational work happen on this job right now".
+   *
+   * Every write that has a real operational or financial consequence --
+   * planning a task, starting one, asking the store for a part, adding an
+   * external part line -- asks this before it writes. Before it existed,
+   * each of those paths checked its own record's status and nothing else,
+   * so a technician could plan, start, part-fit, complete and bill a
+   * repair while the job was still REGISTERED and the customer had agreed
+   * to nothing. The finish gate was the only thing in the way, and it
+   * fires when the labour is already spent.
+   *
+   * **The answer is derived, never listed.** A workshop's authorization
+   * boundary is wherever its own effective graph puts APPROVED_FOR_WORK,
+   * so the question asked here is structural: can this job still *arrive*
+   * at APPROVED_FOR_WORK? If it can, it has not passed the boundary yet
+   * and no repair may run. That single question carries every policy
+   * branch for free, because the branches are already edges:
+   *
+   *   - ALWAYS_INSPECT darkens REGISTERED -> AWAITING_CUSTOMER_APPROVAL,
+   *     so the only route to authorization runs through UNDER_INSPECTION.
+   *   - CUSTOMER_MAY_DECLINE keeps that route, and a declined inspection
+   *     reaches authorization without one -- which stays legal here,
+   *     exactly as it already does at the finish gate.
+   *   - APPROVAL_REQUIRED_SCOPE's BEYOND_INITIAL_SCOPE and CRITICAL_ONLY
+   *     open UNDER_INSPECTION -> APPROVED_FOR_WORK directly, so work
+   *     that legitimately needs no customer decision is not made to
+   *     invent one. ALL_WORK darkens that edge and forces the approval
+   *     route instead.
+   *
+   * This is why the check is not `status === "IN_PROGRESS"` and not
+   * `task.decisionItemId != null`. The first is wrong for every profile
+   * that reroutes; the second would forbid legitimate work under two
+   * shipped approval scopes. Neither can express "this workshop's own
+   * rule", and that is the only thing worth enforcing.
+   */
+  async assertOperationalWorkAuthorized(workOrderId: string): Promise<void> {
+    const workOrder = await this.prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      select: { id: true, tenantId: true, status: true },
+    });
+    if (!workOrder) {
+      throw new NotFoundException({ code: "work_order_not_found", message: "Work order not found." });
+    }
+
+    if (isTerminal(WORK_ORDER_GRAPH, workOrder.status)) {
+      throw new ConflictException({
+        code: "work_order_closed",
+        message: "This job is already closed. No further work can be recorded against it.",
+      });
+    }
+
+    const { profile, policies, facts } = await this.routingContext(workOrder.tenantId, workOrderId);
+
+    // "Still ahead of this job", not "reachable from it". A job sitting
+    // exactly ON the boundary has arrived at it -- APPROVED_FOR_WORK is
+    // the state that means authorized-but-not-started, and reading its
+    // own reflexive reachability as "not yet authorized" would refuse
+    // every task at the moment the customer had just agreed to it.
+    const authorizationPending =
+      workOrder.status !== "APPROVED_FOR_WORK" &&
+      canStillReach(WORK_ORDER_GRAPH, profile, workOrder.status, "APPROVED_FOR_WORK", policies, facts);
+    if (!authorizationPending) return;
+
+    // Naming the move that would unblock them, rather than the state they
+    // are in. A technician holding a tablet needs the next action, and the
+    // set of next actions is already something the graph can answer.
+    const intents = new Set(await this.availableIntents(workOrderId));
+    const step = (Object.keys(NEXT_STEP) as (keyof typeof NEXT_STEP)[]).find((intent) => intents.has(intent));
+
+    throw new ConflictException({
+      code: "work_not_authorized",
+      message: step ? NEXT_STEP[step] : "This job has not been authorized for work yet.",
+    });
+  }
+
   async availableIntents(workOrderId: string): Promise<readonly WorkflowIntent[]> {
     const workOrder = await this.prisma.workOrder.findUnique({
       where: { id: workOrderId },
@@ -249,7 +344,11 @@ export class WorkOrderLifecycleService {
       workOrderId,
       routed.transition.gates,
       profile,
-      routed.transition.to === "CLOSED" ? "DELIVERY" : "FINISH",
+      routed.transition.to === "CLOSED"
+        ? "DELIVERY"
+        : routed.transition.to === "APPROVED_FOR_WORK"
+          ? "AUTHORIZATION"
+          : "FINISH",
     );
   }
 }

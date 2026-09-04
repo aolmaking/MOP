@@ -49,6 +49,16 @@ export class RecordInspectionDto {
   @IsString()
   @Length(1, 2000)
   note?: string;
+
+  /**
+   * How long the diagnosis took, under the same TIME_TRACKING policy as a
+   * task's. Diagnostic labour is labour, and a workshop that measures
+   * repair time but not diagnosis time is measuring half its floor.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  actualMinutes?: number;
 }
 
 export class RequestPartDto {

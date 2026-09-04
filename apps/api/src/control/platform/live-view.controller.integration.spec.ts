@@ -213,6 +213,12 @@ describe("LiveViewController (integration, real HTTP)", () => {
   });
 
   it("turns a real event into a plain-language summary without reading its payload", async () => {
+    // Logged in before the write, for the same reason as the fallback test
+    // below: `recentActivity` is the 40 most recent events across EVERY
+    // tenant, and a bcrypt verify plus a round trip is long enough for a
+    // loaded run to fill all 40 rows and push this event out of view.
+    const cookieHeader = await login(platformEmail, PLATFORM_PASSWORD);
+
     await prisma.operationEvent.create({
       data: {
         tenantId,
@@ -225,7 +231,6 @@ describe("LiveViewController (integration, real HTTP)", () => {
       },
     });
 
-    const cookieHeader = await login(platformEmail, PLATFORM_PASSWORD);
     const res = await request(app.getHttpServer()).get("/api/v1/platform/live-view").set("Cookie", cookieHeader);
 
     const row = res.body.recentActivity.find(
@@ -251,6 +256,19 @@ describe("LiveViewController (integration, real HTTP)", () => {
   });
 
   it("falls back to a readable summary for an event key it has no phrasing for", async () => {
+    // Logged in BEFORE the event is written, deliberately.
+    //
+    // `recentActivity` is the 40 most recent events across EVERY tenant,
+    // so anything that happens between writing this event and reading the
+    // feed can push it out of the window -- and `login` is a bcrypt verify
+    // plus a round trip, which is long enough for a loaded suite running
+    // 117 files against one database to fill all 40 rows. That made this
+    // test pass or fail on how busy the rest of the run happened to be.
+    // Nothing about the behaviour under test needs the session to be
+    // fresh, so the slow part moves ahead of the write and the event is
+    // read back in the very next call.
+    const cookieHeader = await login(platformEmail, PLATFORM_PASSWORD);
+
     await prisma.operationEvent.create({
       data: {
         tenantId,
@@ -261,7 +279,6 @@ describe("LiveViewController (integration, real HTTP)", () => {
       },
     });
 
-    const cookieHeader = await login(platformEmail, PLATFORM_PASSWORD);
     const res = await request(app.getHttpServer()).get("/api/v1/platform/live-view").set("Cookie", cookieHeader);
 
     const row = res.body.recentActivity.find(

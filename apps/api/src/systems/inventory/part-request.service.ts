@@ -27,6 +27,14 @@ export interface RequestPartInput {
   readonly inventoryItemId: string;
   readonly quantity: number;
   readonly taskId?: string;
+  /**
+   * The diagnosis consuming this part, when no authorized task exists.
+   *
+   * See PartRequest.inspectionId. This is the ONLY way a part request is
+   * legal on a job whose work the workflow has not authorized yet, and
+   * the inspection is checked to belong to that job before it is trusted.
+   */
+  readonly inspectionId?: string;
   readonly reason?: string;
   readonly urgency?: string;
 }
@@ -47,6 +55,8 @@ export interface CartInput {
    */
   readonly cartKey: string;
   readonly taskId?: string;
+  /** See RequestPartInput.inspectionId. */
+  readonly inspectionId?: string;
   readonly reason?: string;
   readonly urgency?: string;
 }
@@ -113,6 +123,7 @@ export class PartRequestService {
     }
 
     await this.requireInventory(input.tenantId);
+    await this.requireAuthorizedConsumption(input.workOrderId, input.inspectionId);
 
     const created = await this.prisma.$transaction(async (tx) => {
       const request = await tx.partRequest.create({
@@ -120,6 +131,7 @@ export class PartRequestService {
           tenantId: input.tenantId,
           workOrderId: input.workOrderId,
           taskId: input.taskId,
+          inspectionId: input.inspectionId,
           inventoryItemId: input.inventoryItemId,
           requestedById: actor.accountId,
           quantity: input.quantity,
@@ -211,6 +223,10 @@ export class PartRequestService {
     }
 
     await this.requireInventory(input.tenantId);
+    // Checked before the replay lookup so an unauthorized cart is refused
+    // on every submit, not just the first: a replay that returned the
+    // earlier basket would hand back requests this boundary now forbids.
+    await this.requireAuthorizedConsumption(input.workOrderId, input.inspectionId);
 
     const replay = await this.prisma.partRequest.findMany({
       where: { tenantId: input.tenantId, cartKey },
@@ -245,6 +261,7 @@ export class PartRequestService {
               tenantId: input.tenantId,
               workOrderId: input.workOrderId,
               taskId: input.taskId,
+              inspectionId: input.inspectionId,
               inventoryItemId,
               requestedById: actor.accountId,
               quantity,
@@ -1014,6 +1031,43 @@ export class PartRequestService {
         message: "This workshop does not hold stock, so parts are not requested through it.",
       });
     }
+  }
+
+  /**
+   * Stock may only leave the shelf for work the workshop is allowed to be
+   * doing.
+   *
+   * Two legal shapes, and nothing else:
+   *
+   *   - the job has passed its own authorization boundary, so any part on
+   *     it is a part for authorized work; or
+   *   - the request names an inspection on THIS job, which is diagnostic
+   *     consumption -- the one thing a pre-authorization job legitimately
+   *     spends stock on.
+   *
+   * The inspection is verified rather than trusted. Without that check
+   * `inspectionId` would be the bypass it exists to prevent: a technician
+   * could quote any inspection id, including one from another workshop's
+   * job, and walk every part out of the store with it. Authorization is
+   * asked of the lifecycle service, never re-derived here -- Inventory
+   * enforcing operational truth is right, Inventory deciding it is not.
+   */
+  private async requireAuthorizedConsumption(workOrderId: string, inspectionId?: string): Promise<void> {
+    if (inspectionId) {
+      const inspection = await this.prisma.inspection.findFirst({
+        where: { id: inspectionId, workOrderId },
+        select: { id: true },
+      });
+      if (!inspection) {
+        throw new BadRequestException({
+          code: "inspection_not_on_this_job",
+          message: "That inspection does not belong to this job.",
+        });
+      }
+      return;
+    }
+
+    await this.lifecycle.assertOperationalWorkAuthorized(workOrderId);
   }
 
   private async move(

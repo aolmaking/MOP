@@ -14,6 +14,13 @@ export interface RecordInspectionInput {
   /** Category-specific answers, shaped by the tenant's form configuration. */
   readonly fields: Record<string, unknown>;
   readonly note?: string;
+  /**
+   * Minutes the diagnosis took, under the same TIME_TRACKING policy that
+   * governs Task.actualMinutes. Diagnostic labour is labour; a workshop
+   * that measures repair time but not diagnosis time cannot see what its
+   * inspections cost.
+   */
+  readonly actualMinutes?: number;
 }
 
 export interface CreateFaultInput {
@@ -71,6 +78,19 @@ export class TechnicianWorkService {
     decisionItemId?: string,
   ) {
     const workOrder = await this.requireWorkOrder(workOrderId);
+
+    // A Task IS authorized work -- that is the whole meaning of the type,
+    // so one must not exist before the job's own effective workflow has
+    // authorized any. Planning was the quietest of the bypasses: nothing
+    // here consulted the work order's state, so a full repair could be
+    // written onto a REGISTERED job, handed to a technician, started,
+    // parted, completed and billed, with the finish gate as the first and
+    // only objection -- raised after the money was already spent.
+    //
+    // Diagnostic work needs no task and is not blocked by this: it is an
+    // Inspection, which is the one work vehicle a pre-authorization job
+    // legitimately has.
+    await this.lifecycle.assertOperationalWorkAuthorized(workOrderId);
 
     // Refuse a key the workshop does not actually have. A task pointing at
     // a service that was never priced would bill nothing and report under
@@ -164,13 +184,19 @@ export class TechnicianWorkService {
   async startTask(taskId: string, actor: LifecycleActor) {
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
-      select: { id: true, tenantId: true, workOrderId: true, status: true, serviceKey: true },
+      select: { id: true, tenantId: true, workOrderId: true, status: true, serviceKey: true, startedAt: true },
     });
     if (!task) throw new NotFoundException({ code: "task_not_found", message: "Task not found." });
 
     if (task.status === "DONE" || task.status === "CANCELLED") {
       throw new BadRequestException({ code: "task_finished", message: "That task is already finished." });
     }
+
+    // Asked again at the press, not only when the task was planned. A job
+    // authorized this morning can be back in AWAITING_CUSTOMER_APPROVAL
+    // this afternoon, and a task created while it was legal must not stay
+    // startable through the change.
+    await this.lifecycle.assertOperationalWorkAuthorized(task.workOrderId);
 
     const openBlockers = await this.prisma.taskBlocker.count({
       where: { taskId, status: { in: ["OPEN", "ESCALATED"] } },
@@ -183,7 +209,13 @@ export class TechnicianWorkService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.task.update({ where: { id: taskId }, data: { status: "IN_PROGRESS" } });
+      // `startedAt` is stamped once and never overwritten: a task paused
+      // by a blocker and resumed later still started when it started, and
+      // the ordering check compares against the FIRST time work happened.
+      await tx.task.update({
+        where: { id: taskId },
+        data: { status: "IN_PROGRESS", ...(task.startedAt ? {} : { startedAt: new Date() }) },
+      });
       await this.events.emit(
         {
           tenantId: task.tenantId,
@@ -220,6 +252,12 @@ export class TechnicianWorkService {
       select: { id: true, tenantId: true, workOrderId: true, status: true, serviceKey: true },
     });
     if (!task) throw new NotFoundException({ code: "task_not_found", message: "Task not found." });
+
+    // Completion is the moment work becomes a charge: chargeable-items
+    // reads DONE tasks. Authorization is therefore checked here too, so a
+    // task that slipped through before this boundary existed cannot be
+    // completed into an invoice line for work nobody agreed to.
+    await this.lifecycle.assertOperationalWorkAuthorized(task.workOrderId);
 
     const openBlockers = await this.prisma.taskBlocker.count({
       where: { taskId, status: { in: ["OPEN", "ESCALATED"] } },
@@ -295,6 +333,12 @@ export class TechnicianWorkService {
     actor: LifecycleActor,
   ) {
     const workOrder = await this.requireWorkOrder(workOrderId);
+
+    // A WorkOrderPartLine is billable on creation and never passes through
+    // inventory, which made this the shortest route from "unauthorized
+    // job" to "charge on an invoice" in the whole product.
+    await this.lifecycle.assertOperationalWorkAuthorized(workOrderId);
+
     const quantity = input.quantity ?? 1;
     return this.prisma.$transaction(async (tx) => {
       const line = await tx.workOrderPartLine.create({
@@ -364,6 +408,19 @@ export class TechnicianWorkService {
     }));
   }
 
+  /**
+   * Records a completed inspection.
+   *
+   * `completedAt` is stamped here rather than left for a second call
+   * because that is what this write honestly is: the technician submits
+   * the findings when the diagnosis is done. An inspection row created by
+   * `beginInspection` below is the in-progress case, and this fills it in.
+   *
+   * The stamped time is what the ordering check reads, which is why it is
+   * taken from the server and never from the request body: "when was this
+   * inspected" decides whether work that already happened was legal, and
+   * a client-supplied answer to that question is not evidence.
+   */
   async recordInspection(input: RecordInspectionInput, actor: LifecycleActor) {
     const workOrder = await this.requireWorkOrder(input.workOrderId);
     const owner = await this.prisma.workOrder.findUnique({
@@ -371,9 +428,13 @@ export class TechnicianWorkService {
       select: { customerId: true },
     });
 
+    const completedAt = new Date();
+
     return this.prisma.$transaction(async (tx) => {
       const inspection = await tx.inspection.create({
         data: {
+          completedAt,
+          actualMinutes: input.actualMinutes ?? null,
           tenantId: workOrder.tenantId,
           workOrderId: input.workOrderId,
           technicianId: input.technicianId,

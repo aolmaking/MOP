@@ -59,15 +59,32 @@ export const WORK_ORDER_GRAPH: WorkflowGraph = {
     //
     // ALL_WORK removes the skip. The approval route beside it is
     // unconditional, so no option of this policy can strand an inspection.
+    //
+    // Both routes into APPROVED_FOR_WORK carry `inspection_completed`.
+    // This is the authorization boundary, and it is the earliest point at
+    // which the inspection prerequisite can be enforced usefully: past
+    // here, TechnicianWorkService will let tasks be planned, started and
+    // billed. The same gate still guards FINISH below, but only as a
+    // second look -- as the sole check it could never prevent the work,
+    // only refuse to let a car leave after the work was already done.
+    //
+    // It is also what stops the ordering rule becoming a trap. The gate
+    // is satisfied by an inspection completed BEFORE the first task
+    // started, so a job that reached authorization with no inspection at
+    // all could never satisfy it later: it would work, and then be unable
+    // to finish. Requiring the inspection here means that state is not
+    // reachable. A declined inspection satisfies the gate outright, so
+    // CUSTOMER_MAY_DECLINE's route is untouched.
     {
       from: "UNDER_INSPECTION",
       to: "APPROVED_FOR_WORK",
       intent: "APPROVE",
       requiresPolicy: [{ policyKey: "APPROVAL_REQUIRED_SCOPE", oneOf: ["BEYOND_INITIAL_SCOPE", "CRITICAL_ONLY"] }],
+      gates: ["inspection_completed"],
       label: "findings within what was agreed -- no approval needed",
     },
 
-    { from: "AWAITING_CUSTOMER_APPROVAL", to: "APPROVED_FOR_WORK", intent: "APPROVE", label: "customer approved" },
+    { from: "AWAITING_CUSTOMER_APPROVAL", to: "APPROVED_FOR_WORK", intent: "APPROVE", gates: ["inspection_completed"], label: "customer approved" },
     { from: "AWAITING_CUSTOMER_APPROVAL", to: "CANCELLED", label: "customer rejected everything" },
 
     { from: "APPROVED_FOR_WORK", to: "IN_PROGRESS", intent: "START_WORK", label: "work started" },

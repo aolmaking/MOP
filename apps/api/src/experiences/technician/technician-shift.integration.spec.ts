@@ -111,6 +111,26 @@ async function bookIn(plate: string): Promise<string> {
   return result.workOrderId;
 }
 
+/**
+ * Walks a booked-in job to the point where repair work is legal.
+ *
+ * A Task means authorized work, so these tests can no longer plan or
+ * start one straight off an intake -- that was the bypass the
+ * inspection-first boundary closed. The journey here is the real one a
+ * technician makes under this tenant's default policies: start the
+ * inspection, record it, and take the APPROVAL_REQUIRED_SCOPE =
+ * BEYOND_INITIAL_SCOPE route that lets agreed work proceed without a
+ * customer decision it never needed.
+ */
+async function authorizeForWork(workOrderId: string): Promise<void> {
+  await lifecycle.apply(workOrderId, "START_INSPECTION", ACTOR);
+  await techWork.recordInspection(
+    { workOrderId, technicianId: mineStaffId, type: "QUICK", fields: {}, note: "Road tested." },
+    ACTOR,
+  );
+  await lifecycle.apply(workOrderId, "APPROVE", ACTOR);
+}
+
 beforeAll(async () => {
   const plan = await prisma.plan.create({
     data: {
@@ -155,10 +175,14 @@ beforeAll(async () => {
 
   await prisma.workOrderAssignment.create({ data: { tenantId, workOrderId: myJobId, staffUserId: mineStaffId } });
   await prisma.workOrderAssignment.create({ data: { tenantId, workOrderId: theirJobId, staffUserId: theirsStaffId } });
+
+  await authorizeForWork(myJobId);
+  await authorizeForWork(theirJobId);
 }, 180_000);
 
 afterAll(async () => {
   const where = { tenantId };
+  await prisma.inspection.deleteMany({ where });
   await prisma.taskBlocker.deleteMany({ where });
   await prisma.taskAssignment.deleteMany({ where });
   await prisma.task.deleteMany({ where });

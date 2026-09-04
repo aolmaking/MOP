@@ -338,14 +338,17 @@ describe("Live work order journey (real HTTP, real Postgres)", () => {
 
     expect(journey.current.status).toBe("UNDER_INSPECTION");
     expect(kinds(journey)).toContain("inspection.recorded");
-    // Dated by the row, not by the read: the inspection row's own
-    // createdAt is what the event has to carry.
+    // Dated by the row, not by the read: the moment the diagnosis
+    // FINISHED is what the event has to carry.
     const inspection = await booted.prisma.inspection.findFirstOrThrow({
       where: { workOrderId },
-      select: { createdAt: true },
+      select: { completedAt: true },
     });
     const recorded = journey.events.find((event) => event.kind === "inspection.recorded");
-    expect(recorded?.at).toBe(inspection.createdAt.toISOString());
+    // Dated by `completedAt` -- when the diagnosis finished -- not by when
+    // the row happened to be written. They differ by milliseconds today and
+    // will differ by the length of the inspection once one can be left open.
+    expect(recorded?.at).toBe(inspection.completedAt?.toISOString());
     expect(recorded?.actor).toBe("Journey Technician");
     // REGISTERED is behind us and is drawn as done, with the real moment
     // it happened.

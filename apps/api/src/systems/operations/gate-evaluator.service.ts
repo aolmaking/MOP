@@ -3,6 +3,7 @@ import {
   ACTIVE_STATUSES,
   gateDefinition,
   type CapabilityProfile,
+  type GateCheckpoint,
   type GateKey,
   type GateEvaluation,
   type GateResult,
@@ -38,7 +39,7 @@ export class GateEvaluatorService {
     workOrderId: string,
     gates: readonly GateKey[],
     capabilities: CapabilityProfile,
-    checkpoint: "FINISH" | "DELIVERY",
+    checkpoint: GateCheckpoint,
   ): Promise<GateResult> {
     const live = gates.filter((gate) => this.isLive(gate, capabilities));
     const suppressed = await this.suppressedByPolicy(workOrderId, live);
@@ -113,15 +114,38 @@ export class GateEvaluatorService {
   private async check(gate: GateKey, workOrderId: string): Promise<boolean> {
     switch (gate) {
       case "inspection_completed": {
-        // Satisfied by an inspection existing, OR by the work order never
+        // Satisfied by a COMPLETED inspection, OR by the work order never
         // having been scoped for one -- a customer who declines inspection
         // and asks for a single named service must not be blocked by a
         // step they refused (SCENARIOS.md 1.2).
-        const [inspections, workOrder] = await Promise.all([
-          this.prisma.inspection.count({ where: { workOrderId } }),
+        const [workOrder, firstStart] = await Promise.all([
           this.prisma.workOrder.findUnique({ where: { id: workOrderId }, select: { inspectionDeclined: true } }),
+          // The earliest moment any repair actually began on this job.
+          this.prisma.task.findFirst({
+            where: { workOrderId, startedAt: { not: null } },
+            orderBy: { startedAt: "asc" },
+            select: { startedAt: true },
+          }),
         ]);
-        return inspections > 0 || workOrder?.inspectionDeclined === true;
+        if (workOrder?.inspectionDeclined === true) return true;
+
+        // Ordering, not existence. Counting rows meant an inspection
+        // written AFTER the repair satisfied this identically to one done
+        // before it -- so the recorded history could show a job diagnosed
+        // at 10:00 and repaired at 09:00 and still call itself compliant.
+        // A diagnosis only justifies work that came after it.
+        //
+        // `startedAt` is null for tasks that predate it being recorded, and
+        // those jobs fall back to the old existence check rather than being
+        // failed for a fact the database never captured: a gate must not
+        // block on evidence that could not have been collected.
+        const completedBefore = await this.prisma.inspection.count({
+          where: {
+            workOrderId,
+            completedAt: firstStart?.startedAt ? { not: null, lte: firstStart.startedAt } : { not: null },
+          },
+        });
+        return completedBefore > 0;
       }
 
       case "approved_work_completed": {

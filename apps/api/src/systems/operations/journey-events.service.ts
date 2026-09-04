@@ -454,7 +454,7 @@ export class JourneyEventsService {
       await Promise.all([
       this.prisma.inspection.findMany({
         where: { tenantId, workOrderId },
-        select: { id: true, type: true, note: true, createdAt: true, technicianId: true },
+        select: { id: true, type: true, note: true, createdAt: true, completedAt: true, technicianId: true },
       }),
       this.prisma.fault.findMany({
         where: { tenantId, workOrderId },
@@ -536,7 +536,12 @@ export class JourneyEventsService {
       ...inspections.map(
         (inspection): RawJourneyEvent => ({
           kind: "inspection.recorded",
-          at: inspection.createdAt,
+          // The moment the diagnosis FINISHED, which is the fact this
+          // event claims and the one the ordering check reads. Falls back
+          // to `createdAt` only for rows written before completion was
+          // recorded -- the migration backfilled those to the same value,
+          // so the fallback is a type guard rather than a guess.
+          at: inspection.completedAt ?? inspection.createdAt,
           sourceId: inspection.id,
           stage: "UNDER_INSPECTION",
           // A staffUserId here, not an accountId -- `resolveActors` asks

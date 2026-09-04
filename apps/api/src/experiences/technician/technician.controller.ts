@@ -146,6 +146,7 @@ export class TechnicianController {
         // truthful about that rather than inventing fields.
         fields: {},
         note: dto.note,
+        actualMinutes: dto.actualMinutes,
       },
       this.actor(session),
     );
@@ -192,7 +193,17 @@ export class TechnicianController {
     return this.decisions.raiseAndSend(
       tenantId,
       id,
-      { name: dto.name, explanation: dto.explanation, importance: dto.importance, price: dto.price, laborPrice: dto.laborPrice },
+      {
+        name: dto.name,
+        explanation: dto.explanation,
+        importance: dto.importance,
+        price: dto.price,
+        laborPrice: dto.laborPrice,
+        // Inspection -> Fault -> Recommendation, carried as stored
+        // evidence rather than reconstructed from matching strings later.
+        faultId: dto.faultId,
+        serviceKey: dto.serviceKey,
+      },
       { accountId: session.accountId, displayName: session.displayName },
     );
   }

@@ -337,7 +337,17 @@ export class CustomerDecisionService {
   async raiseAndSend(
     tenantId: string,
     workOrderId: string,
-    item: { readonly name: string; readonly explanation: string; readonly importance: string; readonly price: string; readonly laborPrice?: string },
+    item: {
+      readonly name: string;
+      readonly explanation: string;
+      readonly importance: string;
+      readonly price: string;
+      readonly laborPrice?: string;
+      /** The finding this answers -- see CustomerDecisionItem.faultId. */
+      readonly faultId?: string;
+      /** The catalogued service being proposed -- see CustomerDecisionItem.serviceKey. */
+      readonly serviceKey?: string;
+    },
     actor: StaffActor,
   ): Promise<{ readonly requestId: string; readonly secureToken: string }> {
     const workOrder = await this.prisma.workOrder.findUnique({
@@ -358,6 +368,23 @@ export class CustomerDecisionService {
     const total = add(item.price, laborPrice);
     const secureToken = randomBytes(24).toString("hex");
 
+    // A finding from ANOTHER job must not be citable here, for the same
+    // reason `createTask` refuses a recommendation from another job: a
+    // history that can be pointed at someone else's vehicle is worse than
+    // one with a gap in it, because it reads as evidence.
+    if (item.faultId) {
+      const fault = await this.prisma.fault.findFirst({
+        where: { id: item.faultId, tenantId, workOrderId },
+        select: { id: true },
+      });
+      if (!fault) {
+        throw new NotFoundException({
+          code: "fault_not_on_this_job",
+          message: "That finding does not belong to this job.",
+        });
+      }
+    }
+
     const result = await this.prisma.$transaction(async (tx) => {
       const request = await tx.customerDecisionRequest.create({
         data: {
@@ -376,6 +403,8 @@ export class CustomerDecisionService {
         data: {
           tenantId,
           decisionRequestId: request.id,
+          faultId: item.faultId ?? null,
+          serviceKey: item.serviceKey ?? null,
           name: item.name,
           explanation: item.explanation,
           importance: item.importance as SeverityLevel,
