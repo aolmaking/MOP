@@ -22,14 +22,34 @@ function build(options: {
   parts?: unknown[];
   intents?: string[];
   profile?: Record<string, string>;
+  /** The latest inspection on the job, or null for a job with none. */
+  inspection?: { completedAt: Date | null; actualMinutes: number | null } | null;
+  /** The refusal the authority would give, or null when work is allowed. */
+  workNotAuthorized?: string | null;
 }) {
   const prisma = {
     workOrder: { findFirst: jest.fn().mockResolvedValue(workOrder(options.order)) },
     partRequest: { findMany: jest.fn().mockResolvedValue(options.parts ?? []) },
+    // Mission 1 reads both: the inspection for its state, the faults for
+    // what it found.
+    inspection: {
+      findFirst: jest.fn().mockResolvedValue(
+        options.inspection === undefined
+          ? { completedAt: new Date("2026-09-04T08:00:00.000Z"), actualMinutes: 20 }
+          : options.inspection,
+      ),
+    },
+    fault: { count: jest.fn().mockResolvedValue(0) },
   };
   const lifecycle = {
     availableIntents: jest.fn().mockResolvedValue(options.intents ?? []),
     previewGates: jest.fn(),
+    // The card asks the real authority and reports its refusal verbatim,
+    // so the stub refuses the same shape the service throws.
+    assertOperationalWorkAuthorized: jest.fn().mockImplementation(async () => {
+      if (!options.workNotAuthorized) return;
+      throw { response: { code: "work_not_authorized", message: options.workNotAuthorized } };
+    }),
   };
   const assetHistory = { complaintText: jest.fn().mockResolvedValue(new Map([["wo1", "Brake noise"]])) };
   const policies = { resolveValue: jest.fn().mockResolvedValue("REQUIRED") };

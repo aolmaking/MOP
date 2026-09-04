@@ -69,11 +69,59 @@
         </section>
       }
 
+      <!-- ── mission 1: the inspection ───────────────────────────────── -->
+      <!-- First on the card because it is first on the car. Everything
+           below is repair work, and repair work is not legal until this
+           is done and the customer has agreed to what it found.
+
+           Every value here is the server's. The lock is explained here,
+           not imposed here: the same request sent by hand is refused by
+           the API with this same sentence. -->
+
+      <section class="mission" [attr.data-state]="c.inspection.state">
+        <p class="mission-step">Mission 1</p>
+        <h2 class="mission-title">Inspection</h2>
+
+        @switch (c.inspection.state) {
+          @case ('DECLINED') {
+            <p class="mission-state">Declined by the customer</p>
+            <p class="mission-note">They asked for one named service. Do only what was agreed.</p>
+          }
+          @case ('COMPLETED') {
+            <p class="mission-state mission-state--done">Completed</p>
+            <p class="mission-note">
+              {{ c.inspection.faultCount }} finding{{ c.inspection.faultCount === 1 ? '' : 's' }} recorded.
+              @if (c.inspection.actualMinutes !== null) {
+                <span>· {{ c.inspection.actualMinutes }} min</span>
+              }
+            </p>
+          }
+          @case ('IN_PROGRESS') {
+            <p class="mission-state">Under way</p>
+            <p class="mission-note">Record what you found to finish it.</p>
+          }
+          @default {
+            <p class="mission-state">Not started</p>
+            <p class="mission-note">The car is inspected before any repair work begins.</p>
+          }
+        }
+      </section>
+
       <!-- ── group 1: record what I did ─────────────────────────────── -->
       <!-- Cheap, frequent, one tap. -->
 
       <section class="tools">
         <h2 class="tools-title">My tasks</h2>
+
+        @if (c.repairLocked) {
+          <!-- Says WHY, and says what would clear it. A greyed-out row with
+               no reason is the thing a technician taps twice and then asks
+               the branch manager about. -->
+          <p class="tools-locked" role="status">
+            <span class="tools-locked-title">Repair work is locked</span>
+            <span class="tools-locked-why">{{ c.repairLockReason }}</span>
+          </p>
+        }
 
         @if (c.tasks.length === 0) {
           <p class="tools-empty">Nothing assigned to you on this job yet.</p>
@@ -91,7 +139,7 @@
                 <button
                   class="tap tap--primary"
                   type="button"
-                  [disabled]="busy() !== null"
+                  [disabled]="busy() !== null || c.repairLocked"
                   (click)="start(task)"
                 >
                   {{ busy() === 'start-' + task.id ? '…' : 'Start' }}

@@ -22,6 +22,11 @@ function card(overrides: Partial<WorkCard> = {}): WorkCard {
     complaint: null,
     inspectionDeclined: false,
     timeTracking: 'OPTIONAL',
+    // The default is a job past Mission 1, because that is what most of
+    // these cases are about. The inspection-first cases below override it.
+    inspection: { state: 'COMPLETED', completedAt: '2026-09-04T08:00:00.000Z', actualMinutes: 20, faultCount: 2 },
+    repairLocked: false,
+    repairLockReason: null,
     tasks: [],
     parts: [],
     finish: { available: false, passed: false, conditions: [] },
@@ -555,5 +560,74 @@ describe('TechWorkCard vehicle history', () => {
     const backToA = await openHistory(fixture);
     expect(backToA.textContent).toContain('Grinding noise when braking');
     expect(backToA.textContent).not.toContain('Battery flat');
+  });
+});
+
+/**
+ * Mission 1 on the card.
+ *
+ * These prove the page SAYS the right thing. They deliberately do not
+ * prove anything is prevented: enforcement lives in the API and is pinned
+ * by `inspection-first.integration.spec.ts`, because a disabled button is
+ * not a rule -- anyone can open developer tools on a workshop tablet.
+ */
+describe('the technician work card, inspection first', () => {
+  it('puts the inspection first, above the tasks', async () => {
+    const { element } = await render(card());
+
+    const mission = element.querySelector('.mission');
+    const tasks = element.querySelector('.tools');
+    expect(mission).not.toBeNull();
+    expect(tasks).not.toBeNull();
+
+    // Position, not merely presence: "Mission 1" that renders below the
+    // repair list is not a first mission.
+    expect(mission!.compareDocumentPosition(tasks!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('says why repair work is locked, in the server\'s own words', async () => {
+    const { element } = await render(
+      card({
+        status: 'REGISTERED',
+        inspection: { state: 'REQUIRED', completedAt: null, actualMinutes: null, faultCount: 0 },
+        repairLocked: true,
+        repairLockReason: 'Start and record the inspection before any repair work.',
+        tasks: [{ id: 't1', title: 'Replace pads', status: 'ASSIGNED', blockedReason: null }],
+      }),
+    );
+
+    expect(element.querySelector('.tools-locked-why')?.textContent).toContain(
+      'Start and record the inspection before any repair work.',
+    );
+
+    // And the Start control is inert while it is locked.
+    const start = element.querySelector('.task button.tap--primary') as HTMLButtonElement | null;
+    expect(start?.disabled).toBe(true);
+  });
+
+  it('shows a completed inspection with what it found, and unlocks the work', async () => {
+    const { element } = await render(
+      card({ tasks: [{ id: 't1', title: 'Replace pads', status: 'ASSIGNED', blockedReason: null }] }),
+    );
+
+    expect(element.querySelector('.mission')?.getAttribute('data-state')).toBe('COMPLETED');
+    expect(element.querySelector('.mission-note')?.textContent).toContain('2 findings');
+    expect(element.querySelector('.tools-locked')).toBeNull();
+
+    const start = element.querySelector('.task button.tap--primary') as HTMLButtonElement | null;
+    expect(start?.disabled).toBe(false);
+  });
+
+  it('does not nag about an inspection the customer declined', async () => {
+    const { element } = await render(
+      card({
+        inspectionDeclined: true,
+        inspection: { state: 'DECLINED', completedAt: null, actualMinutes: null, faultCount: 0 },
+      }),
+    );
+
+    expect(element.querySelector('.mission')?.getAttribute('data-state')).toBe('DECLINED');
+    expect(element.querySelector('.mission-state')?.textContent).toContain('Declined');
+    expect(element.querySelector('.tools-locked')).toBeNull();
   });
 });

@@ -434,3 +434,86 @@
 .primary {
   margin-block-end: var(--space-4);
 }
+
+/* Mission 1 -- the inspection.
+ *
+ * First block on the card, and the only one with a step number. The
+ * numbering exists because the order is the rule here: repair work is not
+ * legal until this is done, so the card is laid out in the sequence the
+ * job actually runs rather than by how often a control is tapped.
+ *
+ * Border on the inline-start edge, matching `.blocked` above: the same
+ * visual grammar for "this row is telling you the state of something",
+ * with the colour carrying which state. Logical properties throughout --
+ * Arabic is a primary market and `border-left` would put the marker on
+ * the wrong side of the card.
+ */
+.mission {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-block-start: var(--space-4);
+  padding: var(--space-4);
+  background: var(--surface-raised, var(--surface));
+  border-inline-start: 4px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* Completed is the only state that earns colour. The others are the
+ * ordinary condition of a job that has just arrived, and painting them
+ * amber would make every new car look like a problem. */
+.mission[data-state='COMPLETED'] {
+  background: var(--success-bg);
+  border-inline-start-color: var(--success);
+}
+
+.mission-step {
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--text-faint);
+}
+
+.mission-title {
+  font-size: var(--tech-text-lg, var(--tech-text-md));
+  font-weight: 700;
+}
+
+.mission-state {
+  font-weight: 600;
+}
+
+.mission-state--done {
+  color: var(--success);
+}
+
+.mission-note {
+  color: var(--text-faint);
+  font-size: var(--tech-text-sm);
+}
+
+/* Why the repair rows below are inert.
+ *
+ * Stated, never merely implied by a greyed-out button: a disabled control
+ * with no reason is the one a technician taps twice and then walks to the
+ * office about. The sentence is the server's own refusal text, so what is
+ * read here and what the API would say are the same words.
+ */
+.tools-locked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--danger-bg);
+  border-inline-start: 4px solid var(--warning);
+  border-radius: var(--radius-sm);
+}
+
+.tools-locked-title {
+  font-weight: 700;
+}
+
+.tools-locked-why {
+  font-size: var(--tech-text-sm);
+}

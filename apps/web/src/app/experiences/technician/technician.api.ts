@@ -58,6 +58,21 @@ export interface WorkCardPrimaryAction {
   readonly label: string;
 }
 
+/**
+ * Mission 1 -- where the inspection stands on this job.
+ *
+ * Every field is the server's answer. The card renders it and never
+ * derives it: `repairLocked` below comes from the same authority that
+ * refuses the write, so what the technician is told and what the API
+ * would do cannot drift apart.
+ */
+export interface WorkCardInspection {
+  readonly state: 'REQUIRED' | 'IN_PROGRESS' | 'COMPLETED' | 'DECLINED';
+  readonly completedAt: string | null;
+  readonly actualMinutes: number | null;
+  readonly faultCount: number;
+}
+
 export interface WorkCard {
   readonly workOrderId: string;
   readonly identifier: string | null;
@@ -66,6 +81,16 @@ export interface WorkCard {
   readonly complaint: string | null;
   readonly inspectionDeclined: boolean;
   readonly timeTracking: 'OFF' | 'OPTIONAL' | 'REQUIRED';
+  readonly inspection: WorkCardInspection;
+  /**
+   * Whether repair work is legal right now. Server-computed.
+   *
+   * A disabled button is not enforcement -- this flag exists so the page
+   * can EXPLAIN the lock, not so it can impose one. The same request sent
+   * by hand is refused by the API with the same reason.
+   */
+  readonly repairLocked: boolean;
+  readonly repairLockReason: string | null;
   readonly tasks: readonly TechnicianTask[];
   readonly parts: readonly WorkCardPart[];
   readonly finish: FinishCheck;

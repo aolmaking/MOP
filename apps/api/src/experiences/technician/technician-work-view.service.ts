@@ -94,6 +94,27 @@ export interface WorkCardPrimaryAction {
   readonly label: string;
 }
 
+/**
+ * Mission 1 on the Work Card: where the inspection stands, and whether
+ * repair work is legal yet.
+ *
+ * This is the server's answer, not the page's opinion. A disabled button
+ * is not enforcement -- anyone can open developer tools on a workshop
+ * tablet and call the endpoint directly -- so the card reports the same
+ * decision the write paths will make, and the UI's job is only to say it
+ * clearly. `lockReason` is the sentence the technician reads; it comes
+ * from the same lifecycle service that would refuse the request.
+ */
+export interface WorkCardInspection {
+  readonly state: "REQUIRED" | "IN_PROGRESS" | "COMPLETED" | "DECLINED";
+  /** When the diagnosis finished, for the card to show it was done first. */
+  readonly completedAt: string | null;
+  /** How long it took, when the workshop tracks time. */
+  readonly actualMinutes: number | null;
+  /** Findings recorded against this job so far. */
+  readonly faultCount: number;
+}
+
 export interface WorkCard {
   readonly workOrderId: string;
   readonly identifier: string | null;
@@ -102,6 +123,15 @@ export interface WorkCard {
   readonly complaint: string | null;
   readonly inspectionDeclined: boolean;
   readonly timeTracking: "OFF" | "OPTIONAL" | "REQUIRED";
+  /** Mission 1. Always present -- a job with no inspection still has a state. */
+  readonly inspection: WorkCardInspection;
+  /**
+   * Whether repair work is legal on this job right now, asked of the same
+   * authority that guards every write.
+   */
+  readonly repairLocked: boolean;
+  /** Why repair is locked, in the technician's words. Null when it is not. */
+  readonly repairLockReason: string | null;
   readonly tasks: readonly TechnicianTask[];
   readonly parts: readonly WorkCardPart[];
   readonly finish: FinishCheck;
@@ -270,11 +300,16 @@ export class TechnicianWorkViewService {
       throw new NotFoundException({ code: "work_order_not_found", message: "That job is not assigned to you." });
     }
 
-    const [complaints, timeTracking, profile, intents] = await Promise.all([
+    const [complaints, timeTracking, profile, intents, inspection, repairLockReason] = await Promise.all([
       this.assetHistory.complaintText(tenantId, [workOrder.id]),
       this.policies.resolveValue(tenantId, "TIME_TRACKING") as Promise<"OFF" | "OPTIONAL" | "REQUIRED">,
       this.capabilities.resolveCurrent(tenantId),
       this.lifecycle.availableIntents(workOrder.id),
+      this.inspectionState(workOrder.id, workOrder.status, workOrder.inspectionDeclined),
+      // Asked of the authority itself rather than inferred from status.
+      // The card must say exactly what the write paths will do, or the
+      // technician is told one thing and refused another.
+      this.repairLockReason(workOrder.id),
     ]);
 
     // Every part request on the job, not only this technician's own:
@@ -306,6 +341,9 @@ export class TechnicianWorkViewService {
       complaint: complaints.get(workOrder.id) ?? null,
       inspectionDeclined: workOrder.inspectionDeclined,
       timeTracking,
+      inspection,
+      repairLocked: repairLockReason !== null,
+      repairLockReason,
       tasks: workOrder.tasks.map((task) => ({
         id: task.id,
         title: task.title,
@@ -372,6 +410,69 @@ export class TechnicianWorkViewService {
     }
 
     return this.workshopHistory.technicianBrief(tenantId, workOrder.assetId, workOrderId);
+  }
+
+  /**
+   * Mission 1's state, from stored facts only.
+   *
+   * DECLINED outranks everything: a customer who refused a diagnostic is
+   * not looking at an outstanding step, and showing them one would put a
+   * permanent red mark on a job that is behaving exactly as agreed.
+   *
+   * COMPLETED needs a completed row, not merely an existing one -- the
+   * same distinction the finish gate now makes, so the card and the gate
+   * cannot disagree about whether the inspection is done.
+   */
+  private async inspectionState(
+    workOrderId: string,
+    status: string,
+    declined: boolean,
+  ): Promise<WorkCardInspection> {
+    const [latest, faultCount] = await Promise.all([
+      this.prisma.inspection.findFirst({
+        where: { workOrderId },
+        orderBy: [{ completedAt: "desc" }, { startedAt: "desc" }],
+        select: { completedAt: true, actualMinutes: true },
+      }),
+      this.prisma.fault.count({ where: { workOrderId } }),
+    ]);
+
+    const state: WorkCardInspection["state"] = declined
+      ? "DECLINED"
+      : latest?.completedAt
+        ? "COMPLETED"
+        : latest || status === "UNDER_INSPECTION"
+          ? "IN_PROGRESS"
+          : "REQUIRED";
+
+    return {
+      state,
+      completedAt: latest?.completedAt?.toISOString() ?? null,
+      actualMinutes: latest?.actualMinutes ?? null,
+      faultCount,
+    };
+  }
+
+  /**
+   * Why repair work is locked, or null when it is not.
+   *
+   * Deliberately implemented by CALLING the guard and catching its
+   * refusal rather than by re-deriving the rule. Two copies of an
+   * authorization rule is how a screen ends up promising something the
+   * server then refuses -- and this way the sentence the technician reads
+   * is literally the sentence the write path would have produced.
+   */
+  private async repairLockReason(workOrderId: string): Promise<string | null> {
+    try {
+      await this.lifecycle.assertOperationalWorkAuthorized(workOrderId);
+      return null;
+    } catch (error) {
+      const response = (error as { response?: { code?: string; message?: string } }).response;
+      if (response?.code === "work_not_authorized" || response?.code === "work_order_closed") {
+        return response.message ?? "This job is not authorized for work yet.";
+      }
+      throw error;
+    }
   }
 
   /**
