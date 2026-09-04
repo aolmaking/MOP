@@ -68,7 +68,7 @@ export class HistoryRecordDrawer {
   protected readonly record = signal<OwnerHistoryRecord | null>(null);
   protected readonly error = signal<PresentedError | null>(null);
 
-  /** Which visits are expanded. The most recent opens itself; the rest are a click. */
+  /** Which visits are expanded. None to begin with -- see `load`. */
   protected readonly openVisits = signal<ReadonlySet<string>>(new Set());
   /** Which recommendations have their evidence showing. */
   protected readonly openEvidence = signal<ReadonlySet<string>>(new Set());
@@ -94,9 +94,16 @@ export class HistoryRecordDrawer {
       .subscribe({
         next: (record) => {
           this.record.set(record);
-          // Newest first from the server, so the first entry is the
-          // visit somebody opening this almost always wants.
-          this.openVisits.set(new Set(record.visits.slice(0, 1).map((visit) => visit.workOrderId)));
+          // Every visit starts CLOSED, including the newest.
+          //
+          // Opening one by default reads well with two visits and badly
+          // with six: the panel filled with one expanded record and the
+          // rest pushed off-screen, so "what happened to this car over
+          // time" -- the question the drawer exists for -- needed
+          // scrolling before it could even be asked. Collapsed, the
+          // whole history is one glance: a dated, titled row per visit,
+          // and the detail is one tap on the one that matters.
+          this.openVisits.set(new Set());
           this.openEvidence.set(new Set());
           this.state.set('ready');
         },

@@ -32,6 +32,10 @@
   padding: var(--space-5);
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* The header stays put while the record scrolls under it. A drawer
+     this tall is read by scrolling, and losing the plate and the close
+     button on the way down means scrolling back up to shut it. */
+  scroll-padding-block-start: var(--space-5);
   background: var(--surface-raised);
   border-inline-start: 1px solid var(--border-strong);
   border-start-start-radius: var(--radius-lg);
@@ -190,6 +194,18 @@
 /* ── one visit ───────────────────────────────────────────────────── */
 
 .visit {
+  /*
+   * `flex-shrink: 0` is the whole fix for a real bug, not a tidy-up.
+   *
+   * The panel is a column flexbox with a fixed height and
+   * `overflow-y: auto`. Flex children shrink by default, so with six
+   * visits open the browser squeezed each box to fit the viewport
+   * instead of letting the panel scroll -- every visit body was cut off
+   * mid-row, showing the "OPENED / CLOSED / BRANCH" labels with their
+   * values sliced away. Refusing to shrink is what makes the panel
+   * scroll rather than crush its contents.
+   */
+  flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
@@ -240,10 +256,36 @@
   white-space: nowrap;
 }
 
+/*
+ * The expand control, drawn as one.
+ *
+ * Every visit is collapsed to its title, so this is the only thing on
+ * the row that says the row opens. A bare faint glyph did not: it read
+ * as decoration next to the date. Bordered and centred, it reads as the
+ * button the whole header already is.
+ */
 .visit-chevron {
-  color: var(--text-faint);
+  display: grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  justify-self: end;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
   font-size: var(--text-md);
-  text-align: end;
+  line-height: 1;
+}
+
+.visit-head:hover .visit-chevron {
+  border-color: var(--accent);
+  color: var(--brand-text);
+}
+
+.visit--open .visit-chevron {
+  background: var(--accent-muted);
+  border-color: var(--accent);
+  color: var(--brand-text);
 }
 
 .visit-body {
