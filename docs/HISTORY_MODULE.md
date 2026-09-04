@@ -291,8 +291,53 @@ neither was added for its own sake.
 | No link between an approved recommendation and the work done about it | **Fixed** — `Task.decisionItemId`, plus the write path through the manager's create-task route. |
 | The Owner rail called the audit page "History" | **Fixed** — the audit page is `Audit & Changes`; History is its own page. |
 | `workorders.branch.reassign_technician` is granted to `BRANCH_MANAGER` and checked by **no endpoint** — there is no way to assign a technician to a work order over HTTP | **Reported, not fixed.** Out of this module's scope. The shipped test harness works around it with a direct write, and so does the demo-data script. |
+| The Team Leader's `vehicle-history` route returned a SECOND, flat projection that reported a customer decision as its raw `APPROVED` with no notion of whether the work was done — so a team leader read "approved" for the item the technician's panel reported as not performed | **Fixed** in the closure pass (`6b7ff9f`). The Team Leader now reads the same `technicianBrief`, and `AssetHistoryService.build` is deleted. One question, one answer. |
 
 ---
+
+---
+
+## Closure pass
+
+A dedicated audit ran over the whole History boundary after the module
+landed. What it checked, and what it found:
+
+| Audited | Result |
+|---|---|
+| Competing definitions of "vehicle history" | **One gap, fixed** — see the Team Leader row above. `WorkOrderDossierService` (one job) and `CustomerSafeProjectionService` (customer timeline) answer different questions and correctly remain. |
+| Current visit vs previous history | Clean. `id: { not: currentWorkOrderId }` bounds both the count and the read; verified in the browser and in `history.http.spec.ts`. |
+| A → B → A vehicle isolation | Clean. The reset is keyed on the route id in both `TechWorkCard` and `TechVehicleHistory`; verified live in the browser. |
+| Timestamp honesty | Clean. `new Date()` appears only as the labelled `generatedAt` read time and as the expiry comparison passed into `resolveOutcome`. No historical fact is dated "now". |
+| Tenant / role / IDOR isolation | Clean. Owner routes 403 for manager and technician; unknown or foreign ids answer 404, identical to not-found. |
+| Customer boundary | Clean. `WorkshopHistoryService` is unreachable from the customer portal, which still serves its own `safeHistory`. |
+| Migration integrity | Clean. All 34 migrations apply to an empty database in order, and the History migration lands its column, FK and index. |
+| Declared-but-unenforced permissions | 20 across the product; one of them, `customer.history.view_safe`, names History — see below. |
+
+### `customer.history.view_safe` — declared, unenforceable, and not History's to fix
+
+The manifest declares five `customer.*` permission keys, including
+`customer.history.view_safe`. None is checked anywhere, and none **can**
+be: `CUSTOMER` is not a `StaffRole`, so it has no row in
+`default-role-permissions.ts` and the resolver has nothing to resolve.
+
+Customer history is not therefore unguarded. The portal gates on account
+type, the session's own `customerId`, and `enabledModules` containing
+`CUSTOMER_PORTAL` — a real switch that really does turn the surface off.
+The permission key is decoration standing next to a working gate.
+
+Adding an `access.can()` call for a key no role map can grant would
+deny-by-default and break the portal. The real fix is either to delete
+the five vestigial keys or to give customer accounts permission
+resolution, and both are decisions for the permission module rather than
+for History. **Documented, deliberately not absorbed.**
+
+### Verified at closure
+
+Typecheck clean · all 7 lint gates pass · **1011/1011 API tests, 117/117
+suites** · **318/318 web tests** · browser: owner index, search, record
+drawer, technician panel, A → B → A isolation, and a real task
+completion flipping `APPROVED_PLANNED` to `PERFORMED` in both
+projections at once.
 
 ## Deliberately not done
 
