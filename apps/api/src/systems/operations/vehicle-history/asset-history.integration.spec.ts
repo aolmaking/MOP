@@ -34,6 +34,7 @@ const policiesForTest = new PolicyResolutionService(
   new CapabilityResolutionService(asService),
 );
 const history = new AssetHistoryService(asService);
+const workshopHistory = new WorkshopHistoryService(asService, history);
 
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
 const lifecycle = new WorkOrderLifecycleService(
@@ -47,7 +48,7 @@ const techView = new TechnicianWorkViewService(
   asService,
   lifecycle,
   history,
-  new WorkshopHistoryService(asService, history),
+  workshopHistory,
   policiesForTest,
   new CapabilityResolutionService(asService),
 );
@@ -57,6 +58,7 @@ let tenantId: string;
 let otherTenantId: string;
 let planId: string;
 let branchId: string;
+let otherBranchId: string;
 
 async function makeTenant(slug: string) {
   const tenant = await prisma.tenant.create({
@@ -99,6 +101,14 @@ beforeAll(async () => {
 
   const branch = await prisma.branch.create({ data: { tenantId, name: "Main", code: `MAIN-${SUFFIX}` } });
   branchId = branch.id;
+  // The cross-tenant test needs a real work order in the OTHER tenant:
+  // `technicianBrief` is asked for an asset id and a work order id, and
+  // the refusal has to come from the tenant check rather than from the
+  // work order simply not existing.
+  const otherBranch = await prisma.branch.create({
+    data: { tenantId: otherTenantId, name: "Main", code: `MAIN-${SUFFIX}-other` },
+  });
+  otherBranchId = otherBranch.id;
 }, 120_000);
 
 afterAll(async () => {
@@ -121,7 +131,18 @@ afterAll(async () => {
   await prisma.$disconnect();
 }, 120_000);
 
-describe("AssetHistoryService", () => {
+/**
+ * These three cases moved with the projection they cover.
+ *
+ * `AssetHistoryService.build` was the flat staff-facing vehicle history
+ * and is gone -- superseded by `WorkshopHistoryService.technicianBrief`,
+ * which answers the same question with a truthful outcome per
+ * recommendation instead of a raw customer decision. The BEHAVIOURS these
+ * tests protect are not about that shape though: they are the ownership
+ * boundary, tenant isolation, and the empty vehicle, and every one of
+ * them still has to hold. So they are re-pointed rather than deleted.
+ */
+describe("WorkshopHistoryService.technicianBrief -- ownership, tenancy and emptiness", () => {
   it("preserves technical history across an ownership transfer, but never names a prior owner anywhere in the output", async () => {
     const ownerA = await prisma.customer.create({ data: { tenantId, fullName: "Owner Alpha", phone: `0166${SUFFIX}a` } });
     const ownerB = await prisma.customer.create({ data: { tenantId, fullName: "Owner Beta", phone: `0166${SUFFIX}b` } });
@@ -146,14 +167,14 @@ describe("AssetHistoryService", () => {
       data: { tenantId, branchId, assetId: asset.id, customerId: ownerB.id, status: "IN_PROGRESS" },
     });
 
-    const report = await history.build(tenantId, asset.id, secondVisit.id);
+    const report = await workshopHistory.technicianBrief(tenantId, asset.id, secondVisit.id);
 
     // The technical fact from Owner A's era is still visible to the new owner's technician...
     expect(report.hasPriorOwnerHistory).toBe(true);
-    const priorVisit = report.visits.find((v) => v.workOrderId === firstVisit.id);
-    expect(priorVisit).toBeDefined();
-    expect(priorVisit!.faults[0]!.description).toBe("Worn belt tensioner");
-    expect(priorVisit!.sameOwnerAsCurrent).toBe(false);
+    const priorFinding = report.previousFindings.find((f) => f.workOrderId === firstVisit.id);
+    expect(priorFinding).toBeDefined();
+    expect(priorFinding!.description).toBe("Worn belt tensioner");
+    expect(priorFinding!.sameOwnerAsCurrent).toBe(false);
 
     // ...but Owner A's identity never appears anywhere in the payload.
     const serialized = JSON.stringify(report);
@@ -167,8 +188,11 @@ describe("AssetHistoryService", () => {
     const otherAsset = await prisma.asset.create({
       data: { tenantId: otherTenantId, category: "CARS", plateNumber: `OTH-${SUFFIX}`, currentOwnerCustomerId: customer.id },
     });
+    const otherWorkOrder = await prisma.workOrder.create({
+      data: { tenantId: otherTenantId, branchId: otherBranchId, assetId: otherAsset.id, customerId: customer.id, status: "IN_PROGRESS" },
+    });
 
-    await expect(history.build(tenantId, otherAsset.id)).rejects.toMatchObject({ status: 404 });
+    await expect(workshopHistory.technicianBrief(tenantId, otherAsset.id, otherWorkOrder.id)).rejects.toMatchObject({ status: 404 });
   });
 
   it("handles a vehicle with no prior visits at all", async () => {
@@ -176,11 +200,17 @@ describe("AssetHistoryService", () => {
     const asset = await prisma.asset.create({
       data: { tenantId, category: "CARS", plateNumber: `NEW-${SUFFIX}`, currentOwnerCustomerId: customer.id },
     });
+    const onlyVisit = await prisma.workOrder.create({
+      data: { tenantId, branchId, assetId: asset.id, customerId: customer.id, status: "REGISTERED" },
+    });
 
-    const report = await history.build(tenantId, asset.id);
-    expect(report.totalPriorVisits).toBe(0);
+    const report = await workshopHistory.technicianBrief(tenantId, asset.id, onlyVisit.id);
+    expect(report.priorVisits).toBe(0);
     expect(report.hasPriorOwnerHistory).toBe(false);
-    expect(report.visits).toEqual([]);
+    expect(report.previousComplaints).toEqual([]);
+    expect(report.previousFindings).toEqual([]);
+    expect(report.previousRecommendations).toEqual([]);
+    expect(report.unresolved).toEqual([]);
   });
 });
 

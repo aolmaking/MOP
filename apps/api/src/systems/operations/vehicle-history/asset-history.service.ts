@@ -1,113 +1,29 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { Prisma } from "@mop/database";
 import { PrismaService } from "../../../runtime/database/prisma.service";
 
-export interface AssetHistoryVisit {
-  readonly workOrderId: string;
-  readonly status: string;
-  readonly createdAt: string;
-  readonly closedAt: string | null;
-  /** From the `work_order.created` OperationEvent -- there is no stored `complaint` column; the event log is the record. */
-  readonly complaint: string | null;
-  readonly inspections: readonly { readonly type: string; readonly note: string | null; readonly createdAt: string }[];
-  readonly faults: readonly {
-    readonly code: string | null;
-    readonly description: string;
-    readonly severity: string;
-    readonly recommendedService: string | null;
-  }[];
-  readonly partsUsed: readonly { readonly name: string; readonly quantity: number }[];
-  readonly decisions: readonly { readonly name: string; readonly decision: string }[];
-  /** False marks a visit from a PRIOR ownership period -- see the service doc comment for what that changes. */
-  readonly sameOwnerAsCurrent: boolean;
-}
-
-export interface AssetHistorySummary {
-  readonly assetId: string;
-  readonly category: string;
-  readonly identifier: string | null;
-  readonly currentOwnerCustomerId: string | null;
-  readonly totalPriorVisits: number;
-  readonly hasPriorOwnerHistory: boolean;
-  readonly visits: readonly AssetHistoryVisit[];
-}
-
 /**
- * Staff-facing vehicle history (P-81,
- * docs/POLICY_DECISION_INVENTORY.md §8.B) -- "not just a customer-facing
- * history feature... operationally important." Every field here already
- * existed (Inspection, Fault, WorkOrderPartLine, CustomerDecisionItem,
- * OperationEvent); this service is the first thing that reads them back
- * as one asset's story instead of one work order's fields.
+ * The one thing in this product that knows where a complaint is written
+ * down.
  *
- * Deliberately excludes any customer name/phone/email at every layer --
- * unlike `SafeTechnicalHistory` (customer-facing, keyed per owner), this
- * feed serves the technician working the CURRENT visit, who already
- * knows who the current customer is from the work order they opened;
- * this service only needs to answer "what has this VEHICLE been through,"
- * never "who owned it when." `sameOwnerAsCurrent` marks the ownership
- * boundary explicitly so a caller can still visually separate "this
- * customer's own history" from "history from before this customer owned
- * it" without ever naming who the prior owner was.
+ * `WorkOrder` has no `complaint` column: what the customer said is
+ * carried on the `work_order.created` OperationEvent, and every surface
+ * that shows a complaint -- the technician's job list, the work card,
+ * the owner's history index, the deep record, the decision-support brief
+ * -- reads it back through the single query below.
+ *
+ * This service used to ALSO assemble a flat, staff-facing vehicle
+ * history (`build`), which was superseded by
+ * `WorkshopHistoryService.technicianBrief`. The two disagreed in a way
+ * that mattered: the flat version reported a customer decision as its
+ * raw `APPROVED` with no notion of whether the work was ever done, so a
+ * team leader read "approved" for the exact item the technician's panel
+ * reported as not performed. One question now has one answer, and the
+ * competing projection is gone rather than left to drift.
  */
 @Injectable()
 export class AssetHistoryService {
   constructor(private readonly prisma: PrismaService) {}
-
-  async build(tenantId: string, assetId: string, excludeWorkOrderId?: string): Promise<AssetHistorySummary> {
-    const asset = await this.prisma.asset.findFirst({
-      where: { id: assetId, tenantId },
-      select: { id: true, category: true, plateNumber: true, serialNumber: true, currentOwnerCustomerId: true },
-    });
-    if (!asset) throw new NotFoundException({ code: "asset_not_found", message: "That vehicle was not found." });
-
-    const currentOwnershipStart = await this.prisma.assetOwnershipHistory.findFirst({
-      where: { tenantId, assetId, endedAt: null },
-      select: { startedAt: true },
-    });
-
-    const workOrders = await this.prisma.workOrder.findMany({
-      where: { tenantId, assetId, ...(excludeWorkOrderId ? { id: { not: excludeWorkOrderId } } : {}) },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        status: true,
-        createdAt: true,
-        closedAt: true,
-        inspections: { select: { type: true, note: true, createdAt: true } },
-        faults: { select: { code: true, description: true, severity: true, recommendedService: true } },
-        partLines: { select: { name: true, quantity: true } },
-        decisionRequests: {
-          select: { items: { select: { name: true, decision: true } } },
-        },
-      },
-    });
-
-    const complaintByWorkOrder = await this.complaintText(tenantId, workOrders.map((w) => w.id));
-
-    const visits: AssetHistoryVisit[] = workOrders.map((wo) => ({
-      workOrderId: wo.id,
-      status: wo.status,
-      createdAt: wo.createdAt.toISOString(),
-      closedAt: wo.closedAt?.toISOString() ?? null,
-      complaint: complaintByWorkOrder.get(wo.id) ?? null,
-      inspections: wo.inspections.map((i) => ({ type: i.type, note: i.note, createdAt: i.createdAt.toISOString() })),
-      faults: wo.faults,
-      partsUsed: wo.partLines.map((p) => ({ name: p.name, quantity: p.quantity })),
-      decisions: wo.decisionRequests.flatMap((r) => r.items.map((item) => ({ name: item.name, decision: item.decision }))),
-      sameOwnerAsCurrent: currentOwnershipStart ? wo.createdAt >= currentOwnershipStart.startedAt : true,
-    }));
-
-    return {
-      assetId: asset.id,
-      category: asset.category,
-      identifier: asset.plateNumber ?? asset.serialNumber,
-      currentOwnerCustomerId: asset.currentOwnerCustomerId,
-      totalPriorVisits: visits.length,
-      hasPriorOwnerHistory: visits.some((v) => !v.sameOwnerAsCurrent),
-      visits,
-    };
-  }
 
   /**
    * A raw, JSONB-filtered query rather than `findMany` + JS filtering --

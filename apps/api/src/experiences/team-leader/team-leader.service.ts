@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../runtime/database/prisma.service";
-import { AssetHistoryService } from "../../systems/operations/vehicle-history/asset-history.service";
+import { WorkshopHistoryService } from "../../systems/operations/history/workshop-history.service";
+import type { TechnicianHistoryBrief } from "../../systems/operations/history/workshop-history.types";
 
 export interface TeamLeaderHome {
   readonly managedCount: number;
@@ -67,7 +68,7 @@ export interface TechnicianPerformanceRow {
 export class TeamLeaderService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly assetHistory: AssetHistoryService,
+    private readonly workshopHistory: WorkshopHistoryService,
   ) {}
 
   async home(tenantId: string, managedTechnicianIds: readonly string[]): Promise<TeamLeaderHome> {
@@ -276,7 +277,11 @@ export class TeamLeaderService {
    * touching one of their managed technicians, not just their own
    * assignments (P-81, docs/POLICY_DECISION_INVENTORY.md §8.B).
    */
-  async vehicleHistory(tenantId: string, managedTechnicianIds: readonly string[], workOrderId: string) {
+  async vehicleHistory(
+    tenantId: string,
+    managedTechnicianIds: readonly string[],
+    workOrderId: string,
+  ): Promise<TechnicianHistoryBrief> {
     await this.requireInTeam(tenantId, managedTechnicianIds, workOrderId);
 
     const workOrder = await this.prisma.workOrder.findFirst({
@@ -287,7 +292,17 @@ export class TeamLeaderService {
       throw new NotFoundException({ code: "work_order_not_found", message: "That job is not in your team." });
     }
 
-    return this.assetHistory.build(tenantId, workOrder.assetId, workOrderId);
+    // The SAME projection the technician reads, deliberately.
+    //
+    // This route used to return a second, flat vehicle history that
+    // reported a customer decision as its raw `APPROVED` with no notion
+    // of whether the work was ever done. A team leader checking on a
+    // technician's car would therefore read "approved" for the exact
+    // item the technician's own panel correctly reported as not
+    // performed -- two History projections of one truth, disagreeing.
+    // A supervising technician asks the technician's question, so they
+    // get the technician's answer, money absent and all.
+    return this.workshopHistory.technicianBrief(tenantId, workOrder.assetId, workOrderId);
   }
 
   /**
