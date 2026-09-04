@@ -1,6 +1,6 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { forkJoin, of } from 'rxjs';
+import { type Observable, map, switchMap } from 'rxjs';
 import { ErrorBanner } from '../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../ui/button/button.directive';
 import { FormField } from '../../ui/form-field/form-field';
@@ -8,6 +8,7 @@ import { ToastService } from '../../ui/toast/toast.service';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import {
   InventoryApi,
+  type AttributeRecord,
   type CatalogConfiguration,
   type ConfiguredAttribute,
   type ConfiguredCategory,
@@ -17,7 +18,6 @@ import {
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
 interface CategoryForm {
-  id: string | null;
   name: string;
   parentId: string;
   description: string;
@@ -25,42 +25,44 @@ interface CategoryForm {
   technicianVisible: boolean;
 }
 
-interface AttributeForm {
-  id: string | null;
-  label: string;
-  showOnCard: boolean;
-  isActive: boolean;
+function emptyCategoryForm(): CategoryForm {
+  return { name: '', parentId: '', description: '', isActive: true, technicianVisible: true };
 }
 
-function emptyCategory(): CategoryForm {
-  return { id: null, name: '', parentId: '', description: '', isActive: true, technicianVisible: true };
-}
-
-function emptyAttribute(): AttributeForm {
-  return { id: null, label: '', showOnCard: true, isActive: true };
-}
+/** The sentinel `expandedId` for a category that does not exist yet. */
+const NEW = 'new';
 
 /**
  * Catalog Builder -- where the technician's shopping experience is
- * actually authored.
+ * actually authored, as one continuous job rather than three.
  *
- * Three things happen on one page because they are one decision: what
- * the categories are, what questions someone browsing them can ask
- * ("Brand", "Engine Size"), and which of those questions each category
- * offers. Splitting them across three routes would mean creating a
- * filter, navigating away, and hoping you remembered to attach it.
+ * The earlier shape of this page put categories in one panel and filters
+ * in another, with "which filters does this category offer" as a third,
+ * separate toggle buried in a category row. Building "Brakes needs a
+ * Vehicle Type filter with Sedan/SUV/Truck" meant: create the category
+ * here, switch panels, invent the filter and its values there, switch
+ * back, open the assignment toggle, tick a checkbox, save. Four contexts
+ * for one decision.
  *
- * The preview is the fourth panel and it is not a mock-up: it calls the
+ * Now a category IS the unit of work. Click one and its own editor
+ * expands in place: rename it, and right there attach an existing
+ * filter, invent a brand new one with its first value, add more values
+ * to one it already has, or detach one it no longer needs. Nothing
+ * requires leaving the row. Filters themselves stay a shared vocabulary
+ * -- "Brand" invented once is reusable by every category -- which is why
+ * creating one still writes a workshop-wide `CatalogAttribute` under the
+ * hood; the difference is that the workshop-wide object is now created
+ * from inside the one place a manager actually needs it.
+ *
+ * A filter that ends up attached to nothing (the result of detaching it
+ * from its last category) is not orphaned data -- it is listed, quietly,
+ * at the bottom, so it can be picked back up by attaching it to a
+ * category later, without ever being deleted.
+ *
+ * The preview is the proof this isn't just a nicer form: it calls the
  * same server browse the technician's page calls, so a category left
  * invisible or a filter attached to nothing shows up here exactly as it
- * would in a bay. A preview drawn from local state would agree with the
- * form and disagree with the product.
- *
- * Nothing on this page deletes. A category with parts filed under it and
- * a filter value stamped on a hundred of them are both referenced by
- * records that outlive the decision to stop using them -- deactivating
- * takes them out of the technician's browse while leaving every existing
- * part readable.
+ * would in a bay.
  */
 @Component({
   selector: 'app-catalog-builder',
@@ -79,21 +81,39 @@ export class CatalogBuilder {
   protected readonly saving = signal(false);
   protected readonly formError = signal<string | null>(null);
 
-  protected readonly categoryForm = signal<CategoryForm>(emptyCategory());
-  protected readonly categoryOpen = signal(false);
+  /**
+   * Which category's editor is open. `NEW` is the not-yet-saved category
+   * at the top of the list; a real id is an existing one; `null` means
+   * nothing is expanded. Only one at a time -- this is read as a single
+   * decision, not a spreadsheet of them.
+   */
+  protected readonly expandedId = signal<string | null>(null);
+  protected readonly isNew = computed(() => this.expandedId() === NEW);
 
-  protected readonly attributeForm = signal<AttributeForm>(emptyAttribute());
-  protected readonly attributeOpen = signal(false);
+  protected readonly categoryForm = signal<CategoryForm>(emptyCategoryForm());
+  /** The exact filters THIS category offers -- not inherited from a parent. */
+  protected readonly categoryFilterIds = signal<string[]>([]);
 
-  /** Which attribute is taking a new value, and what it is called. */
-  protected readonly valueFor = signal<string | null>(null);
-  protected readonly valueLabel = signal('');
+  /** The pending choice in "attach an existing filter". */
+  protected readonly attachChoice = signal('');
 
-  /** Which category's filter assignment is open, and the working set. */
-  protected readonly assigningTo = signal<string | null>(null);
-  protected readonly assignment = signal<string[]>([]);
+  /** The inline "invent a new filter" mini-form, scoped to the open category. */
+  protected readonly creatingFilter = signal(false);
+  protected readonly newFilterLabel = signal('');
+  protected readonly newFilterFirstValue = signal('');
 
-  /* --- preview ------------------------------------------------------ */
+  /** Renaming one already-attached filter, inline. */
+  protected readonly renamingAttributeId = signal<string | null>(null);
+  protected readonly renameLabel = signal('');
+
+  /** Adding one more value to an already-attached filter, inline. */
+  protected readonly addingValueFor = signal<string | null>(null);
+  protected readonly newValueLabel = signal('');
+
+  /** The housekeeping list at the bottom, collapsed by default. */
+  protected readonly orphansOpen = signal(false);
+
+  /* --- preview -------------------------------------------------------- */
 
   protected readonly preview = signal<PreviewPage | null>(null);
   protected readonly previewLoading = signal(false);
@@ -101,7 +121,9 @@ export class CatalogBuilder {
   protected readonly previewSelections = signal<Record<string, string[]>>({});
   protected readonly previewQuery = signal('');
 
-  /** Flat category list for the parent picker and the preview rail. */
+  /* --- derived ---------------------------------------------------------- */
+
+  /** Flat category list, depth-tagged, for the row list and the parent picker. */
   protected readonly flatCategories = computed(() => {
     const walk = (nodes: readonly ConfiguredCategory[], depth: number): { node: ConfiguredCategory; depth: number }[] =>
       nodes.flatMap((node) => [{ node, depth }, ...walk(node.children, depth + 1)]);
@@ -111,11 +133,29 @@ export class CatalogBuilder {
   /** Only top-level categories may be a parent -- the tree is one deep. */
   protected readonly parentOptions = computed(() =>
     this.flatCategories()
-      .filter((entry) => entry.depth === 0 && entry.node.id !== this.categoryForm().id)
+      .filter((entry) => entry.depth === 0 && entry.node.id !== this.expandedId())
       .map((entry) => entry.node),
   );
 
-  protected readonly attributes = computed(() => this.config()?.attributes ?? []);
+  /** All filters, in the order the technician sees them (global sortOrder). */
+  protected readonly allAttributes = computed(() => this.config()?.attributes ?? []);
+
+  /** The open category's filters, resolved to full objects, technician order. */
+  protected readonly categoryAttributes = computed<readonly ConfiguredAttribute[]>(() => {
+    const ids = new Set(this.categoryFilterIds());
+    return this.allAttributes().filter((attribute) => ids.has(attribute.id));
+  });
+
+  /** Active filters the open category does not already offer. */
+  protected readonly attachableAttributes = computed(() => {
+    const attached = new Set(this.categoryFilterIds());
+    return this.allAttributes().filter((attribute) => attribute.isActive && !attached.has(attribute.id));
+  });
+
+  /** Filters attached to nothing at all -- reachable, never deleted. */
+  protected readonly orphanAttributes = computed(() =>
+    this.allAttributes().filter((attribute) => attribute.usedByCategoryIds.length === 0),
+  );
 
   constructor() {
     this.load();
@@ -139,61 +179,148 @@ export class CatalogBuilder {
       });
   }
 
-  /* --- categories --------------------------------------------------- */
+  /* --- opening / closing a category's editor -------------------------- */
 
-  protected newCategory(): void {
+  protected startNewCategory(): void {
     this.formError.set(null);
-    this.categoryForm.set(emptyCategory());
-    this.categoryOpen.set(true);
+    this.categoryForm.set(emptyCategoryForm());
+    this.categoryFilterIds.set([]);
+    this.resetInlineState();
+    this.expandedId.set(NEW);
   }
 
-  protected editCategory(category: ConfiguredCategory): void {
+  protected toggleCategory(category: ConfiguredCategory): void {
+    if (this.expandedId() === category.id) {
+      this.closeExpanded();
+      return;
+    }
     this.formError.set(null);
     this.categoryForm.set({
-      id: category.id,
       name: category.name,
       parentId: category.parentId ?? '',
       description: category.description ?? '',
       isActive: category.isActive,
       technicianVisible: category.technicianVisible,
     });
-    this.categoryOpen.set(true);
+    this.categoryFilterIds.set([...category.attributeIds]);
+    this.resetInlineState();
+    this.expandedId.set(category.id);
+  }
+
+  protected closeExpanded(): void {
+    this.expandedId.set(null);
+    this.resetInlineState();
+  }
+
+  private resetInlineState(): void {
+    this.creatingFilter.set(false);
+    this.newFilterLabel.set('');
+    this.newFilterFirstValue.set('');
+    this.renamingAttributeId.set(null);
+    this.addingValueFor.set(null);
+    this.attachChoice.set('');
   }
 
   protected patchCategory<K extends keyof CategoryForm>(key: K, value: CategoryForm[K]): void {
     this.categoryForm.update((form) => ({ ...form, [key]: value }));
   }
 
+  /**
+   * Saves the category, then re-opens the SAME editor on the saved row --
+   * it does not collapse. A just-created category has nothing to manage
+   * yet but its own fields; the moment it exists, this is where its
+   * filters get built, in the same place, without a second click to get
+   * back here.
+   */
   protected saveCategory(): void {
+    const id = this.expandedId();
+    if (!id) return;
     const form = this.categoryForm();
-    if (!form.name.trim()) {
+    const name = form.name.trim();
+    if (!name) {
       this.formError.set('A category needs a name.');
       return;
     }
 
     const draft = {
-      name: form.name.trim(),
+      name,
       parentId: form.parentId || null,
       description: form.description.trim() || undefined,
       isActive: form.isActive,
       technicianVisible: form.technicianVisible,
     };
 
-    this.run(form.id ? this.api.updateCategory(form.id, draft) : this.api.createCategory(draft), () => {
-      this.categoryOpen.set(false);
-      this.toast.show(form.id ? `${draft.name} updated.` : `${draft.name} added.`, 'success');
+    this.saving.set(true);
+    this.formError.set(null);
+    const request = id === NEW ? this.api.createCategory(draft) : this.api.updateCategory(id, draft);
+    request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (saved) => {
+        this.saving.set(false);
+        this.toast.show(id === NEW ? `${name} added.` : `${name} updated.`, 'success');
+        this.reloadThenExpand(id === NEW ? saved.id : id);
+      },
+      error: (err: PresentedError) => {
+        this.saving.set(false);
+        this.formError.set(err.message ?? 'That could not be saved.');
+      },
     });
   }
 
-  /* --- ordering ----------------------------------------------------- *
+  /**
+   * Reloads the configuration and keeps (or moves) the open editor onto
+   * `categoryId` -- the one operation every write on this page ends
+   * with, since the server is the source of truth for slugs, sort
+   * positions and counts, and the manager should never lose their place
+   * to find that out.
+   */
+  private reloadThenExpand(categoryId: string): void {
+    this.api
+      .catalogConfiguration()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (config) => {
+          this.config.set(config);
+          const node = this.findCategory(config, categoryId);
+          if (node) {
+            this.categoryForm.set({
+              name: node.name,
+              parentId: node.parentId ?? '',
+              description: node.description ?? '',
+              isActive: node.isActive,
+              technicianVisible: node.technicianVisible,
+            });
+            this.categoryFilterIds.set([...node.attributeIds]);
+          }
+          this.expandedId.set(categoryId);
+          this.refreshPreview();
+        },
+        error: (err: PresentedError) => {
+          this.error.set(err);
+          this.state.set(err.httpStatus === 403 ? 'forbidden' : 'error');
+        },
+      });
+  }
+
+  private findCategory(config: CatalogConfiguration, id: string): ConfiguredCategory | null {
+    const walk = (nodes: readonly ConfiguredCategory[]): ConfiguredCategory | null => {
+      for (const node of nodes) {
+        if (node.id === id) return node;
+        const found = walk(node.children);
+        if (found) return found;
+      }
+      return null;
+    };
+    return walk(config.categories);
+  }
+
+  /* --- ordering --------------------------------------------------------
    *
    * Up/down rather than drag: this list is read on a desk, the moves are
    * one position at a time in practice, and a keyboard can reach a
    * button. Each move sends the whole sibling group, so two rows can
    * never end up sharing a position.
-   * ------------------------------------------------------------------ */
+   * ---------------------------------------------------------------------- */
 
-  /** The ordered ids of the group this category sits in. */
   private siblingsOf(category: ConfiguredCategory): string[] {
     const config = this.config();
     if (!config) return [];
@@ -227,21 +354,24 @@ export class CatalogBuilder {
   protected moveCategory(category: ConfiguredCategory, delta: number): void {
     const next = this.shifted(this.siblingsOf(category), category.id, delta);
     if (!next) return;
-    this.run(this.api.reorderCategories(category.parentId, next), () => {
-      this.toast.show(`${category.name} moved.`, 'success');
-    });
+    this.run(this.api.reorderCategories(category.parentId, next), () => undefined);
   }
 
   protected canMoveAttribute(attribute: ConfiguredAttribute, delta: number): boolean {
-    return this.shifted(this.attributes().map((a) => a.id), attribute.id, delta) !== null;
+    return this.shifted(this.allAttributes().map((a) => a.id), attribute.id, delta) !== null;
   }
 
+  /**
+   * Moves the filter's GLOBAL order -- the same position it holds in
+   * every category that offers it, and in the technician's own filter
+   * panel. There is deliberately no separate per-category order: two
+   * ordering concepts for one row would be a second thing to keep in
+   * sync, and the technician only ever experiences the one.
+   */
   protected moveAttribute(attribute: ConfiguredAttribute, delta: number): void {
-    const next = this.shifted(this.attributes().map((a) => a.id), attribute.id, delta);
+    const next = this.shifted(this.allAttributes().map((a) => a.id), attribute.id, delta);
     if (!next) return;
-    this.run(this.api.reorderAttributes(next), () => {
-      this.toast.show(`${attribute.label} moved.`, 'success');
-    });
+    this.run(this.api.reorderAttributes(next), () => undefined);
   }
 
   protected canMoveValue(attribute: ConfiguredAttribute, valueId: string, delta: number): boolean {
@@ -251,63 +381,128 @@ export class CatalogBuilder {
   protected moveValue(attribute: ConfiguredAttribute, valueId: string, delta: number): void {
     const next = this.shifted(attribute.values.map((v) => v.id), valueId, delta);
     if (!next) return;
-    this.run(this.api.reorderAttributeValues(attribute.id, next), () => {
-      this.toast.show('Filter values reordered.', 'success');
+    this.run(this.api.reorderAttributeValues(attribute.id, next), () => undefined);
+  }
+
+  /* --- a category's filters: attach, invent, rename, add value, detach - */
+
+  protected attachExisting(): void {
+    const categoryId = this.expandedId();
+    const attributeId = this.attachChoice();
+    if (!categoryId || categoryId === NEW || !attributeId) return;
+
+    const next = [...this.categoryFilterIds(), attributeId];
+    this.run(this.api.setCategoryAttributes(categoryId, next), () => {
+      this.categoryFilterIds.set(next);
+      this.attachChoice.set('');
+      this.toast.show('Filter attached.', 'success');
     });
   }
 
-  /* --- filters ------------------------------------------------------ */
+  protected detachFilter(attributeId: string, label: string): void {
+    const categoryId = this.expandedId();
+    if (!categoryId || categoryId === NEW) return;
 
-  protected newAttribute(): void {
-    this.formError.set(null);
-    this.attributeForm.set(emptyAttribute());
-    this.attributeOpen.set(true);
-  }
-
-  protected editAttribute(attribute: ConfiguredAttribute): void {
-    this.formError.set(null);
-    this.attributeForm.set({
-      id: attribute.id,
-      label: attribute.label,
-      showOnCard: attribute.showOnCard,
-      isActive: attribute.isActive,
+    const next = this.categoryFilterIds().filter((id) => id !== attributeId);
+    this.run(this.api.setCategoryAttributes(categoryId, next), () => {
+      this.categoryFilterIds.set(next);
+      this.toast.show(`${label} removed from this category.`, 'success');
     });
-    this.attributeOpen.set(true);
   }
 
-  protected patchAttribute<K extends keyof AttributeForm>(key: K, value: AttributeForm[K]): void {
-    this.attributeForm.update((form) => ({ ...form, [key]: value }));
+  protected startNewFilter(): void {
+    this.formError.set(null);
+    this.creatingFilter.set(true);
+    this.newFilterLabel.set('');
+    this.newFilterFirstValue.set('');
   }
 
-  protected saveAttribute(): void {
-    const form = this.attributeForm();
-    if (!form.label.trim()) {
+  protected cancelNewFilter(): void {
+    this.creatingFilter.set(false);
+  }
+
+  /**
+   * Invent a filter, give it its first value, and attach it to the open
+   * category -- three server calls that read as one action, because
+   * from here they are one action. A filter with zero values is not
+   * useful to a technician, so the first value is asked for up front
+   * rather than left for a second visit.
+   */
+  protected saveNewFilter(): void {
+    const categoryId = this.expandedId();
+    const label = this.newFilterLabel().trim();
+    const firstValue = this.newFilterFirstValue().trim();
+    if (!categoryId || categoryId === NEW) return;
+    if (!label) {
       this.formError.set('A filter needs a name.');
       return;
     }
+    if (!firstValue) {
+      this.formError.set('Give it at least one value to start with.');
+      return;
+    }
 
-    const draft = { label: form.label.trim(), showOnCard: form.showOnCard, isActive: form.isActive };
-    this.run(form.id ? this.api.updateAttribute(form.id, draft) : this.api.createAttribute(draft), () => {
-      this.attributeOpen.set(false);
-      this.toast.show(form.id ? `${draft.label} updated.` : `${draft.label} added.`, 'success');
+    this.saving.set(true);
+    this.formError.set(null);
+    this.api
+      .createAttribute({ label })
+      .pipe(
+        switchMap((attribute) => this.api.addAttributeValue(attribute.id, { label: firstValue }).pipe(map(() => attribute))),
+        switchMap((attribute) =>
+          this.api.setCategoryAttributes(categoryId, [...this.categoryFilterIds(), attribute.id]).pipe(map(() => attribute)),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (attribute: AttributeRecord) => {
+          this.saving.set(false);
+          this.creatingFilter.set(false);
+          this.toast.show(`${attribute.label} added, with "${firstValue}".`, 'success');
+          this.reloadThenExpand(categoryId);
+        },
+        error: (err: PresentedError) => {
+          this.saving.set(false);
+          this.formError.set(err.message ?? 'That could not be saved.');
+        },
+      });
+  }
+
+  protected startRename(attribute: ConfiguredAttribute): void {
+    this.formError.set(null);
+    this.renamingAttributeId.set(attribute.id);
+    this.renameLabel.set(attribute.label);
+  }
+
+  protected cancelRename(): void {
+    this.renamingAttributeId.set(null);
+  }
+
+  protected saveRename(attribute: ConfiguredAttribute): void {
+    const label = this.renameLabel().trim();
+    if (!label) {
+      this.formError.set('A filter needs a name.');
+      return;
+    }
+    this.run(this.api.updateAttribute(attribute.id, { label, showOnCard: attribute.showOnCard, isActive: attribute.isActive }), () => {
+      this.renamingAttributeId.set(null);
+      this.toast.show(`Renamed to ${label}.`, 'success');
     });
   }
 
-  protected openValueFor(attributeId: string): void {
+  protected openAddValue(attributeId: string): void {
     this.formError.set(null);
-    this.valueFor.set(this.valueFor() === attributeId ? null : attributeId);
-    this.valueLabel.set('');
+    this.addingValueFor.set(this.addingValueFor() === attributeId ? null : attributeId);
+    this.newValueLabel.set('');
   }
 
-  protected addValue(): void {
-    const attributeId = this.valueFor();
-    const label = this.valueLabel().trim();
-    if (!attributeId || !label) {
+  protected saveNewValue(attributeId: string): void {
+    const label = this.newValueLabel().trim();
+    if (!label) {
       this.formError.set('A filter value needs a name.');
       return;
     }
     this.run(this.api.addAttributeValue(attributeId, { label }), () => {
-      this.valueLabel.set('');
+      this.addingValueFor.set(null);
       this.toast.show(`${label} added.`, 'success');
     });
   }
@@ -317,41 +512,13 @@ export class CatalogBuilder {
    * it, and a workshop that stops selling BMW parts still has to be able
    * to read last year's requests.
    */
-  protected toggleValue(id: string, label: string, isActive: boolean): void {
+  protected toggleValueActive(id: string, label: string, isActive: boolean): void {
     this.run(this.api.updateAttributeValue(id, { label, isActive: !isActive }), () => {
       this.toast.show(isActive ? `${label} hidden from filters.` : `${label} back in filters.`, 'success');
     });
   }
 
-  /* --- which filters a category offers ------------------------------ */
-
-  protected openAssignment(category: ConfiguredCategory): void {
-    this.formError.set(null);
-    const open = this.assigningTo() === category.id;
-    this.assigningTo.set(open ? null : category.id);
-    this.assignment.set(open ? [] : [...category.attributeIds]);
-  }
-
-  protected toggleAssignment(attributeId: string): void {
-    this.assignment.update((current) =>
-      current.includes(attributeId) ? current.filter((id) => id !== attributeId) : [...current, attributeId],
-    );
-  }
-
-  protected isAssigned(attributeId: string): boolean {
-    return this.assignment().includes(attributeId);
-  }
-
-  protected saveAssignment(): void {
-    const categoryId = this.assigningTo();
-    if (!categoryId) return;
-    this.run(this.api.setCategoryAttributes(categoryId, this.assignment()), () => {
-      this.assigningTo.set(null);
-      this.toast.show('Filters updated for this category.', 'success');
-    });
-  }
-
-  /* --- preview ------------------------------------------------------ */
+  /* --- preview ---------------------------------------------------------- */
 
   protected previewCategory(id: string | null): void {
     this.previewCategoryId.set(this.previewCategoryId() === id ? null : id);
@@ -396,29 +563,33 @@ export class CatalogBuilder {
       });
   }
 
-  /* --- plumbing ----------------------------------------------------- */
-
-  /**
-   * Every write reloads the configuration AND the preview. Deliberately
-   * not an optimistic local patch: the server mints slugs and keys, and
+  /* --- plumbing ----------------------------------------------------------
+   *
+   * Every write reloads the configuration and, if a category is open,
+   * keeps it open with fresh data -- deliberately not an optimistic
+   * local patch: the server mints slugs, keys and sort positions, and
    * the preview's whole value is being the server's answer rather than
    * this page's guess about it.
-   */
-  private run(request: ReturnType<InventoryApi['createCategory']>, onDone: () => void): void {
+   * ---------------------------------------------------------------------- */
+
+  private run<T>(request: Observable<T>, onDone: (result: T) => void): void {
     this.saving.set(true);
     this.formError.set(null);
-    forkJoin([request, of(null)])
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.saving.set(false);
-          onDone();
+    request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (result) => {
+        this.saving.set(false);
+        onDone(result);
+        const keepExpanded = this.expandedId();
+        if (keepExpanded && keepExpanded !== NEW) {
+          this.reloadThenExpand(keepExpanded);
+        } else {
           this.load();
-        },
-        error: (err: PresentedError) => {
-          this.saving.set(false);
-          this.formError.set(err.message ?? 'That could not be saved.');
-        },
-      });
+        }
+      },
+      error: (err: PresentedError) => {
+        this.saving.set(false);
+        this.formError.set(err.message ?? 'That could not be saved.');
+      },
+    });
   }
 }

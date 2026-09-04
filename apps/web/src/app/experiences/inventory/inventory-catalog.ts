@@ -1,5 +1,5 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
-import { Subject, debounceTime, switchMap } from 'rxjs';
+import { Subject, debounceTime, map, switchMap } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ErrorBanner } from '../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../ui/button/button.directive';
@@ -157,6 +157,198 @@ export class InventoryCatalog {
     });
   }
 
+  /* ------------------------------------------------------------------ *
+   * Creating a category or a filter without leaving the part.
+   *
+   * The old shape sent a storekeeper away to Catalog Builder the moment
+   * the category or filter they needed did not exist yet -- cancel this
+   * dialog, build it there, come back, remember what you were filing.
+   * Filing a part and shaping the taxonomy it needs are one job in
+   * practice, so both now happen inline, in this editor, using the same
+   * server endpoints Catalog Builder uses. Nothing here duplicates that
+   * page's authority: a filter invented here is the same workshop-wide
+   * `CatalogAttribute` row, reusable by every other category exactly as
+   * if it had been built there.
+   * ------------------------------------------------------------------ */
+
+  protected readonly creatingCategory = signal(false);
+  protected readonly newCategoryName = signal('');
+  protected readonly newCategoryParentId = signal('');
+
+  protected readonly creatingFilterForItem = signal(false);
+  protected readonly newFilterLabelForItem = signal('');
+  protected readonly newFilterFirstValueForItem = signal('');
+
+  protected readonly attachFilterChoice = signal('');
+
+  /** Top-level categories only -- one level of nesting, so only these may be a parent. */
+  protected readonly topLevelCategories = computed(() =>
+    (this.configuration()?.categories ?? []).map((node) => ({ id: node.id, name: node.name })),
+  );
+
+  /** Active filters not already offered by the selected category. */
+  protected readonly attachableFilters = computed<readonly ConfiguredAttribute[]>(() => {
+    const categoryId = this.draft().catalogCategoryId;
+    const config = this.configuration();
+    if (!categoryId || !config) return [];
+    const own = new Set(this.findCategory(categoryId)?.attributeIds ?? []);
+    return config.attributes.filter((attribute) => attribute.isActive && !own.has(attribute.id));
+  });
+
+  protected onCategorySelect(value: string): void {
+    if (value === '__new__') {
+      this.saveError.set(null);
+      this.newCategoryName.set('');
+      this.newCategoryParentId.set('');
+      this.creatingCategory.set(true);
+      return;
+    }
+    this.creatingCategory.set(false);
+    this.patch('catalogCategoryId', value || undefined);
+  }
+
+  protected cancelNewCategory(): void {
+    this.creatingCategory.set(false);
+  }
+
+  protected saveNewCategory(): void {
+    const name = this.newCategoryName().trim();
+    if (!name) {
+      this.saveError.set('A category needs a name.');
+      return;
+    }
+
+    this.saving.set(true);
+    this.saveError.set(null);
+    this.api
+      .createCategory({ name, parentId: this.newCategoryParentId() || undefined })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (category) => {
+          this.saving.set(false);
+          this.creatingCategory.set(false);
+          this.patch('catalogCategoryId', category.id);
+          this.toast.show(`${category.name} added.`, 'success');
+          this.reloadConfiguration();
+        },
+        error: (err: PresentedError) => {
+          this.saving.set(false);
+          this.saveError.set(err.message ?? 'That could not be saved.');
+        },
+      });
+  }
+
+  protected startNewFilterForItem(): void {
+    this.saveError.set(null);
+    this.creatingFilterForItem.set(true);
+    this.newFilterLabelForItem.set('');
+    this.newFilterFirstValueForItem.set('');
+  }
+
+  protected cancelNewFilterForItem(): void {
+    this.creatingFilterForItem.set(false);
+  }
+
+  /**
+   * Invents a filter, gives it its first value, attaches it to the
+   * category this part is filed under, and stamps that value on the
+   * part being edited -- the whole reason a manager would open this
+   * mid-edit rather than finish the part first.
+   */
+  protected saveNewFilterForItem(): void {
+    const categoryId = this.draft().catalogCategoryId;
+    const label = this.newFilterLabelForItem().trim();
+    const firstValue = this.newFilterFirstValueForItem().trim();
+    if (!categoryId) return;
+    if (!label) {
+      this.saveError.set('A filter needs a name.');
+      return;
+    }
+    if (!firstValue) {
+      this.saveError.set('Give it at least one value to start with.');
+      return;
+    }
+
+    const ownIds = this.findCategory(categoryId)?.attributeIds ?? [];
+
+    this.saving.set(true);
+    this.saveError.set(null);
+    this.api
+      .createAttribute({ label })
+      .pipe(
+        switchMap((attribute) =>
+          this.api.addAttributeValue(attribute.id, { label: firstValue }).pipe(map((value) => ({ attribute, value }))),
+        ),
+        switchMap(({ attribute, value }) =>
+          this.api.setCategoryAttributes(categoryId, [...ownIds, attribute.id]).pipe(map(() => ({ attribute, value }))),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: ({ attribute, value }) => {
+          this.saving.set(false);
+          this.creatingFilterForItem.set(false);
+          this.toggleValue(value.id);
+          this.toast.show(`${attribute.label} added, with "${firstValue}".`, 'success');
+          this.reloadConfiguration();
+        },
+        error: (err: PresentedError) => {
+          this.saving.set(false);
+          this.saveError.set(err.message ?? 'That could not be saved.');
+        },
+      });
+  }
+
+  /** Attaches a filter that already exists elsewhere to this category. */
+  protected attachExistingFilter(): void {
+    const categoryId = this.draft().catalogCategoryId;
+    const attributeId = this.attachFilterChoice();
+    if (!categoryId || !attributeId) return;
+
+    const ownIds = this.findCategory(categoryId)?.attributeIds ?? [];
+
+    this.saving.set(true);
+    this.saveError.set(null);
+    this.api
+      .setCategoryAttributes(categoryId, [...ownIds, attributeId])
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.saving.set(false);
+          this.attachFilterChoice.set('');
+          this.toast.show('Filter attached to this category.', 'success');
+          this.reloadConfiguration();
+        },
+        error: (err: PresentedError) => {
+          this.saving.set(false);
+          this.saveError.set(err.message ?? 'That could not be attached.');
+        },
+      });
+  }
+
+  private findCategory(categoryId: string): CatalogConfiguration['categories'][number] | null {
+    const config = this.configuration();
+    if (!config) return null;
+    const walk = (
+      nodes: CatalogConfiguration['categories'],
+    ): CatalogConfiguration['categories'][number] | null => {
+      for (const node of nodes) {
+        if (node.id === categoryId) return node;
+        const found = walk(node.children);
+        if (found) return found;
+      }
+      return null;
+    };
+    return walk(config.categories);
+  }
+
+  private reloadConfiguration(): void {
+    this.api
+      .catalogConfiguration()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: (config) => this.configuration.set(config), error: () => this.configuration.set(null) });
+  }
+
   private readonly refresh = new Subject<void>();
 
   constructor() {
@@ -179,11 +371,9 @@ export class InventoryCatalog {
     this.fetchNow();
 
     // Configuration changes far less often than the list, so it is
-    // fetched once rather than with every filter change.
-    this.api
-      .catalogConfiguration()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({ next: (config) => this.configuration.set(config), error: () => this.configuration.set(null) });
+    // fetched once rather than with every filter change -- and again
+    // after any inline category/filter creation reshapes it.
+    this.reloadConfiguration();
   }
 
   protected onQuery(value: string): void {

@@ -182,7 +182,7 @@
 
         <app-form-field
           label="Category"
-          hint="Where a technician will find it. Categories are built on Catalog Builder."
+          hint="Where a technician will find it. Not there yet? Create it without leaving."
         >
           <!-- `[selected]` per option, not `[value]` on the select: the
                options are rendered by @for in the same change-detection
@@ -190,22 +190,56 @@
                back to the first option. The symptom was an item that IS
                filed reading "not filed" the moment you opened it, and
                saving would then have unfiled it. -->
-          <select (change)="patch('catalogCategoryId', $any($event.target).value)">
-            <option value="" [selected]="!draft().catalogCategoryId">— not filed —</option>
+          <select (change)="onCategorySelect($any($event.target).value)">
+            <option value="" [selected]="!draft().catalogCategoryId && !creatingCategory()">— not filed —</option>
             @for (entry of categoryOptions(); track entry.id) {
               <option [value]="entry.id" [selected]="entry.id === draft().catalogCategoryId">{{ entry.name }}</option>
             }
+            <option value="__new__" [selected]="creatingCategory()">+ Create a new category…</option>
           </select>
         </app-form-field>
+
+        @if (creatingCategory()) {
+          <div class="inline-create">
+            <app-form-field label="New category name" [required]="true">
+              <input
+                type="text"
+                [value]="newCategoryName()"
+                (input)="newCategoryName.set($any($event.target).value)"
+              />
+            </app-form-field>
+            <app-form-field label="Sits inside" hint="Optional. One level of nesting only.">
+              <select (change)="newCategoryParentId.set($any($event.target).value)">
+                <option value="" [selected]="!newCategoryParentId()">— top level —</option>
+                @for (top of topLevelCategories(); track top.id) {
+                  <option [value]="top.id" [selected]="top.id === newCategoryParentId()">{{ top.name }}</option>
+                }
+              </select>
+            </app-form-field>
+            <div class="inline-create-actions">
+              <button appButton variant="primary" size="small" type="button" [disabled]="saving()" (click)="saveNewCategory()">
+                {{ saving() ? 'Saving…' : 'Add category' }}
+              </button>
+              <button appButton variant="ghost" size="small" type="button" (click)="cancelNewCategory()">Cancel</button>
+            </div>
+          </div>
+        }
 
         <!-- The filter values this part carries. Only the filters the
              chosen category actually offers are shown: stamping "Engine
              Size" on a windscreen wiper is a value nothing will ever
-             filter by, and offering it invites exactly that. -->
-        @if (applicableFilters().length > 0) {
+             filter by, and offering it invites exactly that. Creating or
+             attaching one happens right here too -- no trip to Catalog
+             Builder to shape the taxonomy this one part needs. -->
+        @if (draft().catalogCategoryId) {
           <fieldset class="chips">
             <legend class="chips-legend">Filters</legend>
             <p class="chips-hint">What a technician filtering this category will match on.</p>
+
+            @if (applicableFilters().length === 0) {
+              <p class="chips-hint">This category has no filters yet.</p>
+            }
+
             @for (filter of applicableFilters(); track filter.id) {
               <p class="chips-hint">{{ filter.label }}</p>
               <div class="chips-row">
@@ -221,11 +255,61 @@
                 }
               </div>
             }
+
+            <div class="inline-create-row">
+              @if (attachableFilters().length > 0) {
+                <label class="attach-filter">
+                  <span class="visually-hidden">Attach an existing filter</span>
+                  <select [value]="attachFilterChoice()" (change)="attachFilterChoice.set($any($event.target).value)">
+                    <option value="" disabled selected>Attach an existing filter…</option>
+                    @for (filter of attachableFilters(); track filter.id) {
+                      <option [value]="filter.id">{{ filter.label }}</option>
+                    }
+                  </select>
+                  <button
+                    appButton
+                    variant="secondary"
+                    size="small"
+                    type="button"
+                    [disabled]="!attachFilterChoice() || saving()"
+                    (click)="attachExistingFilter()"
+                  >
+                    Attach
+                  </button>
+                </label>
+              }
+
+              @if (creatingFilterForItem()) {
+                <div class="inline-create">
+                  <app-form-field label="New filter name" hint="e.g. Vehicle Type, Brand, Engine Size.">
+                    <input
+                      type="text"
+                      [value]="newFilterLabelForItem()"
+                      (input)="newFilterLabelForItem.set($any($event.target).value)"
+                    />
+                  </app-form-field>
+                  <app-form-field label="Its first value" hint="e.g. Sedan. This part gets stamped with it right away.">
+                    <input
+                      type="text"
+                      [value]="newFilterFirstValueForItem()"
+                      (input)="newFilterFirstValueForItem.set($any($event.target).value)"
+                      (keydown.enter)="saveNewFilterForItem()"
+                    />
+                  </app-form-field>
+                  <div class="inline-create-actions">
+                    <button appButton variant="primary" size="small" type="button" [disabled]="saving()" (click)="saveNewFilterForItem()">
+                      {{ saving() ? 'Saving…' : 'Add filter' }}
+                    </button>
+                    <button appButton variant="ghost" size="small" type="button" (click)="cancelNewFilterForItem()">Cancel</button>
+                  </div>
+                </div>
+              } @else {
+                <button appButton variant="secondary" size="small" type="button" (click)="startNewFilterForItem()">
+                  + New filter
+                </button>
+              }
+            </div>
           </fieldset>
-        } @else if (draft().catalogCategoryId) {
-          <p class="chips-hint">
-            This category offers no filters yet. Attach some on Catalog Builder.
-          </p>
         }
 
         <app-form-field label="One-line description" hint="Shown under the name on the technician's card.">

@@ -1,15 +1,13 @@
 /*
  * Catalog Builder.
  *
- * Two authoring panels side by side and the preview underneath, at full
- * width. That arrangement is the argument the page makes: categories and
- * filters are edited against each other (a filter is created to be
- * attached to a category, in one sitting), and the preview is the
- * consequence of both, so it reads last and reads wide.
- *
- * On a narrow desk the columns stack. The preview never moves above the
- * things it previews -- a result shown before its cause reads as an
- * unrelated widget.
+ * One authoring panel, full width, then the preview underneath. A
+ * category used to live in one panel and its filters in a second one you
+ * switched to -- now a category's row expands into everything about it,
+ * fields and filters together, so building "Brakes needs Vehicle Type
+ * with Sedan/SUV/Truck" never leaves the row you opened. The preview
+ * reads last because it is the consequence of the authoring above it,
+ * never the other way around.
  */
 
 :host {
@@ -40,13 +38,6 @@
   color: var(--text-muted);
   font-size: var(--text-sm);
   max-inline-size: 60ch;
-}
-
-.builder {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(24rem, 1fr));
-  gap: var(--space-4);
-  align-items: start;
 }
 
 .panel {
@@ -139,6 +130,20 @@
   font-size: var(--text-base);
 }
 
+.hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+/* An editor that sits inside another editor -- the "invent a new
+   filter" mini-form inside a category's own filter section. Same look,
+   tighter, so it reads as a nested step rather than a sibling panel. */
+.editor--inline {
+  padding: var(--space-3);
+  background: var(--bg);
+}
+
 /* --- rows ----------------------------------------------------------- */
 
 .rows {
@@ -152,13 +157,21 @@
 
 .row {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
+  flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-3);
   background: var(--surface-raised);
   border-radius: var(--radius-sm);
+}
+
+/* The always-visible line: name, meta, move/manage controls. What
+   expands underneath is `.category-block`. */
+.row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
 }
 
 .row--child {
@@ -250,10 +263,129 @@
   color: var(--neutral-badge);
 }
 
+/* --- the expanded category: fields + its filters, one block ---------- */
+
+.category-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px dashed var(--border-strong);
+}
+
+.category-block--new {
+  /* The not-yet-saved category sits above the list, not inside a row --
+     nothing to indent it against yet. */
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+}
+
+.filters-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.filters-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.filter-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.filter-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+}
+
+.filter-block-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.filter-name {
+  margin: 0;
+  margin-inline-end: auto;
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.rename-input {
+  flex: 1;
+  min-inline-size: 8rem;
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--text-base);
+}
+
+.filter-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.attach {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.attach select {
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--text-sm);
+}
+
+/* --- housekeeping: filters attached to nothing right now ------------- */
+
+.orphans {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border);
+}
+
+.orphans-toggle {
+  align-self: flex-start;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--text-sm);
+}
+
 /* --- chips ---------------------------------------------------------- */
 
-.assign,
-.value-add,
 .values,
 .assign-chips {
   display: flex;
@@ -261,15 +393,6 @@
   gap: var(--space-2);
 }
 
-.assign {
-  flex-direction: column;
-  inline-size: 100%;
-  padding: var(--space-3);
-  background: var(--bg);
-  border-radius: var(--radius-sm);
-}
-
-.assign-hint,
 .filter-label {
   color: var(--text-muted);
   font-size: var(--text-xs);
@@ -299,6 +422,14 @@
   text-decoration: line-through;
 }
 
+/* The "+ value" chip that opens the inline add-value input. Dashed
+   border reads as "not a value yet, an action" against the solid chips
+   beside it. */
+.chip--dashed {
+  border-style: dashed;
+  color: var(--text-muted);
+}
+
 .chip:disabled {
   opacity: 0.45;
 }
@@ -309,16 +440,21 @@
   font-variant-numeric: tabular-nums;
 }
 
+.value-add {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .value-add input {
-  flex: 1;
   min-inline-size: 8rem;
-  padding: var(--space-2) var(--space-3);
-  background: var(--bg);
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   font-family: inherit;
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
 }
 
 /* --- preview -------------------------------------------------------- */

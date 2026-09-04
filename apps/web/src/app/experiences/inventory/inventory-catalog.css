@@ -301,6 +301,52 @@
   outline-offset: 1px;
 }
 
+/*
+ * Creating a category or a filter inline, without leaving the part.
+ * Boxed and indented from the field above it, so it reads as "a small
+ * job opened from this field" rather than another top-level section of
+ * the form.
+ */
+.inline-create {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-inline-start: var(--space-4);
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border-inline-start: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.inline-create-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.inline-create-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.attach-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.attach-filter select {
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--text-sm);
+}
+
 .toggle {
   display: flex;
   align-items: flex-start;

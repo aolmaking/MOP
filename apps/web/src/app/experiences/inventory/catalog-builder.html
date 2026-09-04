@@ -2,8 +2,8 @@
   <div>
     <h1 class="page-title">Catalog Builder</h1>
     <p class="page-sub">
-      Categories, the filters each one offers, and the words a technician will see. Parts and prices live on
-      Catalog.
+      Build a category and its filters in one place. Click a category to open it, then attach or invent the
+      filters it should offer, right there. Parts and prices live on Catalog.
     </p>
   </div>
 </header>
@@ -20,22 +20,24 @@
     <p class="form-error" role="alert">{{ message }}</p>
   }
 
-  <div class="builder">
-    <!-- ---------------------------------------------------------- -->
-    <section class="panel" aria-labelledby="categories-heading">
-      <header class="panel-head">
-        <h2 class="panel-title" id="categories-heading">Categories</h2>
-        <button appButton variant="primary" size="small" (click)="newCategory()">New category</button>
-      </header>
+  <!-- ------------------------------------------------------------ -->
+  <section class="panel" aria-labelledby="categories-heading">
+    <header class="panel-head">
+      <h2 class="panel-title" id="categories-heading">Categories &amp; filters</h2>
+      <button appButton variant="primary" size="small" [disabled]="isNew()" (click)="startNewCategory()">
+        New category
+      </button>
+    </header>
 
-      @if (config()!.uncategorisedItemCount > 0) {
-        <p class="warn">
-          {{ config()!.uncategorisedItemCount }} parts are not filed under any category. A technician browsing by
-          category will not find them.
-        </p>
-      }
+    @if (config()!.uncategorisedItemCount > 0) {
+      <p class="warn">
+        {{ config()!.uncategorisedItemCount }} parts are not filed under any category. A technician browsing by
+        category will not find them.
+      </p>
+    }
 
-      @if (categoryOpen()) {
+    @if (isNew()) {
+      <div class="category-block category-block--new">
         <div class="editor">
           <app-form-field label="Name" [required]="true">
             <input
@@ -46,11 +48,6 @@
           </app-form-field>
 
           <app-form-field label="Sits inside" hint="Leave empty for a top-level category. One level only.">
-            <!-- `[selected]` per option rather than `[value]` on the
-                 select: @for renders the options in the same pass, so a
-                 value set on the select before they exist silently falls
-                 back to the first one -- which would show a sub-category
-                 as top-level and re-parent it on save. -->
             <select (change)="patchCategory('parentId', $any($event.target).value)">
               <option value="" [selected]="!categoryForm().parentId">— top level —</option>
               @for (parent of parentOptions(); track parent.id) {
@@ -85,22 +82,26 @@
             Technicians can browse this
           </label>
 
+          <p class="hint">Save it to start adding its filters -- they attach to a real category, not a draft.</p>
+
           <div class="editor-actions">
             <button appButton variant="primary" [disabled]="saving()" (click)="saveCategory()">
               {{ saving() ? 'Saving…' : 'Save category' }}
             </button>
-            <button appButton variant="ghost" (click)="categoryOpen.set(false)">Cancel</button>
+            <button appButton variant="ghost" (click)="closeExpanded()">Cancel</button>
           </div>
         </div>
-      }
+      </div>
+    }
 
-      @if (flatCategories().length === 0) {
-        <p class="note">No categories yet. A technician browsing parts will see nothing to tap.</p>
-      }
+    @if (flatCategories().length === 0) {
+      <p class="note">No categories yet. A technician browsing parts will see nothing to tap.</p>
+    }
 
-      <ul class="rows">
-        @for (entry of flatCategories(); track entry.node.id) {
-          <li class="row" [class.row--child]="entry.depth > 0">
+    <ul class="rows">
+      @for (entry of flatCategories(); track entry.node.id) {
+        <li class="row" [class.row--child]="entry.depth > 0">
+          <div class="row-head">
             <div class="row-main">
               <p class="row-name">
                 {{ entry.node.name }}
@@ -113,11 +114,8 @@
               </p>
               <p class="row-meta">
                 {{ entry.node.itemCount }} parts ·
-                {{ entry.node.attributeIds.length }} filters
+                {{ entry.node.attributeIds.length }} {{ entry.node.attributeIds.length === 1 ? 'filter' : 'filters' }}
               </p>
-              <!-- The manager's own note about this category. It was
-                   writable and shown nowhere, which is a field nobody
-                   can check they filled in correctly. -->
               @if (entry.node.description) {
                 <p class="row-note">{{ entry.node.description }}</p>
               }
@@ -145,193 +143,274 @@
               >
                 ↓
               </button>
-              <button appButton variant="ghost" size="small" (click)="editCategory(entry.node)">Edit</button>
-              <button appButton variant="secondary" size="small" (click)="openAssignment(entry.node)">
-                Filters
+              <button appButton [variant]="expandedId() === entry.node.id ? 'secondary' : 'primary'" size="small" (click)="toggleCategory(entry.node)">
+                {{ expandedId() === entry.node.id ? 'Close' : 'Manage' }}
               </button>
             </div>
+          </div>
 
-            @if (assigningTo() === entry.node.id) {
-              <div class="assign">
-                <p class="assign-hint">
-                  A technician browsing {{ entry.node.name }} sees only these. Nothing else in the workshop.
-                </p>
-                @if (attributes().length === 0) {
-                  <p class="note">No filters exist yet. Create one on the right first.</p>
-                }
-                <div class="assign-chips">
-                  @for (attribute of attributes(); track attribute.id) {
-                    <button
-                      class="chip"
-                      type="button"
-                      [class.chip--on]="isAssigned(attribute.id)"
-                      [attr.aria-pressed]="isAssigned(attribute.id)"
-                      (click)="toggleAssignment(attribute.id)"
-                    >
-                      {{ attribute.label }}
-                    </button>
-                  }
-                </div>
+          @if (expandedId() === entry.node.id) {
+            <div class="category-block">
+              <!-- The category's own fields. -->
+              <div class="editor">
+                <app-form-field label="Name" [required]="true">
+                  <input
+                    type="text"
+                    [value]="categoryForm().name"
+                    (input)="patchCategory('name', $any($event.target).value)"
+                  />
+                </app-form-field>
+
+                <app-form-field label="Sits inside" hint="Leave empty for a top-level category. One level only.">
+                  <select (change)="patchCategory('parentId', $any($event.target).value)">
+                    <option value="" [selected]="!categoryForm().parentId">— top level —</option>
+                    @for (parent of parentOptions(); track parent.id) {
+                      <option [value]="parent.id" [selected]="parent.id === categoryForm().parentId">{{ parent.name }}</option>
+                    }
+                  </select>
+                </app-form-field>
+
+                <app-form-field label="Description" hint="Optional. Not shown to technicians.">
+                  <input
+                    type="text"
+                    [value]="categoryForm().description"
+                    (input)="patchCategory('description', $any($event.target).value)"
+                  />
+                </app-form-field>
+
+                <label class="check">
+                  <input
+                    type="checkbox"
+                    [checked]="categoryForm().isActive"
+                    (change)="patchCategory('isActive', $any($event.target).checked)"
+                  />
+                  Active
+                </label>
+
+                <label class="check">
+                  <input
+                    type="checkbox"
+                    [checked]="categoryForm().technicianVisible"
+                    (change)="patchCategory('technicianVisible', $any($event.target).checked)"
+                  />
+                  Technicians can browse this
+                </label>
+
                 <div class="editor-actions">
-                  <button appButton variant="primary" size="small" [disabled]="saving()" (click)="saveAssignment()">
-                    {{ saving() ? 'Saving…' : 'Save filters' }}
+                  <button appButton variant="primary" [disabled]="saving()" (click)="saveCategory()">
+                    {{ saving() ? 'Saving…' : 'Save changes' }}
                   </button>
-                  <button appButton variant="ghost" size="small" (click)="assigningTo.set(null)">Cancel</button>
                 </div>
               </div>
-            }
-          </li>
-        }
-      </ul>
-    </section>
 
-    <!-- ---------------------------------------------------------- -->
-    <section class="panel" aria-labelledby="filters-heading">
-      <header class="panel-head">
-        <h2 class="panel-title" id="filters-heading">Filters</h2>
-        <button appButton variant="primary" size="small" (click)="newAttribute()">New filter</button>
-      </header>
+              <!-- The category's filters -- the whole point of opening it. -->
+              <div class="filters-block">
+                <h3 class="filters-heading">
+                  Filters {{ entry.node.name }} offers
+                  <span class="note-inline">a technician browsing here sees only these</span>
+                </h3>
 
-      <p class="panel-sub">
-        The questions a technician can ask about a part — Vehicle Type, Brand, Engine Size, whatever this workshop
-        actually needs. Give each one its values, then attach it to the categories it belongs to.
-      </p>
-
-      @if (attributeOpen()) {
-        <div class="editor">
-          <app-form-field label="Name" [required]="true">
-            <input
-              type="text"
-              [value]="attributeForm().label"
-              (input)="patchAttribute('label', $any($event.target).value)"
-            />
-          </app-form-field>
-
-          <label class="check">
-            <input
-              type="checkbox"
-              [checked]="attributeForm().showOnCard"
-              (change)="patchAttribute('showOnCard', $any($event.target).checked)"
-            />
-            Print it on the part's card
-          </label>
-
-          <label class="check">
-            <input
-              type="checkbox"
-              [checked]="attributeForm().isActive"
-              (change)="patchAttribute('isActive', $any($event.target).checked)"
-            />
-            Active
-          </label>
-
-          <div class="editor-actions">
-            <button appButton variant="primary" [disabled]="saving()" (click)="saveAttribute()">
-              {{ saving() ? 'Saving…' : 'Save filter' }}
-            </button>
-            <button appButton variant="ghost" (click)="attributeOpen.set(false)">Cancel</button>
-          </div>
-        </div>
-      }
-
-      @if (attributes().length === 0) {
-        <p class="note">No filters yet.</p>
-      }
-
-      <ul class="rows">
-        @for (attribute of attributes(); track attribute.id) {
-          <li class="row">
-            <div class="row-main">
-              <p class="row-name">
-                {{ attribute.label }}
-                @if (!attribute.isActive) {
-                  <span class="tag tag--off">inactive</span>
+                @if (categoryAttributes().length === 0) {
+                  <p class="note">No filters yet. Attach one below, or invent a new one.</p>
                 }
-              </p>
-              <p class="row-meta">
-                {{ attribute.values.length }} values · used by {{ attribute.usedByCategoryIds.length }} categories
-              </p>
 
-              <div class="values">
-                @for (value of attribute.values; track value.id) {
-                  <span class="value">
+                <ul class="filter-list">
+                  @for (attribute of categoryAttributes(); track attribute.id) {
+                    <li class="filter-block">
+                      <div class="filter-block-head">
+                        @if (renamingAttributeId() === attribute.id) {
+                          <input
+                            type="text"
+                            class="rename-input"
+                            [value]="renameLabel()"
+                            (input)="renameLabel.set($any($event.target).value)"
+                            (keydown.enter)="saveRename(attribute)"
+                          />
+                          <button appButton variant="primary" size="small" [disabled]="saving()" (click)="saveRename(attribute)">
+                            Save
+                          </button>
+                          <button appButton variant="ghost" size="small" (click)="cancelRename()">Cancel</button>
+                        } @else {
+                          <p class="filter-name">
+                            {{ attribute.label }}
+                            @if (!attribute.isActive) {
+                              <span class="tag tag--off">inactive</span>
+                            }
+                          </p>
+                          <button
+                            class="move"
+                            type="button"
+                            [attr.aria-label]="'Move ' + attribute.label + ' up'"
+                            [disabled]="saving() || !canMoveAttribute(attribute, -1)"
+                            (click)="moveAttribute(attribute, -1)"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            class="move"
+                            type="button"
+                            [attr.aria-label]="'Move ' + attribute.label + ' down'"
+                            [disabled]="saving() || !canMoveAttribute(attribute, 1)"
+                            (click)="moveAttribute(attribute, 1)"
+                          >
+                            ↓
+                          </button>
+                          <button appButton variant="ghost" size="small" (click)="startRename(attribute)">Rename</button>
+                          <button appButton variant="ghost" size="small" (click)="detachFilter(attribute.id, attribute.label)">
+                            Remove from this category
+                          </button>
+                        }
+                      </div>
+
+                      <div class="values">
+                        @for (value of attribute.values; track value.id) {
+                          <span class="value">
+                            <button
+                              class="chip chip--value"
+                              type="button"
+                              [class.chip--off]="!value.isActive"
+                              [title]="value.itemCount + ' parts carry this'"
+                              (click)="toggleValueActive(value.id, value.label, value.isActive)"
+                            >
+                              {{ value.label }}
+                              <span class="chip-count">{{ value.itemCount }}</span>
+                            </button>
+                            <button
+                              class="move move--tight"
+                              type="button"
+                              [attr.aria-label]="'Move ' + value.label + ' earlier'"
+                              [disabled]="saving() || !canMoveValue(attribute, value.id, -1)"
+                              (click)="moveValue(attribute, value.id, -1)"
+                            >
+                              ‹
+                            </button>
+                            <button
+                              class="move move--tight"
+                              type="button"
+                              [attr.aria-label]="'Move ' + value.label + ' later'"
+                              [disabled]="saving() || !canMoveValue(attribute, value.id, 1)"
+                              (click)="moveValue(attribute, value.id, 1)"
+                            >
+                              ›
+                            </button>
+                          </span>
+                        }
+
+                        @if (addingValueFor() === attribute.id) {
+                          <span class="value-add">
+                            <input
+                              type="text"
+                              placeholder="e.g. Sedan"
+                              [value]="newValueLabel()"
+                              (input)="newValueLabel.set($any($event.target).value)"
+                              (keydown.enter)="saveNewValue(attribute.id)"
+                            />
+                            <button appButton variant="primary" size="small" [disabled]="saving()" (click)="saveNewValue(attribute.id)">
+                              Add
+                            </button>
+                          </span>
+                        } @else {
+                          <button class="chip chip--dashed" type="button" (click)="openAddValue(attribute.id)">+ value</button>
+                        }
+                      </div>
+                    </li>
+                  }
+                </ul>
+
+                <div class="filter-add-row">
+                  @if (attachableAttributes().length > 0) {
+                    <label class="attach">
+                      <span class="visually-hidden">Attach an existing filter</span>
+                      <select [value]="attachChoice()" (change)="attachChoice.set($any($event.target).value)">
+                        <option value="" disabled selected>Attach an existing filter…</option>
+                        @for (attribute of attachableAttributes(); track attribute.id) {
+                          <option [value]="attribute.id">{{ attribute.label }}</option>
+                        }
+                      </select>
+                      <button appButton variant="secondary" size="small" [disabled]="!attachChoice() || saving()" (click)="attachExisting()">
+                        Attach
+                      </button>
+                    </label>
+                  }
+
+                  @if (creatingFilter()) {
+                    <div class="editor editor--inline">
+                      <app-form-field label="New filter name" hint="e.g. Vehicle Type, Brand, Engine Size.">
+                        <input
+                          type="text"
+                          [value]="newFilterLabel()"
+                          (input)="newFilterLabel.set($any($event.target).value)"
+                        />
+                      </app-form-field>
+                      <app-form-field label="Its first value" hint="e.g. Sedan. More can be added after.">
+                        <input
+                          type="text"
+                          [value]="newFilterFirstValue()"
+                          (input)="newFilterFirstValue.set($any($event.target).value)"
+                          (keydown.enter)="saveNewFilter()"
+                        />
+                      </app-form-field>
+                      <div class="editor-actions">
+                        <button appButton variant="primary" size="small" [disabled]="saving()" (click)="saveNewFilter()">
+                          {{ saving() ? 'Saving…' : 'Add filter' }}
+                        </button>
+                        <button appButton variant="ghost" size="small" (click)="cancelNewFilter()">Cancel</button>
+                      </div>
+                    </div>
+                  } @else {
+                    <button appButton variant="secondary" size="small" (click)="startNewFilter()">+ New filter</button>
+                  }
+                </div>
+              </div>
+            </div>
+          }
+        </li>
+      }
+    </ul>
+
+    @if (orphanAttributes().length > 0) {
+      <div class="orphans">
+        <button class="orphans-toggle" type="button" (click)="orphansOpen.set(!orphansOpen())">
+          {{ orphansOpen() ? '▾' : '▸' }} Filters not used by any category ({{ orphanAttributes().length }})
+        </button>
+
+        @if (orphansOpen()) {
+          <p class="hint">
+            Not lost -- just not attached anywhere right now. Open a category above and attach one of these to
+            bring it back.
+          </p>
+          <ul class="filter-list">
+            @for (attribute of orphanAttributes(); track attribute.id) {
+              <li class="filter-block">
+                <div class="filter-block-head">
+                  <p class="filter-name">
+                    {{ attribute.label }}
+                    @if (!attribute.isActive) {
+                      <span class="tag tag--off">inactive</span>
+                    }
+                  </p>
+                </div>
+                <div class="values">
+                  @for (value of attribute.values; track value.id) {
                     <button
                       class="chip chip--value"
                       type="button"
                       [class.chip--off]="!value.isActive"
                       [title]="value.itemCount + ' parts carry this'"
-                      (click)="toggleValue(value.id, value.label, value.isActive)"
+                      (click)="toggleValueActive(value.id, value.label, value.isActive)"
                     >
                       {{ value.label }}
                       <span class="chip-count">{{ value.itemCount }}</span>
                     </button>
-                    <button
-                      class="move move--tight"
-                      type="button"
-                      [attr.aria-label]="'Move ' + value.label + ' earlier'"
-                      [disabled]="saving() || !canMoveValue(attribute, value.id, -1)"
-                      (click)="moveValue(attribute, value.id, -1)"
-                    >
-                      ‹
-                    </button>
-                    <button
-                      class="move move--tight"
-                      type="button"
-                      [attr.aria-label]="'Move ' + value.label + ' later'"
-                      [disabled]="saving() || !canMoveValue(attribute, value.id, 1)"
-                      (click)="moveValue(attribute, value.id, 1)"
-                    >
-                      ›
-                    </button>
-                  </span>
-                }
-              </div>
-
-              @if (valueFor() === attribute.id) {
-                <div class="value-add">
-                  <input
-                    type="text"
-                    placeholder="e.g. Sedan"
-                    [value]="valueLabel()"
-                    (input)="valueLabel.set($any($event.target).value)"
-                    (keydown.enter)="addValue()"
-                  />
-                  <button appButton variant="primary" size="small" [disabled]="saving()" (click)="addValue()">
-                    Add value
-                  </button>
+                  }
                 </div>
-              }
-            </div>
-
-            <div class="row-actions">
-              <button
-                class="move"
-                type="button"
-                [attr.aria-label]="'Move ' + attribute.label + ' up'"
-                [disabled]="saving() || !canMoveAttribute(attribute, -1)"
-                (click)="moveAttribute(attribute, -1)"
-              >
-                ↑
-              </button>
-              <button
-                class="move"
-                type="button"
-                [attr.aria-label]="'Move ' + attribute.label + ' down'"
-                [disabled]="saving() || !canMoveAttribute(attribute, 1)"
-                (click)="moveAttribute(attribute, 1)"
-              >
-                ↓
-              </button>
-              <button appButton variant="ghost" size="small" (click)="editAttribute(attribute)">Edit</button>
-              <button appButton variant="secondary" size="small" (click)="openValueFor(attribute.id)">
-                {{ valueFor() === attribute.id ? 'Done' : 'Add value' }}
-              </button>
-            </div>
-          </li>
+              </li>
+            }
+          </ul>
         }
-      </ul>
-    </section>
-  </div>
+      </div>
+    }
+  </section>
 
   <!-- ------------------------------------------------------------ -->
   <section class="panel panel--preview" aria-labelledby="preview-heading">
@@ -401,8 +480,8 @@
       </div>
     } @else if (previewCategoryId() !== null) {
       <p class="warn">
-        This category offers no filters. A technician browsing it can only search and scroll — attach filters to it
-        on the left.
+        This category offers no filters. A technician browsing it can only search and scroll — open it above and
+        attach or invent one.
       </p>
     }
 

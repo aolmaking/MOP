@@ -150,12 +150,18 @@ export class InventoryApi {
     return this.http.get<CatalogConfiguration>('/api/v1/inventory/catalog-config');
   }
 
-  createCategory(draft: CategoryDraft): Observable<unknown> {
-    return this.http.post('/api/v1/inventory/catalog-config/categories', draft);
+  /**
+   * Returns the created row, id included -- callers that create a
+   * category inline (from the item editor, or from Catalog Builder's own
+   * "new category" flow) need it immediately, to select it or to keep
+   * editing it, without a second round trip to find out what id it got.
+   */
+  createCategory(draft: CategoryDraft): Observable<CategoryRecord> {
+    return this.http.post<CategoryRecord>('/api/v1/inventory/catalog-config/categories', draft);
   }
 
-  updateCategory(id: string, draft: CategoryDraft): Observable<unknown> {
-    return this.http.post(`/api/v1/inventory/catalog-config/categories/${id}`, draft);
+  updateCategory(id: string, draft: CategoryDraft): Observable<CategoryRecord> {
+    return this.http.post<CategoryRecord>(`/api/v1/inventory/catalog-config/categories/${id}`, draft);
   }
 
   setCategoryAttributes(id: string, attributeIds: readonly string[]): Observable<unknown> {
@@ -182,20 +188,25 @@ export class InventoryApi {
     return this.http.post(`/api/v1/inventory/catalog-config/attributes/${attributeId}/values/reorder`, { orderedIds });
   }
 
-  createAttribute(draft: AttributeDraft): Observable<unknown> {
-    return this.http.post('/api/v1/inventory/catalog-config/attributes', draft);
+  createAttribute(draft: AttributeDraft): Observable<AttributeRecord> {
+    return this.http.post<AttributeRecord>('/api/v1/inventory/catalog-config/attributes', draft);
   }
 
-  updateAttribute(id: string, draft: AttributeDraft): Observable<unknown> {
-    return this.http.post(`/api/v1/inventory/catalog-config/attributes/${id}`, draft);
+  updateAttribute(id: string, draft: AttributeDraft): Observable<AttributeRecord> {
+    return this.http.post<AttributeRecord>(`/api/v1/inventory/catalog-config/attributes/${id}`, draft);
   }
 
-  addAttributeValue(attributeId: string, draft: AttributeValueDraft): Observable<unknown> {
-    return this.http.post(`/api/v1/inventory/catalog-config/attributes/${attributeId}/values`, draft);
+  /**
+   * Returns the created value, id included -- creating a filter's first
+   * value inline (right after inventing the filter) needs that id to
+   * stamp it on the part being edited in the same motion.
+   */
+  addAttributeValue(attributeId: string, draft: AttributeValueDraft): Observable<AttributeValueRecord> {
+    return this.http.post<AttributeValueRecord>(`/api/v1/inventory/catalog-config/attributes/${attributeId}/values`, draft);
   }
 
-  updateAttributeValue(id: string, draft: AttributeValueDraft): Observable<unknown> {
-    return this.http.post(`/api/v1/inventory/catalog-config/attribute-values/${id}`, draft);
+  updateAttributeValue(id: string, draft: AttributeValueDraft): Observable<AttributeValueRecord> {
+    return this.http.post<AttributeValueRecord>(`/api/v1/inventory/catalog-config/attribute-values/${id}`, draft);
   }
 
   /**
@@ -335,6 +346,25 @@ export interface CatalogDraft {
 /* ------------------------------------------------------------------ *
  * Catalog configuration -- what the technician's catalog is made of.
  * ------------------------------------------------------------------ */
+
+/** The bare shape a create/update on a category actually returns. */
+export interface CategoryRecord {
+  readonly id: string;
+  readonly name: string;
+  readonly parentId: string | null;
+}
+
+/** The bare shape a create/update on a filter actually returns. */
+export interface AttributeRecord {
+  readonly id: string;
+  readonly label: string;
+}
+
+/** The bare shape adding or editing a filter value actually returns. */
+export interface AttributeValueRecord {
+  readonly id: string;
+  readonly label: string;
+}
 
 export interface ConfiguredCategory {
   readonly id: string;
