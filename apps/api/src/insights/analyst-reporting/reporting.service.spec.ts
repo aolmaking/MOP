@@ -52,7 +52,7 @@ describe("ReportingService", () => {
       expect.objectContaining({
         where: {
           tenantId: "tenant1",
-          task: { assignments: { some: { staffUserId: "tech1" } }, workOrder: workOrderScope },
+          task: { assignments: { some: { staffUserId: "tech1", unassignedAt: null } }, workOrder: workOrderScope },
         },
       }),
     );

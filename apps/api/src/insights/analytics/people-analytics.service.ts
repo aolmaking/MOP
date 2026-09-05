@@ -73,17 +73,39 @@ export class PeopleAnalyticsService {
           where: {
             tenantId,
             staffUserId: person.id,
-            task: { status: "DONE", workOrder: workOrderScopeFilter(scope) },
-            assignedAt: { gte: range.from, lte: range.to },
+            task: {
+              status: "DONE",
+              workOrder: workOrderScopeFilter(scope),
+            },
+            OR: [
+              { task: { completedAt: { gte: range.from, lte: range.to } } },
+              { task: { completedAt: null }, assignedAt: { gte: range.from, lte: range.to } },
+            ],
           },
-          select: { assignedAt: true, task: { select: { updatedAt: true } } },
+          select: {
+            assignedAt: true,
+            unassignedAt: true,
+            task: { select: { startedAt: true, completedAt: true, actualMinutes: true } },
+          },
+        });
+
+        // Historical attribution: a technician is only credited with completion if they were
+        // actively assigned when the task completed (unassignedAt is null, or unassigned after completedAt).
+        const validCompletedAssignments = completedAssignments.filter((a) => {
+          if (a.unassignedAt === null) return true;
+          if (a.task.completedAt && a.unassignedAt.getTime() >= a.task.completedAt.getTime()) return true;
+          return false;
         });
 
         const reworkCount = await this.prisma.taskAssignment.count({
           where: {
             tenantId,
             staffUserId: person.id,
-            task: { status: "RETURNED_FOR_REWORK", workOrder: workOrderScopeFilter(scope) },
+            unassignedAt: null,
+            task: {
+              status: "RETURNED_FOR_REWORK",
+              workOrder: workOrderScopeFilter(scope),
+            },
             assignedAt: { gte: range.from, lte: range.to },
           },
         });
@@ -92,22 +114,41 @@ export class PeopleAnalyticsService {
           where: {
             tenantId,
             createdAt: { gte: range.from, lte: range.to },
-            task: { assignments: { some: { staffUserId: person.id } }, workOrder: workOrderScopeFilter(scope) },
+            task: {
+              assignments: {
+                some: {
+                  staffUserId: person.id,
+                  OR: [{ unassignedAt: null }, { unassignedAt: { gte: range.from } }],
+                },
+              },
+              workOrder: workOrderScopeFilter(scope),
+            },
           },
         });
 
-        const durationsHours = completedAssignments
-          .map((a) => (a.task.updatedAt.getTime() - a.assignedAt.getTime()) / (60 * 60 * 1000))
-          .filter((h) => h >= 0);
+        const durationsHours = validCompletedAssignments
+          .map((a) => {
+            if (a.task.actualMinutes != null) {
+              return a.task.actualMinutes / 60;
+            }
+            if (a.task.completedAt) {
+              const start = a.task.startedAt ?? a.assignedAt;
+              const diffHours = (a.task.completedAt.getTime() - start.getTime()) / (60 * 60 * 1000);
+              return diffHours >= 0 ? diffHours : null;
+            }
+            return null;
+          })
+          .filter((h): h is number => h !== null && h >= 0);
+
         const averageTaskHours =
           durationsHours.length === 0 ? null : durationsHours.reduce((a, b) => a + b, 0) / durationsHours.length;
 
         return {
           staffUserId: person.id,
           fullName: person.fullName,
-          tasksCompleted: completedAssignments.length,
+          tasksCompleted: validCompletedAssignments.length,
           averageTaskHours,
-          reworkRate: safeDivide(reworkCount, completedAssignments.length + reworkCount) * 100,
+          reworkRate: safeDivide(reworkCount, validCompletedAssignments.length + reworkCount) * 100,
           blockerCount,
         };
       }),
@@ -126,19 +167,60 @@ export class PeopleAnalyticsService {
 
     return Promise.all(
       teams.map(async (team) => {
-        const memberIds = await this.prisma.teamMembership.findMany({
-          where: { tenantId, teamId: team.id, endedAt: null },
-          select: { technicianId: true },
-        });
-        const tasksCompleted = await this.prisma.taskAssignment.count({
+        // Historical team membership overlap: startedAt <= range.to and (endedAt is null or >= range.from)
+        const memberships = await this.prisma.teamMembership.findMany({
           where: {
             tenantId,
-            staffUserId: { in: memberIds.map((m) => m.technicianId) },
-            task: { status: "DONE" },
-            assignedAt: { gte: range.from, lte: range.to },
+            teamId: team.id,
+            startedAt: { lte: range.to },
+            OR: [
+              { endedAt: null },
+              { endedAt: { gte: range.from } },
+            ],
           },
+          select: { technicianId: true, startedAt: true, endedAt: true },
         });
-        return { teamId: team.id, teamName: team.name, tasksCompleted };
+
+        if (memberships.length === 0) {
+          return { teamId: team.id, teamName: team.name, tasksCompleted: 0 };
+        }
+
+        let totalCompleted = 0;
+        for (const m of memberships) {
+          const activeFrom = m.startedAt > range.from ? m.startedAt : range.from;
+          const activeTo = m.endedAt && m.endedAt < range.to ? m.endedAt : range.to;
+
+          if (activeFrom <= activeTo) {
+            const memberAssignments = await this.prisma.taskAssignment.findMany({
+              where: {
+                tenantId,
+                staffUserId: m.technicianId,
+                task: {
+                  status: "DONE",
+                  workOrder: workOrderScopeFilter(scope),
+                },
+                OR: [
+                  { task: { completedAt: { gte: activeFrom, lte: activeTo } } },
+                  { task: { completedAt: null }, assignedAt: { gte: activeFrom, lte: activeTo } },
+                ],
+              },
+              select: {
+                unassignedAt: true,
+                task: { select: { completedAt: true } },
+              },
+            });
+
+            const validCount = memberAssignments.filter((a) => {
+              if (a.unassignedAt === null) return true;
+              if (a.task.completedAt && a.unassignedAt.getTime() >= a.task.completedAt.getTime()) return true;
+              return false;
+            }).length;
+
+            totalCompleted += validCount;
+          }
+        }
+
+        return { teamId: team.id, teamName: team.name, tasksCompleted: totalCompleted };
       }),
     );
   }

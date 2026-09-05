@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { Prisma } from "@mop/database";
+import { fromMinor, toMinor } from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { resolveDateRange, resolveGranularity, toDecimalNumber, type ReportQueryParams } from "./date-range.util";
 
@@ -47,17 +48,30 @@ export interface FinancialReport {
   readonly outstandingAging: readonly OutstandingAgingBucket[];
 }
 
+/** Valid non-cancelled invoice filter condition for Prisma queries */
+function validInvoiceWhere(branchId?: string) {
+  return {
+    ...(branchId
+      ? {
+          OR: [{ branchId }, { branchId: null, workOrder: { branchId } }],
+        }
+      : {}),
+    NOT: {
+      OR: [
+        { status: "REFUNDED" as const },
+        { workOrder: { status: "CANCELLED" as const }, paid: 0 },
+      ],
+    },
+  };
+}
+
 /**
  * Financial -- revenue, collections, and where the money actually comes
- * from. "Revenue" here means Invoice.total issued in the period (what
- * was billed), never conflated with `collected` (Payment.amount actually
- * received) -- the reporting brief's own example of the distinction this
- * subsystem must never blur.
+ * from. Revenue is what was billed net of credit notes; collected is cash
+ * actually received net of completed refunds.
  *
- * Labor vs Parts is read directly off `InvoiceLine.lockedLaborPrice` and
- * `.lockedUnitPrice` -- both already exist as separate columns on every
- * line, so the split needs no fragile parsing of a free-text `itemType`
- * string.
+ * Uses exact integer minor units for internal monetary math to prevent
+ * floating-point corruption.
  */
 @Injectable()
 export class ReportsFinancialService {
@@ -74,8 +88,8 @@ export class ReportsFinancialService {
       await Promise.all([
         this.trend(tenantId, range, granularity, branchId),
         this.laborVsParts(tenantId, range, branchId),
-        this.discountsTotal(tenantId, range),
-        this.branchRevenue(tenantId, range),
+        this.discountsTotal(tenantId, range, branchId),
+        this.branchRevenue(tenantId, range, branchId),
         this.topServicesByRevenue(tenantId, range, branchId),
         this.paymentMethods(tenantId, range, branchId),
         this.outstandingAging(tenantId, branchId),
@@ -101,22 +115,37 @@ export class ReportsFinancialService {
     granularity: "day" | "week" | "month",
     branchId: string | undefined,
   ): Promise<TrendPoint[]> {
-    // Prisma has no date_trunc groupBy, and bucketing needs to happen in
-    // the database (not JS) to stay correct across timezones and at real
-    // data volume -- a raw, fully parameterized query is the standard
-    // escape hatch this codebase already uses (billing.service.ts,
-    // finance.service.ts).
+    const branchClause = branchId
+      ? Prisma.sql`AND (i."branchId" = ${branchId} OR (i."branchId" IS NULL AND w."branchId" = ${branchId}))`
+      : Prisma.empty;
+
+    // Gross invoiced, excluding fully refunded invoices and unpaid invoices on cancelled work orders
     const revenueRows = await this.prisma.$queryRaw<{ bucket: Date; total: Prisma.Decimal }[]>(Prisma.sql`
       SELECT date_trunc(${granularity}, i."issuedAt") AS bucket, SUM(i.total) AS total
       FROM "invoices" i
       JOIN "work_orders" w ON w.id = i."workOrderId"
       WHERE i."tenantId" = ${tenantId}
         AND i."issuedAt" >= ${range.from} AND i."issuedAt" <= ${range.to}
-        ${branchId ? Prisma.sql`AND w."branchId" = ${branchId}` : Prisma.empty}
+        AND NOT (i.status = 'REFUNDED' OR (w.status = 'CANCELLED' AND i.paid = 0))
+        ${branchClause}
       GROUP BY bucket
       ORDER BY bucket ASC
     `);
 
+    // Credit notes reduce recognized invoiced revenue in their issued bucket
+    const creditNoteRows = await this.prisma.$queryRaw<{ bucket: Date; total: Prisma.Decimal }[]>(Prisma.sql`
+      SELECT date_trunc(${granularity}, cn."createdAt") AS bucket, SUM(cn.amount) AS total
+      FROM "credit_notes" cn
+      JOIN "invoices" i ON i.id = cn."invoiceId"
+      JOIN "work_orders" w ON w.id = i."workOrderId"
+      WHERE cn."tenantId" = ${tenantId}
+        AND cn."createdAt" >= ${range.from} AND cn."createdAt" <= ${range.to}
+        ${branchClause}
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `);
+
+    // Confirmed cash collections
     const collectedRows = await this.prisma.$queryRaw<{ bucket: Date; total: Prisma.Decimal }[]>(Prisma.sql`
       SELECT date_trunc(${granularity}, p."createdAt") AS bucket, SUM(p.amount) AS total
       FROM "payments" p
@@ -124,24 +153,61 @@ export class ReportsFinancialService {
       JOIN "work_orders" w ON w.id = i."workOrderId"
       WHERE p."tenantId" = ${tenantId} AND p.status = 'CONFIRMED'
         AND p."createdAt" >= ${range.from} AND p."createdAt" <= ${range.to}
-        ${branchId ? Prisma.sql`AND w."branchId" = ${branchId}` : Prisma.empty}
+        ${branchClause}
       GROUP BY bucket
       ORDER BY bucket ASC
     `);
 
-    const byBucket = new Map<string, { revenue: number; collected: number }>();
+    // Completed refunds reduce cash collected in their decided bucket
+    const refundRows = await this.prisma.$queryRaw<{ bucket: Date; total: Prisma.Decimal }[]>(Prisma.sql`
+      SELECT date_trunc(${granularity}, r."decidedAt") AS bucket, SUM(r.amount) AS total
+      FROM "refund_requests" r
+      JOIN "invoices" i ON i.id = r."invoiceId"
+      JOIN "work_orders" w ON w.id = i."workOrderId"
+      WHERE r."tenantId" = ${tenantId} AND r.status = 'COMPLETED'
+        AND r."decidedAt" >= ${range.from} AND r."decidedAt" <= ${range.to}
+        ${branchClause}
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `);
+
+    const byBucket = new Map<string, { revenueMinor: number; collectedMinor: number }>();
+
     for (const row of revenueRows) {
       const key = row.bucket.toISOString();
-      byBucket.set(key, { revenue: toDecimalNumber(row.total), collected: byBucket.get(key)?.collected ?? 0 });
+      const entry = byBucket.get(key) ?? { revenueMinor: 0, collectedMinor: 0 };
+      entry.revenueMinor += toMinor(row.total.toFixed(2));
+      byBucket.set(key, entry);
     }
+
+    for (const row of creditNoteRows) {
+      const key = row.bucket.toISOString();
+      const entry = byBucket.get(key) ?? { revenueMinor: 0, collectedMinor: 0 };
+      entry.revenueMinor = Math.max(0, entry.revenueMinor - toMinor(row.total.toFixed(2)));
+      byBucket.set(key, entry);
+    }
+
     for (const row of collectedRows) {
       const key = row.bucket.toISOString();
-      byBucket.set(key, { revenue: byBucket.get(key)?.revenue ?? 0, collected: toDecimalNumber(row.total) });
+      const entry = byBucket.get(key) ?? { revenueMinor: 0, collectedMinor: 0 };
+      entry.collectedMinor += toMinor(row.total.toFixed(2));
+      byBucket.set(key, entry);
+    }
+
+    for (const row of refundRows) {
+      const key = row.bucket.toISOString();
+      const entry = byBucket.get(key) ?? { revenueMinor: 0, collectedMinor: 0 };
+      entry.collectedMinor = Math.max(0, entry.collectedMinor - toMinor(row.total.toFixed(2)));
+      byBucket.set(key, entry);
     }
 
     return [...byBucket.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([bucket, values]) => ({ bucket, ...values }));
+      .map(([bucket, values]) => ({
+        bucket,
+        revenue: Number(fromMinor(values.revenueMinor)),
+        collected: Number(fromMinor(values.collectedMinor)),
+      }));
   }
 
   private async laborVsParts(
@@ -152,64 +218,104 @@ export class ReportsFinancialService {
     const lines = await this.prisma.invoiceLine.findMany({
       where: {
         tenantId,
-        invoice: { issuedAt: { gte: range.from, lte: range.to }, workOrder: branchId ? { branchId } : {} },
+        invoice: {
+          issuedAt: { gte: range.from, lte: range.to },
+          ...validInvoiceWhere(branchId),
+        },
       },
       select: { quantity: true, lockedUnitPrice: true, lockedLaborPrice: true },
     });
 
-    let labor = 0;
-    let parts = 0;
+    let laborMinor = 0;
+    let partsMinor = 0;
     for (const line of lines) {
-      labor += toDecimalNumber(line.lockedLaborPrice) * line.quantity;
-      parts += toDecimalNumber(line.lockedUnitPrice) * line.quantity;
+      const laborUnit = toMinor(line.lockedLaborPrice.toFixed(2));
+      const partsUnit = toMinor(line.lockedUnitPrice.toFixed(2));
+      laborMinor += laborUnit * line.quantity;
+      partsMinor += partsUnit * line.quantity;
     }
-    return { labor, parts };
+
+    return {
+      labor: Number(fromMinor(laborMinor)),
+      parts: Number(fromMinor(partsMinor)),
+    };
   }
 
-  private async discountsTotal(tenantId: string, range: { from: Date; to: Date }): Promise<number> {
-    const result = await this.prisma.discountRequest.aggregate({
-      where: { tenantId, status: "APPROVED", decidedAt: { gte: range.from, lte: range.to } },
-      _sum: { amount: true },
+  private async discountsTotal(
+    tenantId: string,
+    range: { from: Date; to: Date },
+    branchId: string | undefined,
+  ): Promise<number> {
+    const result = await this.prisma.invoice.aggregate({
+      where: {
+        tenantId,
+        issuedAt: { gte: range.from, lte: range.to },
+        ...validInvoiceWhere(branchId),
+      },
+      _sum: { discount: true },
     });
-    return toDecimalNumber(result._sum.amount);
+    return toDecimalNumber(result._sum.discount);
   }
 
-  private async branchRevenue(tenantId: string, range: { from: Date; to: Date }): Promise<BranchRevenueRow[]> {
+  private async branchRevenue(
+    tenantId: string,
+    range: { from: Date; to: Date },
+    branchId: string | undefined,
+  ): Promise<BranchRevenueRow[]> {
     const invoices = await this.prisma.invoice.findMany({
-      where: { tenantId, issuedAt: { gte: range.from, lte: range.to } },
-      select: { total: true, workOrder: { select: { branchId: true } } },
+      where: {
+        tenantId,
+        issuedAt: { gte: range.from, lte: range.to },
+        ...validInvoiceWhere(branchId),
+      },
+      select: { total: true, branchId: true, workOrder: { select: { branchId: true } } },
     });
 
-    const branches = await this.prisma.branch.findMany({ where: { tenantId }, select: { id: true, name: true } });
+    const creditNotes = await this.prisma.creditNote.findMany({
+      where: {
+        tenantId,
+        createdAt: { gte: range.from, lte: range.to },
+        invoice: validInvoiceWhere(branchId),
+      },
+      select: {
+        amount: true,
+        invoice: { select: { branchId: true, workOrder: { select: { branchId: true } } } },
+      },
+    });
+
+    const branches = await this.prisma.branch.findMany({
+      where: { tenantId, ...(branchId ? { id: branchId } : {}) },
+      select: { id: true, name: true },
+    });
     const branchNames = new Map(branches.map((b) => [b.id, b.name]));
 
-    const byBranch = new Map<string, { revenue: number; count: number }>();
+    const byBranch = new Map<string, { revenueMinor: number; count: number }>();
     for (const invoice of invoices) {
-      const id = invoice.workOrder.branchId;
-      const entry = byBranch.get(id) ?? { revenue: 0, count: 0 };
-      entry.revenue += toDecimalNumber(invoice.total);
+      const id = invoice.branchId ?? invoice.workOrder.branchId;
+      const entry = byBranch.get(id) ?? { revenueMinor: 0, count: 0 };
+      entry.revenueMinor += toMinor(invoice.total.toFixed(2));
       entry.count += 1;
       byBranch.set(id, entry);
     }
 
+    for (const cn of creditNotes) {
+      const id = cn.invoice.branchId ?? cn.invoice.workOrder.branchId;
+      const entry = byBranch.get(id);
+      if (entry) {
+        entry.revenueMinor = Math.max(0, entry.revenueMinor - toMinor(cn.amount.toFixed(2)));
+      }
+    }
+
     return [...byBranch.entries()]
-      .map(([branchId, { revenue, count }]) => ({
-        branchId,
-        branchName: branchNames.get(branchId) ?? "Unknown branch",
-        revenue,
+      .map(([id, { revenueMinor, count }]) => ({
+        branchId: id,
+        branchName: branchNames.get(id) ?? "Unknown branch",
+        revenue: Number(fromMinor(revenueMinor)),
         workOrderCount: count,
       }))
       .sort((a, b) => b.revenue - a.revenue);
   }
 
-  /**
-   * Grouped by invoice-line name -- the closest stable dimension
-   * available. There is no `serviceId` foreign key anywhere in the
-   * pricing pipeline (QuotationItem/InvoiceLine both store a free-text
-   * `name` snapshot, by design, so a later catalog rename can't rewrite
-   * an old invoice's line item) -- this is named honestly as a text
-   * grouping, not implied to be a stable catalog reference.
-   */
   private async topServicesByRevenue(
     tenantId: string,
     range: { from: Date; to: Date },
@@ -218,21 +324,28 @@ export class ReportsFinancialService {
     const lines = await this.prisma.invoiceLine.findMany({
       where: {
         tenantId,
-        invoice: { issuedAt: { gte: range.from, lte: range.to }, workOrder: branchId ? { branchId } : {} },
+        invoice: {
+          issuedAt: { gte: range.from, lte: range.to },
+          ...validInvoiceWhere(branchId),
+        },
       },
       select: { name: true, total: true, quantity: true },
     });
 
-    const byName = new Map<string, { revenue: number; quantity: number }>();
+    const byName = new Map<string, { revenueMinor: number; quantity: number }>();
     for (const line of lines) {
-      const entry = byName.get(line.name) ?? { revenue: 0, quantity: 0 };
-      entry.revenue += toDecimalNumber(line.total);
+      const entry = byName.get(line.name) ?? { revenueMinor: 0, quantity: 0 };
+      entry.revenueMinor += toMinor(line.total.toFixed(2));
       entry.quantity += line.quantity;
       byName.set(line.name, entry);
     }
 
     return [...byName.entries()]
-      .map(([name, { revenue, quantity }]) => ({ name, revenue, quantity }))
+      .map(([name, { revenueMinor, quantity }]) => ({
+        name,
+        revenue: Number(fromMinor(revenueMinor)),
+        quantity,
+      }))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 15);
   }
@@ -247,50 +360,56 @@ export class ReportsFinancialService {
         tenantId,
         status: "CONFIRMED",
         createdAt: { gte: range.from, lte: range.to },
-        invoice: { workOrder: branchId ? { branchId } : {} },
+        invoice: validInvoiceWhere(branchId),
       },
       select: { method: true, amount: true },
     });
 
-    const byMethod = new Map<string, { amount: number; count: number }>();
+    const byMethod = new Map<string, { amountMinor: number; count: number }>();
     for (const payment of payments) {
-      const entry = byMethod.get(payment.method) ?? { amount: 0, count: 0 };
-      entry.amount += toDecimalNumber(payment.amount);
+      const entry = byMethod.get(payment.method) ?? { amountMinor: 0, count: 0 };
+      entry.amountMinor += toMinor(payment.amount.toFixed(2));
       entry.count += 1;
       byMethod.set(payment.method, entry);
     }
 
     return [...byMethod.entries()]
-      .map(([method, { amount, count }]) => ({ method, amount, count }))
+      .map(([method, { amountMinor, count }]) => ({
+        method,
+        amount: Number(fromMinor(amountMinor)),
+        count,
+      }))
       .sort((a, b) => b.amount - a.amount);
   }
 
-  /**
-   * Approximate aging by `issuedAt` (there is no per-invoice due date
-   * column, only a workshop-wide `defaultDueInDays`) -- labeled by
-   * how long since issuance, not claimed to be a precise due-date aging
-   * report.
-   */
   private async outstandingAging(tenantId: string, branchId: string | undefined): Promise<OutstandingAgingBucket[]> {
     const unpaid = await this.prisma.invoice.findMany({
-      where: { tenantId, balance: { gt: 0 }, workOrder: branchId ? { branchId } : {} },
+      where: {
+        tenantId,
+        balance: { gt: 0 },
+        ...validInvoiceWhere(branchId),
+      },
       select: { balance: true, issuedAt: true },
     });
 
     const now = Date.now();
     const buckets = {
-      "0-30 days": { amount: 0, invoiceCount: 0 },
-      "31-60 days": { amount: 0, invoiceCount: 0 },
-      "61+ days": { amount: 0, invoiceCount: 0 },
+      "0-30 days": { amountMinor: 0, invoiceCount: 0 },
+      "31-60 days": { amountMinor: 0, invoiceCount: 0 },
+      "61+ days": { amountMinor: 0, invoiceCount: 0 },
     };
 
     for (const invoice of unpaid) {
       const ageDays = (now - invoice.issuedAt.getTime()) / (24 * 60 * 60 * 1000);
       const bucket = ageDays <= 30 ? "0-30 days" : ageDays <= 60 ? "31-60 days" : "61+ days";
-      buckets[bucket].amount += toDecimalNumber(invoice.balance);
+      buckets[bucket].amountMinor += toMinor(invoice.balance.toFixed(2));
       buckets[bucket].invoiceCount += 1;
     }
 
-    return Object.entries(buckets).map(([label, values]) => ({ label, ...values }));
+    return Object.entries(buckets).map(([label, values]) => ({
+      label,
+      amount: Number(fromMinor(values.amountMinor)),
+      invoiceCount: values.invoiceCount,
+    }));
   }
 }

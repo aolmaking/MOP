@@ -1,5 +1,6 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { SlicePipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ErrorBanner } from '../../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../../ui/button/button.directive';
@@ -7,7 +8,21 @@ import { BarList, type BarListItem } from '../../../ui/charts/bar-list/bar-list'
 import { KpiCard } from '../../../ui/charts/kpi-card/kpi-card';
 import type { IntegrityIssueSeverity } from './workflow-health.api';
 import type { PresentedError } from '../../../runtime/http/error.interceptor';
-import { WorkflowHealthApi, type BottlenecksReport, type IntegrityReport } from './workflow-health.api';
+import {
+  WorkflowHealthApi,
+  type BottlenecksReport,
+  type IntegrityReport,
+  type QualityIntelligenceReport,
+  type BranchQualityContributor,
+  type ServiceQualityContributor,
+  type TechnicianQualityContributor,
+  type DiagnosticSubject,
+  type DiagnosticEvidenceLevel,
+  type RootCauseAnalysisReport,
+} from './workflow-health.api';
+
+import { DrillDownDrawer } from '../../../domain/drill-down/drill-down-drawer';
+import { DossierDrawer } from '../../../domain/dossier/dossier-drawer';
 
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
@@ -31,7 +46,7 @@ const SEVERITY_ORDER: Record<string, number> = { CRITICAL: 0, WARNING: 1, INFO: 
  */
 @Component({
   selector: 'app-workflow-health-page',
-  imports: [RouterLink, ErrorBanner, ButtonDirective, BarList, KpiCard],
+  imports: [RouterLink, SlicePipe, ErrorBanner, ButtonDirective, BarList, KpiCard, DrillDownDrawer, DossierDrawer],
   templateUrl: './workflow-health-page.html',
   styleUrl: './workflow-health-page.css',
 })
@@ -43,6 +58,7 @@ export class WorkflowHealthPage {
   protected readonly error = signal<PresentedError | null>(null);
   protected readonly issues = signal<IntegrityReport | null>(null);
   protected readonly bottlenecks = signal<BottlenecksReport | null>(null);
+  protected readonly quality = signal<QualityIntelligenceReport | null>(null);
 
   protected readonly sortedIssues = computed(
     () =>
@@ -67,10 +83,30 @@ export class WorkflowHealthPage {
 
   /** The issue whose acknowledgement form is open, if any. */
   protected readonly acknowledging = signal<string | null>(null);
-  protected readonly ackNote = signal('');
-  protected readonly ackStatus = signal<'ACKNOWLEDGED' | 'INVESTIGATING' | 'ESCALATED'>('INVESTIGATING');
+  protected readonly ackStatus = signal<'ACKNOWLEDGED' | 'INVESTIGATING' | 'ESCALATED'>('ACKNOWLEDGED');
+  protected readonly ackNote = signal<string>('');
+  protected readonly ackSaving = signal<boolean>(false);
   protected readonly ackError = signal<string | null>(null);
-  protected readonly ackSaving = signal(false);
+
+  /** Universal Drill-Down and Dossier states */
+  protected readonly activeDrillDownMetric = signal<string | null>(null);
+  protected readonly activeDossierWorkOrderId = signal<string | null>(null);
+
+  protected openDrillDown(metric: string): void {
+    this.activeDrillDownMetric.set(metric);
+  }
+
+  protected closeDrillDown(): void {
+    this.activeDrillDownMetric.set(null);
+  }
+
+  protected openDossier(woId: string): void {
+    this.activeDossierWorkOrderId.set(woId);
+  }
+
+  protected closeDossier(): void {
+    this.activeDossierWorkOrderId.set(null);
+  }
 
   protected readonly biggestProblem = computed(() => {
     const causes = this.bottlenecks()?.waitingCauseBreakdown ?? [];
@@ -103,6 +139,92 @@ export class WorkflowHealthPage {
     })),
   );
 
+  // Quality & Rework Intelligence computed properties
+  protected readonly firstPassYieldDisplay = computed(() => {
+    const v = this.quality()?.qc.firstPassYield;
+    return v !== null && v !== undefined ? `${v.toFixed(1)}%` : '—';
+  });
+  protected readonly firstPassYieldSub = computed(() => {
+    const q = this.quality()?.qc;
+    if (!q || q.firstPassEvaluations === 0) return 'No evaluations';
+    return `${q.firstPassPassed} / ${q.firstPassEvaluations} first attempts passed`;
+  });
+
+  protected readonly qcFailureRateDisplay = computed(() => {
+    const v = this.quality()?.qc.qcFailureRate;
+    return v !== null && v !== undefined ? `${v.toFixed(1)}%` : '—';
+  });
+  protected readonly qcFailureRateSub = computed(() => {
+    const q = this.quality()?.qc;
+    if (!q || q.qcEvaluationsCount === 0) return 'No evaluations';
+    return `${q.qcFailures} failures / ${q.qcEvaluationsCount} total evaluations`;
+  });
+
+  protected readonly taskReworkRateDisplay = computed(() => {
+    const v = this.quality()?.rework.taskReworkRate;
+    return v !== null && v !== undefined ? `${v.toFixed(1)}%` : '—';
+  });
+  protected readonly taskReworkRateSub = computed(() => {
+    const r = this.quality()?.rework;
+    if (!r || r.completedTasks === 0) return 'No completed tasks';
+    return `${r.tasksWithRework} / ${r.completedTasks} tasks reworked`;
+  });
+
+  protected readonly reopenedJobsDisplay = computed(
+    () => `${this.quality()?.workOrders.reopenedWorkOrders ?? 0}`,
+  );
+  protected readonly repeatVisitsDisplay = computed(
+    () => `${this.quality()?.vehicleRepeats.repeatVehicleVisitsWithin30Days ?? 0}`,
+  );
+  protected readonly repeatVisitsSub = computed(() => {
+    const v = this.quality()?.vehicleRepeats;
+    return `${v?.uniqueVehiclesWithRepeatVisitWithin30Days ?? 0} unique vehicle(s) · repeat visit, not warranty`;
+  });
+  protected readonly faultRecurrenceDisplay = computed(
+    () => `${this.quality()?.vehicleRepeats.faultRecurrenceCount ?? 0}`,
+  );
+
+  protected readonly reworkLaborMinutesDisplay = computed(
+    () => `${this.quality()?.costDrag.reworkLaborMinutes ?? 0} min`,
+  );
+
+  protected readonly qcFailureReasonItems = computed<BarListItem[]>(() =>
+    (this.quality()?.qcFailureReasons ?? []).map((r) => ({
+      label: r.reason,
+      value: r.count,
+      displayValue: `${r.count} (${r.percentage !== null && r.percentage !== undefined ? r.percentage + '%' : '—'})`,
+    })),
+  );
+
+  protected readonly reworkReasonItems = computed<BarListItem[]>(() =>
+    (this.quality()?.reworkReasons ?? []).map((r) => ({
+      label: r.reason,
+      value: r.count,
+      displayValue: `${r.count} (${r.percentage !== null && r.percentage !== undefined ? r.percentage + '%' : '—'})`,
+    })),
+  );
+
+  protected readonly branchContributors = computed<readonly BranchQualityContributor[]>(
+    () => this.quality()?.contributors.byBranch ?? [],
+  );
+
+  protected readonly serviceContributors = computed<readonly ServiceQualityContributor[]>(
+    () => this.quality()?.contributors.byService ?? [],
+  );
+
+  protected readonly technicianContributors = computed<readonly TechnicianQualityContributor[]>(
+    () => this.quality()?.contributors.byTechnician ?? [],
+  );
+
+  protected readonly qualityIntegrity = computed(
+    () => this.quality()?.integrity ?? null,
+  );
+
+  // Root-Cause Analysis Engine signals
+  protected readonly rootCause = signal<RootCauseAnalysisReport | null>(null);
+  protected readonly rootCauseSubject = signal<DiagnosticSubject>('WORK_ORDER_DELAY');
+  protected readonly rootCauseLoading = signal<boolean>(false);
+
   constructor() {
     this.load();
   }
@@ -126,13 +248,78 @@ export class WorkflowHealthPage {
             .subscribe({
               next: (b) => {
                 this.bottlenecks.set(b);
-                this.state.set('ready');
+                this.api
+                  .quality()
+                  .pipe(takeUntilDestroyed(this.destroyRef))
+                  .subscribe({
+                    next: (q) => {
+                      this.quality.set(q);
+                      this.loadRootCause();
+                      this.state.set('ready');
+                    },
+                    error: onError,
+                  });
               },
               error: onError,
             });
         },
         error: onError,
       });
+  }
+
+  protected setRootCauseSubject(sub: DiagnosticSubject): void {
+    this.rootCauseSubject.set(sub);
+    this.loadRootCause();
+  }
+
+  protected loadRootCause(): void {
+    this.rootCauseLoading.set(true);
+    this.api
+      .rootCause({ subject: this.rootCauseSubject() })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (report) => {
+          this.rootCause.set(report);
+          this.rootCauseLoading.set(false);
+        },
+        error: () => {
+          this.rootCauseLoading.set(false);
+        },
+      });
+  }
+
+  protected evidenceBadgeClass(level: DiagnosticEvidenceLevel | undefined): string {
+    switch (level) {
+      case 'OBSERVED_FACT':
+        return 'badge--fact';
+      case 'RULE_BASED_CONTRIBUTOR':
+        return 'badge--contributor';
+      case 'STRONG_ASSOCIATION':
+        return 'badge--association';
+      case 'CAUSAL_LINK':
+        return 'badge--causal';
+      case 'INSUFFICIENT_EVIDENCE':
+        return 'badge--insufficient';
+      default:
+        return 'badge--fact';
+    }
+  }
+
+  protected evidenceBadgeLabel(level: DiagnosticEvidenceLevel | undefined): string {
+    switch (level) {
+      case 'OBSERVED_FACT':
+        return 'Observed Fact';
+      case 'RULE_BASED_CONTRIBUTOR':
+        return 'Evidence-Supported Contributor';
+      case 'STRONG_ASSOCIATION':
+        return 'Statistical Association';
+      case 'CAUSAL_LINK':
+        return 'Authoritative Causal Link';
+      case 'INSUFFICIENT_EVIDENCE':
+        return 'Insufficient Evidence';
+      default:
+        return level ?? '';
+    }
   }
 
   protected severityClass(severity: string): string {

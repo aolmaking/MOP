@@ -63,6 +63,446 @@
         </section>
       }
 
+      <!-- Quality & Rework Intelligence (Phase 2 Prompt 7) -->
+      <section class="quality-intelligence">
+        <header class="section-head">
+          <h2 class="section-title">Quality &amp; Rework Intelligence</h2>
+          <p class="section-sub">
+            First-pass QC yield, verified task rework, repeat vehicle visits, and non-fabricated labor cost drag.
+          </p>
+        </header>
+
+        <!-- Quality KPI cards -->
+        <div class="kpi-grid">
+          <div class="kpi-card-wrapper">
+            <app-kpi-card
+              label="First Pass Yield"
+              [value]="firstPassYieldDisplay()"
+              [meaning]="firstPassYieldSub()"
+            />
+            <button type="button" class="drill-down-btn" (click)="openDrillDown('firstPassYield')" title="Drill-down to underlying work orders and QC evaluations">
+              Inspect Evidence →
+            </button>
+          </div>
+          <div class="kpi-card-wrapper">
+            <app-kpi-card
+              label="QC Failure Rate"
+              [value]="qcFailureRateDisplay()"
+              [meaning]="qcFailureRateSub()"
+              [invert]="true"
+            />
+            <button type="button" class="drill-down-btn" (click)="openDrillDown('qcFailures')" title="Drill-down to failed evaluations and fault records">
+              Inspect Evidence →
+            </button>
+          </div>
+          <div class="kpi-card-wrapper">
+            <app-kpi-card
+              label="Task Rework Rate"
+              [value]="taskReworkRateDisplay()"
+              [meaning]="taskReworkRateSub()"
+              [invert]="true"
+            />
+            <button type="button" class="drill-down-btn" (click)="openDrillDown('taskReworkRate')" title="Drill-down to rework tasks and parent task lineage">
+              Inspect Evidence →
+            </button>
+          </div>
+          <div class="kpi-card-wrapper">
+            <app-kpi-card
+              label="Reopened Work Orders"
+              [value]="reopenedJobsDisplay()"
+              meaning="Authoritative relinked jobs"
+              [invert]="true"
+            />
+            <button type="button" class="drill-down-btn" (click)="openDrillDown('completedWorkOrders')" title="Drill-down to completed/reopened work orders">
+              Inspect Evidence →
+            </button>
+          </div>
+          <div class="kpi-card-wrapper">
+            <app-kpi-card
+              label="Repeat Visits (30d)"
+              [value]="repeatVisitsDisplay()"
+              [meaning]="repeatVisitsSub()"
+              [invert]="true"
+            />
+            <button type="button" class="drill-down-btn" (click)="openDrillDown('repeatVehicleVisits')" title="Drill-down to repeat vehicle visit records">
+              Inspect Evidence →
+            </button>
+          </div>
+        </div>
+
+        <!-- Quality Cost Drag notice & Measurable Effort -->
+        <div class="cost-drag-panel panel">
+          <h3 class="panel-title">Quality Cost Drag &amp; Measurable Effort</h3>
+          <p class="panel-hint">Direct time spent on rework tasks vs non-computable financial attribution.</p>
+          <div class="cost-drag-grid">
+            <div class="cost-stat">
+              <span class="cost-label">Measurable Rework Labor Time</span>
+              <span class="cost-value">{{ reworkLaborMinutesDisplay() }}</span>
+              <span class="cost-note">Total recorded actualMinutes across tasks identified as rework.</span>
+            </div>
+            <div class="cost-stat cost-stat--unavailable">
+              <span class="cost-label">Technician Labor Cost</span>
+              <span class="cost-value">— (Not Computable)</span>
+              <span class="cost-note">Technician hourly labor cost rate is not captured in domain; selling price cannot be substituted for cost.</span>
+            </div>
+            <div class="cost-stat cost-stat--unavailable">
+              <span class="cost-label">Rework Parts &amp; Scrap Cost</span>
+              <span class="cost-value">— (Not Tracked)</span>
+              <span class="cost-note">Damaged part scrap or rework consumption cost allocation is not tracked.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Reasons Breakdown Grid -->
+        <div class="grid-2">
+          <section class="panel">
+            <h3 class="panel-title">QC Failure Reasons</h3>
+            <p class="panel-hint">Structured evaluator classification. Historical failures without enum remain Unclassified.</p>
+            @if (qcFailureReasonItems().length > 0) {
+              <app-bar-list [items]="qcFailureReasonItems()" color="var(--danger)" />
+            } @else {
+              <p class="empty-hint">No QC failures recorded in this reporting period.</p>
+            }
+          </section>
+
+          <section class="panel">
+            <h3 class="panel-title">Task Rework Reasons</h3>
+            <p class="panel-hint">Structured rework classification captured on rework tasks.</p>
+            @if (reworkReasonItems().length > 0) {
+              <app-bar-list [items]="reworkReasonItems()" color="var(--warning)" />
+            } @else {
+              <p class="empty-hint">No task rework recorded in this reporting period.</p>
+            }
+          </section>
+        </div>
+
+        <!-- Quality Contributors -->
+        <div class="grid-2">
+          <section class="panel">
+            <h3 class="panel-title">Quality Contributors by Branch</h3>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Branch</th>
+                    <th>QC Evals</th>
+                    <th>First Pass Yield</th>
+                    <th>QC Failures</th>
+                    <th>Completed</th>
+                    <th>Rework Tasks</th>
+                    <th>Rework Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (b of branchContributors(); track b.branchId) {
+                    <tr>
+                      <td><strong>{{ b.branchName }}</strong></td>
+                      <td>{{ b.qcEvaluations }}</td>
+                      <td>{{ b.firstPassYield !== null ? b.firstPassYield + '%' : '—' }}</td>
+                      <td>{{ b.qcFailures }}</td>
+                      <td>{{ b.completedTasks }}</td>
+                      <td>{{ b.reworkTaskCount }}</td>
+                      <td>{{ b.reworkRate !== null ? b.reworkRate + '%' : '—' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <h3 class="panel-title">Quality Contributors by Service</h3>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Service</th>
+                    <th>Completed</th>
+                    <th>Rework</th>
+                    <th>Rework Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (s of serviceContributors(); track s.serviceKey) {
+                    <tr>
+                      <td><strong>{{ s.serviceTitle }}</strong></td>
+                      <td>{{ s.completedTasks }}</td>
+                      <td>{{ s.reworkTaskCount }}</td>
+                      <td>{{ s.reworkRate !== null ? s.reworkRate + '%' : '—' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <!-- Technician Quality & Sample Size Protection -->
+        <section class="panel">
+          <h3 class="panel-title">Technician Quality &amp; Sample-Size Protection</h3>
+          <p class="panel-hint">
+            Technicians with fewer than 5 completed tasks are protected against misleading comparative ranking.
+          </p>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Technician</th>
+                  <th>Completed Tasks</th>
+                  <th>Rework Tasks</th>
+                  <th>Rework Rate</th>
+                  <th>Sample Reliability</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (tech of technicianContributors(); track tech.staffUserId) {
+                  <tr>
+                    <td><strong>{{ tech.staffName }}</strong></td>
+                    <td>{{ tech.completedTasks }}</td>
+                    <td>{{ tech.reworkTasks }}</td>
+                    <td>{{ tech.reworkRate !== null ? tech.reworkRate + '%' : '—' }}</td>
+                    <td>
+                      @if (tech.insufficientSampleSize) {
+                        <span class="sample-badge sample-badge--low">&lt; 5 completed tasks — insufficient sample size (ranking suppressed)</span>
+                      } @else {
+                        <span class="sample-badge sample-badge--ok">Sufficient sample size (&ge; 5)</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Quality Data Integrity Anomalies -->
+        @if (qualityIntegrity(); as integ) {
+          <section class="panel integrity-panel">
+            <h3 class="panel-title">Quality Data Integrity Signals</h3>
+            <p class="panel-hint">Honest tracking of unclassified evaluations and unlinked repeat visits.</p>
+            <div class="integrity-grid">
+              <div class="integrity-card">
+                <span class="int-label">QC Failures Without Structured Reason</span>
+                <span class="int-value">{{ integ.qcFailedWithoutStructuredReason }}</span>
+                <span class="int-note">Preserved honestly as unclassified historical records.</span>
+              </div>
+              <div class="integrity-card">
+                <span class="int-label">QC Failures Without Note</span>
+                <span class="int-value">{{ integ.qcFailedWithoutNote }}</span>
+                <span class="int-note">Evaluations that lacked explanatory feedback.</span>
+              </div>
+              <div class="integrity-card">
+                <span class="int-label">Rework Tasks Without Original Task</span>
+                <span class="int-value">{{ integ.reworkWithoutOriginalTask }}</span>
+                <span class="int-note">Tasks marked rework without formal lineage linkage.</span>
+              </div>
+              <div class="integrity-card">
+                <span class="int-label">Repeat Visits Unlinked</span>
+                <span class="int-value">{{ integ.repeatVisitsUnlinked }}</span>
+                <span class="int-note">Repeat vehicle visits within 30 days that have no relink reference.</span>
+              </div>
+            </div>
+          </section>
+        }
+      </section>
+
+      <!-- 4. Root-Cause Analysis Engine (Phase 2 — Prompt 8) -->
+      <section class="quality-intelligence root-cause-section">
+        <div class="section-head rc-head">
+          <div>
+            <h2 class="section-title">Root-Cause Analysis Engine</h2>
+            <p class="section-sub">
+              Evidence-based, deterministic causal &amp; diagnostic investigation. Distinguishes observed facts, contributors, and uncertainties.
+            </p>
+          </div>
+          <div class="subject-selector-wrapper">
+            <label for="rcSubjectSelect" class="subject-label">Investigate Subject:</label>
+            <select
+              id="rcSubjectSelect"
+              class="subject-select"
+              [value]="rootCauseSubject()"
+              (change)="setRootCauseSubject($any($event.target).value)"
+            >
+              <option value="WORK_ORDER_DELAY">Workflow Cycle Delay</option>
+              <option value="WORKFLOW_BOTTLENECK">Workflow Bottleneck</option>
+              <option value="QC_FAILURE">Quality Control (QC) Failure</option>
+              <option value="TASK_REWORK">Task Rework</option>
+              <option value="REPEAT_VEHICLE_VISIT">Repeat Vehicle Visits (30d)</option>
+              <option value="FAULT_RECURRENCE">Diagnostic Fault Recurrence</option>
+              <option value="CUSTOMER_DECISION_DROP_OFF">Customer Recommendation Drop-Off</option>
+              <option value="DELIVERY_DELAY">Delivery &amp; Handover Delay</option>
+            </select>
+          </div>
+        </div>
+
+        @if (rootCauseLoading()) {
+          <div class="panel rc-loading">
+            <p class="state-body" aria-busy="true">Analyzing workshop evidence…</p>
+          </div>
+        } @else if (rootCause(); as rc) {
+          <!-- Outcome Headline Card -->
+          <div class="panel rc-outcome-card">
+            <div class="rc-outcome-head">
+              <div>
+                <span class="rc-outcome-badge" [class]="evidenceBadgeClass(rc.evidenceLevel)">
+                  {{ evidenceBadgeLabel(rc.evidenceLevel) }}
+                </span>
+                <h3 class="rc-outcome-title">{{ rc.outcome.title }}</h3>
+                <p class="rc-outcome-desc">{{ rc.outcome.description }}</p>
+              </div>
+              <div class="rc-outcome-stat">
+                <span class="rc-stat-label">{{ rc.outcome.metricName }}</span>
+                <span class="rc-stat-value">
+                  {{ rc.outcome.metricValue !== null ? rc.outcome.metricValue : '—' }}
+                  @if (rc.outcome.metricUnit) {
+                    <small>{{ rc.outcome.metricUnit }}</small>
+                  }
+                </span>
+              </div>
+            </div>
+            <div class="rc-summary-banner">
+              <strong>Executive Diagnostic Summary:</strong> {{ rc.summary }}
+            </div>
+            <div class="rc-outcome-actions">
+              <button type="button" class="drill-down-btn-primary" (click)="openDrillDown('diagnosticFindings')">
+                🔍 Trace Diagnostic Findings Evidence →
+              </button>
+            </div>
+          </div>
+
+          <!-- Observed Facts vs Contributing Factors Grid -->
+          <div class="grid-2">
+            <!-- Observed Facts -->
+            <section class="panel">
+              <h3 class="panel-title">Directly Observed Facts</h3>
+              <p class="panel-hint">Hard data points directly recorded in persisted historical events.</p>
+              @if (rc.observedFacts.length > 0) {
+                <div class="facts-list">
+                  @for (fact of rc.observedFacts; track fact.key) {
+                    <div class="fact-card">
+                      <div class="fact-head">
+                        <span class="fact-label">{{ fact.label }}</span>
+                        <span class="fact-value">{{ fact.value }} {{ fact.unit ?? '' }}</span>
+                      </div>
+                      <p class="fact-explanation">{{ fact.explanation }}</p>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <p class="empty-hint">No facts recorded for this selection.</p>
+              }
+            </section>
+
+            <!-- Contributing Factors -->
+            <section class="panel">
+              <h3 class="panel-title">Evidence-Supported Contributors</h3>
+              <p class="panel-hint">Patterns and factors with verified statistical or rule-based evidence.</p>
+              @if (rc.contributingFactors.length > 0) {
+                <div class="factors-list">
+                  @for (factor of rc.contributingFactors; track factor.key) {
+                    <div class="factor-card">
+                      <div class="factor-head">
+                        <span class="factor-category">{{ factor.category }}</span>
+                        <span class="factor-badge" [class]="evidenceBadgeClass(factor.evidenceLevel)">
+                          {{ evidenceBadgeLabel(factor.evidenceLevel) }}
+                        </span>
+                      </div>
+                      <h4 class="factor-title">{{ factor.label }}</h4>
+                      <p class="factor-explanation">{{ factor.explanation }}</p>
+                      @if (factor.rate !== null && factor.rate !== undefined) {
+                        <div class="factor-metrics">
+                          <span>Observed Rate: <strong>{{ factor.rate }}%</strong></span>
+                          @if (factor.baselineRate !== null && factor.baselineRate !== undefined) {
+                            <span>Org Baseline: <strong>{{ factor.baselineRate }}%</strong></span>
+                          }
+                          @if (factor.delta !== null && factor.delta !== undefined) {
+                            <span class="factor-delta" [class.factor-delta--elevated]="factor.delta > 0">
+                              Delta: {{ factor.delta > 0 ? '+' : '' }}{{ factor.delta }}%
+                            </span>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              } @else {
+                <p class="empty-hint">No elevated contributing factors detected beyond baseline.</p>
+              }
+            </section>
+          </div>
+
+          <!-- Evidence References & Limitations Grid -->
+          <div class="grid-2">
+            <!-- Evidence References -->
+            <section class="panel">
+              <h3 class="panel-title">Authoritative Domain Evidence</h3>
+              <p class="panel-hint">Traceable entity identifiers linking findings back to domain records.</p>
+              @if (rc.evidenceReferences.length > 0) {
+                <div class="evidence-tags">
+                  @for (ref of rc.evidenceReferences; track ref.id) {
+                    <div class="evidence-tag">
+                      <span class="evidence-type">{{ ref.type }}</span>
+                      <span class="evidence-id">{{ ref.label ?? ref.id }}</span>
+                      @if (ref.timestamp) {
+                        <span class="evidence-time">{{ ref.timestamp | slice: 0:10 }}</span>
+                      }
+                    </div>
+                  }
+                </div>
+              } @else {
+                <p class="empty-hint">No individual reference records tagged.</p>
+              }
+            </section>
+
+            <!-- Unknowns & Uncertainty Boundaries -->
+            <section class="panel">
+              <h3 class="panel-title">Diagnostic Unknowns &amp; Limitations</h3>
+              <p class="panel-hint">What cannot be determined honestly from current workshop data.</p>
+              @if (rc.unknowns.length > 0) {
+                <ul class="unknowns-list">
+                  @for (unk of rc.unknowns; track unk.key) {
+                    <li class="unknown-item">
+                      <strong class="unknown-q">{{ unk.question }}</strong>
+                      <p class="unknown-r">{{ unk.reason }}</p>
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <p class="empty-hint">All core diagnostic dimensions were verified.</p>
+              }
+            </section>
+          </div>
+
+          <!-- Diagnostic Integrity Card -->
+          <div class="panel rc-integrity-card">
+            <h4 class="rc-integrity-title">Diagnostic Integrity &amp; Data Honesty Guarantees</h4>
+            <div class="rc-integrity-grid">
+              <div class="rc-int-item">
+                <span class="rc-int-label">Sample Size</span>
+                <span class="rc-int-val">{{ rc.integrity.sampleSize }} evaluated</span>
+                @if (rc.integrity.insufficientSampleSize) {
+                  <span class="sample-badge sample-badge--low">&lt; 5 sample size: ranking suppressed</span>
+                }
+              </div>
+              <div class="rc-int-item">
+                <span class="rc-int-label">Baseline Comparison</span>
+                <span class="rc-int-val">{{ rc.integrity.baselineAvailable ? 'Org Baseline Available' : 'Baseline Not Available' }}</span>
+              </div>
+              <div class="rc-int-item">
+                <span class="rc-int-label">Causal Classification</span>
+                <span class="rc-int-val">Deterministic (No AI / No ML)</span>
+                <span class="rc-int-note">Correlation is never claimed as causation.</span>
+              </div>
+              <div class="rc-int-item">
+                <span class="rc-int-label">Financial Attribution</span>
+                <span class="rc-int-val">Explicitly Null</span>
+                <span class="rc-int-note">Selling prices are not substituted for costs.</span>
+              </div>
+            </div>
+          </div>
+        }
+      </section>
+
       <!--
         Causes first, then the individual records.
 
@@ -217,5 +657,22 @@
         }
       </section>
     }
+  }
+
+  <!-- Universal Drill-Down Drawer (Phase 2 Prompt 9) -->
+  @if (activeDrillDownMetric()) {
+    <app-drill-down-drawer
+      [metric]="activeDrillDownMetric()!"
+      (closed)="closeDrillDown()"
+      (openWorkOrderDossier)="openDossier($event)"
+    />
+  }
+
+  <!-- Dossier Drawer for Work Order Deep-Dive -->
+  @if (activeDossierWorkOrderId()) {
+    <app-dossier-drawer
+      [workOrderId]="activeDossierWorkOrderId()!"
+      (closed)="closeDossier()"
+    />
   }
 </section>

@@ -6,6 +6,12 @@ import { CurrentSession } from "../../identity/auth/current-session.decorator";
 import { EffectiveAccessService } from "../../identity/access/effective-access.service";
 import { WorkflowIntegrityService, type IntegrityIssueSeverity, type IntegrityReport } from "./workflow-integrity.service";
 import { WorkflowBottlenecksService, type BottlenecksReport } from "./workflow-bottlenecks.service";
+import { QualityAnalyticsService, type QualityIntelligenceReport } from "../analytics/quality-analytics.service";
+import { RootCauseAnalysisService } from "../analytics/root-cause-analysis.service";
+import { UniversalDrillDownService } from "../analytics/universal-drill-down.service";
+import type { DiagnosticSubject, RootCauseAnalysisReport } from "../analytics/root-cause-analysis.types";
+import type { DrillDownResult } from "../analytics/drill-down.types";
+import { resolveScope } from "../analytics/analytics-scope.util";
 
 /**
  * Workflow Health / Operations Integrity
@@ -35,6 +41,9 @@ export class WorkflowHealthController {
   constructor(
     private readonly integrity: WorkflowIntegrityService,
     private readonly bottlenecks: WorkflowBottlenecksService,
+    private readonly quality: QualityAnalyticsService,
+    private readonly rootCause: RootCauseAnalysisService,
+    private readonly drillDownService: UniversalDrillDownService,
     private readonly access: EffectiveAccessService,
   ) {}
 
@@ -96,6 +105,92 @@ export class WorkflowHealthController {
     const tenantId = await this.require(session);
     try {
       return await this.bottlenecks.build(tenantId, { from, to });
+    } catch (error) {
+      if (error instanceof Error && (error.message === "invalid_date_range" || error.message === "date_range_reversed")) {
+        throw new BadRequestException({ code: error.message, message: "Check the date range and try again." });
+      }
+      throw error;
+    }
+  }
+
+  @Get("quality")
+  async getQuality(
+    @CurrentSession() session: SessionContext,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("branchId") branchId?: string,
+  ): Promise<QualityIntelligenceReport> {
+    const tenantId = await this.require(session);
+    try {
+      return await this.quality.build(tenantId, resolveScope(session), { from, to, branchId });
+    } catch (error) {
+      if (error instanceof Error && (error.message === "invalid_date_range" || error.message === "date_range_reversed")) {
+        throw new BadRequestException({ code: error.message, message: "Check the date range and try again." });
+      }
+      throw error;
+    }
+  }
+
+  @Get("root-cause")
+  async getRootCause(
+    @CurrentSession() session: SessionContext,
+    @Query("subject") subject?: DiagnosticSubject,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("branchId") branchId?: string,
+    @Query("serviceKey") serviceKey?: string,
+    @Query("technicianId") technicianId?: string,
+    @Query("workOrderId") workOrderId?: string,
+  ): Promise<RootCauseAnalysisReport> {
+    const tenantId = await this.require(session);
+    try {
+      return await this.rootCause.analyze(tenantId, resolveScope(session), {
+        subject,
+        from,
+        to,
+        branchId,
+        serviceKey,
+        technicianId,
+        workOrderId,
+      });
+    } catch (error) {
+      if (error instanceof Error && (error.message === "invalid_date_range" || error.message === "date_range_reversed")) {
+        throw new BadRequestException({ code: error.message, message: "Check the date range and try again." });
+      }
+      throw error;
+    }
+  }
+
+  @Get("drill-down")
+  async getDrillDown(
+    @CurrentSession() session: SessionContext,
+    @Query("metric") metric: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("branchId") branchId?: string,
+    @Query("serviceKey") serviceKey?: string,
+    @Query("technicianId") technicianId?: string,
+    @Query("workOrderId") workOrderId?: string,
+    @Query("dimension") dimension?: string,
+    @Query("dimensionValue") dimensionValue?: string,
+    @Query("cursor") cursor?: string,
+    @Query("limit") limit?: string,
+  ): Promise<DrillDownResult> {
+    const tenantId = await this.require(session);
+    try {
+      return await this.drillDownService.drillDown(tenantId, resolveScope(session), {
+        metric,
+        from,
+        to,
+        branchId,
+        serviceKey,
+        technicianId,
+        workOrderId,
+        dimension,
+        dimensionValue,
+        cursor,
+        limit: limit ? parseInt(limit, 10) : undefined,
+      });
     } catch (error) {
       if (error instanceof Error && (error.message === "invalid_date_range" || error.message === "date_range_reversed")) {
         throw new BadRequestException({ code: error.message, message: "Check the date range and try again." });

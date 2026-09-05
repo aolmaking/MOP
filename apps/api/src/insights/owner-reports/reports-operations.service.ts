@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { Prisma } from "@mop/database";
+import { Prisma, type WorkOrderStatus } from "@mop/database";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import {
   resolveDateRange,
@@ -8,7 +8,12 @@ import {
   type ReportGranularity,
   type ReportQueryParams,
 } from "./date-range.util";
-import { averageMsByStatus, computeStatusDurations, TERMINAL_STATUSES } from "./lifecycle-duration.util";
+import {
+  averageMsByStatus,
+  computeStatusDurations,
+  TERMINAL_STATUSES,
+  type WorkOrderMeta,
+} from "./lifecycle-duration.util";
 
 export interface StatusDistributionRow {
   readonly status: string;
@@ -36,6 +41,8 @@ export interface TechnicianWorkloadRow {
   readonly reworkCount: number;
   /** Rework as a share of everything this technician completed or reworked -- null when they have done nothing yet. */
   readonly reworkRate: number | null;
+  readonly actualLaborMinutes?: number | null;
+  readonly completionRate?: number | null;
 }
 
 /** One bucket of the volume series -- how many vehicles came in and went out. */
@@ -45,27 +52,34 @@ export interface VolumePoint {
   readonly closed: number;
 }
 
+export interface CycleTimeSummary {
+  readonly averageTotalHours: number | null;
+  readonly averageActiveWorkHours: number | null;
+  readonly averageWaitingHours: number | null;
+  readonly activeTimeRatio: number | null;
+  readonly bottleneckStage: string | null;
+}
+
+export interface DeliverySlaSummary {
+  readonly evaluatedAsOf: string;
+  readonly totalWithPromise: number;
+  readonly deliveredOnTime: number;
+  readonly deliveredLate: number;
+  readonly currentlyOverdue: number;
+  readonly onTimeRate: number | null;
+  readonly averageDelayHours: number | null;
+}
+
+export interface VehicleActivitySummary {
+  readonly distinctVehicles: number;
+  readonly repeatVisits: number;
+  readonly averageOrdersPerVehicle: number | null;
+}
+
 export interface OperationsReport {
   readonly range: { from: string; to: string };
-  /**
-   * Vehicles in and out over time, bucketed by the caller's granularity
-   * (day by default, week or month via `groupBy`).
-   *
-   * The Owner's most basic operational question -- "how many cars did we
-   * do today, and this month" -- had no answer anywhere in Reports: the
-   * page could show a status snapshot and a financial trend, but nothing
-   * counted throughput over time, so a workshop could not tell a busy
-   * week from a quiet one.
-   */
   readonly volume: readonly VolumePoint[];
-  /** Totals for the whole selected range, so the headline needs no client-side summing. */
   readonly volumeTotals: { created: number; closed: number };
-  /**
-   * The bucketing actually used. Stated by the server rather than assumed
-   * by the client, because an unrecognised `groupBy` falls back to day --
-   * a chart that labelled those buckets as months would be reporting a
-   * granularity the figures do not have.
-   */
   readonly granularity: ReportGranularity;
   readonly statusDistribution: readonly StatusDistributionRow[];
   readonly averageTimeInStatus: readonly AverageTimeInStatusRow[];
@@ -75,15 +89,16 @@ export interface OperationsReport {
   readonly reopenedJobs: number;
   readonly cancelledJobs: number;
   readonly cancellationRate: number;
+  readonly cycleTimeSummary?: CycleTimeSummary;
+  readonly deliverySla?: DeliverySlaSummary;
+  readonly vehicleActivity?: VehicleActivitySummary;
 }
 
 /**
  * Operations -- workload, throughput, cycle time, and where jobs
- * actually get stuck. `averageTimeInStatus` is the one metric here that
- * genuinely needs history rather than a snapshot (see
- * lifecycle-duration.util.ts): a work order sitting in WAITING_PARTS
- * right now says nothing about how long jobs *typically* wait there,
- * which is the operationally useful question.
+ * actually get stuck. Reconstructs history from OperationEvents, Task.completedAt,
+ * and immutable creation events to ensure historical truth across branch transfers,
+ * team transfers, and closed historical periods.
  */
 @Injectable()
 export class ReportsOperationsService {
@@ -96,35 +111,37 @@ export class ReportsOperationsService {
 
     const [
       statusDistribution,
-      averageTimeInStatus,
+      timeAndCycle,
       branchComparison,
       technicianWorkload,
-      delayedJobs,
+      deliverySlaResult,
       reopenedJobs,
       cancelledJobs,
       totalInRange,
       volume,
+      vehicleActivity,
     ] = await Promise.all([
       this.statusDistribution(tenantId, branchFilter),
-      this.averageTimeInStatus(tenantId, range, params.branchId),
+      this.timeInStatusAndCycleSummary(tenantId, range, params.branchId),
       this.branchComparison(tenantId, range),
       this.technicianWorkload(tenantId, range),
-      this.delayedJobsCount(tenantId, branchFilter),
+      this.deliverySlaPerformance(tenantId, range, branchFilter),
       this.reopenedJobsCount(tenantId, range),
       this.prisma.workOrder.count({
         where: { tenantId, ...branchFilter, status: "CANCELLED", updatedAt: { gte: range.from, lte: range.to } },
       }),
       this.prisma.workOrder.count({ where: { tenantId, ...branchFilter, createdAt: { gte: range.from, lte: range.to } } }),
       this.volume(tenantId, range, granularity, params.branchId),
+      this.vehicleActivity(tenantId, range, branchFilter),
     ]);
 
     return {
       range: { from: range.from.toISOString(), to: range.to.toISOString() },
       statusDistribution,
-      averageTimeInStatus,
+      averageTimeInStatus: timeAndCycle.averageTimeInStatus,
       branchComparison,
       technicianWorkload,
-      delayedJobs,
+      delayedJobs: deliverySlaResult.delayedJobs,
       reopenedJobs,
       cancelledJobs,
       cancellationRate: safeDivide(cancelledJobs, totalInRange) * 100,
@@ -134,18 +151,16 @@ export class ReportsOperationsService {
         (acc, p) => ({ created: acc.created + p.created, closed: acc.closed + p.closed }),
         { created: 0, closed: 0 },
       ),
+      cycleTimeSummary: timeAndCycle.cycleTimeSummary,
+      deliverySla: deliverySlaResult.deliverySla,
+      vehicleActivity,
     };
   }
 
   /**
    * Created vs closed per bucket.
    *
-   * Bucketed in the database rather than in JS for the same reason the
-   * financial trend is: date_trunc stays correct across timezones and at
-   * real data volume, where pulling every row back to count them does
-   * not. Two queries rather than one because a work order created in one
-   * bucket and closed in another belongs to both series, and a single
-   * grouped query would have to pick one.
+   * Bucketed in the database via date_trunc across timezones.
    */
   private async volume(
     tenantId: string,
@@ -197,72 +212,135 @@ export class ReportsOperationsService {
     return grouped.map((row) => ({ status: row.status, count: row._count._all })).sort((a, b) => b.count - a.count);
   }
 
-  private async averageTimeInStatus(
+  private async timeInStatusAndCycleSummary(
     tenantId: string,
     range: { from: Date; to: Date },
     branchId: string | undefined,
-  ): Promise<AverageTimeInStatusRow[]> {
-    // OperationEvent has no targetId column -- the work order id lives
-    // inside `payload.workOrderId` (see work-order-lifecycle.service.ts's
-    // emit call), so branch scoping has to join back through that id
-    // rather than filtering the query itself.
+  ): Promise<{
+    averageTimeInStatus: AverageTimeInStatusRow[];
+    cycleTimeSummary: CycleTimeSummary;
+  }> {
     const events = await this.prisma.operationEvent.findMany({
       where: {
         tenantId,
         eventKey: "work_order.status_changed",
         createdAt: { gte: range.from, lte: range.to },
+        ...(branchId ? { branchId } : {}),
       },
-      select: { payload: true, createdAt: true },
+      select: { payload: true, createdAt: true, workOrderId: true, branchId: true },
     });
 
-    let statusEvents = events.map((e) => this.toStatusChangeEvent(e));
+    let statusEvents = events.map((e) => {
+      const payload = e.payload as { workOrderId?: string; from?: string; to?: string };
+      return {
+        workOrderId: e.workOrderId ?? payload.workOrderId ?? "unknown",
+        branchId: e.branchId ?? undefined,
+        from: payload.from ?? "UNKNOWN",
+        to: payload.to ?? "UNKNOWN",
+        at: e.createdAt,
+      };
+    });
+
+    const workOrderIds = [...new Set(statusEvents.map((e) => e.workOrderId).filter((id) => id !== "unknown"))];
+    const workOrders = await this.prisma.workOrder.findMany({
+      where: { tenantId, id: { in: workOrderIds }, ...(branchId ? { branchId } : {}) },
+      select: { id: true, createdAt: true, closedAt: true, status: true, branchId: true },
+    });
 
     if (branchId) {
-      const workOrderIds = [...new Set(statusEvents.map((e) => e.workOrderId))];
-      const inBranch = await this.prisma.workOrder.findMany({
-        where: { tenantId, branchId, id: { in: workOrderIds } },
-        select: { id: true },
-      });
-      const allowed = new Set(inBranch.map((w) => w.id));
+      const allowed = new Set(workOrders.map((w) => w.id));
       statusEvents = statusEvents.filter((e) => allowed.has(e.workOrderId));
     }
 
-    const durations = computeStatusDurations(statusEvents, range.to);
+    const metaMap = new Map<string, WorkOrderMeta>(
+      workOrders.map((wo) => [
+        wo.id,
+        {
+          workOrderId: wo.id,
+          createdAt: wo.createdAt,
+          closedAt: wo.closedAt,
+          initialStatus: "DRAFT",
+          branchId: wo.branchId,
+          tenantId,
+        },
+      ]),
+    );
+
+    const durations = computeStatusDurations(statusEvents, range.to, metaMap);
     const averages = averageMsByStatus(durations);
 
-    return Object.entries(averages)
-      // Terminal states are excluded: their slice measures time since the
-      // job finished, which grows with the report range rather than
-      // saying anything about how the workshop runs.
+    const averageTimeInStatus = Object.entries(averages)
       .filter(([status]) => !TERMINAL_STATUSES.includes(status))
       .map(([status, ms]) => ({ status, averageHours: ms / (60 * 60 * 1000) }))
       .sort((a, b) => b.averageHours - a.averageHours);
-  }
 
-  private toStatusChangeEvent(event: { payload: unknown; createdAt: Date }) {
-    const payload = event.payload as { workOrderId?: string; from?: string; to?: string };
-    return {
-      workOrderId: payload.workOrderId ?? "unknown",
-      from: payload.from ?? "UNKNOWN",
-      to: payload.to ?? "UNKNOWN",
-      at: event.createdAt,
-    };
+    let cycleTimeSummary: CycleTimeSummary;
+    if (durations.length === 0) {
+      cycleTimeSummary = {
+        averageTotalHours: null,
+        averageActiveWorkHours: null,
+        averageWaitingHours: null,
+        activeTimeRatio: null,
+        bottleneckStage: null,
+      };
+    } else {
+      const totalDurations = durations.reduce(
+        (acc, d) => ({
+          totalMs: acc.totalMs + d.totalMs,
+          activeMs: acc.activeMs + (d.activeWorkMs ?? 0),
+          waitingMs: acc.waitingMs + (d.waitingMs ?? 0),
+        }),
+        { totalMs: 0, activeMs: 0, waitingMs: 0 },
+      );
+
+      const n = durations.length;
+      const avgTotalH = totalDurations.totalMs / (n * 60 * 60 * 1000);
+      const avgActiveH = totalDurations.activeMs / (n * 60 * 60 * 1000);
+      const avgWaitH = totalDurations.waitingMs / (n * 60 * 60 * 1000);
+
+      cycleTimeSummary = {
+        averageTotalHours: avgTotalH,
+        averageActiveWorkHours: avgActiveH,
+        averageWaitingHours: avgWaitH,
+        activeTimeRatio: avgTotalH > 0 ? avgActiveH / avgTotalH : null,
+        bottleneckStage: averageTimeInStatus.length > 0 ? averageTimeInStatus[0]!.status : null,
+      };
+    }
+
+    return { averageTimeInStatus, cycleTimeSummary };
   }
 
   private async branchComparison(tenantId: string, range: { from: Date; to: Date }): Promise<BranchOperationsRow[]> {
     const branches = await this.prisma.branch.findMany({ where: { tenantId }, select: { id: true, name: true } });
 
+    // Check if we have work_order.created operation events for this tenant
+    const hasCreationEvents = await this.prisma.operationEvent.count({
+      where: { tenantId, eventKey: "work_order.created" },
+    });
+
     return Promise.all(
       branches.map(async (branch) => {
-        const [created, closed] = await Promise.all([
-          this.prisma.workOrder.count({
+        let created: number;
+        if (hasCreationEvents > 0) {
+          // Historical branch attribution via creation events
+          created = await this.prisma.operationEvent.count({
+            where: {
+              tenantId,
+              branchId: branch.id,
+              eventKey: "work_order.created",
+              createdAt: { gte: range.from, lte: range.to },
+            },
+          });
+        } else {
+          created = await this.prisma.workOrder.count({
             where: { tenantId, branchId: branch.id, createdAt: { gte: range.from, lte: range.to } },
-          }),
-          this.prisma.workOrder.findMany({
-            where: { tenantId, branchId: branch.id, status: "CLOSED", closedAt: { gte: range.from, lte: range.to } },
-            select: { createdAt: true, closedAt: true },
-          }),
-        ]);
+          });
+        }
+
+        const closed = await this.prisma.workOrder.findMany({
+          where: { tenantId, branchId: branch.id, status: "CLOSED", closedAt: { gte: range.from, lte: range.to } },
+          select: { createdAt: true, closedAt: true },
+        });
 
         const averageCompletionHours =
           closed.length === 0
@@ -290,13 +368,24 @@ export class ReportsOperationsService {
 
     return Promise.all(
       technicians.map(async (person) => {
-        const [tasksCompleted, activeTasks, reworkCount] = await Promise.all([
-          this.prisma.taskAssignment.count({
+        // Query completed tasks by completion timestamp within range
+        const [completedAssignments, activeTasks, reworkCount, assignedInRange] = await Promise.all([
+          this.prisma.taskAssignment.findMany({
             where: {
               tenantId,
               staffUserId: person.id,
-              task: { status: "DONE" },
-              assignedAt: { gte: range.from, lte: range.to },
+              task: {
+                status: "DONE",
+              },
+              OR: [
+                { task: { completedAt: { gte: range.from, lte: range.to } } },
+                { task: { completedAt: null }, assignedAt: { gte: range.from, lte: range.to } },
+              ],
+            },
+            select: {
+              task: {
+                select: { actualMinutes: true },
+              },
             },
           }),
           this.prisma.taskAssignment.count({
@@ -306,43 +395,160 @@ export class ReportsOperationsService {
             where: {
               tenantId,
               staffUserId: person.id,
-              task: { status: "RETURNED_FOR_REWORK" },
+              task: {
+                status: "RETURNED_FOR_REWORK",
+                updatedAt: { gte: range.from, lte: range.to },
+              },
+            },
+          }),
+          this.prisma.taskAssignment.count({
+            where: {
+              tenantId,
+              staffUserId: person.id,
               assignedAt: { gte: range.from, lte: range.to },
             },
           }),
         ]);
 
-        const denominator = tasksCompleted + reworkCount;
+        const tasksCompleted = completedAssignments.length;
+        const totalActualMinutes = completedAssignments.reduce(
+          (sum, a) => sum + (a.task.actualMinutes ?? 0),
+          0,
+        );
+        const hasAnyTimedTasks = completedAssignments.some((a) => a.task.actualMinutes != null);
+
+        const reworkDenominator = tasksCompleted + reworkCount;
         return {
           staffUserId: person.id,
           fullName: person.fullName,
           tasksCompleted,
           activeTasks,
           reworkCount,
-          reworkRate: denominator === 0 ? null : (reworkCount / denominator) * 100,
+          reworkRate: reworkDenominator === 0 ? null : (reworkCount / reworkDenominator) * 100,
+          actualLaborMinutes: hasAnyTimedTasks ? totalActualMinutes : null,
+          completionRate: assignedInRange === 0 ? null : (tasksCompleted / assignedInRange) * 100,
         };
       }),
     );
   }
 
-  /** Non-terminal work orders past their own promised time -- the SLA clock the Attention Center already uses. */
-  private async delayedJobsCount(tenantId: string, branchFilter: object): Promise<number> {
-    return this.prisma.workOrder.count({
+  /**
+   * Evaluates delivery SLA against asOf = min(range.to, now).
+   * Historical reports evaluate against range.to and remain stable over time.
+   */
+  private async deliverySlaPerformance(
+    tenantId: string,
+    range: { from: Date; to: Date },
+    branchFilter: { branchId?: string },
+  ): Promise<{ delayedJobs: number; deliverySla: DeliverySlaSummary }> {
+    const now = new Date();
+    const asOf = range.to.getTime() < now.getTime() ? range.to : now;
+
+    // 1. Closed jobs in range that had a promisedAt
+    const closedInRange = await this.prisma.workOrder.findMany({
       where: {
         tenantId,
         ...branchFilter,
-        status: { notIn: ["CLOSED", "CANCELLED"] },
-        promisedAt: { lt: new Date() },
+        status: "CLOSED",
+        closedAt: { gte: range.from, lte: range.to },
+        promisedAt: { not: null },
       },
+      select: { id: true, promisedAt: true, closedAt: true },
     });
+
+    let deliveredOnTime = 0;
+    let deliveredLate = 0;
+    let totalDelayMs = 0;
+
+    for (const wo of closedInRange) {
+      if (wo.promisedAt && wo.closedAt) {
+        if (wo.closedAt.getTime() > wo.promisedAt.getTime()) {
+          deliveredLate++;
+          totalDelayMs += wo.closedAt.getTime() - wo.promisedAt.getTime();
+        } else {
+          deliveredOnTime++;
+        }
+      }
+    }
+
+    // 2. Open jobs at asOf that were created <= asOf and not closed before asOf, with promisedAt < asOf
+    const overdueOpenJobs = await this.prisma.workOrder.findMany({
+      where: {
+        tenantId,
+        ...branchFilter,
+        createdAt: { lte: asOf },
+        promisedAt: { lt: asOf },
+        OR: [
+          { status: { notIn: ["CLOSED", "CANCELLED"] as WorkOrderStatus[] } },
+          { closedAt: { gt: asOf } },
+        ],
+      },
+      select: { id: true, promisedAt: true },
+    });
+
+    for (const wo of overdueOpenJobs) {
+      if (wo.promisedAt) {
+        totalDelayMs += asOf.getTime() - wo.promisedAt.getTime();
+      }
+    }
+
+    const currentlyOverdue = overdueOpenJobs.length;
+    const totalDelayed = deliveredLate + currentlyOverdue;
+    const totalDelivered = deliveredOnTime + deliveredLate;
+    const onTimeRate = totalDelivered === 0 ? null : (deliveredOnTime / totalDelivered) * 100;
+    const averageDelayHours =
+      totalDelayed === 0 ? null : totalDelayMs / (totalDelayed * 60 * 60 * 1000);
+
+    return {
+      delayedJobs: totalDelayed,
+      deliverySla: {
+        evaluatedAsOf: asOf.toISOString(),
+        totalWithPromise: closedInRange.length + overdueOpenJobs.length,
+        deliveredOnTime,
+        deliveredLate,
+        currentlyOverdue,
+        onTimeRate,
+        averageDelayHours,
+      },
+    };
   }
 
-  /**
-   * `relinkedFromWorkOrderId` is how this codebase already models "this
-   * work order continues one that was closed" (see schema comment on
-   * WorkOrder) -- a reopened job is exactly one whose relink target
-   * closed and was then relinked, within this range.
-   */
+  private async vehicleActivity(
+    tenantId: string,
+    range: { from: Date; to: Date },
+    branchFilter: { branchId?: string },
+  ): Promise<VehicleActivitySummary> {
+    const workOrders = await this.prisma.workOrder.findMany({
+      where: {
+        tenantId,
+        ...branchFilter,
+        createdAt: { gte: range.from, lte: range.to },
+      },
+      select: { assetId: true },
+    });
+
+    const ordersByVehicle = new Map<string, number>();
+    for (const wo of workOrders) {
+      if (!wo.assetId) continue;
+      ordersByVehicle.set(wo.assetId, (ordersByVehicle.get(wo.assetId) ?? 0) + 1);
+    }
+
+    const distinctVehicles = ordersByVehicle.size;
+    let repeatVisits = 0;
+    for (const count of ordersByVehicle.values()) {
+      if (count > 1) {
+        repeatVisits += count - 1;
+      }
+    }
+
+    return {
+      distinctVehicles,
+      repeatVisits,
+      averageOrdersPerVehicle:
+        distinctVehicles === 0 ? null : workOrders.length / distinctVehicles,
+    };
+  }
+
   private async reopenedJobsCount(tenantId: string, range: { from: Date; to: Date }): Promise<number> {
     return this.prisma.workOrder.count({
       where: { tenantId, relinkedFromWorkOrderId: { not: null }, createdAt: { gte: range.from, lte: range.to } },

@@ -62,12 +62,38 @@ export interface TechnicianWorkloadRow {
   readonly activeTasks: number;
   readonly reworkCount: number;
   readonly reworkRate: number | null;
+  readonly actualLaborMinutes?: number | null;
+  readonly completionRate?: number | null;
 }
 
 export interface VolumePoint {
   readonly bucket: string;
   readonly created: number;
   readonly closed: number;
+}
+
+export interface CycleTimeSummary {
+  readonly averageTotalHours: number | null;
+  readonly averageActiveWorkHours: number | null;
+  readonly averageWaitingHours: number | null;
+  readonly activeTimeRatio: number | null;
+  readonly bottleneckStage: string | null;
+}
+
+export interface DeliverySlaSummary {
+  readonly evaluatedAsOf: string;
+  readonly totalWithPromise: number;
+  readonly deliveredOnTime: number;
+  readonly deliveredLate: number;
+  readonly currentlyOverdue: number;
+  readonly onTimeRate: number | null;
+  readonly averageDelayHours: number | null;
+}
+
+export interface VehicleActivitySummary {
+  readonly distinctVehicles: number;
+  readonly repeatVisits: number;
+  readonly averageOrdersPerVehicle: number | null;
 }
 
 export interface OperationsReport {
@@ -83,6 +109,9 @@ export interface OperationsReport {
   readonly reopenedJobs: number;
   readonly cancelledJobs: number;
   readonly cancellationRate: number;
+  readonly cycleTimeSummary?: CycleTimeSummary;
+  readonly deliverySla?: DeliverySlaSummary;
+  readonly vehicleActivity?: VehicleActivitySummary;
 }
 
 export interface TrendPoint {

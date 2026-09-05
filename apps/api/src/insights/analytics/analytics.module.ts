@@ -13,6 +13,14 @@ import { DecisionsAnalyticsService } from "./decisions-analytics.service";
 import { FeatureAdoptionAnalyticsService } from "./feature-adoption-analytics.service";
 import { AnalystSavedViewsService } from "./saved-views.service";
 import { AnalyticsExportService } from "./analytics-export.service";
+import { QualityAnalyticsService } from "./quality-analytics.service";
+import { RootCauseAnalysisService } from "./root-cause-analysis.service";
+import { UniversalDrillDownService } from "./universal-drill-down.service";
+import { QualityDrillDownResolver } from "./resolvers/quality-drill-down.resolver";
+import { DecisionDrillDownResolver } from "./resolvers/decision-drill-down.resolver";
+import { FinancialDrillDownResolver } from "./resolvers/financial-drill-down.resolver";
+import { OperationsDrillDownResolver } from "./resolvers/operations-drill-down.resolver";
+import { RootCauseDrillDownResolver } from "./resolvers/root-cause-drill-down.resolver";
 
 @Module({
   imports: [DatabaseModule, AuthModule, AccessModule, AuditModule, InventoryModule],
@@ -26,6 +34,15 @@ import { AnalyticsExportService } from "./analytics-export.service";
     FeatureAdoptionAnalyticsService,
     AnalystSavedViewsService,
     AnalyticsExportService,
+    QualityAnalyticsService,
+    RootCauseAnalysisService,
+    UniversalDrillDownService,
+    QualityDrillDownResolver,
+    DecisionDrillDownResolver,
+    FinancialDrillDownResolver,
+    OperationsDrillDownResolver,
+    RootCauseDrillDownResolver,
   ],
+  exports: [QualityAnalyticsService, RootCauseAnalysisService, UniversalDrillDownService],
 })
 export class AnalyticsModule {}

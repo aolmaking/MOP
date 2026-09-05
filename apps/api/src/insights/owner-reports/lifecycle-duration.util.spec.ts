@@ -34,7 +34,43 @@ describe("computeStatusDurations", () => {
     expect(results).toHaveLength(2);
   });
 
-  it("returns an empty array for no events, never throws", () => {
+  it("preserves initial status duration before the first recorded transition when meta is supplied", () => {
+    const createdAt = new Date("2026-01-01T08:00:00Z");
+    const registeredAt = new Date("2026-01-01T09:30:00Z"); // 1.5h in DRAFT
+    const inProgressAt = new Date("2026-01-01T11:00:00Z"); // 1.5h in REGISTERED
+    const closedAt = new Date("2026-01-01T14:00:00Z"); // 3.0h in IN_PROGRESS
+
+    const events = [
+      { workOrderId: "wo-initial", from: "DRAFT", to: "REGISTERED", at: registeredAt },
+      { workOrderId: "wo-initial", from: "REGISTERED", to: "IN_PROGRESS", at: inProgressAt },
+      { workOrderId: "wo-initial", from: "IN_PROGRESS", to: "CLOSED", at: closedAt },
+    ];
+
+    const metas = [{ workOrderId: "wo-initial", createdAt, initialStatus: "DRAFT", closedAt }];
+    const [result] = computeStatusDurations(events, new Date("2026-01-02T00:00:00Z"), metas);
+
+    expect(result).toBeDefined();
+    expect(result!.msByStatus["DRAFT"]).toBe(1.5 * HOUR);
+    expect(result!.msByStatus["REGISTERED"]).toBe(1.5 * HOUR);
+    expect(result!.msByStatus["IN_PROGRESS"]).toBe(3.0 * HOUR);
+    expect(result!.activeWorkMs).toBe(3.0 * HOUR);
+    expect(result!.waitingMs).toBe(3.0 * HOUR); // DRAFT (1.5h) + REGISTERED (1.5h)
+    expect(result!.bottleneckStatus).toBe("IN_PROGRESS");
+  });
+
+  it("computes duration for work orders that have zero events yet", () => {
+    const createdAt = new Date("2026-01-01T08:00:00Z");
+    const asOf = new Date("2026-01-01T12:00:00Z");
+    const metas = [{ workOrderId: "wo-new", createdAt, initialStatus: "DRAFT" }];
+
+    const [result] = computeStatusDurations([], asOf, metas);
+    expect(result).toBeDefined();
+    expect(result!.msByStatus["DRAFT"]).toBe(4 * HOUR);
+    expect(result!.waitingMs).toBe(4 * HOUR);
+    expect(result!.activeWorkMs).toBe(0);
+  });
+
+  it("returns an empty array for no events and no metas, never throws", () => {
     expect(computeStatusDurations([], new Date())).toEqual([]);
   });
 });

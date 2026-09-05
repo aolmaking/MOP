@@ -1,0 +1,205 @@
+<div class="drawer-backdrop" (click)="closed.emit()"></div>
+
+<div class="drawer-panel" appDismissOnEscape (dismiss)="closed.emit()" role="dialog" aria-modal="true">
+  <!-- Header -->
+  <header class="drawer-header">
+    <div class="header-main">
+      <div class="metric-meta">
+        <span class="eyebrow">Universal Evidence & Drill-Down</span>
+        @if (data(); as d) {
+          <h2>{{ d.metric.label }}</h2>
+          <div class="metric-value-row">
+            <span class="kpi-value">{{ d.metric.value !== null ? d.metric.value : 'N/A' }}</span>
+            <span class="kpi-unit">{{ d.metric.unit }}</span>
+            <span class="kpi-period">{{ d.metric.period.from | date:'mediumDate' }} – {{ d.metric.period.to | date:'mediumDate' }}</span>
+            <span class="count-badge">{{ d.integrity.totalMatchingRecords }} matching record(s)</span>
+          </div>
+        } @else {
+          <h2>Loading Metric Evidence...</h2>
+        }
+      </div>
+      <div class="header-actions">
+        <button type="button" appButton="secondary" (click)="exportCsv()" [disabled]="state() !== 'ready'">
+          Export CSV
+        </button>
+        <button type="button" class="close-button" (click)="closed.emit()" aria-label="Close drawer">
+          &times;
+        </button>
+      </div>
+    </div>
+
+    <!-- Data Honesty Disclaimers -->
+    @if (data(); as d) {
+      @if (d.integrity.dataHonestyDisclaimer) {
+        <div class="honesty-banner">
+          <span class="badge fact">Evidence Note</span>
+          <p>{{ d.integrity.dataHonestyDisclaimer }}</p>
+        </div>
+      }
+      @if (d.integrity.sampleSizeProtected) {
+        <div class="honesty-banner warning">
+          <span class="badge warning">Sample Size Protection</span>
+          <p>Technician has fewer than 5 completed tasks. Statistical rankings are suppressed to prevent misleading attribution.</p>
+        </div>
+      }
+      @if (d.integrity.financialAttributionNote) {
+        <div class="honesty-banner info">
+          <span class="badge info">Financial Attribution Note</span>
+          <p>{{ d.integrity.financialAttributionNote }}</p>
+        </div>
+      }
+    }
+
+    <!-- Dimension Breakdown Tabs -->
+    @if (data(); as d) {
+      @if (d.dimensions && d.dimensions.length > 0) {
+        <div class="dimension-tabs">
+          <button
+            type="button"
+            class="tab-button"
+            [class.active]="!selectedDimensionValue()"
+            (click)="setDimensionFilter(undefined, undefined)">
+            All ({{ d.integrity.totalMatchingRecords }})
+          </button>
+          @for (dim of d.dimensions; track dim.value) {
+            <button
+              type="button"
+              class="tab-button"
+              [class.active]="selectedDimensionValue() === dim.value"
+              (click)="setDimensionFilter(dim.key, dim.value)">
+              {{ dim.label }}: {{ dim.count }}
+            </button>
+          }
+        </div>
+      }
+    }
+  </header>
+
+  <!-- Body Content -->
+  <div class="drawer-body">
+    @switch (state()) {
+      @case ('loading') {
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Resolving authoritative domain records and events...</p>
+        </div>
+      }
+
+      @case ('error') {
+        <div class="error-container">
+          <app-error-banner [error]="error()" />
+          <button type="button" appButton="secondary" (click)="load()">Retry</button>
+        </div>
+      }
+
+      @case ('ready') {
+        @if (data(); as d) {
+          @if (d.records.length === 0) {
+            <div class="empty-state">
+              <p>No matching evidence records found for this period and filter selection.</p>
+            </div>
+          } @else {
+            <div class="records-table-container">
+              <table class="records-table">
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>Identifier / Label</th>
+                    <th>Occurred At</th>
+                    <th>Status</th>
+                    <th>Key Attributes</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (record of d.records; track record.entityId) {
+                    <tr class="record-row" [class.expanded]="isExpanded(record.entityId)">
+                      <td>
+                        <span class="entity-badge">{{ record.entityType }}</span>
+                      </td>
+                      <td>
+                        <div class="record-main-label">
+                          <strong>{{ record.label }}</strong>
+                          <span class="entity-id-sub">ID: {{ record.entityId | slice:0:12 }}...</span>
+                        </div>
+                      </td>
+                      <td>{{ record.occurredAt | date:'short' }}</td>
+                      <td>
+                        @if (record.status) {
+                          <span class="status-pill">{{ record.status }}</span>
+                        } @else {
+                          <span class="muted">-</span>
+                        }
+                      </td>
+                      <td>
+                        <div class="attributes-preview">
+                          @for (entry of record.attributes | keyvalue; track entry.key) {
+                            @if (entry.value !== null && entry.value !== undefined && entry.key !== 'services') {
+                              <span class="attr-tag">
+                                <strong>{{ entry.key }}:</strong> {{ entry.value }}
+                              </span>
+                            }
+                          }
+                        </div>
+                      </td>
+                      <td class="action-cell">
+                        @if (record.timeline && record.timeline.length > 0) {
+                          <button type="button" class="btn-text" (click)="toggleExpand(record.entityId)">
+                            {{ isExpanded(record.entityId) ? 'Hide Events' : 'Timeline (' + record.timeline.length + ')' }}
+                          </button>
+                        }
+                        @if (record.workOrderId) {
+                          <button type="button" class="btn-text dossier-btn" (click)="onOpenDossier(record.workOrderId)">
+                            View Dossier
+                          </button>
+                        }
+                      </td>
+                    </tr>
+
+                    <!-- Expandable Timeline Row -->
+                    @if (isExpanded(record.entityId) && record.timeline) {
+                      <tr class="timeline-row">
+                        <td colspan="6">
+                          <div class="timeline-panel">
+                            <h4>Immutable Event History</h4>
+                            <div class="timeline-list">
+                              @for (ev of record.timeline; track ev.id) {
+                                <div class="timeline-item">
+                                  <div class="timeline-dot"></div>
+                                  <div class="timeline-content">
+                                    <div class="timeline-header">
+                                      <strong>{{ ev.label }}</strong>
+                                      <span class="event-time">{{ ev.timestamp | date:'medium' }}</span>
+                                    </div>
+                                    <span class="event-key">Event: {{ ev.eventKey }}</span>
+                                    @if (ev.payload) {
+                                      <div class="event-payload">
+                                        <code>{{ ev.payload | json }}</code>
+                                      </div>
+                                    }
+                                  </div>
+                                </div>
+                              }
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+              </table>
+
+              @if (d.nextCursor) {
+                <div class="load-more-container">
+                  <button type="button" appButton="secondary" (click)="loadMore()" [disabled]="loadingMore()">
+                    {{ loadingMore() ? 'Loading More Records...' : 'Load More Records' }}
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        }
+      }
+    }
+  </div>
+</div>

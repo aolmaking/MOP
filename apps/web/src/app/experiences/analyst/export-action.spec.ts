@@ -70,4 +70,35 @@ describe('ExportAction', () => {
       'danger',
     );
   });
+
+  it('forwards active date range and groupBy parameters when provided', () => {
+    const blob = new Blob(['a,b\n1,2'], { type: 'text/csv' });
+    const api = { exportCsv: vi.fn().mockReturnValue(of(blob)) };
+    const access = { can: vi.fn().mockReturnValue(of(true)) };
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: AnalystApi, useValue: api },
+        { provide: AccessApi, useValue: access },
+        { provide: ToastService, useValue: { show: vi.fn() } },
+      ],
+    });
+
+    const fixture = TestBed.createComponent(ExportAction);
+    fixture.componentRef.setInput('sourcePage', 'OPERATIONS');
+    fixture.componentRef.setInput('params', {
+      range: { from: '2026-01-01', to: '2026-01-31' },
+      groupBy: 'week',
+    });
+    fixture.detectChanges();
+
+    const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button');
+    expect(button).not.toBeNull();
+    button!.click();
+
+    expect(api.exportCsv).toHaveBeenCalledWith('OPERATIONS', {
+      from: '2026-01-01',
+      to: '2026-01-31',
+      groupBy: 'week',
+    });
+  });
 });

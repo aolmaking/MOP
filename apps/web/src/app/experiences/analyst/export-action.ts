@@ -21,6 +21,7 @@ import { AnalystApi, type AnalystSavedViewSourcePage } from './analyst.api';
 })
 export class ExportAction {
   readonly sourcePage = input.required<AnalystSavedViewSourcePage>();
+  readonly params = input<{ from?: string; to?: string; groupBy?: string; range?: { from?: string; to?: string } | null } | null>(null);
 
   private readonly api = inject(AnalystApi);
   private readonly access = inject(AccessApi);
@@ -41,8 +42,20 @@ export class ExportAction {
     if (this.exporting()) return;
 
     this.exporting.set(true);
-    this.api
-      .exportCsv(this.sourcePage())
+    const p = this.params();
+    const query = p
+      ? {
+          from: p.from ?? p.range?.from ?? undefined,
+          to: p.to ?? p.range?.to ?? undefined,
+          groupBy: p.groupBy,
+        }
+      : undefined;
+
+    const call$ = query
+      ? this.api.exportCsv(this.sourcePage(), query)
+      : this.api.exportCsv(this.sourcePage());
+
+    call$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (blob) => {
