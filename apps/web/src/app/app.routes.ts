@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './identity/auth.guard';
+import { rootRedirectGuard } from './identity/root-redirect.guard';
 import { TEAM_API_BASE_PATH, TeamApi } from './experiences/branch-manager/team/team.api';
 
 export const routes: Routes = [
@@ -411,7 +412,7 @@ export const routes: Routes = [
   {
     // The fallback frame, for roles whose own shell is not built yet.
     path: '',
-    canActivate: [authGuard],
+    canActivate: [authGuard, rootRedirectGuard],
     loadComponent: () => import('./experiences/home/shell/shell').then((m) => m.Shell),
     children: [
       { path: '', loadComponent: () => import('./experiences/home/placeholder-home').then((m) => m.PlaceholderHome) },

@@ -49,7 +49,8 @@ export class LoginPage {
       // for their role. Roles whose home is not built yet fall through to
       // the placeholder, which names the phase that builds it.
       const redirectTo = this.route.snapshot.queryParamMap.get('redirectTo');
-      const target = redirectTo && redirectTo !== '/login' ? redirectTo : landingRouteFor(session);
+      const target =
+        redirectTo && redirectTo !== '/login' && redirectTo !== '/' ? redirectTo : landingRouteFor(session);
       await this.router.navigateByUrl(target);
     } catch (err) {
       const presented = err as PresentedError;

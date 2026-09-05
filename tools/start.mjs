@@ -344,10 +344,12 @@ async function main() {
   // Step 4: Dev server launch
   logStep(4, 4, "Launching API (:4000) and Web (:4200) servers...\n");
 
-  const child = spawn("node", ["tools/pnpm.mjs", "dev"], {
+  // Launch dev servers using pnpm directly
+  const child = spawn("pnpm", ["-r", "--filter", "@mop/api", "--filter", "@mop/web", "run", "start:dev"], {
     cwd: ROOT,
     stdio: "inherit",
     env: { ...process.env, PATH: process.env.PATH },
+    shell: true,
   });
 
   let webReady = false;

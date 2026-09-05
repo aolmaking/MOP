@@ -76,6 +76,19 @@ describe('LoginPage', () => {
     expect(navigateSpy).toHaveBeenCalledWith('/some/protected/page');
   });
 
+  it('navigates to the role landing page when redirectTo is root /', async () => {
+    const authStoreStub = configure({ redirectTo: '/' });
+    authStoreStub.login.mockResolvedValue({ role: 'TECHNICIAN', landingPage: 'technician-home' } as SessionContext);
+    const fixture = TestBed.createComponent(LoginPage);
+    fixture.detectChanges();
+    const navigateSpy = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+
+    fixture.componentInstance['form'].setValue({ email: 'tech@example.com', password: 'secret123' });
+    await fixture.componentInstance.submit();
+
+    expect(navigateSpy).toHaveBeenCalledWith('/tech');
+  });
+
   it('shows the presented error inline and does not navigate on failure', async () => {
     const authStoreStub = configure();
     authStoreStub.login.mockRejectedValue({ code: 'unauthorized', message: 'Incorrect email or password', httpStatus: 401 });

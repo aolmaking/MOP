@@ -10,7 +10,7 @@
     "start": "node tools/start.mjs",
     "stop": "node tools/stop.mjs",
     "doctor": "node tools/doctor.mjs",
-    "dev": "node tools/pnpm.mjs --parallel --filter @mop/api --filter @mop/web run start:dev",
+    "dev": "node tools/pnpm.mjs -r --filter @mop/api --filter @mop/web run start:dev",
     "db:generate": "node tools/pnpm.mjs --filter @mop/database run generate",
     "db:migrate": "node tools/pnpm.mjs --filter @mop/database run migrate:dev",
     "db:deploy": "node tools/pnpm.mjs --filter @mop/database run migrate:deploy",
