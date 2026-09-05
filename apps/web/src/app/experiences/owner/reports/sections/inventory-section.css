@@ -36,3 +36,8 @@
   color: var(--text-faint);
   font-size: var(--text-xs);
 }
+
+/* MOP page-scoped visual polish — inventory */
+:where(.inventory) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}

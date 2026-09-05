@@ -75,3 +75,8 @@
   border: 2px solid var(--border-strong);
   color: var(--text);
 }
+
+/* MOP page-scoped visual polish — decide */
+:where(.decide) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}

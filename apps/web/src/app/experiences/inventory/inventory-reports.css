@@ -331,3 +331,8 @@ a.bar-label:focus-visible {
   font-size: var(--text-base);
   max-inline-size: 44rem;
 }
+
+/* MOP page-scoped visual polish — reports */
+:where(.reports) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}

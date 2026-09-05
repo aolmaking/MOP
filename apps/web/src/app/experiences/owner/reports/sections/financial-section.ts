@@ -23,8 +23,8 @@ export class FinancialSection {
   );
 
   protected readonly trendSeries = computed<TrendSeries[]>(() => [
-    { label: 'Revenue', color: '#e0574a', values: this.data().trend.map((p) => p.revenue) },
-    { label: 'Collected', color: '#46a86a', values: this.data().trend.map((p) => p.collected) },
+    { label: 'Revenue', color: '#ff6b70', values: this.data().trend.map((p) => p.revenue) },
+    { label: 'Collected', color: '#61b8ff', values: this.data().trend.map((p) => p.collected) },
   ]);
 
   // Each detail below states the figure the bar cannot: the count behind

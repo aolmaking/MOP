@@ -1,120 +1,103 @@
-/*
- * Register as Customer.
- *
- * Centred and narrow, no shell -- the same visual language Login and
- * Invite Accept already use for the same reason: a person arriving from
- * outside with one thing to do and no navigation to offer them yet.
- */
-
+/* Register — guided public account setup. */
+.register-page {
+  display: grid;
+  grid-template-columns: minmax(12rem, 18rem) minmax(18rem, 28rem);
+  align-items: center;
+  justify-content: center;
+  gap: clamp(var(--space-6), 8vw, 7rem);
+  min-block-size: 100vh;
+  padding: clamp(var(--space-5), 7vw, var(--space-8));
+  background: radial-gradient(circle at 85% 45%, rgb(97 184 255 / 0.08), transparent 25rem), transparent;
+}
+.register-aside { display: flex; flex-direction: column; gap: var(--space-5); }
+.public-mark {
+  color: var(--white);
+  font-family: var(--font-mono);
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+.public-kicker {
+  color: var(--brand-text);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+  line-height: 1.45;
+  text-transform: uppercase;
+}
+.setup-steps { display: flex; flex-direction: column; gap: var(--space-3); }
+.setup-step { display: flex; align-items: center; gap: var(--space-3); color: var(--text-faint); font-size: var(--text-sm); }
+.setup-step b {
+  display: grid;
+  place-items: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.setup-step--active { color: var(--text); }
+.setup-step--active b {
+  border-color: var(--brand);
+  background: var(--brand-muted);
+  color: var(--brand-text);
+  box-shadow: 0 0 0 5px rgb(226 45 54 / 0.1);
+}
 .register {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  max-width: 26rem;
-  margin: var(--space-8) auto;
-  padding: var(--space-6) var(--space-5);
+  max-width: 28rem;
+  margin: 0;
+  padding: clamp(var(--space-5), 5vw, var(--space-7));
   background: var(--surface);
   border: 1px solid var(--border);
   border-block-start: 4px solid var(--brand);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
 }
-
-.head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.title {
-  color: var(--white);
-  font-size: var(--text-lg);
-  font-weight: 600;
-  line-height: var(--leading-tight);
-}
-
-.body {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
-}
-
-.error {
-  padding: var(--space-3);
-  background: var(--danger-bg);
-  border-inline-start: 3px solid var(--danger);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.field-label {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
+.head { display: flex; flex-direction: column; gap: var(--space-2); }
+.title { color: var(--white); font-size: var(--text-lg); font-weight: 600; line-height: var(--leading-tight); letter-spacing: -0.02em; }
+.body { color: var(--text-muted); font-size: var(--text-sm); line-height: var(--leading-normal); }
+.error { padding: var(--space-3); background: var(--danger-bg); border-inline-start: 3px solid var(--danger); border-radius: var(--radius-sm); font-size: var(--text-sm); }
+.field { display: flex; flex-direction: column; gap: var(--space-1); }
+.field-label { color: var(--text-muted); font-size: var(--text-sm); font-weight: 600; }
 .field input {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3);
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   color: var(--text);
   font-size: var(--text-base);
 }
-
-.field input:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
-  border-color: var(--focus-ring);
-}
-
-.hint {
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-}
-
-.hint--met {
-  color: var(--success);
-}
-
+.field input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; border-color: var(--focus-ring); }
+.hint { color: var(--text-faint); font-size: var(--text-xs); }
+.hint--met { color: var(--success); }
 .primary {
   padding: var(--space-3) var(--space-4);
   background: var(--accent);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   color: var(--on-accent);
   font-size: var(--text-base);
   font-weight: 600;
   cursor: pointer;
+  box-shadow: 0 8px 20px rgb(226 45 54 / 0.22);
+}
+.primary:hover:not(:disabled) { background: var(--accent-hover); box-shadow: 0 12px 26px rgb(226 45 54 / 0.32); transform: translateY(-2px); }
+.primary:disabled { opacity: 0.5; cursor: default; }
+.link { font-size: var(--text-sm); }
+.link-button { padding: 0; background: none; border: none; color: var(--accent); font-size: inherit; text-decoration: underline; cursor: pointer; }
+@media (max-width: 760px) {
+  .register-page { grid-template-columns: 1fr; align-content: center; gap: var(--space-5); }
+  .register-aside { gap: var(--space-3); }
+  .setup-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); }
+  .setup-step { align-items: flex-start; flex-direction: column; gap: var(--space-2); font-size: var(--text-xs); }
 }
 
-.primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-
-.primary:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.link {
-  font-size: var(--text-sm);
-}
-
-/* An inline text-styled button ("Not your workshop?") -- a real button
-   for keyboard/screen-reader semantics, styled to read as a link since
-   it sits inside a sentence. */
-.link-button {
-  padding: 0;
-  background: none;
-  border: none;
-  color: var(--accent);
-  font-size: inherit;
-  text-decoration: underline;
-  cursor: pointer;
+/* MOP page-scoped visual polish — register-page */
+:where(.register-page) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
 }

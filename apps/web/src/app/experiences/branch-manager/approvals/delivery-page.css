@@ -187,3 +187,8 @@
   font-size: var(--text-base);
   font-weight: 500;
 }
+
+/* MOP page-scoped visual polish — delivery */
+:where(.delivery) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}

@@ -1,4 +1,14 @@
-<section class="register">
+<div class="register-page">
+  <aside class="register-aside" aria-label="MOP account setup introduction">
+    <span class="public-mark">MOP</span>
+    <p class="public-kicker">A better day in the workshop starts here</p>
+    <div class="setup-steps" aria-label="Account setup steps">
+      <span class="setup-step setup-step--active"><b>01</b><span>Connect your workshop</span></span>
+      <span class="setup-step"><b>02</b><span>Tell us about you</span></span>
+      <span class="setup-step"><b>03</b><span>Start with confidence</span></span>
+    </div>
+  </aside>
+  <section class="register">
   @switch (step()) {
     @case ('code') {
       <header class="head">
@@ -87,3 +97,4 @@
     }
   }
 </section>
+</div>

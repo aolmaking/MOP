@@ -155,3 +155,8 @@
   background: var(--accent-muted);
   border-radius: var(--radius-sm);
 }
+
+/* MOP page-scoped visual polish — page-title */
+:where(.page-title) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}

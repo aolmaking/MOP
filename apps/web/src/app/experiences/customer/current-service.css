@@ -99,3 +99,8 @@
   flex-basis: 100%;
   margin-block-start: var(--space-2);
 }
+
+/* MOP page-scoped visual polish — service */
+:where(.service) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}

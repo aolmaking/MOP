@@ -102,3 +102,8 @@
   grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
   gap: var(--space-3);
 }
+
+/* MOP page-scoped visual polish — analytics-page */
+:where(.analytics-page) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}

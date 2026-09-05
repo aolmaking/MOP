@@ -348,3 +348,8 @@
   color: var(--text-muted);
   font-size: var(--text-base);
 }
+
+/* MOP page-scoped visual polish — catalog */
+:where(.catalog) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}

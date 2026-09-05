@@ -121,3 +121,8 @@
 .shortcut:hover {
   border-color: var(--accent);
 }
+
+/* MOP page-scoped visual polish — analyst-home */
+:where(.analyst-home) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}

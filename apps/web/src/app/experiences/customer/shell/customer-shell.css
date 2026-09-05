@@ -114,3 +114,8 @@
     justify-content: center;
   }
 }
+
+/* MOP page-scoped visual polish — portal */
+:where(.portal) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}

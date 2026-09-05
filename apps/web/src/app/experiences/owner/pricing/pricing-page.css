@@ -178,3 +178,8 @@
   gap: var(--space-2);
   margin-block-start: var(--space-2);
 }
+
+/* MOP page-scoped visual polish — pricing */
+:where(.pricing) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}

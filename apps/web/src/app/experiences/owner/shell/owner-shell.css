@@ -221,3 +221,8 @@
     padding: var(--space-4) var(--space-3);
   }
 }
+
+/* MOP page-scoped visual polish — rail-shell */
+:where(.rail-shell) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}
