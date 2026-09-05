@@ -24,6 +24,12 @@ export interface DefinitionSummary {
   readonly fields: readonly FieldSpec[];
 }
 
+export interface SpecializationContext {
+  readonly tenantId: string;
+  readonly specializations: readonly string[];
+  readonly definitions: readonly DefinitionSummary[];
+}
+
 export interface EntrySummary {
   readonly id: string;
   readonly definitionId: string;
@@ -96,14 +102,54 @@ export class SpecializationService {
 
   async listDefinitions(
     tenantId: string,
-    category: string,
-    kind: SpecializationKind,
+    category?: string,
+    kind?: SpecializationKind,
+    tx?: Prisma.TransactionClient,
   ): Promise<readonly DefinitionSummary[]> {
-    const rows = await this.prisma.specializationDefinition.findMany({
-      where: { tenantId, category: category as never, kind: kind as never, isActive: true },
+    const client = tx ?? this.prisma;
+    const where: Prisma.SpecializationDefinitionWhereInput = {
+      tenantId,
+      isActive: true,
+    };
+    if (category) {
+      where.category = category as never;
+    }
+    if (kind) {
+      where.kind = kind as never;
+    }
+    const rows = await client.specializationDefinition.findMany({
+      where,
       orderBy: { name: "asc" },
     });
     return rows.map((row) => this.toSummary(row));
+  }
+
+  async assignedSpecializations(
+    tenantId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<readonly string[]> {
+    const client = tx ?? this.prisma;
+    const rows = await client.workshopSpecialization.findMany({
+      where: { tenantId },
+      orderBy: { specializationKey: "asc" },
+      select: { specializationKey: true },
+    });
+    return rows.map((r) => r.specializationKey);
+  }
+
+  async resolveSpecializationContext(
+    tenantId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<SpecializationContext> {
+    const [specializations, definitions] = await Promise.all([
+      this.assignedSpecializations(tenantId, tx),
+      this.listDefinitions(tenantId, undefined, undefined, tx),
+    ]);
+    return {
+      tenantId,
+      specializations,
+      definitions,
+    };
   }
 
   /**

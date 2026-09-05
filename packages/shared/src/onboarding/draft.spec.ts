@@ -13,7 +13,7 @@ import { applicableResponsibilities, grantsForResponsibilities, orphanedCapabili
 import { validateDraft } from "./validator";
 import { CAPABILITY_KEYS } from "../capabilities/types";
 import { CAPABILITY_PRESENTATION } from "./presentation";
-import { SPECIALIZATION_PACKS, definitionsSeededBy, packsForCategory } from "./specialization-packs";
+import { SPECIALIZATION_PACKS, canonicalSpecializationKey, definitionsSeededBy, packsForCategory, specializationPack } from "./specialization-packs";
 import { workingDaysFor } from "../platform/countries";
 
 /**
@@ -483,3 +483,132 @@ describe("a workshop is never created with nowhere to take a job in", () => {
     expect(finding?.message).toContain("will be created");
   });
 });
+
+describe("plan capability entitlement validation", () => {
+  it("capability consequence exposes semantic type, supported statuses, and governing module", () => {
+    const inventory = capabilityConsequence("INVENTORY");
+    expect(inventory.type).toBe("BOOLEAN");
+    expect(inventory.governingModule).toBe("INVENTORY");
+    expect(inventory.supportedStatuses).toContain("ENABLED");
+    expect(inventory.supportedStatuses).toContain("DISABLED");
+    expect(inventory.runtimeConsumers).toContain("PartRequestService");
+
+    const finance = capabilityConsequence("FINANCE_CORE");
+    expect(finance.type).toBe("MODE_BASED");
+    expect(finance.governingModule).toBe("FINANCE");
+    expect(finance.supportedStatuses).toContain("EXTERNAL");
+  });
+
+  it("refuses an active capability when the plan does not include its governing module", () => {
+    // Draft enables INVENTORY, but plan only allows OPERATIONS, ORGANIZATION, AUDIT, REPORTS
+    const draft = completeDraft({
+      capabilities: { MULTI_BRANCH: "DISABLED", MULTI_WAREHOUSE: "DISABLED" },
+      warehouses: [{ name: "Main store", code: "WH1", branchCodes: [] }],
+      responsibilities: { INVENTORY: "TENANT_OWNER" },
+    });
+
+    const planLimits = {
+      maxBranches: 2,
+      maxUsers: 5,
+      maxWarehouses: 2,
+      allowedModules: ["ORGANIZATION", "OPERATIONS", "AUDIT", "REPORTS"],
+    };
+
+    const result = validateDraft(draft, planLimits);
+    const finding = result.findings.find((f) => f.code === "CAPABILITY_NOT_PERMITTED_BY_PLAN");
+    expect(finding).toBeDefined();
+    expect(finding?.severity).toBe("BLOCKER");
+    expect(finding?.subject).toBe("INVENTORY");
+    expect(finding?.message).toContain("INVENTORY requires the INVENTORY module");
+    expect(result.publishable).toBe(false);
+  });
+
+  it("passes when the capability is disabled even if the plan does not include its module", () => {
+    const draft = completeDraft({
+      capabilities: {
+        INVENTORY: "DISABLED",
+        PART_RETURNS: "DISABLED",
+        MULTI_BRANCH: "DISABLED",
+        MULTI_WAREHOUSE: "DISABLED",
+      },
+      warehouses: [],
+    });
+
+    // Plan includes everything EXCEPT INVENTORY
+    const planLimits = {
+      maxBranches: 2,
+      maxUsers: 5,
+      maxWarehouses: 2,
+      allowedModules: ["ORGANIZATION", "OPERATIONS", "AUDIT", "REPORTS", "FINANCE", "TEAM_MANAGEMENT", "CUSTOMER_PORTAL"],
+    };
+
+    const result = validateDraft(draft, planLimits);
+    const blockers = result.findings.filter((f) => f.code === "CAPABILITY_NOT_PERMITTED_BY_PLAN");
+    expect(blockers).toHaveLength(0);
+  });
+
+  it("passes when the plan permits all active capabilities", () => {
+    const draft = completeDraft({
+      capabilities: { MULTI_BRANCH: "DISABLED", MULTI_WAREHOUSE: "DISABLED" },
+      warehouses: [{ name: "Main store", code: "WH1", branchCodes: [] }],
+      responsibilities: { INVENTORY: "TENANT_OWNER" },
+    });
+
+    const planLimits = {
+      maxBranches: 2,
+      maxUsers: 5,
+      maxWarehouses: 2,
+      allowedModules: ["ORGANIZATION", "OPERATIONS", "AUDIT", "REPORTS", "INVENTORY", "FINANCE", "TEAM_MANAGEMENT", "CUSTOMER_PORTAL"],
+    };
+
+    const result = validateDraft(draft, planLimits);
+    const blockers = result.findings.filter((f) => f.code === "CAPABILITY_NOT_PERMITTED_BY_PLAN");
+    expect(blockers).toHaveLength(0);
+    expect(result.publishable).toBe(true);
+  });
+});
+
+describe("specialization pack resolution and capability compatibility", () => {
+  it("resolves TYRES alias to canonical TYRES_AND_WHEELS pack", () => {
+    expect(canonicalSpecializationKey("TYRES")).toBe("TYRES_AND_WHEELS");
+    const pack = specializationPack("TYRES");
+    expect(pack).toBeDefined();
+    expect(pack?.key).toBe("TYRES_AND_WHEELS");
+    expect(pack?.title).toBe("Tyres & wheels");
+  });
+
+  it("flags SPECIALIZATION_CAPABILITY_INCOMPATIBLE when required capability is disabled", () => {
+    const draft = completeDraft({
+      capabilities: {
+        QUICK_INSPECTION: "DISABLED",
+      },
+      specializationPacks: ["QUICK_SERVICE"],
+    });
+
+    const result = validateDraft(draft);
+    const incompatible = result.findings.filter((f) => f.code === "SPECIALIZATION_CAPABILITY_INCOMPATIBLE");
+    expect(incompatible).toHaveLength(1);
+    expect(incompatible[0].severity).toBe("BLOCKER");
+    expect(incompatible[0].subject).toBe("QUICK_SERVICE");
+    expect(incompatible[0].message).toContain("QUICK_INSPECTION");
+    expect(result.publishable).toBe(false);
+  });
+
+  it("passes specialization capability check when required capability is active", () => {
+    const draft = completeDraft({
+      capabilities: {
+        QUICK_INSPECTION: "ENABLED",
+        MULTI_BRANCH: "DISABLED",
+        MULTI_WAREHOUSE: "DISABLED",
+      },
+      specializationPacks: ["QUICK_SERVICE"],
+      warehouses: [{ name: "Main store", code: "WH1", branchCodes: [] }],
+      responsibilities: { INVENTORY: "TENANT_OWNER" },
+    });
+
+    const result = validateDraft(draft);
+    const incompatible = result.findings.filter((f) => f.code === "SPECIALIZATION_CAPABILITY_INCOMPATIBLE");
+    expect(incompatible).toHaveLength(0);
+  });
+});
+

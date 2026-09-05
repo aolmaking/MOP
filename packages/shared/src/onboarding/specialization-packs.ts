@@ -1,4 +1,5 @@
 import type { OperatingCategory } from "../operations/categories";
+import type { CapabilityKey } from "../capabilities/types";
 
 /**
  * Starter specialization packs: the real service cards and measurement
@@ -58,6 +59,12 @@ export interface SpecializationPack {
    */
   readonly categories: readonly OperatingCategory[];
   readonly definitions: readonly PackDefinition[];
+  /**
+   * Optional capabilities required for this specialization pack to be
+   * operational. If declared, the workshop's capability configuration
+   * must have these capabilities active.
+   */
+  readonly requiredCapabilities?: readonly CapabilityKey[];
 }
 
 const PACKS: readonly SpecializationPack[] = [
@@ -66,6 +73,7 @@ const PACKS: readonly SpecializationPack[] = [
     title: "Quick service",
     summary: "Oil, filters, fluids — short jobs, done many times a day, recorded the same way each time.",
     categories: ["CARS", "MOTORCYCLES"],
+    requiredCapabilities: ["QUICK_INSPECTION"],
     definitions: [
       {
         kind: "SERVICE_CARD",
@@ -98,6 +106,7 @@ const PACKS: readonly SpecializationPack[] = [
     title: "Brakes & suspension",
     summary: "Measured wear, per wheel — the readings that decide whether a part is replaced or passed.",
     categories: ["CARS", "MOTORCYCLES"],
+    requiredCapabilities: ["QC"],
     definitions: [
       {
         kind: "MEASUREMENT_FORM",
@@ -251,8 +260,14 @@ export const SPECIALIZATION_PACKS: readonly SpecializationPack[] = PACKS;
 
 export const SPECIALIZATION_PACK_KEYS: readonly string[] = PACKS.map((pack) => pack.key);
 
+export function canonicalSpecializationKey(key: string): string {
+  if (key === "TYRES") return "TYRES_AND_WHEELS";
+  return key;
+}
+
 export function specializationPack(key: string): SpecializationPack | undefined {
-  return PACKS.find((pack) => pack.key === key);
+  const canonical = canonicalSpecializationKey(key);
+  return PACKS.find((pack) => pack.key === canonical);
 }
 
 /** The packs offered for a category. The category is known before this stage is reached, so an irrelevant pack is never shown. */

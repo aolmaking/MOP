@@ -957,6 +957,245 @@ const DEFINITIONS: readonly PolicyDefinition[] = [
       summary: "Whether a customer sees a price next to a finding, or only the finding itself.",
     },
   },
+
+  // -------------------------------------------------------------------
+  // P-23 -- Who may approve a customer refund?
+  // -------------------------------------------------------------------
+  {
+    key: "REFUND_AUTHORITY",
+    question: "Who may approve a customer refund?",
+    options: [
+      {
+        key: "OWNER_ONLY",
+        label: "Owner only",
+        meaning: "Only the workshop owner may approve a refund request.",
+      },
+      {
+        key: "ANY_WITH_PERMISSION",
+        label: "Any authorized staff",
+        meaning: "Any staff member holding refund permissions may approve.",
+      },
+      {
+        key: "DIFFERENT_FROM_REQUESTER",
+        label: "Different person from requester",
+        meaning: "Any authorized staff may approve, but never the person who requested the refund.",
+      },
+    ],
+    default: "ANY_WITH_PERMISSION",
+    defaultReason:
+      "Baseline workshop operations allow any staff member holding refund permissions to approve, ensuring " +
+      "single-operator and small workshops operate without disruption until restricted by explicit policy.",
+    relevantWhen: () => true,
+    mutability: "GOVERNED",
+    buildPosture: "POLICY_CONTROLLED",
+    dependsOnCapabilities: ["FINANCE_CORE"],
+    dependsOnPolicies: [],
+    enforcement: {
+      status: "ENFORCED",
+      where:
+        "FinanceService.approveRefund validates this policy, restricting approval to the owner or refusing self-approval.",
+      consumers: ["FinanceService.approveRefund"],
+    },
+    impact: {
+      capabilities: ["FINANCE_CORE"],
+      roles: ["TENANT_OWNER", "BRANCH_MANAGER"],
+      workflowStates: [],
+      permissions: ["finance.refund.decide"],
+      pages: ["branch_manager.refunds", "owner.money"],
+      changesVisibility: false,
+      changesBilling: true,
+      summary: "Who has the authority to release funds back to a customer.",
+    },
+  },
+
+  // -------------------------------------------------------------------
+  // P-30 -- Are customer-supplied parts accepted?
+  // -------------------------------------------------------------------
+  {
+    key: "CUSTOMER_SUPPLIED_PARTS",
+    question: "Are customer-supplied parts accepted for repairs?",
+    options: [
+      {
+        key: "ACCEPTED_LIABILITY_RECORDED",
+        label: "Accepted with recorded disclaimer",
+        meaning: "Customer parts are accepted; warranty exclusions and liability flags are recorded on the part line.",
+      },
+      {
+        key: "REFUSED",
+        label: "Refused — workshop parts only",
+        meaning: "Only parts sourced and supplied by the workshop are permitted.",
+      },
+    ],
+    default: "ACCEPTED_LIABILITY_RECORDED",
+    defaultReason:
+      "Refusing customer parts outright is commercially unrealistic in many aftermarket workshops, while recording " +
+      "liability protects the workshop against warranty disputes.",
+    relevantWhen: () => true,
+    mutability: "GOVERNED",
+    buildPosture: "POLICY_CONTROLLED",
+    dependsOnCapabilities: ["INVENTORY"],
+    dependsOnPolicies: [],
+    enforcement: {
+      status: "ENFORCED",
+      where:
+        "TechnicianWorkService.addExternalPartLine checks this policy and rejects customer-supplied parts when REFUSED.",
+      consumers: ["TechnicianWorkService.addExternalPartLine"],
+    },
+    impact: {
+      capabilities: ["INVENTORY"],
+      roles: ["TECHNICIAN", "BRANCH_MANAGER"],
+      workflowStates: [],
+      permissions: ["parts.external.record"],
+      pages: ["technician.work-card", "branch_manager.work-order-workspace"],
+      changesVisibility: false,
+      changesBilling: true,
+      summary: "Whether customers can bring their own components to be fitted.",
+    },
+  },
+
+  // -------------------------------------------------------------------
+  // P-31 -- May a part be bought directly for a job, bypassing warehouse?
+  // -------------------------------------------------------------------
+  {
+    key: "DIRECT_PART_PURCHASE",
+    question: "May parts be bought directly for a job, bypassing warehouse stock?",
+    options: [
+      {
+        key: "ALLOWED",
+        label: "Allowed",
+        meaning: "Direct purchase for a specific work order is permitted without inventory warehouse receipt.",
+      },
+      {
+        key: "ONLY_IF_OUT_OF_STOCK",
+        label: "Only when warehouse stock is zero",
+        meaning: "Warehouse stock must be used first; direct buy is permitted only if warehouse stock is exhausted.",
+      },
+      {
+        key: "NEVER",
+        label: "Never — all parts through warehouse",
+        meaning: "Every part fitted must be received into and issued from the warehouse.",
+      },
+    ],
+    default: "ALLOWED",
+    defaultReason:
+      "Forcing every emergency or one-off part through inventory creates fiction in stock counts and unnecessary " +
+      "friction for rush jobs.",
+    relevantWhen: () => true,
+    mutability: "GOVERNED",
+    buildPosture: "POLICY_CONTROLLED",
+    dependsOnCapabilities: ["INVENTORY"],
+    dependsOnPolicies: [],
+    enforcement: {
+      status: "ENFORCED",
+      where:
+        "TechnicianWorkService.addExternalPartLine enforces direct purchase rules against warehouse inventory levels.",
+      consumers: ["TechnicianWorkService.addExternalPartLine"],
+    },
+    impact: {
+      capabilities: ["INVENTORY"],
+      roles: ["TECHNICIAN", "INVENTORY_MANAGER"],
+      workflowStates: ["WAITING_PARTS"],
+      permissions: ["parts.external.record"],
+      pages: ["technician.work-card", "inventory_manager.stock-levels"],
+      changesVisibility: false,
+      changesBilling: true,
+      summary: "Whether emergency or direct part purchases can bypass warehouse receiving.",
+    },
+  },
+
+  // -------------------------------------------------------------------
+  // Unapproved Work Execution -- Can technicians start unapproved work?
+  // -------------------------------------------------------------------
+  {
+    key: "UNAPPROVED_WORK_EXECUTION",
+    question: "Can technicians start tasks while customer approval is pending?",
+    options: [
+      {
+        key: "BLOCKED",
+        label: "Blocked — wait for approval",
+        meaning: "Technicians cannot start or progress tasks until the customer has explicitly approved the work.",
+      },
+      {
+        key: "ALLOWED_INITIAL_ONLY",
+        label: "Allow initial scope only",
+        meaning: "Work agreed at intake can proceed; only newly discovered findings require waiting for customer approval.",
+      },
+    ],
+    default: "BLOCKED",
+    defaultReason:
+      "Starting unapproved work risks customer refusal to pay for unauthorized labour. Blocking until approval " +
+      "ensures informed consent and guaranteed payment.",
+    relevantWhen: () => true,
+    mutability: "GOVERNED",
+    buildPosture: "POLICY_CONTROLLED",
+    dependsOnCapabilities: [],
+    dependsOnPolicies: ["APPROVAL_REQUIRED_SCOPE"],
+    enforcement: {
+      status: "ENFORCED",
+      where:
+        "WorkOrderLifecycleService.assertOperationalWorkAuthorized and TechnicianWorkService.startTask block task " +
+        "execution when customer approval is pending.",
+      consumers: [
+        "WorkOrderLifecycleService.assertOperationalWorkAuthorized",
+        "TechnicianWorkService.startTask",
+      ],
+    },
+    impact: {
+      capabilities: ["CUSTOMER_PORTAL"],
+      roles: ["TECHNICIAN", "BRANCH_MANAGER"],
+      workflowStates: ["WAITING_CUSTOMER", "AWAITING_CUSTOMER_APPROVAL"],
+      permissions: ["task.finish_attempt", "task.complete"],
+      pages: ["technician.work-card", "branch_manager.attention-center"],
+      changesVisibility: false,
+      changesBilling: true,
+      summary: "Whether technicians can turn wrenches while customer approval is outstanding.",
+    },
+  },
+
+  // -------------------------------------------------------------------
+  // P-50 -- Is the promised time visible to the customer?
+  // -------------------------------------------------------------------
+  {
+    key: "PROMISED_TIME_VISIBILITY",
+    question: "Is the estimated completion time visible to the customer?",
+    options: [
+      {
+        key: "VISIBLE",
+        label: "Visible in customer portal",
+        meaning: "The promised ready time is shown directly to the customer in their portal and status link.",
+      },
+      {
+        key: "HIDDEN",
+        label: "Internal only",
+        meaning: "The promised time is tracked internally for staff without being shown to the customer.",
+      },
+    ],
+    default: "VISIBLE",
+    defaultReason:
+      "Transparency builds trust: customers primarily want to know when their vehicle will be ready. Hiding it is " +
+      "reserved for workshops with variable turnaround times.",
+    relevantWhen: () => true,
+    mutability: "FREELY",
+    buildPosture: "POLICY_CONTROLLED",
+    dependsOnCapabilities: ["CUSTOMER_PORTAL"],
+    dependsOnPolicies: [],
+    enforcement: {
+      status: "ENFORCED",
+      where:
+        "CustomerPortalService.currentService filters the promised completion time based on this policy setting.",
+      consumers: ["CustomerPortalService.currentService"],
+    },
+    impact: {
+      capabilities: ["CUSTOMER_PORTAL"],
+      roles: ["CUSTOMER", "BRANCH_MANAGER"],
+      workflowStates: [],
+      permissions: ["customer.current_service.view"],
+      pages: ["customer.portal", "customer.current-service"],
+      changesVisibility: true,
+      changesBilling: false,
+      summary: "Whether vehicle return time commitments are transparent to customers.",
+    },
+  },
 ];
 
 export const POLICY_REGISTRY: ReadonlyMap<string, PolicyDefinition> = new Map(

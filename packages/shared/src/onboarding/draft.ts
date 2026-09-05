@@ -1,4 +1,4 @@
-import { CAPABILITY_KEYS, isCapabilityActive, type CapabilityKey, type CapabilityProfile, type CapabilityStatus } from "../capabilities/types";
+import { CAPABILITY_KEYS, isCapabilityActive, type CapabilityKey, type CapabilityProfile, type CapabilitySemanticType, type CapabilityStatus } from "../capabilities/types";
 import { CAPABILITY_REGISTRY, capabilityDefinition } from "../capabilities/registry";
 import { validateCapabilityProfile } from "../capabilities/validator";
 import { GATE_DEFINITIONS, gateDefinition, gatesOwnedBy, type GateKey } from "../capabilities/gates";
@@ -76,15 +76,17 @@ export interface WorkshopPlanDraft {
 }
 
 /**
- * A plan's ceilings, passed in rather than looked up: plans are database
- * rows, and this module does not read a database. The caller supplies
- * the selected plan's numbers so the same validation runs identically in
- * the browser and on the server.
+ * A plan's ceilings and entitlements, passed in rather than looked up:
+ * plans are database rows, and this module does not read a database.
+ * The caller supplies the selected plan's numbers and permitted modules
+ * so the same validation runs identically in the browser and on the server.
  */
 export interface PlanLimits {
   readonly maxBranches: number;
   readonly maxUsers: number;
   readonly maxWarehouses: number;
+  readonly allowedModules?: readonly string[];
+  readonly allowedFeatures?: readonly string[];
 }
 
 /**
@@ -150,6 +152,9 @@ export function emptyDraft(): WorkshopDraft {
 export interface CapabilityConsequence {
   readonly key: CapabilityKey;
   readonly owningSystem: string;
+  readonly type: CapabilitySemanticType;
+  readonly governingModule?: string;
+  readonly supportedStatuses: readonly CapabilityStatus[];
   /** Capabilities that must be active for this one to function. */
   readonly requires: readonly CapabilityKey[];
   /** Capabilities that stop working if this one is turned off. */
@@ -172,6 +177,7 @@ export interface CapabilityConsequence {
   readonly policiesLostWithout: readonly string[];
   /** Stages later in the journey that this capability makes relevant. */
   readonly requiresLaterSetup: readonly string[];
+  readonly runtimeConsumers: readonly string[];
 }
 
 /**
@@ -203,6 +209,9 @@ export function capabilityConsequence(key: CapabilityKey): CapabilityConsequence
   return {
     key,
     owningSystem: definition.owningSystem,
+    type: definition.type,
+    governingModule: definition.governingModule,
+    supportedStatuses: definition.supportedStatuses,
     requires: definition.dependencies,
     requiredBy,
     conflicts: definition.conflicts,
@@ -216,6 +225,7 @@ export function capabilityConsequence(key: CapabilityKey): CapabilityConsequence
     customerSafeMessage: definition.removal?.customerSafeMessage ?? null,
     policiesLostWithout,
     requiresLaterSetup: laterSetupFor(key),
+    runtimeConsumers: definition.runtimeConsumers,
   };
 }
 

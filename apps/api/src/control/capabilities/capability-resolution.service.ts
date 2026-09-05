@@ -1,8 +1,42 @@
 import { Injectable } from "@nestjs/common";
 import type { Prisma } from "@mop/database";
-import type { CapabilityKey, CapabilityProfile, CapabilityStatus } from "@mop/shared";
-import { CAPABILITY_KEYS } from "@mop/shared";
+import type { CapabilityKey, CapabilityProfile, CapabilityStatus, GateKey, StaffRole } from "@mop/shared";
+import {
+  CAPABILITY_KEYS,
+  GATE_DEFINITIONS,
+  ROLE_PAGES,
+  isCapabilityActive,
+  modulesForProfile,
+  validateCapabilityProfile,
+} from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
+
+export interface ResolvedWorkshopPlan {
+  readonly id: string;
+  readonly code: string;
+  readonly name: string;
+  readonly maxBranches: number;
+  readonly maxWarehouses: number;
+  readonly maxUsers: number;
+  readonly allowedModules: readonly string[];
+  readonly allowedFeatures: readonly string[];
+}
+
+export interface ResolvedWorkshopModel {
+  readonly tenantId: string;
+  readonly plan: ResolvedWorkshopPlan;
+  readonly capabilities: CapabilityProfile;
+  readonly specializations: readonly string[];
+  readonly enabledModules: readonly string[];
+  readonly activeRoles: readonly StaffRole[];
+  readonly activeGates: readonly GateKey[];
+  readonly structure: {
+    readonly branchCount: number;
+    readonly warehouseCount: number;
+  };
+}
+
+const ALL_TENANT_ROLES: readonly StaffRole[] = Object.keys(ROLE_PAGES) as StaffRole[];
 
 /**
  * Turns stored `TenantCapability` rows into the `CapabilityProfile` the
@@ -64,6 +98,86 @@ export class CapabilityResolutionService {
     });
 
     return rows.map((row) => row.capabilityKey).filter(isCapabilityKey);
+  }
+
+  /**
+   * Resolves the authoritative runtime workshop model: plan entitlements,
+   * capability configuration, enabled modules, active roles, and live gates.
+   *
+   * Deliberately does NOT load or depend on WorkshopPolicy -- preserving the
+   * architectural seam:
+   *   PLAN -> CAPABILITY CONFIGURATION -> RESOLVED MODEL -> (Sprint 3: POLICIES)
+   */
+  async resolveWorkshopModel(tenantId: string, tx?: Prisma.TransactionClient): Promise<ResolvedWorkshopModel> {
+    const client = tx ?? this.prisma;
+    const tenant = await client.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: {
+        id: true,
+        plan: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            maxBranches: true,
+            maxWarehouses: true,
+            maxUsers: true,
+            allowedModules: true,
+            allowedFeatures: true,
+          },
+        },
+        _count: {
+          select: {
+            branches: true,
+            warehouses: true,
+          },
+        },
+      },
+    });
+
+    const [capabilities, specializationRows] = await Promise.all([
+      this.resolveCurrent(tenantId, client),
+      client.workshopSpecialization.findMany({
+        where: { tenantId },
+        orderBy: { specializationKey: "asc" },
+        select: { specializationKey: true },
+      }),
+    ]);
+    const specializations = specializationRows.map((r) => r.specializationKey);
+    const validation = validateCapabilityProfile(capabilities);
+
+    const activeRoles = ALL_TENANT_ROLES.filter(
+      (role) => role === "TENANT_OWNER" || !validation.orphanedRoles.includes(role),
+    );
+
+    const activeGates = GATE_DEFINITIONS.filter(
+      (gate) => gate.owner === null || isCapabilityActive(capabilities, gate.owner),
+    ).map((gate) => gate.key);
+
+    const enabledModules = modulesForProfile(capabilities);
+
+    return {
+      tenantId,
+      plan: {
+        id: tenant.plan.id,
+        code: tenant.plan.code,
+        name: tenant.plan.name,
+        maxBranches: tenant.plan.maxBranches,
+        maxWarehouses: tenant.plan.maxWarehouses,
+        maxUsers: tenant.plan.maxUsers,
+        allowedModules: tenant.plan.allowedModules,
+        allowedFeatures: tenant.plan.allowedFeatures,
+      },
+      capabilities,
+      specializations,
+      enabledModules,
+      activeRoles,
+      activeGates,
+      structure: {
+        branchCount: tenant._count.branches,
+        warehouseCount: tenant._count.warehouses,
+      },
+    };
   }
 
   /**

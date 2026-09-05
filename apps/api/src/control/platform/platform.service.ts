@@ -4,10 +4,13 @@ import { Prisma, type Tenant } from "@mop/database";
 import {
   DEFAULT_ROLE_PERMISSIONS,
   ROLE_PAGES,
+  canonicalSpecializationKey,
   definitionsSeededBy,
   modulesForProfile,
   grantsForResponsibilities,
+  isCapabilityActive,
   policyDefinition,
+  specializationPack,
   validateDraft,
   type CapabilityKey,
   type CapabilityProfile,
@@ -658,10 +661,47 @@ export class PlatformService {
     tenantId: string,
     dto: CreateWorkshopDto,
   ): Promise<string[]> {
-    const packKeys = new Set(dto.specializationPacks ?? []);
-    if (packKeys.size === 0) return [];
+    const rawKeys = dto.specializationPacks ?? [];
+    if (rawKeys.length === 0) return [];
 
-    const definitions = definitionsSeededBy([...packKeys]);
+    const canonicalKeys: string[] = [];
+    for (const rawKey of rawKeys) {
+      const canonicalKey = canonicalSpecializationKey(rawKey);
+      const pack = specializationPack(canonicalKey);
+      if (!pack) {
+        throw new BadRequestException({
+          code: "UNKNOWN_SPECIALIZATION_PACK",
+          message: `Specialization pack "${rawKey}" does not exist.`,
+        });
+      }
+
+      if (pack.requiredCapabilities && pack.requiredCapabilities.length > 0) {
+        for (const reqCap of pack.requiredCapabilities) {
+          if (!isCapabilityActive((dto.capabilities ?? {}) as CapabilityProfile, reqCap)) {
+            throw new BadRequestException({
+              code: "SPECIALIZATION_CAPABILITY_INCOMPATIBLE",
+              message: `Specialization "${pack.title}" requires capability ${reqCap}, which is not active for this workshop.`,
+            });
+          }
+        }
+      }
+
+      if (!canonicalKeys.includes(canonicalKey)) {
+        canonicalKeys.push(canonicalKey);
+      }
+    }
+
+    // Persist assigned specialization keys to workshopSpecialization table
+    for (const key of canonicalKeys) {
+      await tx.workshopSpecialization.create({
+        data: {
+          tenantId,
+          specializationKey: key,
+        },
+      });
+    }
+
+    const definitions = definitionsSeededBy(canonicalKeys);
     for (const definition of definitions) {
       await this.specialization.defineCard(
         tenantId,
@@ -819,12 +859,14 @@ export class PlatformService {
    */
   private assertDraftIsPublishable(
     dto: CreateWorkshopDto,
-    plan: { maxBranches: number; maxUsers: number; maxWarehouses: number },
+    plan: { maxBranches: number; maxUsers: number; maxWarehouses: number; allowedModules?: string[]; allowedFeatures?: string[] },
   ): void {
     const result = validateDraft(draftFromDto(dto), {
       maxBranches: plan.maxBranches,
       maxUsers: plan.maxUsers,
       maxWarehouses: plan.maxWarehouses,
+      allowedModules: plan.allowedModules,
+      allowedFeatures: plan.allowedFeatures,
     });
     const blockers = result.findings.filter((finding) => finding.severity === "BLOCKER");
     if (blockers.length === 0) return;

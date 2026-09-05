@@ -205,6 +205,8 @@ describe("static integrity", () => {
         {
           key: "QC" as const,
           owningSystem: "OPERATIONS" as const,
+          type: "BOOLEAN" as const,
+          supportedStatuses: ["ENABLED", "DISABLED", "LOCKED"] as const,
           dependencies: [],
           conflicts: [],
           affectedGates: [],
@@ -213,6 +215,7 @@ describe("static integrity", () => {
           historicalRecordPolicy: "PRESERVE_READ_ONLY" as const,
           reversible: false,
           removal: null,
+          runtimeConsumers: [],
         },
       ],
     ]);

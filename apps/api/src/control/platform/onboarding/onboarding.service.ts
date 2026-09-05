@@ -110,6 +110,8 @@ export interface OnboardingBlueprint {
     maxBranches: number;
     maxUsers: number;
     maxWarehouses: number;
+    allowedModules: readonly string[];
+    allowedFeatures: readonly string[];
     monthlyPrice: string;
   }[];
 }
@@ -143,16 +145,23 @@ const EXPLICIT_GROUPS: Readonly<Record<string, string>> = {
   DELIVERY_BLOCKED_UNTIL_PAID: "MONEY",
   PARTIAL_PAYMENT: "MONEY",
   DISCOUNT_AUTHORITY: "MONEY",
+  REFUND_AUTHORITY: "MONEY",
   UNCOVERED_COUNTRY_BILLING: "MONEY",
   PARTS_SEPARATION_OF_DUTIES: "PARTS",
   RETURN_UNUSED_BEFORE_FINISH: "PARTS",
+  CUSTOMER_SUPPLIED_PARTS: "PARTS",
+  DIRECT_PART_PURCHASE: "PARTS",
   QC_MANDATORY: "WORK",
   TECHNICIAN_DIRECT_SEND: "WORK",
   TIME_TRACKING: "WORK",
   POST_CLOSE_ADDENDA: "WORK",
+  INSPECTION_REQUIRED: "WORK",
   APPROVAL_REQUIRED_SCOPE: "CUSTOMER",
   APPROVAL_WEIGHT: "CUSTOMER",
   PORTAL_COUNTER_APPROVAL: "CUSTOMER",
+  CUSTOMER_INVOICE_VISIBILITY: "CUSTOMER",
+  UNAPPROVED_WORK_EXECUTION: "CUSTOMER",
+  PROMISED_TIME_VISIBILITY: "CUSTOMER",
   WORKING_WEEK: "GENERAL",
 };
 
@@ -162,7 +171,17 @@ export class OnboardingService {
 
   async blueprint(): Promise<OnboardingBlueprint> {
     const plans = await this.prisma.plan.findMany({
-      select: { id: true, code: true, name: true, maxBranches: true, maxUsers: true, maxWarehouses: true, monthlyPrice: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        maxBranches: true,
+        maxUsers: true,
+        maxWarehouses: true,
+        allowedModules: true,
+        allowedFeatures: true,
+        monthlyPrice: true,
+      },
       orderBy: { monthlyPrice: "asc" },
     });
 
@@ -236,7 +255,13 @@ export class OnboardingService {
     const plan = dto.planId
       ? await this.prisma.plan.findUnique({
           where: { id: dto.planId },
-          select: { maxBranches: true, maxUsers: true, maxWarehouses: true },
+          select: {
+            maxBranches: true,
+            maxUsers: true,
+            maxWarehouses: true,
+            allowedModules: true,
+            allowedFeatures: true,
+          },
         })
       : null;
 
