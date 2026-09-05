@@ -2,12 +2,51 @@
 
 > **Purpose:** everything needed to continue MOP in a fresh session without the previous conversation.
 > **Companion:** [`CLAUDE.md`](./CLAUDE.md) holds permanent knowledge (architecture, rules, toolchain). This holds *where we are*.
-> **Last updated:** 2026-09-03 — the catalog-driven part request landed (section 0 below).
-> Previous entry: 2026-09-02 — two independent sessions built overlapping
-> implementations of the same 14-day launch mission on separate branches;
-> this entry records the reconciliation. **Read [`docs/LAUNCH_HANDOVER.md`](docs/LAUNCH_HANDOVER.md)
-> first** — it is the live, current status document going forward, not this file.
+> **Last updated:** 2026-09-05 — Phase T2 officially closed (Mission 1: Inspection, Findings & Customer Lineage Experience).
+> Previous entries: 2026-09-03 (catalog-driven part requests & journey projection), 2026-09-02 (reconciliation).
+> **Read [`docs/LAUNCH_HANDOVER.md`](docs/LAUNCH_HANDOVER.md) first** — it is the live, current status document going forward alongside this file.
 > **Keep this current.** Update it at the end of any phase task, and before ending a long session.
+
+---
+
+## Phase T2 — Official Closure: Mission 1 Inspection, Findings & Customer Lineage Experience (2026-09-05)
+
+**Status:** `COMPLETE` (Formally closed after passing Final Regression Audit with zero regressions).
+
+### 1. Delivered Scope
+The completed Phase T2 delivered a cohesive, end-to-end Technician operational workflow across Steps 3 through 7:
+- **Step 3 — Frontend API Contract Alignment:** Aligned Angular Technician contracts (`technician.api.ts`) with the authoritative backend WorkCard projection, introducing `WorkCardFinding`, typed `decisionStatus` (`NOT_REQUESTED`, `PENDING`, `APPROVED`, `DECLINED`), and canonical payload-object contracts (`RecordInspectionPayload`).
+- **Step 4 — Frontend Data Lineage Repair:** Preserved strict data lineage from `Inspection` → `Fault` → `CustomerDecisionItem`. `createFault` passes the active `inspectionId`, and decision raising binds directly to the server-minted `fault.id` without fake IDs or orphaned records.
+- **Step 5A — Mission 1 UX Foundation:** Replaced passive status displays with an active operational entry point. Made customer complaint prominent and established the authoritative `Start inspection` CTA for assigned technicians on `REGISTERED` jobs.
+- **Step 5B — Active Inspection Workspace:** Operationalized `UNDER_INSPECTION` (`IN_PROGRESS`). Delivered the active inspection workspace with real-time findings display, inline `+ Log finding` form with severity/description/actionable pricing, and formal `Complete inspection` metadata capture (odometer, duration, notes).
+- **Step 5C — Post-Inspection Lifecycle UX Fix:** Resolved post-inspection discontinuity. Read-only findings display persists when `inspection.state === 'COMPLETED'`. Added contextual `.mission-locked-banner` surfacing `repairLockReason` during `AWAITING_CUSTOMER_APPROVAL` and `UNDER_INSPECTION`, ensuring technicians clearly understand why repair work is locked.
+- **Step 6 — Inspection Decoupled from Exception Handling:** Decoupled normal inspection from exception handling. Removed duplicate `Record inspection` controls and panels from `Something's wrong` tools, eliminating duplicate lifecycles and restoring single-responsibility semantics.
+- **Step 7 — Tech Now vs My Work Orientation & Messaging:** Clarified the distinct responsibilities of the two technician views:
+  - **Tech Now (`/tech/now`):** Single active bay focus; answers "What am I working on right now?" with customer complaint, operational posture, and direct Work Card navigation.
+  - **Tech My Work (`/tech/my-work`):** Full shift queue; answers "What else is mine today?" with shift workload counters and human-readable operational status badges (`Needs Inspection`, `Under Inspection`, `Awaiting Customer Approval`, `Ready to Start`, `Work in Progress`, `Paused / Blocked`).
+
+### 2. Verified Architectural Guarantees & Invariants
+- **Lineage Chain:** `Inspection` → `Fault` → `CustomerDecisionItem`.
+- **Backend Lifecycle Authority:** Inspection lifecycle transitions are strictly owned by `WorkOrderLifecycleService` and `TechnicianWorkService`.
+- **Mission 1 Sole Initiation:** Inspection is initiated only through Mission 1 via `POST /technician/work-orders/:id/start-inspection`.
+- **Active Controls Scope:** Active inspection controls (logging findings, completing inspection) exist only while `card.status === 'UNDER_INSPECTION'` and `card.inspection.state === 'IN_PROGRESS'`.
+- **Read-Only Post-Inspection:** Completed inspections (`COMPLETED`) are strictly read-only; findings and customer decision outcomes remain fully visible without mutation controls.
+- **Lineage Integrity:** `inspectionId` is preserved when creating faults during inspection; server-generated `fault.id` is used when raising customer decisions.
+- **Fault Resilience:** Partial failure when raising a decision preserves the successfully created fault record.
+- **Repair Authorization Authority:** `repairLocked` and `repairLockReason` remain authoritative backend projections; the frontend cannot bypass repair authorization.
+- **Separation of Concerns:** Inspection is a normal operational stage and not an exception workflow.
+- **Operational Clarity:** Tech Now and Tech My Work have distinct roles and do not duplicate queue mechanics.
+
+### 3. Verification Record
+All verification passed with zero failures and zero regressions:
+- **Frontend Unit & Component Suites:** 62 test files passed, 368 tests passed (`corepack pnpm --filter @mop/web test`).
+  - `tech-work-card.spec.ts`: 58 tests passed
+  - `tech-now.spec.ts`: 7 tests passed
+  - `tech-my-work.spec.ts`: 4 tests passed
+- **Backend Suites:**
+  - `technician-work-view.service.spec.ts`: 10 tests passed
+  - `technician-inspection-lifecycle.integration.spec.ts`: 15 tests passed
+- **Production Build:** PASSED (`corepack pnpm --filter @mop/web build`, Exit Code 0).
 
 ---
 
