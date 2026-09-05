@@ -10,7 +10,7 @@ import {
   type WorkOrderFacts,
   relevantPolicyAnswers,
 } from "@mop/shared";
-import type { Prisma, WorkOrderStatus } from "@mop/database";
+import type { Prisma, WorkOrderStatus, QcFailureReason } from "@mop/database";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
@@ -91,7 +91,7 @@ export class WorkOrderLifecycleService {
     workOrderId: string,
     intent: WorkflowIntent,
     actor: LifecycleActor,
-    options: { readonly reason?: string; readonly tx?: Prisma.TransactionClient } = {},
+    options: { readonly reason?: string; readonly failureReason?: QcFailureReason; readonly tx?: Prisma.TransactionClient } = {},
   ): Promise<TransitionResult> {
     const workOrder = await this.prisma.workOrder.findUnique({
       where: { id: workOrderId },
@@ -173,6 +173,7 @@ export class WorkOrderLifecycleService {
             to: target,
             intent,
             reason: options.reason ?? null,
+            failureReason: options.failureReason ?? null,
           },
         },
         tx,
@@ -291,6 +292,17 @@ export class WorkOrderLifecycleService {
     const authorizationPending =
       workOrder.status !== "APPROVED_FOR_WORK" &&
       canStillReach(WORK_ORDER_GRAPH, profile, workOrder.status, "APPROVED_FOR_WORK", policies, facts);
+
+    if (workOrder.status === "WAITING_CUSTOMER") {
+      const executionPolicy = await this.policies.resolveValue(workOrder.tenantId, "UNAPPROVED_WORK_EXECUTION");
+      if (executionPolicy === "BLOCKED") {
+        throw new ConflictException({
+          code: "work_not_authorized",
+          message: "Waiting for customer approval before work can proceed.",
+        });
+      }
+    }
+
     if (!authorizationPending) return;
 
     // Naming the move that would unblock them, rather than the state they

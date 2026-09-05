@@ -1,4 +1,5 @@
-import { IsBoolean, IsOptional, IsString, Length } from "class-validator";
+import { IsBoolean, IsEnum, IsOptional, IsString, Length } from "class-validator";
+import { QcFailureReason } from "@mop/database";
 
 /**
  * Passing or failing a job at review or QC.
@@ -22,4 +23,12 @@ export class AdvanceWorkOrderDto {
   @IsString()
   @Length(1, 1000)
   note?: string;
+
+  /**
+   * Structured QC failure reason (Prompt 7). Kept explicitly separate from
+   * the free-text note to ensure data honesty and avoid guessing root causes.
+   */
+  @IsOptional()
+  @IsEnum(QcFailureReason)
+  failureReason?: QcFailureReason;
 }

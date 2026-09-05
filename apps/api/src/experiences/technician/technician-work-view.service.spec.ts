@@ -26,6 +26,7 @@ function build(options: {
   inspection?: { completedAt: Date | null; actualMinutes: number | null } | null;
   /** The refusal the authority would give, or null when work is allowed. */
   workNotAuthorized?: string | null;
+  faults?: unknown[];
 }) {
   const prisma = {
     workOrder: { findFirst: jest.fn().mockResolvedValue(workOrder(options.order)) },
@@ -39,7 +40,10 @@ function build(options: {
           : options.inspection,
       ),
     },
-    fault: { count: jest.fn().mockResolvedValue(0) },
+    fault: {
+      count: jest.fn().mockResolvedValue(0),
+      findMany: jest.fn().mockResolvedValue(options.faults ?? []),
+    },
   };
   const lifecycle = {
     availableIntents: jest.fn().mockResolvedValue(options.intents ?? []),
@@ -162,6 +166,100 @@ describe("TechnicianWorkViewService", () => {
 
       expect(card.parts[0].clarificationPending).toBe(true);
       expect(card.parts[0].clarificationQuestion).toBe("Which of the two did you fit?");
+    });
+  });
+
+  describe("findings projection", () => {
+    it("projects findings with customer decision status and complaint", async () => {
+      const { service } = build({
+        faults: [
+          {
+            id: "f1",
+            description: "Cracked rotor",
+            severity: "CRITICAL",
+            code: "BRK-01",
+            recommendedService: "Replace front rotors",
+            inspectionId: "insp1",
+            decisionItems: [{ id: "cd1", decision: "PENDING" }],
+          },
+          {
+            id: "f2",
+            description: "Worn wipers",
+            severity: "LOW",
+            code: null,
+            recommendedService: null,
+            inspectionId: "insp1",
+            decisionItems: [],
+          },
+          {
+            id: "f3",
+            description: "Leaking strut",
+            severity: "HIGH",
+            code: null,
+            recommendedService: "Replace strut",
+            inspectionId: null,
+            decisionItems: [{ id: "cd2", decision: "APPROVED" }],
+          },
+          {
+            id: "f4",
+            description: "Cabin filter dirty",
+            severity: "LOW",
+            code: null,
+            recommendedService: null,
+            inspectionId: null,
+            decisionItems: [{ id: "cd3", decision: "REJECTED" }],
+          },
+        ],
+      });
+
+      const card = await service.workCard("tech1", "tenant1", "wo1");
+
+      expect(card.complaint).toBe("Brake noise");
+      expect(card.findings).toHaveLength(4);
+      expect(card.findings[0]).toEqual({
+        id: "f1",
+        description: "Cracked rotor",
+        severity: "CRITICAL",
+        code: "BRK-01",
+        recommendedService: "Replace front rotors",
+        inspectionId: "insp1",
+        decisionStatus: "PENDING",
+      });
+      expect(card.findings[1].decisionStatus).toBe("NOT_REQUESTED");
+      expect(card.findings[2].decisionStatus).toBe("APPROVED");
+      expect(card.findings[3].decisionStatus).toBe("REJECTED");
+    });
+
+    it("scopes findings query by tenantId and workOrderId", async () => {
+      const { service, prisma } = build({ faults: [] });
+
+      await service.workCard("tech1", "tenant1", "wo1");
+
+      expect(prisma.fault.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { workOrderId: "wo1", tenantId: "tenant1" },
+        }),
+      );
+    });
+
+    it("uses the latest decision item when multiple decision items exist", async () => {
+      const { service } = build({
+        faults: [
+          {
+            id: "f1",
+            description: "Oil leak",
+            severity: "HIGH",
+            code: null,
+            recommendedService: null,
+            inspectionId: "insp1",
+            decisionItems: [{ id: "cd2", decision: "APPROVED" }], // newest (take: 1)
+          },
+        ],
+      });
+
+      const card = await service.workCard("tech1", "tenant1", "wo1");
+
+      expect(card.findings[0].decisionStatus).toBe("APPROVED");
     });
   });
 });

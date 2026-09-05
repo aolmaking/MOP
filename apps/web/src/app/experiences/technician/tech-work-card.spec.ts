@@ -24,7 +24,8 @@ function card(overrides: Partial<WorkCard> = {}): WorkCard {
     timeTracking: 'OPTIONAL',
     // The default is a job past Mission 1, because that is what most of
     // these cases are about. The inspection-first cases below override it.
-    inspection: { state: 'COMPLETED', completedAt: '2026-09-04T08:00:00.000Z', actualMinutes: 20, faultCount: 2 },
+    inspection: { id: 'insp1', state: 'COMPLETED', completedAt: '2026-09-04T08:00:00.000Z', actualMinutes: 20, faultCount: 2 },
+    findings: [],
     repairLocked: false,
     repairLockReason: null,
     tasks: [],
@@ -49,7 +50,8 @@ async function render(
     startTask: vi.fn(() => of({})),
     completeTask: vi.fn(() => of({})),
     reportBlocker: vi.fn(() => of({})),
-    createFault: vi.fn(() => of({})),
+    recordInspection: vi.fn(() => of({})),
+    createFault: vi.fn(() => of({ id: 'fault1' })),
     partsCatalog: vi.fn(() => of({ items: [], total: 0, categories: [] })),
     journey: vi.fn(() => of(options.journey ?? journeyFixture({ headline: 'This job is yours to move.' }))),
     requestPart: vi.fn(() => of({})),
@@ -79,7 +81,19 @@ interface Internals {
   panel: { set(v: string): void };
   reportBlocker(reason: string): void;
   faultText: { set(v: string): void };
+  faultSeverity: { set(v: string): void };
+  askCustomer: { set(v: boolean): void };
+  faultPrice: { set(v: string): void };
+  faultLaborPrice: { set(v: string): void };
   logFault(): void;
+  startInspection(): void;
+  completeInspection(typeOverride?: 'QUICK' | 'FULL'): void;
+  inspectionType: { set(v: 'QUICK' | 'FULL'): void; (): 'QUICK' | 'FULL' };
+  inspectionOdometer: { set(v: string): void; (): string };
+  inspectionMinutes: { set(v: string): void; (): string };
+  inspectionNote: { set(v: string): void; (): string };
+  missionFindingOpen: { set(v: boolean): void; (): boolean };
+  actionError: { (): string | null };
 }
 
 describe('TechWorkCard', () => {
@@ -589,7 +603,7 @@ describe('the technician work card, inspection first', () => {
     const { element } = await render(
       card({
         status: 'REGISTERED',
-        inspection: { state: 'REQUIRED', completedAt: null, actualMinutes: null, faultCount: 0 },
+        inspection: { id: null, state: 'REQUIRED', completedAt: null, actualMinutes: null, faultCount: 0 },
         repairLocked: true,
         repairLockReason: 'Start and record the inspection before any repair work.',
         tasks: [{ id: 't1', title: 'Replace pads', status: 'ASSIGNED', blockedReason: null }],
@@ -622,7 +636,7 @@ describe('the technician work card, inspection first', () => {
     const { element } = await render(
       card({
         inspectionDeclined: true,
-        inspection: { state: 'DECLINED', completedAt: null, actualMinutes: null, faultCount: 0 },
+        inspection: { id: null, state: 'DECLINED', completedAt: null, actualMinutes: null, faultCount: 0 },
       }),
     );
 
@@ -630,4 +644,839 @@ describe('the technician work card, inspection first', () => {
     expect(element.querySelector('.mission-state')?.textContent).toContain('Declined');
     expect(element.querySelector('.tools-locked')).toBeNull();
   });
+
+  it('accepts the findings projection on the WorkCard', async () => {
+    const { fixture } = await render(
+      card({
+        findings: [
+          {
+            id: 'f1',
+            description: 'Front brake pads worn',
+            severity: 'HIGH',
+            code: 'B-01',
+            recommendedService: 'Pad replacement',
+            inspectionId: 'insp1',
+            decisionStatus: 'PENDING',
+          },
+        ],
+      }),
+    );
+
+    const comp = fixture.componentInstance as any;
+    expect(comp.card()?.findings).toHaveLength(1);
+    expect(comp.card()?.findings[0].decisionStatus).toBe('PENDING');
+  });
+
+  describe('data lineage in logFault', () => {
+    it('passes the active inspectionId to createFault', async () => {
+      const { api, page } = await render(
+        card({
+          inspection: { id: 'insp_active_99', state: 'IN_PROGRESS', completedAt: null, actualMinutes: null, faultCount: 0 },
+        }),
+      );
+
+      page.faultText.set('Leaking brake caliper');
+      page.logFault();
+
+      expect(api.createFault).toHaveBeenCalledWith(
+        'wo1',
+        'Leaking brake caliper',
+        'MEDIUM',
+        'insp_active_99',
+      );
+    });
+
+    it('chains returned fault.id to raiseDecision when Ask Customer is enabled', async () => {
+      const { api, page } = await render(
+        card({
+          inspection: { id: 'insp_active_99', state: 'IN_PROGRESS', completedAt: null, actualMinutes: null, faultCount: 0 },
+        }),
+      );
+
+      page.faultText.set('Cracked brake rotor');
+      page.faultSeverity.set('CRITICAL');
+      page.askCustomer.set(true);
+      page.faultPrice.set('150.00');
+      page.faultLaborPrice.set('50.00');
+
+      page.logFault();
+
+      expect(api.createFault).toHaveBeenCalledWith(
+        'wo1',
+        'Cracked brake rotor',
+        'CRITICAL',
+        'insp_active_99',
+      );
+      expect(api.raiseDecision).toHaveBeenCalledWith('wo1', {
+        name: 'Cracked brake rotor',
+        explanation: 'Cracked brake rotor',
+        importance: 'CRITICAL',
+        price: '150.00',
+        laborPrice: '50.00',
+        faultId: 'fault1',
+      });
+    });
+
+    it('preserves the logged fault and reloads state when raiseDecision fails', async () => {
+      const { api, page, fixture } = await render(
+        card({
+          inspection: { id: 'insp_active_99', state: 'IN_PROGRESS', completedAt: null, actualMinutes: null, faultCount: 0 },
+        }),
+      );
+
+      api.raiseDecision.mockReturnValue(throwError(() => ({ message: 'Decision service unreachable' })));
+
+      page.faultText.set('Cracked brake rotor');
+      page.askCustomer.set(true);
+      page.faultPrice.set('150.00');
+
+      page.logFault();
+
+      expect(api.createFault).toHaveBeenCalled();
+      expect(api.raiseDecision).toHaveBeenCalled();
+      // Verifies authoritative reload occurred
+      expect(api.workCard).toHaveBeenCalledTimes(2);
+      // Verifies precise partial-success error surfaced
+      fixture.detectChanges();
+      const comp = fixture.componentInstance as any;
+      expect(comp.actionError()).toContain('Logged finding, but asking the customer did not go through');
+    });
+  });
+
+  describe('Mission 1 foundation (Step 5A)', () => {
+    describe('Customer Complaint rendering', () => {
+      it('renders customer complaint when non-null and non-empty', async () => {
+        const { element } = await render(
+          card({
+            complaint: 'Front squeak when braking',
+          }),
+        );
+
+        const complaintEl = element.querySelector('.card-complaint');
+        expect(complaintEl).not.toBeNull();
+        expect(complaintEl?.textContent).toContain('Customer reported:');
+        expect(complaintEl?.textContent).toContain('Front squeak when braking');
+      });
+
+      it('does not render complaint section when complaint is null', async () => {
+        const { element } = await render(
+          card({
+            complaint: null,
+          }),
+        );
+
+        expect(element.querySelector('.card-complaint')).toBeNull();
+      });
+
+      it('does not render complaint section when complaint is empty whitespace', async () => {
+        const { element } = await render(
+          card({
+            complaint: '   ',
+          }),
+        );
+
+        expect(element.querySelector('.card-complaint')).toBeNull();
+      });
+    });
+
+    describe('Start Inspection CTA visibility and interaction', () => {
+      it('renders Start inspection CTA inside Mission 1 for REGISTERED + REQUIRED', async () => {
+        const { element } = await render(
+          card({
+            status: 'REGISTERED',
+            inspection: { id: null, state: 'REQUIRED', completedAt: null, actualMinutes: null, faultCount: 0 },
+          }),
+        );
+
+        const missionEl = element.querySelector('.mission');
+        expect(missionEl).not.toBeNull();
+        const startBtn = missionEl?.querySelector('button.tap--primary') as HTMLButtonElement | null;
+        expect(startBtn).not.toBeNull();
+        expect(startBtn?.textContent).toContain('Start inspection');
+      });
+
+      it('calls api.startInspection, enters busy state, and reloads on success', async () => {
+        const { api, element, fixture } = await render(
+          card({
+            status: 'REGISTERED',
+            inspection: { id: null, state: 'REQUIRED', completedAt: null, actualMinutes: null, faultCount: 0 },
+          }),
+        );
+
+        const startBtn = element.querySelector('.mission button.tap--primary') as HTMLButtonElement;
+        expect(startBtn).not.toBeNull();
+
+        startBtn.click();
+        fixture.detectChanges();
+
+        expect(api.startInspection).toHaveBeenCalledTimes(1);
+        expect(api.startInspection).toHaveBeenCalledWith('wo1');
+        // Verifies reload occurred
+        expect(api.workCard).toHaveBeenCalledTimes(2);
+      });
+
+      it('displays meaningful error and clears busy state when startInspection fails', async () => {
+        const { api, element, fixture } = await render(
+          card({
+            status: 'REGISTERED',
+            inspection: { id: null, state: 'REQUIRED', completedAt: null, actualMinutes: null, faultCount: 0 },
+          }),
+        );
+
+        api.startInspection.mockReturnValue(throwError(() => ({ message: 'Cannot start inspection from this state.' })));
+
+        const startBtn = element.querySelector('.mission button.tap--primary') as HTMLButtonElement;
+        startBtn.click();
+        fixture.detectChanges();
+
+        expect(api.startInspection).toHaveBeenCalledWith('wo1');
+        const errorEl = element.querySelector('.action-error');
+        expect(errorEl?.textContent).toContain('Cannot start inspection from this state.');
+        expect(startBtn.disabled).toBe(false);
+      });
+    });
+
+    describe('State safety in REGISTERED + REQUIRED', () => {
+      it('does not render inspection completion or record controls inside Mission 1', async () => {
+        const { element } = await render(
+          card({
+            status: 'REGISTERED',
+            inspection: { id: null, state: 'REQUIRED', completedAt: null, actualMinutes: null, faultCount: 0 },
+          }),
+        );
+
+        const missionEl = element.querySelector('.mission');
+        expect(missionEl).not.toBeNull();
+        // Mission 1 has no completion controls
+        expect(missionEl?.textContent).not.toContain('Record inspection');
+        expect(missionEl?.textContent).not.toContain('Quick check');
+        expect(missionEl?.textContent).not.toContain('Full inspection');
+        expect(missionEl?.querySelector('input[type="number"]')).toBeNull();
+      });
+    });
+  });
+
+  describe('Active Inspection Workspace (Step 5B)', () => {
+    describe('A. Active workspace visibility', () => {
+      it('renders findings section, log finding action, and completion controls when inspection is IN_PROGRESS', async () => {
+        const { element } = await render(
+          card({
+            status: 'UNDER_INSPECTION',
+            inspection: { id: 'insp_act_1', state: 'IN_PROGRESS', completedAt: null, actualMinutes: null, faultCount: 0 },
+            findings: [],
+          }),
+        );
+
+        const missionEl = element.querySelector('.mission');
+        expect(missionEl).not.toBeNull();
+        expect(missionEl?.getAttribute('data-state')).toBe('IN_PROGRESS');
+
+        // Findings section is visible
+        const findingsSection = missionEl?.querySelector('.mission-findings');
+        expect(findingsSection).not.toBeNull();
+
+        // Log Finding action is visible
+        const logFindingBtn = missionEl?.querySelector('.tap--log-finding');
+        expect(logFindingBtn).not.toBeNull();
+        expect(logFindingBtn?.textContent).toContain('+ Log finding');
+
+        // Inspection completion controls are visible
+        const completeSection = missionEl?.querySelector('.mission-complete-inspection');
+        expect(completeSection).not.toBeNull();
+        expect(completeSection?.textContent).toContain('Complete inspection');
+      });
+    });
+
+    describe('B. Empty findings', () => {
+      it('renders clear empty state and no error state when findings list is empty', async () => {
+        const { element } = await render(
+          card({
+            status: 'UNDER_INSPECTION',
+            inspection: { id: 'insp_act_1', state: 'IN_PROGRESS', completedAt: null, actualMinutes: null, faultCount: 0 },
+            findings: [],
+          }),
+        );
+
+        const emptyEl = element.querySelector('.findings-empty');
+        expect(emptyEl).not.toBeNull();
+        expect(emptyEl?.textContent).toContain('No findings recorded yet.');
+        expect(element.querySelector('.action-error')).toBeNull();
+      });
+    });
+
+    describe('C. Findings rendering', () => {
+      it('renders correct descriptions, severity labels, and decision status labels for all variants', async () => {
+        const { element } = await render(
+          card({
+            status: 'UNDER_INSPECTION',
+            inspection: { id: 'insp_act_1', state: 'IN_PROGRESS', completedAt: null, actualMinutes: null, faultCount: 4 },
+            findings: [
+              {
+                id: 'f1',
+                description: 'Brake line severely cracked and leaking fluid',
+                severity: 'CRITICAL',
+                code: 'BRK-01',
+                recommendedService: 'Replace front brake lines',
+                inspectionId: 'insp_act_1',
+                decisionStatus: 'PENDING',
+              },
+              {
+                id: 'f2',
+                description: 'Windshield wiper blade streaking slightly',
+                severity: 'LOW',
+                code: null,
+                recommendedService: null,
+                inspectionId: 'insp_act_1',
+                decisionStatus: 'NOT_REQUESTED',
+              },
+              {
+                id: 'f3',
+                description: 'Front control arm bushing torn',
+                severity: 'HIGH',
+                code: 'SUS-03',
+                recommendedService: 'Front control arm replacement',
+                inspectionId: 'insp_act_1',
+                decisionStatus: 'APPROVED',
+              },
+              {
+                id: 'f4',
+                description: 'Air filter heavily saturated with dust',
+                severity: 'MEDIUM',
+                code: null,
+                recommendedService: 'Engine air filter replacement',
+                inspectionId: 'insp_act_1',
+                decisionStatus: 'REJECTED',
+              },
+            ],
+          }),
+        );
+
+        const items = element.querySelectorAll('.finding-item');
+        expect(items.length).toBe(4);
+
+        // Finding 1: CRITICAL + PENDING
+        expect(items[0].textContent).toContain('Brake line severely cracked and leaking fluid');
+        expect(items[0].textContent).toContain('CRITICAL');
+        expect(items[0].textContent).toContain('Pending customer');
+        expect(items[0].textContent).toContain('BRK-01');
+        expect(items[0].textContent).toContain('Replace front brake lines');
+
+        // Finding 2: LOW + NOT_REQUESTED
+        expect(items[1].textContent).toContain('Windshield wiper blade streaking slightly');
+        expect(items[1].textContent).toContain('LOW');
+        expect(items[1].textContent).toContain('Internal / No customer decision requested');
+
+        // Finding 3: HIGH + APPROVED
+        expect(items[2].textContent).toContain('Front control arm bushing torn');
+        expect(items[2].textContent).toContain('HIGH');
+        expect(items[2].textContent).toContain('Approved');
+        expect(items[2].textContent).toContain('SUS-03');
+
+        // Finding 4: MEDIUM + REJECTED
+        expect(items[3].textContent).toContain('Air filter heavily saturated with dust');
+        expect(items[3].textContent).toContain('MEDIUM');
+        expect(items[3].textContent).toContain('Rejected');
+        expect(items[3].textContent).toContain('Engine air filter replacement');
+      });
+    });
+
+    describe('D. Lineage regression test', () => {
+      it('associates created fault with the active inspectionId insp_123', async () => {
+        const { api, page } = await render(
+          card({
+            status: 'UNDER_INSPECTION',
+            inspection: { id: 'insp_123', state: 'IN_PROGRESS', completedAt: null, actualMinutes: null, faultCount: 0 },
+          }),
+        );
+
+        page.faultText.set('Exhaust manifold leak detected');
+        page.faultSeverity.set('HIGH');
+        page.logFault();
+
+        expect(api.createFault).toHaveBeenCalledWith(
+          'wo1',
+          'Exhaust manifold leak detected',
+          'HIGH',
+          'insp_123',
+        );
+      });
+    });
+
+    describe('E. Decision chaining', () => {
+      it('chains returned fault_456 id into api.raiseDecision', async () => {
+        const { api, page } = await render(
+          card({
+            status: 'UNDER_INSPECTION',
+            inspection: { id: 'insp_123', state: 'IN_PROGRESS', completedAt: null, actualMinutes: null, faultCount: 0 },
+          }),
+        );
+
+        api.createFault.mockReturnValue(of({ id: 'fault_456' }));
+
+        page.faultText.set('Cracked cylinder head');
+        page.faultSeverity.set('CRITICAL');
+        page.askCustomer.set(true);
+        page.faultPrice.set('450.00');
+        page.faultLaborPrice.set('200.00');
+
+        page.logFault();
+
+        expect(api.createFault).toHaveBeenCalledWith(
+          'wo1',
+          'Cracked cylinder head',
+          'CRITICAL',
+          'insp_123',
+        );
+        expect(api.raiseDecision).toHaveBeenCalledWith('wo1', {
+          name: 'Cracked cylinder head',
+          explanation: 'Cracked cylinder head',
+          importance: 'CRITICAL',
+          price: '450.00',
+          laborPrice: '200.00',
+          faultId: 'fault_456',
+        });
+      });
+    });
+
+    describe('F. Partial success', () => {
+      it('retains finding, triggers reload, and shows partial success error when raiseDecision fails', async () => {
+        const { api, page, fixture, element } = await render(
+          card({
+            status: 'UNDER_INSPECTION',
+            inspection: { id: 'insp_123', state: 'IN_PROGRESS', completedAt: null, actualMinutes: null, faultCount: 0 },
+          }),
+        );
+
+        api.createFault.mockReturnValue(of({ id: 'fault_789' }));
+        api.raiseDecision.mockReturnValue(throwError(() => ({ message: 'Decision gateway timeout' })));
+
+        page.faultText.set('Worn serpentine belt');
+        page.askCustomer.set(true);
+        page.faultPrice.set('65.00');
+
+        page.logFault();
+        fixture.detectChanges();
+
+        expect(api.createFault).toHaveBeenCalledTimes(1);
+        expect(api.raiseDecision).toHaveBeenCalledTimes(1);
+        // Work card reload occurred
+        expect(api.workCard).toHaveBeenCalledTimes(2);
+
+        const errorEl = element.querySelector('.action-error');
+        expect(errorEl?.textContent).toContain('Logged finding, but asking the customer did not go through: Decision gateway timeout');
+      });
+    });
+
+    describe('G. Complete inspection payload', () => {
+      it('submits canonical RecordInspection payload with type, odometer, actualMinutes, and note', async () => {
+        const { api, page } = await render(
+          card({
+            status: 'UNDER_INSPECTION',
+            inspection: { id: 'insp_123', state: 'IN_PROGRESS', completedAt: null, actualMinutes: null, faultCount: 1 },
+          }),
+        );
+
+        page.inspectionType.set('FULL');
+        page.inspectionOdometer.set('54000');
+        page.inspectionMinutes.set('25');
+        page.inspectionNote.set('Inspection completed');
+
+        page.completeInspection();
+
+        expect(api.recordInspection).toHaveBeenCalledWith('wo1', {
+          type: 'FULL',
+          odometerOrHours: 54000,
+          actualMinutes: 25,
+          note: 'Inspection completed',
+        });
+        expect(api.workCard).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    describe('H. Quick inspection', () => {
+      it('submits canonical payload with type QUICK', async () => {
+        const { api, page } = await render(
+          card({
+            status: 'UNDER_INSPECTION',
+            inspection: { id: 'insp_123', state: 'IN_PROGRESS', completedAt: null, actualMinutes: null, faultCount: 0 },
+          }),
+        );
+
+        page.completeInspection('QUICK');
+
+        expect(api.recordInspection).toHaveBeenCalledWith('wo1', {
+          type: 'QUICK',
+        });
+      });
+    });
+
+    describe('I. State safety', () => {
+      it('does not render Active Inspection Workspace controls when inspection is REQUIRED', async () => {
+        const { element } = await render(
+          card({
+            status: 'REGISTERED',
+            inspection: { id: null, state: 'REQUIRED', completedAt: null, actualMinutes: null, faultCount: 0 },
+          }),
+        );
+
+        const missionEl = element.querySelector('.mission');
+        expect(missionEl).not.toBeNull();
+        expect(missionEl?.querySelector('.tap--log-finding')).toBeNull();
+        expect(missionEl?.querySelector('.mission-fault-form')).toBeNull();
+        expect(missionEl?.querySelector('.mission-complete-inspection')).toBeNull();
+        expect(missionEl?.querySelector('.completion-input')).toBeNull();
+      });
+
+      it('does not render Active Inspection Workspace controls when inspection is COMPLETED', async () => {
+        const { element } = await render(
+          card({
+            status: 'IN_PROGRESS',
+            inspection: {
+              id: 'insp_past',
+              state: 'COMPLETED',
+              completedAt: '2026-09-04T08:00:00.000Z',
+              actualMinutes: 30,
+              faultCount: 0,
+            },
+          }),
+        );
+
+        const missionEl = element.querySelector('.mission');
+        expect(missionEl).not.toBeNull();
+        expect(missionEl?.querySelector('.tap--log-finding')).toBeNull();
+        expect(missionEl?.querySelector('.mission-fault-form')).toBeNull();
+        expect(missionEl?.querySelector('.mission-complete-inspection')).toBeNull();
+        expect(missionEl?.querySelector('.completion-input')).toBeNull();
+      });
+
+      it('does not render Active Inspection Workspace controls when inspection is DECLINED', async () => {
+        const { element } = await render(
+          card({
+            status: 'IN_PROGRESS',
+            inspection: {
+              id: 'insp_past',
+              state: 'DECLINED',
+              completedAt: null,
+              actualMinutes: null,
+              faultCount: 0,
+            },
+          }),
+        );
+
+        const missionEl = element.querySelector('.mission');
+        expect(missionEl).not.toBeNull();
+        expect(missionEl?.querySelector('.tap--log-finding')).toBeNull();
+        expect(missionEl?.querySelector('.mission-fault-form')).toBeNull();
+        expect(missionEl?.querySelector('.mission-complete-inspection')).toBeNull();
+        expect(missionEl?.querySelector('.completion-input')).toBeNull();
+      });
+    });
+  });
+
+  describe('Post-Inspection UX Continuity and Context (Step 5C)', () => {
+    describe('A & B. Completed inspection findings and decision status persistence', () => {
+      it('renders findings with all decision statuses when inspection.state is COMPLETED', async () => {
+        const { element } = await render(
+          card({
+            status: 'APPROVED_FOR_WORK',
+            inspection: { id: 'insp_c1', state: 'COMPLETED', completedAt: '2026-09-05T10:00:00.000Z', actualMinutes: 25, faultCount: 4 },
+            findings: [
+              {
+                id: 'f1',
+                description: 'Severely cracked brake disc',
+                severity: 'CRITICAL',
+                code: 'BRK-01',
+                recommendedService: 'Rotor replacement',
+                inspectionId: 'insp_c1',
+                decisionStatus: 'PENDING',
+              },
+              {
+                id: 'f2',
+                description: 'Worn air filter',
+                severity: 'LOW',
+                code: null,
+                recommendedService: null,
+                inspectionId: 'insp_c1',
+                decisionStatus: 'NOT_REQUESTED',
+              },
+              {
+                id: 'f3',
+                description: 'Leaking water pump',
+                severity: 'HIGH',
+                code: 'COOL-02',
+                recommendedService: 'Water pump replacement',
+                inspectionId: 'insp_c1',
+                decisionStatus: 'APPROVED',
+              },
+              {
+                id: 'f4',
+                description: 'Torn CV boot',
+                severity: 'MEDIUM',
+                code: null,
+                recommendedService: 'Axle assembly replacement',
+                inspectionId: 'insp_c1',
+                decisionStatus: 'REJECTED',
+              },
+            ],
+          }),
+        );
+
+        const missionEl = element.querySelector('.mission');
+        expect(missionEl).not.toBeNull();
+        expect(missionEl?.textContent).toContain('Completed');
+        expect(missionEl?.textContent).toContain('4 findings recorded');
+
+        const items = missionEl?.querySelectorAll('.finding-item');
+        expect(items?.length).toBe(4);
+
+        // Finding 1: CRITICAL + PENDING
+        expect(items![0].textContent).toContain('Severely cracked brake disc');
+        expect(items![0].textContent).toContain('CRITICAL');
+        expect(items![0].textContent).toContain('Pending customer');
+        expect(items![0].textContent).toContain('BRK-01');
+        expect(items![0].textContent).toContain('Rotor replacement');
+
+        // Finding 2: LOW + NOT_REQUESTED
+        expect(items![1].textContent).toContain('Worn air filter');
+        expect(items![1].textContent).toContain('LOW');
+        expect(items![1].textContent).toContain('Internal / No customer decision requested');
+
+        // Finding 3: HIGH + APPROVED
+        expect(items![2].textContent).toContain('Leaking water pump');
+        expect(items![2].textContent).toContain('HIGH');
+        expect(items![2].textContent).toContain('Approved');
+        expect(items![2].textContent).toContain('COOL-02');
+
+        // Finding 4: MEDIUM + REJECTED
+        expect(items![3].textContent).toContain('Torn CV boot');
+        expect(items![3].textContent).toContain('MEDIUM');
+        expect(items![3].textContent).toContain('Rejected');
+        expect(items![3].textContent).toContain('Axle assembly replacement');
+      });
+    });
+
+    describe('C. Completed inspection safety', () => {
+      it('ensures log finding controls, form, and complete inspection controls are absent in COMPLETED', async () => {
+        const { element } = await render(
+          card({
+            status: 'APPROVED_FOR_WORK',
+            inspection: { id: 'insp_c1', state: 'COMPLETED', completedAt: '2026-09-05T10:00:00.000Z', actualMinutes: 20, faultCount: 1 },
+            findings: [
+              {
+                id: 'f1',
+                description: 'Worn brake pads',
+                severity: 'HIGH',
+                code: null,
+                recommendedService: null,
+                inspectionId: 'insp_c1',
+                decisionStatus: 'APPROVED',
+              },
+            ],
+          }),
+        );
+
+        const missionEl = element.querySelector('.mission');
+        expect(missionEl).not.toBeNull();
+        // Finding remains visible
+        expect(missionEl?.querySelector('.finding-item')).not.toBeNull();
+        // Safety: log finding controls absent
+        expect(missionEl?.querySelector('.tap--log-finding')).toBeNull();
+        expect(missionEl?.querySelector('.mission-fault-form')).toBeNull();
+        // Safety: complete inspection controls absent
+        expect(missionEl?.querySelector('.mission-complete-inspection')).toBeNull();
+        expect(missionEl?.querySelector('.completion-input')).toBeNull();
+      });
+    });
+
+    describe('D. Awaiting customer approval context', () => {
+      it('renders waiting for customer decision banner, keeps findings visible, and keeps repair locked', async () => {
+        const { element } = await render(
+          card({
+            status: 'AWAITING_CUSTOMER_APPROVAL',
+            inspection: { id: 'insp_c1', state: 'COMPLETED', completedAt: '2026-09-05T10:00:00.000Z', actualMinutes: 30, faultCount: 1 },
+            findings: [
+              {
+                id: 'f1',
+                description: 'Front suspension strut bent',
+                severity: 'CRITICAL',
+                code: 'SUS-01',
+                recommendedService: 'Front strut replacement',
+                inspectionId: 'insp_c1',
+                decisionStatus: 'PENDING',
+              },
+            ],
+            repairLocked: true,
+            repairLockReason: 'This job still needs approval before work can start.',
+            tasks: [{ id: 't1', title: 'Replace strut', status: 'ASSIGNED', blockedReason: null }],
+          }),
+        );
+
+        const missionEl = element.querySelector('.mission');
+        expect(missionEl).not.toBeNull();
+        expect(missionEl?.textContent).toContain('Completed');
+
+        // Contextual banner for AWAITING_CUSTOMER_APPROVAL
+        const banner = missionEl?.querySelector('.mission-locked-banner');
+        expect(banner).not.toBeNull();
+        expect(banner?.textContent).toContain('Waiting for customer decision');
+        expect(banner?.textContent).toContain("Inspection is complete. Repair work is waiting for the customer's decision.");
+
+        // Findings remain visible
+        const finding = missionEl?.querySelector('.finding-item');
+        expect(finding).not.toBeNull();
+        expect(finding?.textContent).toContain('Front suspension strut bent');
+        expect(finding?.textContent).toContain('Pending customer');
+
+        // Repair remains locked
+        expect(element.querySelector('.tools-locked')).not.toBeNull();
+        const startBtn = element.querySelector('.task button.tap--primary') as HTMLButtonElement | null;
+        expect(startBtn?.disabled).toBe(true);
+      });
+    });
+
+    describe('E. Post-completion UNDER_INSPECTION context', () => {
+      it('renders authorization required banner with repairLockReason when status is UNDER_INSPECTION and inspection is COMPLETED', async () => {
+        const { element } = await render(
+          card({
+            status: 'UNDER_INSPECTION',
+            inspection: { id: 'insp_c1', state: 'COMPLETED', completedAt: '2026-09-05T10:00:00.000Z', actualMinutes: 15, faultCount: 1 },
+            findings: [
+              {
+                id: 'f1',
+                description: 'Uncovered critical fault',
+                severity: 'CRITICAL',
+                code: null,
+                recommendedService: null,
+                inspectionId: 'insp_c1',
+                decisionStatus: 'NOT_REQUESTED',
+              },
+            ],
+            repairLocked: true,
+            repairLockReason: 'Ask the customer to approve the work before starting it.',
+            tasks: [{ id: 't1', title: 'Critical repair', status: 'ASSIGNED', blockedReason: null }],
+          }),
+        );
+
+        const missionEl = element.querySelector('.mission');
+        expect(missionEl).not.toBeNull();
+        // Mission 1 indicates inspection itself is complete
+        expect(missionEl?.textContent).toContain('Completed');
+
+        // Contextual banner explains authorization required without changing lifecycle semantics
+        const banner = missionEl?.querySelector('.mission-locked-banner');
+        expect(banner).not.toBeNull();
+        expect(banner?.textContent).toContain('Inspection complete — authorization required');
+        expect(banner?.textContent).toContain('Inspection is complete, but the job cannot move to repair work yet.');
+        expect(banner?.textContent).toContain('Ask the customer to approve the work before starting it.');
+
+        // Findings remain visible
+        expect(missionEl?.querySelector('.finding-item')).not.toBeNull();
+        expect(missionEl?.textContent).toContain('Uncovered critical fault');
+
+        // No inspection workspace controls return
+        expect(missionEl?.querySelector('.tap--log-finding')).toBeNull();
+        expect(missionEl?.querySelector('.mission-complete-inspection')).toBeNull();
+
+        // Repair remains locked
+        const startBtn = element.querySelector('.task button.tap--primary') as HTMLButtonElement | null;
+        expect(startBtn?.disabled).toBe(true);
+      });
+    });
+  });
+
+  describe('Step 6 — Inspection Decoupled from Exception Handling', () => {
+    it('does not render "Record inspection" in the "Something\'s wrong" tools section', async () => {
+      const { element } = await render(card({ status: 'IN_PROGRESS' }));
+
+      const toolsSection = Array.from(element.querySelectorAll('.tools')).find(
+        (el) => el.querySelector('.tools-title')?.textContent?.includes("Something's wrong"),
+      );
+      expect(toolsSection).not.toBeUndefined();
+
+      // "Record inspection" button must NOT exist in the tools section
+      const buttons = Array.from(toolsSection!.querySelectorAll('button.tap'));
+      const recordInspectionBtn = buttons.find((btn) => btn.textContent?.includes('Record inspection'));
+      expect(recordInspectionBtn).toBeUndefined();
+
+      // Inspection panel must not exist
+      expect(toolsSection!.querySelector('.fault textarea[placeholder*="What did you check"]')).toBeNull();
+    });
+
+    it('keeps real exception and blocker tools visible and functional', async () => {
+      const { fixture, element } = await render(card({ status: 'IN_PROGRESS' }));
+
+      const toolsSection = Array.from(element.querySelectorAll('.tools')).find(
+        (el) => el.querySelector('.tools-title')?.textContent?.includes("Something's wrong"),
+      );
+      expect(toolsSection).not.toBeUndefined();
+
+      // Genuine tools remain present
+      expect(toolsSection!.querySelector('a[href*="/parts"]')?.textContent).toContain('Need parts');
+      const buttons = Array.from(toolsSection!.querySelectorAll('button.tap'));
+      expect(buttons.some((btn) => btn.textContent?.includes('Part from outside'))).toBe(true);
+      expect(buttons.some((btn) => btn.textContent?.includes("I'm blocked"))).toBe(true);
+      expect(buttons.some((btn) => btn.textContent?.includes('Found a fault'))).toBe(true);
+
+      // Clicking "I'm blocked" opens the genuine blocker reasons
+      const blockedBtn = buttons.find((btn) => btn.textContent?.includes("I'm blocked")) as HTMLButtonElement | undefined;
+      expect(blockedBtn).toBeDefined();
+      blockedBtn!.click();
+      fixture.detectChanges();
+
+      const blockerPanel = toolsSection!.querySelector('.reasons');
+      expect(blockerPanel).not.toBeNull();
+      expect(blockerPanel?.textContent).toContain('Missing a tool');
+      expect(blockerPanel?.textContent).toContain('Not safe to continue');
+    });
+
+    it('does not hide genuine task blockers when inspection is completed', async () => {
+      const { element } = await render(
+        card({
+          status: 'IN_PROGRESS',
+          inspection: { id: 'insp1', state: 'COMPLETED', completedAt: '2026-09-04T08:00:00.000Z', actualMinutes: 20, faultCount: 0 },
+          tasks: [
+            {
+              id: 't1',
+              title: 'Replace brake discs',
+              status: 'IN_PROGRESS',
+              blockedReason: 'Special caliper tool missing',
+            },
+          ],
+        }),
+      );
+
+      // Blocked task alert banner is rendered
+      const blockedSection = element.querySelector('.blocked');
+      expect(blockedSection).not.toBeNull();
+      expect(blockedSection?.textContent).toContain('Blocked');
+      expect(blockedSection?.textContent).toContain('Special caliper tool missing');
+      expect(blockedSection?.textContent).toContain('Your branch manager can see this.');
+
+      // Mission 1 is distinct and completed
+      const missionEl = element.querySelector('.mission');
+      expect(missionEl?.textContent).toContain('Mission 1');
+      expect(missionEl?.textContent).toContain('Completed');
+    });
+
+    it('ensures Mission 1 inspection states (REQUIRED, IN_PROGRESS, COMPLETED) function strictly within Mission 1', async () => {
+      // 1. REQUIRED
+      const { element: reqEl } = await render(
+        card({
+          status: 'REGISTERED',
+          inspection: { id: null, state: 'REQUIRED', completedAt: null, actualMinutes: null, faultCount: 0 },
+        }),
+      );
+      const missionReq = reqEl.querySelector('.mission');
+      expect(missionReq?.textContent).toContain('Mission 1');
+      expect(missionReq?.textContent).toContain('Not started');
+      expect(missionReq?.querySelector('button')?.textContent).toContain('Start inspection');
+
+      // Exception tools do not show inspection
+      const toolsReq = Array.from(reqEl.querySelectorAll('.tools')).find(
+        (el) => el.querySelector('.tools-title')?.textContent?.includes("Something's wrong"),
+      );
+      expect(toolsReq?.textContent).not.toContain('Record inspection');
+    });
+  });
 });
+

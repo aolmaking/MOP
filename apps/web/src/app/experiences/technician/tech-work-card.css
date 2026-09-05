@@ -42,6 +42,31 @@
   font-size: var(--tech-text);
 }
 
+.card-complaint {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--surface-raised, var(--surface));
+  border-inline-start: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+}
+
+.card-complaint-label {
+  font-size: var(--tech-text-xs, 0.75rem);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--accent);
+}
+
+.card-complaint-text {
+  font-size: var(--tech-text);
+  line-height: var(--leading-normal);
+  color: var(--text);
+  font-weight: 500;
+}
+
 .card-note {
   padding-inline-start: var(--space-3);
   border-inline-start: 3px solid var(--border-strong);
@@ -491,6 +516,261 @@
 .mission-note {
   color: var(--text-faint);
   font-size: var(--tech-text-sm);
+}
+
+.mission-actions {
+  margin-block-start: var(--space-3);
+}
+
+.mission[data-state='IN_PROGRESS'] {
+  border-inline-start-color: var(--accent);
+}
+
+.mission-locked-banner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-block-start: var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface);
+  border-inline-start: 4px solid var(--warning);
+  border-radius: var(--radius-sm);
+}
+
+.mission-locked-title {
+  margin: 0;
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--warning, #b45309);
+}
+
+.mission-locked-text {
+  margin: 0;
+  font-size: var(--tech-text);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.mission-locked-reason {
+  margin: 0;
+  font-size: var(--tech-text-sm);
+  color: var(--text-muted);
+}
+
+.mission-status-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-block-end: var(--space-2);
+}
+
+.mission-subheading {
+  margin: 0;
+  padding-block-end: var(--space-1);
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--text-muted);
+}
+
+.mission-findings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-block-start: var(--space-3);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border);
+}
+
+.findings-empty {
+  margin: 0;
+  padding: var(--space-2) 0;
+  color: var(--text-faint);
+  font-size: var(--tech-text-sm);
+  font-style: italic;
+}
+
+.findings-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.finding-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.finding-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.severity-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--tech-text-xs, 0.75rem);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+}
+
+.severity-badge[data-severity='CRITICAL'] {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.severity-badge[data-severity='HIGH'] {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.severity-badge[data-severity='MEDIUM'] {
+  background: var(--surface-raised, var(--surface));
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+
+.severity-badge[data-severity='LOW'] {
+  background: var(--surface-raised, var(--surface));
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.finding-code {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--tech-text-xs, 0.75rem);
+  color: var(--text-muted);
+  padding: 2px var(--space-1);
+  background: var(--surface-raised, var(--surface));
+  border-radius: var(--radius-sm);
+}
+
+.decision-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--tech-text-xs, 0.75rem);
+  font-weight: 600;
+  margin-inline-start: auto;
+}
+
+.decision-badge[data-decision='PENDING'] {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.decision-badge[data-decision='APPROVED'] {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.decision-badge[data-decision='REJECTED'] {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.decision-badge[data-decision='NOT_REQUESTED'] {
+  background: var(--surface-raised, var(--surface));
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.finding-desc {
+  margin: 0;
+  font-size: var(--tech-text);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.finding-service {
+  margin: 0;
+  font-size: var(--tech-text-sm);
+  color: var(--text-muted);
+}
+
+.mission-log-finding {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-block-start: var(--space-3);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border);
+}
+
+.mission-fault-form {
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.mission-complete-inspection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-block-start: var(--space-3);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border);
+}
+
+.completion-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.completion-type-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.completion-type-toggle {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.completion-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.completion-field-label {
+  font-size: var(--tech-text-sm);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.completion-input,
+.completion-textarea {
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--tech-text);
+}
+
+.tap--toggle {
+  flex: 1 1 0;
 }
 
 /* Why the repair rows below are inert.

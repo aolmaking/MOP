@@ -1,6 +1,6 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { routeForBlocker, type BlockerReasonKey } from "@mop/shared";
-import type { InspectionType, Prisma, SeverityLevel } from "@mop/database";
+import type { Inspection, InspectionType, Prisma, SeverityLevel, TaskReworkReason } from "@mop/database";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { OperationEventsService } from "./operation-events.service";
 import { WorkOrderLifecycleService, type LifecycleActor } from "./work-order-lifecycle.service";
@@ -198,6 +198,22 @@ export class TechnicianWorkService {
     // startable through the change.
     await this.lifecycle.assertOperationalWorkAuthorized(task.workOrderId);
 
+    const executionPolicy = await this.policies.resolveValue(task.tenantId, "UNAPPROVED_WORK_EXECUTION");
+    if (executionPolicy === "BLOCKED") {
+      const pendingApproval = await this.prisma.customerDecisionRequest.count({
+        where: {
+          workOrderId: task.workOrderId,
+          status: { in: ["SENT", "VIEWED", "PARTIALLY_RESPONDED"] },
+        },
+      });
+      if (pendingApproval > 0) {
+        throw new ConflictException({
+          code: "work_not_authorized",
+          message: "Customer approval is pending for this job. Work cannot start until customer approval is granted.",
+        });
+      }
+    }
+
     const openBlockers = await this.prisma.taskBlocker.count({
       where: { taskId, status: { in: ["OPEN", "ESCALATED"] } },
     });
@@ -281,7 +297,7 @@ export class TechnicianWorkService {
     const actualMinutes = timeTracking === "OFF" ? null : minutesSpent ?? null;
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.task.update({ where: { id: taskId }, data: { status: "DONE", actualMinutes } });
+      await tx.task.update({ where: { id: taskId }, data: { status: "DONE", actualMinutes, completedAt: new Date() } });
       await this.events.emit(
         {
           tenantId: task.tenantId,
@@ -305,6 +321,146 @@ export class TechnicianWorkService {
   }
 
   /**
+   * Transitions a task to RETURNED_FOR_REWORK.
+   * Preserves current assignment and records structured reason and optional note.
+   */
+  async returnTaskForRework(
+    taskId: string,
+    actor: LifecycleActor,
+    input: { reason?: TaskReworkReason; note?: string } = {},
+  ) {
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: { id: true, tenantId: true, workOrderId: true, status: true, serviceKey: true },
+    });
+    if (!task) throw new NotFoundException({ code: "task_not_found", message: "Task not found." });
+
+    if (task.status === "CANCELLED") {
+      throw new BadRequestException({ code: "task_cancelled", message: "Cancelled task cannot be returned for rework." });
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.task.update({
+        where: { id: taskId },
+        data: {
+          status: "RETURNED_FOR_REWORK",
+          reworkReason: input.reason ?? null,
+          reworkNote: input.note ?? null,
+        },
+      });
+
+      await this.events.emit(
+        {
+          tenantId: task.tenantId,
+          eventKey: "task.returned_for_rework",
+          actorId: actor.accountId,
+          actorName: actor.displayName,
+          actorType: actor.actorType,
+          targetType: "Task",
+          targetId: taskId,
+          riskLevel: "LOW",
+          payload: {
+            taskId,
+            workOrderId: task.workOrderId,
+            serviceKey: task.serviceKey,
+            reason: input.reason ?? null,
+            note: input.note ?? null,
+          },
+        },
+        tx,
+      );
+
+      return updated;
+    });
+  }
+
+  /**
+   * Creates a dedicated rework task linked explicitly to an original task.
+   * Copies workOrderId, tenantId, and serviceKey from the original task,
+   * while recording the structured rework reason and optional note.
+   */
+  async createReworkTask(
+    input: {
+      originalTaskId: string;
+      title?: string;
+      reason: TaskReworkReason;
+      note?: string;
+      assignToStaffUserId?: string;
+    },
+    actor: LifecycleActor,
+  ) {
+    const original = await this.prisma.task.findUnique({
+      where: { id: input.originalTaskId },
+      select: {
+        id: true,
+        tenantId: true,
+        workOrderId: true,
+        title: true,
+        serviceKey: true,
+        decisionItemId: true,
+        status: true,
+      },
+    });
+    if (!original) {
+      throw new NotFoundException({ code: "original_task_not_found", message: "Original task not found." });
+    }
+
+    // Work order must still be authorized for operational work
+    await this.lifecycle.assertOperationalWorkAuthorized(original.workOrderId);
+
+    const taskTitle = input.title ?? `Rework: ${original.title}`;
+
+    return this.prisma.$transaction(async (tx) => {
+      const reworkTask = await tx.task.create({
+        data: {
+          tenantId: original.tenantId,
+          workOrderId: original.workOrderId,
+          title: taskTitle,
+          serviceKey: original.serviceKey,
+          decisionItemId: original.decisionItemId,
+          originalTaskId: original.id,
+          reworkReason: input.reason,
+          reworkNote: input.note ?? null,
+        },
+      });
+
+      if (input.assignToStaffUserId) {
+        await tx.taskAssignment.create({
+          data: {
+            tenantId: original.tenantId,
+            taskId: reworkTask.id,
+            staffUserId: input.assignToStaffUserId,
+          },
+        });
+      }
+
+      await this.events.emit(
+        {
+          tenantId: original.tenantId,
+          eventKey: "task.rework_created",
+          actorId: actor.accountId,
+          actorName: actor.displayName,
+          actorType: actor.actorType,
+          targetType: "Task",
+          targetId: reworkTask.id,
+          riskLevel: "LOW",
+          payload: {
+            taskId: reworkTask.id,
+            originalTaskId: original.id,
+            workOrderId: original.workOrderId,
+            serviceKey: original.serviceKey,
+            reason: input.reason,
+            note: input.note ?? null,
+          },
+        },
+        tx,
+      );
+
+      return reworkTask;
+    });
+  }
+
+  /**
    * The technician's own press of "Ready to finish" -- the FINISH intent,
    * asked for real rather than only previewed.
    *
@@ -319,8 +475,77 @@ export class TechnicianWorkService {
     return this.lifecycle.apply(workOrderId, "FINISH", actor);
   }
 
+  /**
+   * Begins a vehicle inspection.
+   *
+   * The lifecycle transition and the Inspection row are atomic: if either
+   * write fails, neither persists. The WorkOrder row is locked first
+   * (`FOR UPDATE`) so that two concurrent presses on the same job cannot
+   * both observe "no open inspection" and each create one.
+   *
+   * Idempotent by design:
+   *   - WorkOrder already `UNDER_INSPECTION` + open Inspection row exists
+   *     → returns the existing inspection without retrying the transition.
+   *   - WorkOrder already `UNDER_INSPECTION` + no open row
+   *     → creates the missing row (backward-compat for jobs that reached
+   *       UNDER_INSPECTION before this column existed).
+   *   - WorkOrder in any state where `START_INSPECTION` is not an allowed
+   *     intent → lifecycle.apply throws; transaction rolls back; nothing
+   *     persists.
+   */
   async startInspection(workOrderId: string, actor: LifecycleActor) {
-    return this.lifecycle.apply(workOrderId, "START_INSPECTION", actor);
+    const workOrder = await this.requireWorkOrder(workOrderId);
+
+    return this.prisma.$transaction(async (tx) => {
+      // Serialize all concurrent startInspection calls on the WorkOrder
+      // row. A second caller either sees the row after the first committed
+      // (and finds an existing open Inspection below) or waits for the
+      // first to finish -- in either case only one Inspection is created.
+      await tx.$queryRaw`SELECT id FROM "work_orders" WHERE id = ${workOrderId} FOR UPDATE`;
+
+      // Idempotency check. An existing open row means this call is a
+      // replay or a double-tap; return the existing row rather than
+      // creating a second one.
+      const existing = await tx.inspection.findFirst({
+        where: { workOrderId, completedAt: null },
+        select: { id: true },
+      });
+
+      if (existing && workOrder.status === "UNDER_INSPECTION") {
+        // Already in the right state with a live inspection row -- nothing
+        // to do. Return what already exists.
+        return {
+          workOrderId,
+          from: "UNDER_INSPECTION" as const,
+          to: "UNDER_INSPECTION" as const,
+          inspectionId: existing.id,
+        };
+      }
+
+      const inspection = existing ?? (await tx.inspection.create({
+        data: {
+          tenantId: workOrder.tenantId,
+          workOrderId,
+          // The technician's account is the closest available identity at
+          // this point. recordInspection() will carry the same staffUserId.
+          technicianId: actor.accountId,
+          // The type is filled in by recordInspection(); QUICK is a
+          // placeholder that will be overwritten when the findings land.
+          type: "QUICK",
+          fields: {},
+          startedAt: new Date(),
+          // completedAt intentionally null -- marks this as in-progress.
+        },
+        select: { id: true },
+      }));
+
+      // The lifecycle write is folded into this transaction via options.tx.
+      // If the graph refuses (wrong state, policy, capability) the whole
+      // transaction rolls back and neither write persists.
+      const result = await this.lifecycle.apply(workOrderId, "START_INSPECTION", actor, { tx });
+
+      return { ...result, inspectionId: inspection.id };
+    });
   }
 
   async startWork(workOrderId: string, actor: LifecycleActor) {
@@ -338,6 +563,40 @@ export class TechnicianWorkService {
     // inventory, which made this the shortest route from "unauthorized
     // job" to "charge on an invoice" in the whole product.
     await this.lifecycle.assertOperationalWorkAuthorized(workOrderId);
+
+    if (input.provenance === "CUSTOMER_SUPPLIED") {
+      const policy = await this.policies.resolveValue(workOrder.tenantId, "CUSTOMER_SUPPLIED_PARTS");
+      if (policy === "REFUSED") {
+        throw new BadRequestException({
+          code: "customer_parts_refused",
+          message: "Customer-supplied parts are not accepted by this workshop.",
+        });
+      }
+    } else if (input.provenance === "EXTERNAL_PURCHASE") {
+      const policy = await this.policies.resolveValue(workOrder.tenantId, "DIRECT_PART_PURCHASE");
+      if (policy === "NEVER") {
+        throw new BadRequestException({
+          code: "direct_purchase_forbidden",
+          message: "Direct part purchases are not allowed; parts must be received into and issued from inventory.",
+        });
+      }
+      if (policy === "ONLY_IF_OUT_OF_STOCK") {
+        const inStock = await this.prisma.inventoryItem.findFirst({
+          where: {
+            tenantId: workOrder.tenantId,
+            name: { equals: input.name, mode: "insensitive" },
+            stockBalances: { some: { availableQty: { gt: 0 } } },
+          },
+          select: { id: true },
+        });
+        if (inStock) {
+          throw new BadRequestException({
+            code: "warehouse_stock_available",
+            message: `Stock is available in the warehouse for "${input.name}". Issue from inventory instead of purchasing directly.`,
+          });
+        }
+      }
+    }
 
     const quantity = input.quantity ?? 1;
     return this.prisma.$transaction(async (tx) => {
@@ -411,39 +670,84 @@ export class TechnicianWorkService {
   /**
    * Records a completed inspection.
    *
-   * `completedAt` is stamped here rather than left for a second call
-   * because that is what this write honestly is: the technician submits
-   * the findings when the diagnosis is done. An inspection row created by
-   * `beginInspection` below is the in-progress case, and this fills it in.
+   * Finds the open (completedAt = null) Inspection row created by
+   * `startInspection()` and stamps it with `completedAt` and the
+   * technician's findings. If no open row exists -- because this job
+   * reached UNDER_INSPECTION before this column existed -- a completed
+   * row is created directly (backward-compatible fallback).
    *
-   * The stamped time is what the ordering check reads, which is why it is
-   * taken from the server and never from the request body: "when was this
-   * inspected" decides whether work that already happened was legal, and
-   * a client-supplied answer to that question is not evidence.
+   * The stamped time is what the `inspection_completed` gate reads. It
+   * comes from the server so that "when was this inspected" cannot be
+   * supplied by a client: that timestamp decides whether work that
+   * already happened was legal, and a client-supplied answer is not
+   * evidence.
+   *
+   * After the inspection row is committed, this method attempts to
+   * advance the work order to APPROVED_FOR_WORK based on the workshop's
+   * APPROVAL_REQUIRED_SCOPE policy:
+   *
+   *   BEYOND_INITIAL_SCOPE  -- always attempt APPROVE via moveIfPossible.
+   *   CRITICAL_ONLY         -- attempt APPROVE only when no CRITICAL fault
+   *                           exists without a linked CustomerDecisionItem;
+   *                           otherwise remain at UNDER_INSPECTION and
+   *                           return pendingCriticalDecisions: true.
+   *   ALL_WORK              -- never attempt APPROVE; the customer-decision
+   *                           flow is the sole authority for progression.
    */
   async recordInspection(input: RecordInspectionInput, actor: LifecycleActor) {
     const workOrder = await this.requireWorkOrder(input.workOrderId);
     const owner = await this.prisma.workOrder.findUnique({
       where: { id: input.workOrderId },
-      select: { customerId: true },
+      select: { customerId: true, tenantId: true },
     });
+
+    // Resolve before the transaction -- policy lookups are read-only and
+    // adding them inside the write transaction would extend its duration
+    // unnecessarily.
+    const approvalScope = await this.policies.resolveValue(workOrder.tenantId, "APPROVAL_REQUIRED_SCOPE");
 
     const completedAt = new Date();
 
-    return this.prisma.$transaction(async (tx) => {
-      const inspection = await tx.inspection.create({
-        data: {
-          completedAt,
-          actualMinutes: input.actualMinutes ?? null,
-          tenantId: workOrder.tenantId,
-          workOrderId: input.workOrderId,
-          technicianId: input.technicianId,
-          type: input.type,
-          odometerOrHours: input.odometerOrHours,
-          fields: input.fields as Prisma.InputJsonValue,
-          note: input.note,
-        },
+    const inspection = await this.prisma.$transaction(async (tx) => {
+      // Find an in-progress row created by startInspection().
+      const open = await tx.inspection.findFirst({
+        where: { workOrderId: input.workOrderId, completedAt: null },
+        select: { id: true },
       });
+
+      let row: Inspection;
+      if (open) {
+        // Complete the existing in-progress row.
+        row = await tx.inspection.update({
+          where: { id: open.id },
+          data: {
+            completedAt,
+            actualMinutes: input.actualMinutes ?? null,
+            technicianId: input.technicianId,
+            type: input.type,
+            odometerOrHours: input.odometerOrHours,
+            fields: input.fields as Prisma.InputJsonValue,
+            note: input.note,
+          },
+        });
+      } else {
+        // Backward-compatible fallback: job reached UNDER_INSPECTION before
+        // the open-row pattern existed. Create a completed row directly.
+        row = await tx.inspection.create({
+          data: {
+            completedAt,
+            actualMinutes: input.actualMinutes ?? null,
+            tenantId: workOrder.tenantId,
+            workOrderId: input.workOrderId,
+            technicianId: input.technicianId,
+            type: input.type,
+            odometerOrHours: input.odometerOrHours,
+            fields: input.fields as Prisma.InputJsonValue,
+            note: input.note,
+            startedAt: completedAt,
+          },
+        });
+      }
 
       await this.events.emit(
         {
@@ -453,35 +757,122 @@ export class TechnicianWorkService {
           actorName: actor.displayName,
           actorType: actor.actorType,
           targetType: "Inspection",
-          targetId: inspection.id,
+          targetId: row.id,
           riskLevel: "LOW",
-          payload: { inspectionId: inspection.id, workOrderId: input.workOrderId, type: input.type },
-          // "Your vehicle is being inspected." -- another sentence that
-          // existed in CustomerSafeProjectionService and was unreachable
-          // because nothing passed a customer.
+          payload: { inspectionId: row.id, workOrderId: input.workOrderId, type: input.type },
           ...(owner ? { customer: { customerId: owner.customerId, workOrderId: input.workOrderId } } : {}),
         },
         tx,
       );
 
-      return inspection;
+      return row;
     });
+
+    // Post-commit: attempt to advance the work order. Done outside the
+    // inspection transaction so that a lifecycle refusal (e.g. graph does
+    // not allow APPROVE from the current state) does not roll back the
+    // completed inspection row -- the finding is durable regardless.
+    let pendingCriticalDecisions = false;
+
+    if (approvalScope === "ALL_WORK") {
+      // Customer-decision flow is the sole authority. Do not attempt APPROVE.
+    } else if (approvalScope === "CRITICAL_ONLY") {
+      const evaluation = await this.evaluateCriticalFaultProgression(input.workOrderId);
+      pendingCriticalDecisions = evaluation.pendingCriticalDecisions;
+      if (evaluation.canAutoApprove) {
+        // Case A: no CRITICAL faults exist. Attempt APPROVE; graph and gate decide.
+        await this.moveIfPossible(input.workOrderId, "APPROVE", actor);
+      }
+      // Case B: at least one CRITICAL fault has no linked item -- remain
+      // UNDER_INSPECTION. pendingCriticalDecisions: true is returned.
+      // Case C: all CRITICAL faults are covered by a CustomerDecisionItem.
+      // CustomerDecisionService owns the APPROVE transition once the
+      // customer answers (decision.service.ts line 717), so we do not call
+      // moveIfPossible here. pendingCriticalDecisions is false.
+    } else {
+      // BEYOND_INITIAL_SCOPE (default): scope-delta comparison is not yet
+      // built (registry.ts enforcement.where). Attempt APPROVE -- the
+      // graph's own gate (inspection_completed) is the enforcer.
+      await this.moveIfPossible(input.workOrderId, "APPROVE", actor);
+    }
+
+    return { ...inspection, pendingCriticalDecisions };
+  }
+
+  /**
+   * Evaluates whether a job with CRITICAL_ONLY policy can auto-advance to
+   * APPROVED_FOR_WORK after inspection.
+   *
+   * The check is per-fault, per-item via the lineage FK (CustomerDecisionItem.faultId).
+   *
+   *   Case A: No CRITICAL faults exist -> canAutoApprove: true, pendingCriticalDecisions: false
+   *   Case B: CRITICAL faults exist, >=1 without linked item -> canAutoApprove: false, pendingCriticalDecisions: true
+   *   Case C: CRITICAL faults exist, all linked to items -> canAutoApprove: false, pendingCriticalDecisions: false
+   *           (CustomerDecisionService owns APPROVE when the customer responds)
+   */
+  private async evaluateCriticalFaultProgression(
+    workOrderId: string,
+  ): Promise<{ canAutoApprove: boolean; pendingCriticalDecisions: boolean }> {
+    const criticalFaults = await this.prisma.fault.findMany({
+      where: { workOrderId, severity: "CRITICAL" },
+      select: { id: true },
+    });
+
+    if (criticalFaults.length === 0) {
+      return { canAutoApprove: true, pendingCriticalDecisions: false };
+    }
+
+    const criticalFaultIds = criticalFaults.map((f) => f.id);
+
+    const linkedItems = await this.prisma.customerDecisionItem.findMany({
+      where: { faultId: { in: criticalFaultIds } },
+      select: { faultId: true },
+    });
+
+    const coveredIds = new Set(linkedItems.map((i) => i.faultId).filter((id): id is string => id !== null));
+    const hasUncovered = criticalFaults.some((f) => !coveredIds.has(f.id));
+
+    if (hasUncovered) {
+      return { canAutoApprove: false, pendingCriticalDecisions: true };
+    }
+
+    return { canAutoApprove: false, pendingCriticalDecisions: false };
   }
 
   /**
    * A fault is a finding, not a decision. Whether the customer must
    * approve the work it implies is recorded here; asking them is the
    * customer-decision flow's job.
+   *
+   * When `inspectionId` is supplied, it is validated to belong to this
+   * work order before the row is written. A fault citing an inspection
+   * from another job would let a technician attach a finding to evidence
+   * that does not belong to this vehicle, which is the same lie
+   * Task.decisionItemId's own check exists to prevent -- one step earlier
+   * in the Inspection → Fault → Recommendation → Task chain.
    */
   async createFault(input: CreateFaultInput, actor: LifecycleActor) {
     const workOrder = await this.requireWorkOrder(input.workOrderId);
+
+    if (input.inspectionId) {
+      const inspection = await this.prisma.inspection.findFirst({
+        where: { id: input.inspectionId, workOrderId: input.workOrderId },
+        select: { id: true },
+      });
+      if (!inspection) {
+        throw new BadRequestException({
+          code: "inspection_not_on_this_job",
+          message: "That inspection does not belong to this job.",
+        });
+      }
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const fault = await tx.fault.create({
         data: {
           tenantId: workOrder.tenantId,
           workOrderId: input.workOrderId,
-          inspectionId: input.inspectionId,
+          inspectionId: input.inspectionId ?? null,
           code: input.code,
           description: input.description,
           severity: input.severity,
@@ -649,15 +1040,23 @@ export class TechnicianWorkService {
    * Applies a lifecycle intent where the graph allows it, and stays quiet
    * where it does not.
    *
-   * A second blocker on an already-blocked work order is a legitimate
-   * situation, not a failure -- the record is still created, the job is
-   * simply already where it needs to be. Swallowing the refusal here is
-   * safe precisely because the lifecycle service is the thing that decides
-   * whether a move is legal; this never assumes it.
+   * Used in three contexts:
+   *   - REPORT_BLOCKER / RESOLVE_BLOCKER: called inside a FOR-UPDATE
+   *     transaction; `tx` is passed so the status write is atomic with
+   *     the blocker record.
+   *   - APPROVE: called after recordInspection() commits; `tx` is absent
+   *     so the lifecycle opens its own transaction. A refusal here does
+   *     not roll back the completed inspection row.
+   *
+   * Swallowing the error is safe precisely because WorkOrderLifecycleService
+   * is the thing that decides whether a move is legal; this never assumes
+   * it. A second blocker on an already-blocked work order is legitimate,
+   * not a failure. An APPROVE on a job the graph cannot move is likewise
+   * a non-error: the inspection is still durable.
    */
   private async moveIfPossible(
     workOrderId: string,
-    intent: "REPORT_BLOCKER" | "RESOLVE_BLOCKER",
+    intent: "REPORT_BLOCKER" | "RESOLVE_BLOCKER" | "APPROVE",
     actor: LifecycleActor,
     reason?: string,
     tx?: Prisma.TransactionClient,

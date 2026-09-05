@@ -422,7 +422,7 @@ export class BranchManagerController {
       accountId: session.accountId,
       displayName: session.displayName,
       actorType: "TENANT_STAFF",
-    }, { reason: dto.note });
+    }, { reason: dto.note, failureReason: dto.failureReason });
   }
 
   /**

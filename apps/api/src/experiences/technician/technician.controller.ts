@@ -10,7 +10,8 @@ import { CustomerDecisionService } from "../../systems/customer/decision.service
 import { PartRequestService } from "../../systems/inventory/part-request.service";
 import { CatalogBrowseService } from "../../systems/inventory/catalog-browse.service";
 import { parseAttributeQuery } from "../../systems/inventory/inventory.controller";
-import { ReportBlockerDto, CreateFaultDto, RequestPartDto, RecordInspectionDto, CompleteTaskDto, RequestReturnDto, ClarificationDto, ExternalPartDto, SubmitCartDto } from "./technician.dto";
+import { ReportBlockerDto, CreateFaultDto, RequestPartDto, RecordInspectionDto, CompleteTaskDto, RequestReturnDto, ClarificationDto, ExternalPartDto, SubmitCartDto, SubmitSpecializationEntryDto } from "./technician.dto";
+import { SpecializationService } from "../../systems/people/specialization/specialization.service";
 import { RaiseDecisionDto } from "../../systems/customer/decision.dto";
 
 /**
@@ -31,6 +32,7 @@ export class TechnicianController {
     private readonly partRequests: PartRequestService,
     private readonly browse: CatalogBrowseService,
     private readonly journey: WorkflowJourneyService,
+    private readonly specialization: SpecializationService,
   ) {}
 
   /** Home: the car in front of them, if there is one. */
@@ -84,6 +86,40 @@ export class TechnicianController {
   async vehicleHistory(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
     return this.view.vehicleHistory(staffUserId, tenantId, id);
+  }
+
+  /** Specialization forms and service cards available for this workshop. */
+  @Get("work-orders/:id/specialization-forms")
+  async specializationForms(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.specialization.listDefinitions(tenantId);
+  }
+
+  /** Specialization measurements/cards recorded against this work order. */
+  @Get("work-orders/:id/specialization-entries")
+  async specializationEntries(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.specialization.entriesFor(tenantId, id);
+  }
+
+  /** Record a specialization measurement or service card entry for this job. */
+  @Post("work-orders/:id/specialization-entries")
+  async submitSpecializationEntry(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: SubmitSpecializationEntryDto,
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.complete");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.specialization.fillEntry(
+      tenantId,
+      dto.definitionId,
+      staffUserId,
+      dto.values,
+      { workOrderId: id, taskId: dto.taskId },
+    );
   }
 
   @Post("tasks/:id/start")
@@ -260,7 +296,14 @@ export class TechnicianController {
     // Ownership before anything else, same rule as every other write here.
     await this.view.workCard(staffUserId, tenantId, id);
     return this.partRequests.request(
-      { tenantId, workOrderId: id, inventoryItemId: dto.inventoryItemId, quantity: dto.quantity, reason: dto.reason },
+      {
+        tenantId,
+        workOrderId: id,
+        inventoryItemId: dto.inventoryItemId,
+        quantity: dto.quantity,
+        reason: dto.reason,
+        inspectionId: dto.inspectionId,
+      },
       this.actor(session),
     );
   }
@@ -290,6 +333,7 @@ export class TechnicianController {
         lines: dto.lines,
         cartKey: dto.cartKey,
         reason: dto.reason,
+        inspectionId: dto.inspectionId,
       },
       this.actor(session),
     );

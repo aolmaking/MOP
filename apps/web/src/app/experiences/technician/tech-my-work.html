@@ -1,4 +1,7 @@
-<h1 class="page-title">My work</h1>
+<div class="my-work-header">
+  <h1 class="page-title">My work</h1>
+  <p class="page-subtitle">All vehicles and tasks assigned to you today</p>
+</div>
 
 @switch (state()) {
   @case ('loading') {
@@ -31,6 +34,18 @@
   }
 
   @case ('ready') {
+    <div class="work-summary" aria-label="Workload summary">
+      <span class="summary-count">
+        {{ jobs().length }} assigned {{ jobs().length === 1 ? 'vehicle' : 'vehicles' }}
+        @if (activeCount() > 0) {
+          <span> · {{ activeCount() }} on now</span>
+        }
+        @if (blockedCount() > 0) {
+          <span class="summary-blocked"> · {{ blockedCount() }} blocked</span>
+        }
+      </span>
+    </div>
+
     <ul class="jobs">
       @for (job of jobs(); track job.workOrderId) {
         <li class="job" [class.job--active]="job.active" [class.job--blocked]="job.blocked">
@@ -46,10 +61,14 @@
               }
             </span>
 
+            @if (job.complaint) {
+              <p class="job-complaint">{{ job.complaint }}</p>
+            }
+
             <span class="job-bottom">
               <span class="job-customer">{{ job.customerName }}</span>
               <span class="job-status">{{ statusLabel(job.status) }}</span>
-              <span class="job-left">{{ job.myOpenTaskCount }} left</span>
+              <span class="job-left">{{ job.myOpenTaskCount }} of {{ job.myTaskCount }} left</span>
               <span class="job-since">{{ since(job.sinceHours) }}</span>
             </span>
           </a>

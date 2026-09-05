@@ -73,6 +73,10 @@ export class RequestPartDto {
   @IsString()
   @Length(1, 500)
   reason?: string;
+
+  @IsOptional()
+  @IsString()
+  inspectionId?: string;
 }
 
 export class CartLineDto {
@@ -107,6 +111,10 @@ export class SubmitCartDto {
   @IsString()
   @Length(1, 500)
   reason?: string;
+
+  @IsOptional()
+  @IsString()
+  inspectionId?: string;
 }
 
 export class CreateFaultDto {
@@ -174,4 +182,15 @@ export class ExternalPartDto {
   @IsInt()
   @Min(1)
   quantity?: number;
+}
+
+export class SubmitSpecializationEntryDto {
+  @IsString()
+  definitionId!: string;
+
+  @IsOptional()
+  @IsString()
+  taskId?: string;
+
+  values!: Record<string, unknown>;
 }

@@ -67,10 +67,23 @@ export interface WorkCardPrimaryAction {
  * would do cannot drift apart.
  */
 export interface WorkCardInspection {
+  readonly id: string | null;
   readonly state: 'REQUIRED' | 'IN_PROGRESS' | 'COMPLETED' | 'DECLINED';
   readonly completedAt: string | null;
   readonly actualMinutes: number | null;
   readonly faultCount: number;
+}
+
+export type FindingDecisionStatus = 'NOT_REQUESTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface WorkCardFinding {
+  readonly id: string;
+  readonly description: string;
+  readonly severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  readonly code: string | null;
+  readonly recommendedService: string | null;
+  readonly inspectionId: string | null;
+  readonly decisionStatus: FindingDecisionStatus;
 }
 
 export interface WorkCard {
@@ -82,6 +95,8 @@ export interface WorkCard {
   readonly inspectionDeclined: boolean;
   readonly timeTracking: 'OFF' | 'OPTIONAL' | 'REQUIRED';
   readonly inspection: WorkCardInspection;
+  /** Findings logged against this work order with their customer decision states. */
+  readonly findings: readonly WorkCardFinding[];
   /**
    * Whether repair work is legal right now. Server-computed.
    *
@@ -292,6 +307,13 @@ export interface TechnicianHistoryBrief {
   readonly generatedAt: string;
 }
 
+export interface RecordInspectionPayload {
+  readonly type: 'QUICK' | 'FULL';
+  readonly odometerOrHours?: number;
+  readonly actualMinutes?: number;
+  readonly note?: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class TechnicianApi {
   private readonly http = inject(HttpClient);
@@ -300,12 +322,12 @@ export class TechnicianApi {
     return this.http.get<{ job: TechnicianJob | null }>('/api/v1/technician/active');
   }
 
-  myWork(): Observable<{ jobs: TechnicianJob[] }> {
-    return this.http.get<{ jobs: TechnicianJob[] }>('/api/v1/technician/my-work');
+  myWork(): Observable<{ jobs: readonly TechnicianJob[] }> {
+    return this.http.get<{ jobs: readonly TechnicianJob[] }>('/api/v1/technician/my-work');
   }
 
-  workCard(id: string): Observable<WorkCard> {
-    return this.http.get<WorkCard>(`/api/v1/technician/work-orders/${id}`);
+  workCard(workOrderId: string): Observable<WorkCard> {
+    return this.http.get<WorkCard>(`/api/v1/technician/work-orders/${workOrderId}`);
   }
 
   vehicleHistory(workOrderId: string): Observable<TechnicianHistoryBrief> {
@@ -326,12 +348,29 @@ export class TechnicianApi {
     return this.http.post(`/api/v1/technician/tasks/${taskId}/blocker`, { reason, note });
   }
 
-  recordInspection(workOrderId: string, type: 'QUICK' | 'FULL', note?: string): Observable<unknown> {
-    return this.http.post(`/api/v1/technician/work-orders/${workOrderId}/inspection`, { type, note });
+  recordInspection(
+    workOrderId: string,
+    payloadOrType: RecordInspectionPayload | 'QUICK' | 'FULL',
+    note?: string,
+  ): Observable<unknown> {
+    const body =
+      typeof payloadOrType === 'string'
+        ? { type: payloadOrType, ...(note ? { note } : {}) }
+        : payloadOrType;
+    return this.http.post(`/api/v1/technician/work-orders/${workOrderId}/inspection`, body);
   }
 
-  createFault(workOrderId: string, description: string, severity: string): Observable<unknown> {
-    return this.http.post(`/api/v1/technician/work-orders/${workOrderId}/faults`, { description, severity });
+  createFault(
+    workOrderId: string,
+    description: string,
+    severity: string,
+    inspectionId?: string,
+  ): Observable<{ id: string }> {
+    return this.http.post<{ id: string }>(`/api/v1/technician/work-orders/${workOrderId}/faults`, {
+      description,
+      severity,
+      ...(inspectionId ? { inspectionId } : {}),
+    });
   }
 
   finishWorkOrder(workOrderId: string): Observable<unknown> {
@@ -356,19 +395,28 @@ export class TechnicianApi {
     cartKey: string,
     lines: readonly { inventoryItemId: string; quantity: number }[],
     reason?: string,
+    inspectionId?: string,
   ): Observable<CartSubmission> {
     return this.http.post<CartSubmission>(`/api/v1/technician/work-orders/${workOrderId}/parts/cart`, {
       cartKey,
       lines,
       ...(reason?.trim() ? { reason: reason.trim() } : {}),
+      ...(inspectionId ? { inspectionId } : {}),
     });
   }
 
-  requestPart(workOrderId: string, inventoryItemId: string, quantity: number, reason?: string): Observable<unknown> {
+  requestPart(
+    workOrderId: string,
+    inventoryItemId: string,
+    quantity: number,
+    reason?: string,
+    inspectionId?: string,
+  ): Observable<unknown> {
     return this.http.post(`/api/v1/technician/work-orders/${workOrderId}/parts`, {
       inventoryItemId,
       quantity,
       reason,
+      ...(inspectionId ? { inspectionId } : {}),
     });
   }
 
@@ -435,7 +483,14 @@ export class TechnicianApi {
   /** "Ask the customer" -- creates the decision request and sends it in one call. */
   raiseDecision(
     workOrderId: string,
-    item: { name: string; explanation: string; importance: string; price: string; laborPrice?: string },
+    item: {
+      name: string;
+      explanation: string;
+      importance: string;
+      price: string;
+      laborPrice?: string;
+      faultId?: string;
+    },
   ): Observable<{ requestId: string; secureToken: string }> {
     return this.http.post<{ requestId: string; secureToken: string }>(
       `/api/v1/technician/work-orders/${workOrderId}/decisions`,

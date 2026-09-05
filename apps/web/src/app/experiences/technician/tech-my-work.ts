@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Identifier } from '../../ui/identifier/identifier';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
@@ -25,6 +25,8 @@ export class TechMyWork {
 
   protected readonly jobs = signal<readonly TechnicianJob[]>([]);
   protected readonly state = signal<State>('loading');
+  protected readonly activeCount = computed(() => this.jobs().filter((j) => j.active).length);
+  protected readonly blockedCount = computed(() => this.jobs().filter((j) => j.blocked).length);
 
   constructor() {
     this.load();
@@ -49,6 +51,21 @@ export class TechMyWork {
   }
 
   protected statusLabel(status: string): string {
-    return status.toLowerCase().replace(/_/g, ' ');
+    switch (status) {
+      case 'REGISTERED':
+        return 'Ready to start';
+      case 'UNDER_INSPECTION':
+        return 'Under inspection';
+      case 'AWAITING_CUSTOMER_APPROVAL':
+        return 'Waiting on approval';
+      case 'WAITING_PARTS':
+        return 'Waiting on parts';
+      case 'IN_PROGRESS':
+        return 'Work in progress';
+      case 'PENDING_REVIEW':
+        return 'Pending review';
+      default:
+        return status.toLowerCase().replace(/_/g, ' ');
+    }
   }
 }

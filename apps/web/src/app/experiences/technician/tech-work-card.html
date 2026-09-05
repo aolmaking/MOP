@@ -34,6 +34,13 @@
         <h1 class="card-plate"><mop-identifier [value]="c.identifier ?? '—'" /></h1>
         <p class="card-customer">{{ c.customerName }} · {{ label(c.status) }}</p>
 
+        @if (c.complaint?.trim()) {
+          <div class="card-complaint">
+            <span class="card-complaint-label">Customer reported:</span>
+            <p class="card-complaint-text">{{ c.complaint }}</p>
+          </div>
+        }
+
         @if (c.inspectionDeclined) {
           <p class="card-note">Customer refused inspection. Do only what was agreed.</p>
         }
@@ -95,14 +102,265 @@
                 <span>· {{ c.inspection.actualMinutes }} min</span>
               }
             </p>
+
+            @if (c.repairLocked) {
+              <div class="mission-locked-banner" role="status">
+                @if (c.status === 'AWAITING_CUSTOMER_APPROVAL') {
+                  <p class="mission-locked-title">Waiting for customer decision</p>
+                  <p class="mission-locked-text">Inspection is complete. Repair work is waiting for the customer's decision.</p>
+                } @else if (c.status === 'UNDER_INSPECTION') {
+                  <p class="mission-locked-title">Inspection complete — authorization required</p>
+                  <p class="mission-locked-text">Inspection is complete, but the job cannot move to repair work yet.</p>
+                  @if (c.repairLockReason) {
+                    <p class="mission-locked-reason">{{ c.repairLockReason }}</p>
+                  }
+                } @else {
+                  <p class="mission-locked-title">Repair work locked</p>
+                  @if (c.repairLockReason) {
+                    <p class="mission-locked-reason">{{ c.repairLockReason }}</p>
+                  }
+                }
+              </div>
+            }
+
+            <div class="mission-findings">
+              <h3 class="mission-subheading">Recorded findings</h3>
+              @if (c.findings.length === 0) {
+                <p class="findings-empty">No findings recorded.</p>
+              } @else {
+                <ul class="findings-list">
+                  @for (finding of c.findings; track finding.id) {
+                    <li class="finding-item">
+                      <div class="finding-header">
+                        <span class="severity-badge" [attr.data-severity]="finding.severity">
+                          {{ finding.severity }}
+                        </span>
+                        @if (finding.code) {
+                          <span class="finding-code">{{ finding.code }}</span>
+                        }
+                        <span class="decision-badge" [attr.data-decision]="findingDecisionStatus(finding)">
+                          {{ findingDecisionLabel(findingDecisionStatus(finding)) }}
+                        </span>
+                      </div>
+                      <p class="finding-desc">{{ finding.description }}</p>
+                      @if (finding.recommendedService) {
+                        <p class="finding-service">Recommended: {{ finding.recommendedService }}</p>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
           }
           @case ('IN_PROGRESS') {
-            <p class="mission-state">Under way</p>
-            <p class="mission-note">Record what you found to finish it.</p>
+            <!-- 1. Inspection status/context -->
+            <div class="mission-status-group">
+              <p class="mission-state">Under way</p>
+              <p class="mission-note">Record findings, request approvals if necessary, and complete the inspection.</p>
+            </div>
+
+            <!-- 2. Recorded Findings -->
+            <div class="mission-findings">
+              <h3 class="mission-subheading">Recorded findings</h3>
+              @if (c.findings.length === 0) {
+                <p class="findings-empty">No findings recorded yet.</p>
+              } @else {
+                <ul class="findings-list">
+                  @for (finding of c.findings; track finding.id) {
+                    <li class="finding-item">
+                      <div class="finding-header">
+                        <span class="severity-badge" [attr.data-severity]="finding.severity">
+                          {{ finding.severity }}
+                        </span>
+                        @if (finding.code) {
+                          <span class="finding-code">{{ finding.code }}</span>
+                        }
+                        <span class="decision-badge" [attr.data-decision]="findingDecisionStatus(finding)">
+                          {{ findingDecisionLabel(findingDecisionStatus(finding)) }}
+                        </span>
+                      </div>
+                      <p class="finding-desc">{{ finding.description }}</p>
+                      @if (finding.recommendedService) {
+                        <p class="finding-service">Recommended: {{ finding.recommendedService }}</p>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+
+            <!-- 3. Log Finding action / form -->
+            <div class="mission-log-finding">
+              <button
+                class="tap tap--wide tap--log-finding"
+                type="button"
+                [class.tap--selected]="missionFindingOpen()"
+                (click)="missionFindingOpen.set(!missionFindingOpen())"
+              >
+                {{ missionFindingOpen() ? 'Close finding form' : '+ Log finding' }}
+              </button>
+
+              @if (missionFindingOpen()) {
+                <div class="fault mission-fault-form">
+                  <textarea
+                    class="fault-text"
+                    rows="3"
+                    placeholder="What did you find?"
+                    [value]="faultText()"
+                    (input)="faultText.set($any($event.target).value)"
+                  ></textarea>
+
+                  <div class="severity">
+                    @for (level of ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']; track level) {
+                      <button
+                        class="tap tap--severity"
+                        type="button"
+                        [class.tap--selected]="faultSeverity() === level"
+                        (click)="faultSeverity.set(level)"
+                      >
+                        {{ level }}
+                      </button>
+                    }
+                  </div>
+
+                  <label class="ask-toggle">
+                    <input
+                      type="checkbox"
+                      [checked]="askCustomer()"
+                      (change)="askCustomer.set($any($event.target).checked)"
+                    />
+                    Ask the customer to approve this
+                  </label>
+
+                  @if (askCustomer()) {
+                    <div class="ask-price">
+                      <label class="ask-price-field">
+                        <span>Price</span>
+                        <input
+                          type="text"
+                          inputmode="decimal"
+                          placeholder="0.00"
+                          [value]="faultPrice()"
+                          (input)="faultPrice.set($any($event.target).value)"
+                        />
+                      </label>
+                      <label class="ask-price-field">
+                        <span>Labor (optional)</span>
+                        <input
+                          type="text"
+                          inputmode="decimal"
+                          placeholder="0.00"
+                          [value]="faultLaborPrice()"
+                          (input)="faultLaborPrice.set($any($event.target).value)"
+                        />
+                      </label>
+                      <p class="ask-price-hint">Parts and labor entered here form the estimate shown to the customer.</p>
+                    </div>
+                  }
+
+                  <button
+                    class="tap tap--primary tap--wide"
+                    type="button"
+                    [disabled]="busy() !== null || faultText().trim().length < 3 || (askCustomer() && !priceValid())"
+                    (click)="logFault()"
+                  >
+                    {{ busy() === 'fault' ? 'Saving…' : 'Save finding' }}
+                  </button>
+                </div>
+              }
+            </div>
+
+            <!-- 4. Complete Inspection section -->
+            <div class="mission-complete-inspection">
+              <h3 class="mission-subheading">Complete inspection</h3>
+
+              <div class="completion-fields">
+                <div class="completion-type-group">
+                  <span class="completion-field-label">Inspection type</span>
+                  <div class="completion-type-toggle">
+                    <button
+                      class="tap tap--toggle"
+                      type="button"
+                      [class.tap--selected]="inspectionType() === 'QUICK'"
+                      (click)="inspectionType.set('QUICK')"
+                    >
+                      Quick check
+                    </button>
+                    <button
+                      class="tap tap--toggle"
+                      type="button"
+                      [class.tap--selected]="inspectionType() === 'FULL'"
+                      (click)="inspectionType.set('FULL')"
+                    >
+                      Full inspection
+                    </button>
+                  </div>
+                </div>
+
+                <label class="completion-field">
+                  <span class="completion-field-label">Odometer / Hours (optional)</span>
+                  <input
+                    class="completion-input"
+                    type="number"
+                    inputmode="numeric"
+                    min="0"
+                    placeholder="e.g. 54000"
+                    [value]="inspectionOdometer()"
+                    (input)="inspectionOdometer.set($any($event.target).value)"
+                  />
+                </label>
+
+                <label class="completion-field">
+                  <span class="completion-field-label">Diagnostic minutes (optional)</span>
+                  <input
+                    class="completion-input"
+                    type="number"
+                    inputmode="numeric"
+                    min="0"
+                    step="1"
+                    placeholder="e.g. 25"
+                    [value]="inspectionMinutes()"
+                    (input)="inspectionMinutes.set($any($event.target).value)"
+                  />
+                </label>
+
+                <label class="completion-field">
+                  <span class="completion-field-label">Inspection note (optional)</span>
+                  <textarea
+                    class="completion-textarea"
+                    rows="2"
+                    placeholder="Inspection summary or observations…"
+                    [value]="inspectionNote()"
+                    (input)="inspectionNote.set($any($event.target).value)"
+                  ></textarea>
+                </label>
+              </div>
+
+              <div class="mission-actions">
+                <button
+                  class="tap tap--primary tap--wide"
+                  type="button"
+                  [disabled]="busy() !== null"
+                  (click)="completeInspection()"
+                >
+                  {{ busy() === 'complete-inspection' ? 'Completing…' : 'Complete inspection' }}
+                </button>
+              </div>
+            </div>
           }
           @default {
             <p class="mission-state">Not started</p>
-            <p class="mission-note">The car is inspected before any repair work begins.</p>
+            <p class="mission-note">The vehicle must be inspected before repair work begins.</p>
+            <div class="mission-actions">
+              <button
+                class="tap tap--primary tap--wide"
+                type="button"
+                [disabled]="busy() !== null"
+                (click)="startInspection()"
+              >
+                {{ busy() === 'start-inspection' ? 'Starting…' : 'Start inspection' }}
+              </button>
+            </div>
           }
         }
       </section>
@@ -197,13 +455,6 @@
         <h2 class="tools-title">Something's wrong</h2>
 
         <div class="tool-row">
-          <button
-            class="tap"
-            type="button"
-            (click)="panel.set(panel() === 'inspection' ? 'none' : 'inspection')"
-          >
-            Record inspection
-          </button>
           <!-- A page, not a panel. Asking for parts is browsing a
                catalogue and building a basket, and that does not fit
                beside a fault form on a phone. -->
@@ -218,36 +469,6 @@
             Found a fault
           </button>
         </div>
-
-        @if (panel() === 'inspection') {
-          <div class="fault">
-            <textarea
-              class="fault-text"
-              rows="3"
-              placeholder="What did you check? (optional)"
-              [value]="inspectionNote()"
-              (input)="inspectionNote.set($any($event.target).value)"
-            ></textarea>
-            <div class="tool-row">
-              <button
-                class="tap tap--primary"
-                type="button"
-                [disabled]="busy() !== null"
-                (click)="recordInspection('QUICK')"
-              >
-                {{ busy() === 'inspection' ? '…' : 'Quick check' }}
-              </button>
-              <button
-                class="tap tap--primary"
-                type="button"
-                [disabled]="busy() !== null"
-                (click)="recordInspection('FULL')"
-              >
-                {{ busy() === 'inspection' ? '…' : 'Full inspection' }}
-              </button>
-            </div>
-          </div>
-        }
 
         @if (panel() === 'external') {
           <!-- A part that never came off a shelf: the customer brought it,

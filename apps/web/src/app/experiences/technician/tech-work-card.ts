@@ -6,7 +6,15 @@ import { PartList, type PartClarification, type PartReturn } from './part-list';
 import { TechVehicleHistory } from './tech-vehicle-history';
 import { pollJourney, type JourneyFeed } from '../../domain/journey/journey-poller';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
-import { TechnicianApi, type TechnicianTask, type WorkCard, type WorkCardPart } from './technician.api';
+import {
+  TechnicianApi,
+  type FindingDecisionStatus,
+  type RecordInspectionPayload,
+  type TechnicianTask,
+  type WorkCard,
+  type WorkCardFinding,
+  type WorkCardPart,
+} from './technician.api';
 
 type State = 'loading' | 'ready' | 'not-mine' | 'forbidden' | 'error';
 
@@ -68,11 +76,17 @@ export class TechWorkCard {
   protected readonly actionError = signal<string | null>(null);
 
   /** Which panel is open. Only one at a time -- this is a small screen. */
-  protected readonly panel = signal<'none' | 'blocker' | 'fault' | 'inspection' | 'external'>('none');
+  protected readonly panel = signal<'none' | 'blocker' | 'fault' | 'external'>('none');
   protected readonly faultText = signal('');
   protected readonly inspectionNote = signal('');
   protected readonly faultSeverity = signal('MEDIUM');
   protected readonly taskMinutes = signal<Record<string, string>>({});
+
+  /** Active Inspection Workspace signals */
+  protected readonly missionFindingOpen = signal(false);
+  protected readonly inspectionType = signal<'QUICK' | 'FULL'>('QUICK');
+  protected readonly inspectionOdometer = signal('');
+  protected readonly inspectionMinutes = signal('');
 
   /**
    * "Ask the customer" -- folded into the same panel as logging the
@@ -196,6 +210,10 @@ export class TechWorkCard {
     this.busy.set(null);
     this.actionError.set(null);
     this.panel.set('none');
+    this.missionFindingOpen.set(false);
+    this.inspectionType.set('QUICK');
+    this.inspectionOdometer.set('');
+    this.inspectionMinutes.set('');
   }
 
   protected load(): void {
@@ -259,17 +277,73 @@ export class TechWorkCard {
     return minutes;
   }
 
+  protected startInspection(): void {
+    this.run('start-inspection', this.api.startInspection(this.id()));
+  }
+
+
   /**
-   * One press per inspection type. The category-specific measurement
-   * form is Phase 15/16 work; a type and a note is what a technician can
-   * honestly record today, and the finish gate only asks whether an
-   * inspection happened.
+   * Complete inspection with full metadata support for the Active Inspection Workspace.
+   * Sends the canonical RecordInspectionPayload object.
    */
-  protected recordInspection(type: 'QUICK' | 'FULL'): void {
-    const note = this.inspectionNote().trim();
-    this.panel.set('none');
-    this.inspectionNote.set('');
-    this.run('inspection', this.api.recordInspection(this.id(), type, note || undefined));
+  protected completeInspection(typeOverride?: 'QUICK' | 'FULL'): void {
+    const type = typeOverride ?? this.inspectionType();
+    const noteRaw = this.inspectionNote().trim();
+    const odoRaw = this.inspectionOdometer().trim();
+    const minsRaw = this.inspectionMinutes().trim();
+
+    let odometerOrHours: number | undefined = undefined;
+    if (odoRaw !== '') {
+      const parsed = Number(odoRaw);
+      if (isNaN(parsed) || parsed < 0) {
+        this.actionError.set('Enter a valid odometer or engine hours number.');
+        return;
+      }
+      odometerOrHours = parsed;
+    }
+
+    let actualMinutes: number | undefined = undefined;
+    if (minsRaw !== '') {
+      const parsed = Number(minsRaw);
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        this.actionError.set('Enter whole diagnostic minutes.');
+        return;
+      }
+      actualMinutes = parsed;
+    }
+
+    if (this.card()?.timeTracking === 'REQUIRED' && actualMinutes === undefined) {
+      this.actionError.set('Diagnostic minutes are required.');
+      return;
+    }
+
+    const payload: RecordInspectionPayload = {
+      type,
+      ...(odometerOrHours !== undefined ? { odometerOrHours } : {}),
+      ...(actualMinutes !== undefined ? { actualMinutes } : {}),
+      ...(noteRaw ? { note: noteRaw } : {}),
+    };
+
+    this.run('complete-inspection', this.api.recordInspection(this.id(), payload));
+  }
+
+  protected findingDecisionStatus(finding: WorkCardFinding): FindingDecisionStatus {
+    return (finding.decisionStatus ?? (finding as any).customerDecisionStatus ?? 'NOT_REQUESTED') as FindingDecisionStatus;
+  }
+
+  protected findingDecisionLabel(status: FindingDecisionStatus): string {
+    switch (status) {
+      case 'NOT_REQUESTED':
+        return 'Internal / No customer decision requested';
+      case 'PENDING':
+        return 'Pending customer';
+      case 'APPROVED':
+        return 'Approved';
+      case 'REJECTED':
+        return 'Rejected';
+      default:
+        return 'Internal / No customer decision requested';
+    }
   }
 
   protected reportBlocker(reason: string): void {
@@ -296,13 +370,15 @@ export class TechWorkCard {
     const askCustomer = this.askCustomer();
     const price = this.faultPrice().trim();
     const laborPrice = this.faultLaborPrice().trim();
+    const inspectionId = this.card()?.inspection.id ?? undefined;
 
     this.busy.set('fault');
     this.actionError.set(null);
 
-    this.api.createFault(this.id(), description, severity).subscribe({
-      next: () => {
+    this.api.createFault(this.id(), description, severity, inspectionId).subscribe({
+      next: (fault) => {
         this.faultText.set('');
+        this.missionFindingOpen.set(false);
         if (!askCustomer) {
           this.busy.set(null);
           this.load();
@@ -316,6 +392,7 @@ export class TechWorkCard {
             importance: severity,
             price,
             laborPrice: laborPrice || undefined,
+            faultId: fault.id,
           })
           .subscribe({
             next: () => {
@@ -328,7 +405,11 @@ export class TechWorkCard {
             error: (err: PresentedError) => {
               this.busy.set(null);
               // The fault is already logged -- only the ask failed.
-              this.actionError.set(err.message ?? 'Logged, but asking the customer did not go through.');
+              this.actionError.set(
+                err.message
+                  ? `Logged finding, but asking the customer did not go through: ${err.message}`
+                  : 'Logged finding, but asking the customer did not go through.',
+              );
               this.load();
             },
           });

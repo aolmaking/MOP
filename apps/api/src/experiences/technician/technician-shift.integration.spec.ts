@@ -128,7 +128,10 @@ async function authorizeForWork(workOrderId: string): Promise<void> {
     { workOrderId, technicianId: mineStaffId, type: "QUICK", fields: {}, note: "Road tested." },
     ACTOR,
   );
-  await lifecycle.apply(workOrderId, "APPROVE", ACTOR);
+  const order = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrderId }, select: { status: true } });
+  if (order.status !== "APPROVED_FOR_WORK") {
+    await lifecycle.apply(workOrderId, "APPROVE", ACTOR);
+  }
 }
 
 beforeAll(async () => {

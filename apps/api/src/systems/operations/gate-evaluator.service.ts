@@ -241,6 +241,10 @@ export class GateEvaluatorService {
 
         // An unpaid balance is only acceptable where the workshop's own
         // policy says so.
+        const deliveryPolicy = await this.policies.resolveValue(invoice.tenantId, "DELIVERY_BLOCKED_UNTIL_PAID");
+        if (deliveryPolicy === "NEVER") return true;
+        if (deliveryPolicy === "ALWAYS") return false;
+
         const finance = await this.prisma.financeConfiguration.findUnique({
           where: { tenantId: invoice.tenantId },
           select: { allowUnpaidDelivery: true, allowPartialPaidDelivery: true },

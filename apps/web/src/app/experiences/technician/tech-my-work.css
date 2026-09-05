@@ -7,9 +7,42 @@
  */
 
 .page-title {
-  margin-block-end: var(--space-4);
+  margin-block-end: var(--space-1);
   font-size: var(--tech-text-lg);
   font-weight: 700;
+}
+
+.page-subtitle {
+  margin-block-end: var(--space-4);
+  font-size: var(--tech-text-sm);
+  color: var(--text-muted);
+}
+
+.work-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-block-end: var(--space-3);
+  font-size: var(--tech-text-sm);
+  color: var(--text-muted);
+}
+
+.summary-count {
+  font-weight: 500;
+}
+
+.summary-blocked {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.job-complaint {
+  margin: 0;
+  font-size: var(--tech-text-sm);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .jobs {

@@ -13,6 +13,7 @@ import { WorkOrderLifecycleService } from "../../systems/operations/work-order-l
 import { AssetHistoryService } from "../../systems/operations/vehicle-history/asset-history.service";
 import { WorkshopHistoryService } from "../../systems/operations/history/workshop-history.service";
 import type { TechnicianHistoryBrief } from "../../systems/operations/history/workshop-history.types";
+import { SpecializationService, type DefinitionSummary, type EntrySummary } from "../../systems/people/specialization/specialization.service";
 
 export interface TechnicianJob {
   readonly workOrderId: string;
@@ -106,6 +107,7 @@ export interface WorkCardPrimaryAction {
  * from the same lifecycle service that would refuse the request.
  */
 export interface WorkCardInspection {
+  readonly id: string | null;
   readonly state: "REQUIRED" | "IN_PROGRESS" | "COMPLETED" | "DECLINED";
   /** When the diagnosis finished, for the card to show it was done first. */
   readonly completedAt: string | null;
@@ -113,6 +115,18 @@ export interface WorkCardInspection {
   readonly actualMinutes: number | null;
   /** Findings recorded against this job so far. */
   readonly faultCount: number;
+}
+
+export type FindingDecisionStatus = "NOT_REQUESTED" | "PENDING" | "APPROVED" | "REJECTED";
+
+export interface WorkCardFinding {
+  readonly id: string;
+  readonly description: string;
+  readonly severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  readonly code: string | null;
+  readonly recommendedService: string | null;
+  readonly inspectionId: string | null;
+  readonly decisionStatus: FindingDecisionStatus;
 }
 
 export interface WorkCard {
@@ -126,6 +140,11 @@ export interface WorkCard {
   /** Mission 1. Always present -- a job with no inspection still has a state. */
   readonly inspection: WorkCardInspection;
   /**
+   * The list of findings logged against this work order, including their
+   * customer decision status.
+   */
+  readonly findings: readonly WorkCardFinding[];
+  /**
    * Whether repair work is legal on this job right now, asked of the same
    * authority that guards every write.
    */
@@ -134,6 +153,8 @@ export interface WorkCard {
   readonly repairLockReason: string | null;
   readonly tasks: readonly TechnicianTask[];
   readonly parts: readonly WorkCardPart[];
+  readonly specializationForms: readonly DefinitionSummary[];
+  readonly specializationEntries: readonly EntrySummary[];
   readonly finish: FinishCheck;
   /** Null when the job is not waiting on a move only this technician can make. */
   readonly primaryAction: WorkCardPrimaryAction | null;
@@ -193,6 +214,7 @@ export class TechnicianWorkViewService {
     private readonly workshopHistory: WorkshopHistoryService,
     private readonly policies: PolicyResolutionService,
     private readonly capabilities: CapabilityResolutionService,
+    private readonly specialization?: SpecializationService,
   ) {}
 
   async myWork(staffUserId: string, tenantId: string): Promise<readonly TechnicianJob[]> {
@@ -257,7 +279,12 @@ export class TechnicianWorkViewService {
    */
   async activeJob(staffUserId: string, tenantId: string): Promise<TechnicianJob | null> {
     const work = await this.myWork(staffUserId, tenantId);
-    return work.find((job) => job.active) ?? null;
+    return (
+      work.find((job) => job.active) ??
+      work.find((job) => job.status === "UNDER_INSPECTION") ??
+      work.find((job) => job.status === "REGISTERED") ??
+      null
+    );
   }
 
   async workCard(staffUserId: string, tenantId: string, workOrderId: string): Promise<WorkCard> {
@@ -300,7 +327,7 @@ export class TechnicianWorkViewService {
       throw new NotFoundException({ code: "work_order_not_found", message: "That job is not assigned to you." });
     }
 
-    const [complaints, timeTracking, profile, intents, inspection, repairLockReason] = await Promise.all([
+    const [complaints, timeTracking, profile, intents, inspection, repairLockReason, faults, [specializationForms, specializationEntries]] = await Promise.all([
       this.assetHistory.complaintText(tenantId, [workOrder.id]),
       this.policies.resolveValue(tenantId, "TIME_TRACKING") as Promise<"OFF" | "OPTIONAL" | "REQUIRED">,
       this.capabilities.resolveCurrent(tenantId),
@@ -310,7 +337,53 @@ export class TechnicianWorkViewService {
       // The card must say exactly what the write paths will do, or the
       // technician is told one thing and refused another.
       this.repairLockReason(workOrder.id),
+      this.prisma.fault.findMany({
+        where: { workOrderId: workOrder.id, tenantId },
+        select: {
+          id: true,
+          description: true,
+          severity: true,
+          code: true,
+          recommendedService: true,
+          inspectionId: true,
+          decisionItems: {
+            where: { tenantId },
+            select: { id: true, decision: true },
+            orderBy: { id: "desc" },
+            take: 1,
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+      this.specialization
+        ? Promise.all([
+            this.specialization.listDefinitions(tenantId),
+            this.specialization.entriesFor(tenantId, workOrder.id),
+          ])
+        : Promise.resolve([[], []] as const),
     ]);
+
+    const findings: WorkCardFinding[] = faults.map((f) => {
+      const latestDecision = f.decisionItems[0]?.decision;
+      const decisionStatus: FindingDecisionStatus =
+        latestDecision === "PENDING"
+          ? "PENDING"
+          : latestDecision === "APPROVED"
+            ? "APPROVED"
+            : latestDecision === "REJECTED"
+              ? "REJECTED"
+              : "NOT_REQUESTED";
+
+      return {
+        id: f.id,
+        description: f.description,
+        severity: f.severity as WorkCardFinding["severity"],
+        code: f.code,
+        recommendedService: f.recommendedService,
+        inspectionId: f.inspectionId,
+        decisionStatus,
+      };
+    });
 
     // Every part request on the job, not only this technician's own:
     // a second technician's request is still what is holding the car,
@@ -342,6 +415,7 @@ export class TechnicianWorkViewService {
       inspectionDeclined: workOrder.inspectionDeclined,
       timeTracking,
       inspection,
+      findings,
       repairLocked: repairLockReason !== null,
       repairLockReason,
       tasks: workOrder.tasks.map((task) => ({
@@ -373,6 +447,8 @@ export class TechnicianWorkViewService {
           clarificationQuestion: request.returnRequest?.clarificationQuestion ?? null,
         };
       }),
+      specializationForms,
+      specializationEntries,
       finish: await this.finishCheck(workOrderId),
       primaryAction: primaryActionFor(intents),
     };
@@ -432,7 +508,7 @@ export class TechnicianWorkViewService {
       this.prisma.inspection.findFirst({
         where: { workOrderId },
         orderBy: [{ completedAt: "desc" }, { startedAt: "desc" }],
-        select: { completedAt: true, actualMinutes: true },
+        select: { id: true, completedAt: true, actualMinutes: true },
       }),
       this.prisma.fault.count({ where: { workOrderId } }),
     ]);
@@ -446,6 +522,7 @@ export class TechnicianWorkViewService {
           : "REQUIRED";
 
     return {
+      id: latest?.id ?? null,
       state,
       completedAt: latest?.completedAt?.toISOString() ?? null,
       actualMinutes: latest?.actualMinutes ?? null,

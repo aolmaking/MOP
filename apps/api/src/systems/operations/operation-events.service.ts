@@ -55,6 +55,18 @@ export class OperationEventsService {
   }
 
   private async run(input: EmitOperationEventInput, tx: Prisma.TransactionClient): Promise<void> {
+    const payloadObj = input.payload && typeof input.payload === "object" ? (input.payload as Record<string, unknown>) : {};
+    const workOrderId = (input.targetType === "WorkOrder" ? input.targetId : (payloadObj.workOrderId as string | undefined)) ?? null;
+    let branchId = (payloadObj.branchId as string | undefined) ?? null;
+
+    if (!branchId && workOrderId) {
+      const wo = await tx.workOrder.findUnique({
+        where: { id: workOrderId },
+        select: { branchId: true },
+      });
+      if (wo) branchId = wo.branchId;
+    }
+
     await tx.operationEvent.create({
       data: {
         tenantId: input.tenantId,
@@ -62,6 +74,8 @@ export class OperationEventsService {
         payload: input.payload as Prisma.InputJsonValue,
         actorId: input.actorId,
         actorType: input.actorType,
+        workOrderId,
+        branchId,
       },
     });
 

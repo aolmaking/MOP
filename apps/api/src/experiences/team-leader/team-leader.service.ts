@@ -160,7 +160,14 @@ export class TeamLeaderService {
             where: {
               tenantId,
               staffUserId: person.id,
-              task: { status: "DONE", updatedAt: { gte: this.startOfToday() } },
+              unassignedAt: null,
+              task: {
+                status: "DONE",
+              },
+              OR: [
+                { task: { completedAt: { gte: this.startOfToday() } } },
+                { task: { completedAt: null }, assignedAt: { gte: this.startOfToday() } },
+              ],
             },
           }),
         ]);
@@ -355,15 +362,17 @@ export class TeamLeaderService {
     const rows = await Promise.all(
       staff.map(async (person) => {
         const [tasksCompleted, activeTasks, blockers, reworkCount] = await Promise.all([
-          this.prisma.taskAssignment.count({ where: { tenantId, staffUserId: person.id, task: { status: "DONE" } } }),
+          this.prisma.taskAssignment.count({
+            where: { tenantId, staffUserId: person.id, unassignedAt: null, task: { status: "DONE" } },
+          }),
           this.prisma.taskAssignment.count({
             where: { tenantId, staffUserId: person.id, unassignedAt: null, task: { status: "IN_PROGRESS" } },
           }),
           this.prisma.taskBlocker.count({
-            where: { tenantId, task: { assignments: { some: { staffUserId: person.id } } } },
+            where: { tenantId, task: { assignments: { some: { staffUserId: person.id, unassignedAt: null } } } },
           }),
           this.prisma.taskAssignment.count({
-            where: { tenantId, staffUserId: person.id, task: { status: "RETURNED_FOR_REWORK" } },
+            where: { tenantId, staffUserId: person.id, unassignedAt: null, task: { status: "RETURNED_FOR_REWORK" } },
           }),
         ]);
 
