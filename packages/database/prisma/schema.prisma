@@ -99,6 +99,26 @@ enum TaskStatus {
   CANCELLED
 }
 
+enum QcFailureReason {
+  WORKMANSHIP
+  INCOMPLETE_REPAIR
+  INCORRECT_DIAGNOSIS
+  DEFECTIVE_PART
+  SAFETY_ISSUE
+  DOCUMENTATION
+  OTHER
+}
+
+enum TaskReworkReason {
+  WORKMANSHIP
+  INCOMPLETE_WORK
+  INCORRECT_PROCEDURE
+  DEFECTIVE_PART
+  FAILED_INSPECTION
+  CUSTOMER_COMPLAINT
+  OTHER
+}
+
 enum BlockerReason {
   WAITING_PART
   WAITING_CUSTOMER
@@ -393,6 +413,7 @@ model Tenant {
   groupMemberships        TenantGroupMember[]
   liveViewSessions        PlatformLiveViewSession[]
   workflowIssueAcks       WorkflowIssueAcknowledgement[]
+  workshopSpecializations WorkshopSpecialization[]
 
   @@index([status])
   @@map("tenants")
@@ -432,6 +453,7 @@ model Branch {
   warehouseAccess BranchWarehouseAccess[]
   workOrders      WorkOrder[]
   teams           Team[]
+  invoices        Invoice[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -743,6 +765,24 @@ model SpecializationEntry {
   @@index([tenantId, definitionId])
   @@index([workOrderId])
   @@map("specialization_entries")
+}
+
+// Persisted assignment of a specialization pack/domain to a workshop.
+// This is what lets runtime services (RelevanceContext, ResolvedWorkshopModel,
+// TechnicianWorkView) query "which specializations does this workshop have"
+// deterministically without re-parsing snapshots or guessing from definitions.
+model WorkshopSpecialization {
+  id                String   @id @default(cuid())
+  tenantId          String
+  specializationKey String
+  source            String   @default("BUILT_IN") // BUILT_IN | CUSTOM
+  assignedAt        DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, specializationKey])
+  @@index([tenantId])
+  @@map("workshop_specializations")
 }
 
 // Per-category "where on the asset" vocabulary (FL/FR/RL/RR for cars,
@@ -1094,6 +1134,7 @@ model WorkOrder {
   // the WAITING_PARTS/QC_FAILED attention items until the lifecycle
   // records a real state-entry timestamp.
   expectedDurationMinutes Int?
+  qcFailureReason         QcFailureReason?
   createdAt               DateTime        @default(now())
   updatedAt               DateTime        @updatedAt
   closedAt                DateTime?
@@ -1125,6 +1166,10 @@ model WorkOrder {
   @@index([tenantId, branchId, status])
   @@index([tenantId, customerId])
   @@index([assetId])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, closedAt])
+  @@index([tenantId, branchId, createdAt])
+  @@index([tenantId, branchId, closedAt])
   @@map("work_orders")
 }
 
@@ -1181,7 +1226,10 @@ model Task {
   // partial completion across them is a real state history must be able
   // to report.
   decisionItemId String?
-  status         TaskStatus @default(ASSIGNED)
+  status         TaskStatus        @default(ASSIGNED)
+  originalTaskId String?
+  reworkReason   TaskReworkReason?
+  reworkNote     String?
   // TIME_TRACKING (packages/shared/src/policies/registry.ts). Minutes the
   // technician reports at completion, whole minutes because that is the
   // granularity the Work Card's control actually offers -- not derived
@@ -1203,6 +1251,7 @@ model Task {
   // Null for tasks created before this was recorded, and for tasks nobody
   // has started yet. Those two are distinguishable by `status`.
   startedAt      DateTime?
+  completedAt    DateTime?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
@@ -1210,14 +1259,19 @@ model Task {
   // SetNull rather than Cascade: a cancelled decision request must not
   // delete the record of work the workshop actually performed.
   decisionItem CustomerDecisionItem? @relation(fields: [decisionItemId], references: [id], onDelete: SetNull)
+  originalTask Task?                 @relation("TaskRework", fields: [originalTaskId], references: [id], onDelete: SetNull)
+  reworkTasks  Task[]                @relation("TaskRework")
   subtasks     Subtask[]
   assignments  TaskAssignment[]
   blockers     TaskBlocker[]
 
   @@index([tenantId, status])
+  @@index([tenantId, status, completedAt])
   @@index([workOrderId])
   // Answers "what was done about this recommendation" without a scan.
   @@index([decisionItemId])
+  // Answers "which tasks were rework for an original task" without a scan.
+  @@index([originalTaskId])
   // Answers "how much battery-replacement work did we do" without a scan.
   @@index([tenantId, serviceKey])
   @@map("tasks")
@@ -1897,6 +1951,7 @@ model RunningInvoiceLine {
 model Invoice {
   id               String        @id @default(cuid())
   tenantId         String
+  branchId         String?
   workOrderId      String        @unique
   invoiceNumber    String
   status           InvoiceStatus @default(ISSUED)
@@ -1912,6 +1967,7 @@ model Invoice {
   issuedAt         DateTime      @default(now())
 
   tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  branch          Branch?          @relation(fields: [branchId], references: [id], onDelete: Restrict)
   workOrder       WorkOrder        @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
   lines           InvoiceLine[]
   payments        Payment[]
@@ -1921,6 +1977,7 @@ model Invoice {
 
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId, status])
+  @@index([tenantId, branchId, issuedAt])
   @@map("invoices")
 }
 
@@ -2502,17 +2559,21 @@ model AuditLog {
 // significant action emits one row here before fanning out to workflow
 // status, notifications, audit, and customer-safe projection.
 model OperationEvent {
-  id        String         @id @default(cuid())
-  tenantId  String
-  eventKey  String
-  payload   Json
-  actorId   String
-  actorType AuditActorType
-  createdAt DateTime       @default(now())
+  id          String         @id @default(cuid())
+  tenantId    String
+  eventKey    String
+  payload     Json
+  actorId     String
+  actorType   AuditActorType
+  workOrderId String?
+  branchId    String?
+  createdAt   DateTime       @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@index([tenantId, eventKey])
+  @@index([tenantId, eventKey, createdAt])
+  @@index([tenantId, branchId, eventKey, createdAt])
+  @@index([tenantId, workOrderId, createdAt])
   @@map("operation_events")
 }
 
