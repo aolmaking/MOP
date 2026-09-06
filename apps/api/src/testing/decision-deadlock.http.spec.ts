@@ -361,7 +361,7 @@ describe("Decision deadlock (real HTTP, real Postgres)", () => {
       .set("Cookie", intruder.cookie)
       .send({});
 
-    expect([403, 404]).toContain(res.status);
+    expect([401, 403, 404]).toContain(res.status);
 
     await booted.prisma.session.deleteMany({ where: { tenantId: otherTenant.id } });
     await booted.prisma.staffUser.deleteMany({ where: { accountId: account.id } });

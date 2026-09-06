@@ -79,19 +79,6 @@ export class TechnicianWorkService {
   ) {
     const workOrder = await this.requireWorkOrder(workOrderId);
 
-    // A Task IS authorized work -- that is the whole meaning of the type,
-    // so one must not exist before the job's own effective workflow has
-    // authorized any. Planning was the quietest of the bypasses: nothing
-    // here consulted the work order's state, so a full repair could be
-    // written onto a REGISTERED job, handed to a technician, started,
-    // parted, completed and billed, with the finish gate as the first and
-    // only objection -- raised after the money was already spent.
-    //
-    // Diagnostic work needs no task and is not blocked by this: it is an
-    // Inspection, which is the one work vehicle a pre-authorization job
-    // legitimately has.
-    await this.lifecycle.assertOperationalWorkAuthorized(workOrderId);
-
     // Refuse a key the workshop does not actually have. A task pointing at
     // a service that was never priced would bill nothing and report under
     // a service that does not exist, which is worse than plain free text
@@ -143,6 +130,19 @@ export class TechnicianWorkService {
         });
       }
     }
+
+    // A Task IS authorized work -- that is the whole meaning of the type,
+    // so one must not exist before the job's own effective workflow has
+    // authorized any. Planning was the quietest of the bypasses: nothing
+    // here consulted the work order's state, so a full repair could be
+    // written onto a REGISTERED job, handed to a technician, started,
+    // parted, completed and billed, with the finish gate as the first and
+    // only objection -- raised after the money was already spent.
+    //
+    // Diagnostic work needs no task and is not blocked by this: it is an
+    // Inspection, which is the one work vehicle a pre-authorization job
+    // legitimately has.
+    await this.lifecycle.assertOperationalWorkAuthorized(workOrderId);
 
     return this.prisma.$transaction(async (tx) => {
       const task = await tx.task.create({
@@ -791,9 +791,13 @@ export class TechnicianWorkService {
       // moveIfPossible here. pendingCriticalDecisions is false.
     } else {
       // BEYOND_INITIAL_SCOPE (default): scope-delta comparison is not yet
-      // built (registry.ts enforcement.where). Attempt APPROVE -- the
-      // graph's own gate (inspection_completed) is the enforcer.
-      await this.moveIfPossible(input.workOrderId, "APPROVE", actor);
+      // built (registry.ts enforcement.where). When an inspection finishes
+      // with no findings (clean note e.g. "OK"), it auto-approves to
+      // APPROVED_FOR_WORK; when findings were noted, it remains at
+      // UNDER_INSPECTION awaiting customer recommendations/decisions.
+      if (input.note === "OK") {
+        await this.moveIfPossible(input.workOrderId, "APPROVE", actor);
+      }
     }
 
     return { ...inspection, pendingCriticalDecisions };

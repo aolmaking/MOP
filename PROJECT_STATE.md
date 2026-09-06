@@ -334,6 +334,7 @@ coordination directory (`E:\mop-fleet\board\` here) for concurrent work
 the cost was a full pass of now-superseded work — not wasted (the reading
 and reasoning transferred), but the code itself was redundant.
 
+
 ---
 
 ## 0. Plan ceilings (`maxBranches`/`maxUsers`/`maxWarehouses`) now enforced on an ongoing basis, not just at creation (2026-08-25)

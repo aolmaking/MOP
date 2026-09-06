@@ -238,6 +238,19 @@
                   <span class="decision-age">
                     {{ request.sentAt ? 'sent ' + since(request.sentAt) : 'not sent yet' }}
                   </span>
+                  @if (canCancelDecision(request)) {
+                    <!-- M-3: withdraw an ask nobody has answered yet. -->
+                    <button
+                      appButton
+                      variant="secondary"
+                      size="small"
+                      type="button"
+                      [disabled]="cancellingRequestId() === request.id"
+                      (click)="cancelDecision(request.id)"
+                    >
+                      {{ cancellingRequestId() === request.id ? 'Cancelling…' : 'Cancel' }}
+                    </button>
+                  }
                 </p>
                 <ul class="decision-items">
                   @for (item of request.items; track item.id) {

@@ -129,8 +129,6 @@ Net effect in the running product: the Returns queue can only ever be populated 
 | **Stock adjustment as a first-class action** | 🟡 — `inventory.stock.adjust` and the `ADJUSTMENT` movement type exist; reconciliation is not yet its own page, which doc 09 §1 argues it must eventually be |
 | **Inventory transfers between warehouses** | 🟡 — model, `TransferStatus` and `inventory.transfer.create` exist; no graph states, no endpoint, no page |
 | **Supplier orders** | 🟡 — model, `SupplierOrderStatus` and `inventory.supplier_order.create` exist; no endpoint completes the loop back to `SUPPLIER_RECEIPT` |
-| `WAREHOUSE_REVIEWING` / `IN_TRANSIT` / `WAITING_TRANSFER` / `WAITING_SUPPLIER` | ⚠️ read by Home and the requests view, written by nothing — gap G-INV-01 |
-
 
 ---
 
@@ -218,3 +216,4 @@ one from another workshop is refused (`reorder_mismatch`) rather than
 half-applied: it means the page is working from a stale picture, and
 ordering the rest would leave the missing row wherever it was with
 nothing to show anything went wrong.
+

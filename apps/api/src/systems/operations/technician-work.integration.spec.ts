@@ -173,6 +173,78 @@ afterAll(async () => {
   await prisma.$disconnect();
 }, 120_000);
 
+/**
+ * `startInspection`/`startWork` -- the two halves of the spine that had
+ * WORKFLOW_INTENTS entries and zero production callers. Both are thin
+ * delegations to `WorkOrderLifecycleService.apply`, which is exercised
+ * exhaustively elsewhere (`work-order-lifecycle.integration.spec.ts`);
+ * this only proves the delegation itself is wired correctly.
+ */
+describe("start-inspection and start-work", () => {
+  it("moves a freshly-booked job from REGISTERED to UNDER_INSPECTION", async () => {
+    counter += 1;
+    const intakeResult = await intake.intake(
+      {
+        tenantId,
+        branchId,
+        customer: { fullName: `Start Customer ${counter}`, phone: `0100001${String(counter).padStart(4, "0")}` },
+        asset: { category: "CARS", plateNumber: `${SUFFIX}-si-${counter}` },
+        inspectionDeclined: false,
+      },
+      ACTOR,
+    );
+    expect((await prisma.workOrder.findUniqueOrThrow({ where: { id: intakeResult.workOrderId } })).status).toBe(
+      "REGISTERED",
+    );
+
+    const result = await work.startInspection(intakeResult.workOrderId, ACTOR);
+
+    expect(result.to).toBe("UNDER_INSPECTION");
+    expect((await prisma.workOrder.findUniqueOrThrow({ where: { id: intakeResult.workOrderId } })).status).toBe(
+      "UNDER_INSPECTION",
+    );
+  }, 120_000);
+
+  it("moves an approved job from APPROVED_FOR_WORK to IN_PROGRESS", async () => {
+    counter += 1;
+    const intakeResult = await intake.intake(
+      {
+        tenantId,
+        branchId,
+        customer: { fullName: `Start Customer ${counter}`, phone: `0100002${String(counter).padStart(4, "0")}` },
+        asset: { category: "CARS", plateNumber: `${SUFFIX}-sw-${counter}` },
+        inspectionDeclined: true,
+      },
+      ACTOR,
+    );
+    await lifecycle.apply(intakeResult.workOrderId, "REQUEST_APPROVAL", ACTOR);
+    await lifecycle.apply(intakeResult.workOrderId, "APPROVE", ACTOR);
+
+    const result = await work.startWork(intakeResult.workOrderId, ACTOR);
+
+    expect(result.to).toBe("IN_PROGRESS");
+    expect((await prisma.workOrder.findUniqueOrThrow({ where: { id: intakeResult.workOrderId } })).status).toBe(
+      "IN_PROGRESS",
+    );
+  }, 120_000);
+
+  it("refuses start-work on a job that has not been approved yet", async () => {
+    counter += 1;
+    const intakeResult = await intake.intake(
+      {
+        tenantId,
+        branchId,
+        customer: { fullName: `Start Customer ${counter}`, phone: `0100003${String(counter).padStart(4, "0")}` },
+        asset: { category: "CARS", plateNumber: `${SUFFIX}-sw-refuse-${counter}` },
+        inspectionDeclined: false,
+      },
+      ACTOR,
+    );
+
+    await expect(work.startWork(intakeResult.workOrderId, ACTOR)).rejects.toMatchObject({ status: 409 });
+  }, 120_000);
+});
+
 describe("inspections and faults", () => {
   it("records an inspection with its category-specific fields", async () => {
     const workOrderId = await workOrderInProgress();

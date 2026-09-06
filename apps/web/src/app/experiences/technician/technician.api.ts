@@ -40,6 +40,7 @@ export interface WorkCardPart {
   readonly statusText: string;
   readonly waitingOn: 'STORE' | 'YOU' | 'NOBODY';
   readonly action: 'RECEIVE' | 'MARK_USED' | null;
+  readonly actions?: readonly ('RECEIVE' | 'MARK_USED' | 'RETURN' | 'RESPOND_CLARIFICATION')[];
   /**
    * Whether this workshop has a return path at all. Server-computed from
    * the part-request graph under the tenant's capability profile -- the
@@ -440,8 +441,8 @@ export class TechnicianApi {
     );
   }
 
-  /** CONTRACTS-v0 C6. */
-  returnPart(partRequestId: string, quantity: number, reason: string): Observable<unknown> {
+  /** CONTRACTS-v0 C6. Send a received part back to the store. */
+  returnPart(partRequestId: string, quantity: number, reason?: string): Observable<unknown> {
     return this.http.post(`/api/v1/technician/parts/${partRequestId}/return`, { quantity, reason });
   }
 
@@ -478,6 +479,11 @@ export class TechnicianApi {
 
   usePart(partRequestId: string): Observable<unknown> {
     return this.http.post(`/api/v1/technician/parts/${partRequestId}/used`, {});
+  }
+
+  /** Answer the store's clarifying question on a return in progress. */
+  respondToReturnClarification(partRequestId: string, response: string): Observable<unknown> {
+    return this.http.post(`/api/v1/technician/parts/${partRequestId}/return/respond`, { response });
   }
 
   /** "Ask the customer" -- creates the decision request and sends it in one call. */

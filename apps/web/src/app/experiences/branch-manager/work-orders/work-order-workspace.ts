@@ -151,6 +151,29 @@ export class WorkOrderWorkspace {
   protected readonly state = signal<State>('loading');
   protected readonly showDossier = signal(false);
 
+  protected readonly cancellingRequestId = signal<string | null>(null);
+  protected readonly panelError = signal<string | null>(null);
+  protected readonly cancelError = signal<string | null>(null);
+
+  /** Only meaningful before the customer has answered anything. */
+  protected canCancelDecision(request: { status: string }): boolean {
+    return request.status === 'SENT' || request.status === 'VIEWED';
+  }
+
+  protected cancelDecision(requestId: string): void {
+    this.cancellingRequestId.set(requestId);
+    this.api.cancelDecision(requestId).subscribe({
+      next: () => {
+        this.cancellingRequestId.set(null);
+        this.load();
+      },
+      error: (err: PresentedError) => {
+        this.cancellingRequestId.set(null);
+        this.panelError.set(err.message ?? 'Could not cancel that request.');
+      },
+    });
+  }
+
   constructor() {
     // Re-fetches when the route id changes, so navigating between two
     // jobs does not show the previous car's details under a new plate.

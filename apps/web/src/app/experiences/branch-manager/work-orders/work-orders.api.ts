@@ -99,14 +99,28 @@ export class WorkOrdersApi {
   }
 
   /**
-   * CONTRACTS-v0 C3. The manager adds work the technician did not think
-   * to raise -- the counter's own "and while it is in, do this too".
+   * CONTRACTS-v0 C3 / Parity with technician card. The manager adds work
+   * the technician did not think to raise. Supports both object payload and title/serviceKey.
    */
   createTask(
     workOrderId: string,
     task: { title: string; serviceKey?: string; assignToStaffUserId?: string },
+  ): Observable<WorkOrderTask>;
+  createTask(
+    workOrderId: string,
+    title: string,
+    serviceKey?: string,
+  ): Observable<WorkOrderTask>;
+  createTask(
+    workOrderId: string,
+    taskOrTitle: string | { title: string; serviceKey?: string; assignToStaffUserId?: string },
+    serviceKey?: string,
   ): Observable<WorkOrderTask> {
-    return this.http.post<WorkOrderTask>(`/api/v1/branch-manager/work-orders/${workOrderId}/tasks`, task);
+    const body =
+      typeof taskOrTitle === 'string'
+        ? { title: taskOrTitle, serviceKey }
+        : taskOrTitle;
+    return this.http.post<WorkOrderTask>(`/api/v1/branch-manager/work-orders/${workOrderId}/tasks`, body);
   }
 
   /**
@@ -121,5 +135,21 @@ export class WorkOrdersApi {
       `/api/v1/branch-manager/work-orders/${workOrderId}/request-approval`,
       {},
     );
+  }
+
+  /** Parity with the technician's own "ask the customer" press. */
+  raiseDecision(
+    id: string,
+    item: { name: string; explanation: string; importance: string; price: string; laborPrice?: string },
+  ): Observable<{ requestId: string; secureToken: string }> {
+    return this.http.post<{ requestId: string; secureToken: string }>(
+      `/api/v1/branch-manager/work-orders/${id}/decisions`,
+      item,
+    );
+  }
+
+  /** Withdraw an ask nobody has answered yet. */
+  cancelDecision(requestId: string): Observable<unknown> {
+    return this.http.post(`/api/v1/branch-manager/approvals/${requestId}/cancel`, {});
   }
 }

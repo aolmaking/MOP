@@ -10,7 +10,20 @@ import { CustomerDecisionService } from "../../systems/customer/decision.service
 import { PartRequestService } from "../../systems/inventory/part-request.service";
 import { CatalogBrowseService } from "../../systems/inventory/catalog-browse.service";
 import { parseAttributeQuery } from "../../systems/inventory/inventory.controller";
-import { ReportBlockerDto, CreateFaultDto, RequestPartDto, RecordInspectionDto, CompleteTaskDto, RequestReturnDto, ClarificationDto, ExternalPartDto, SubmitCartDto, SubmitSpecializationEntryDto } from "./technician.dto";
+import {
+  ReportBlockerDto,
+  CreateFaultDto,
+  RequestPartDto,
+  RecordInspectionDto,
+  CompleteTaskDto,
+  RequestReturnDto,
+  ReturnPartDto,
+  ClarificationDto,
+  RespondToClarificationDto,
+  ExternalPartDto,
+  SubmitCartDto,
+  SubmitSpecializationEntryDto,
+} from "./technician.dto";
 import { SpecializationService } from "../../systems/people/specialization/specialization.service";
 import { RaiseDecisionDto } from "../../systems/customer/decision.dto";
 
@@ -145,6 +158,33 @@ export class TechnicianController {
   ) {
     await this.requireTechnician(session, "blocker.report");
     return this.work.reportBlocker({ taskId: id, reason: dto.reason, note: dto.note }, this.actor(session));
+  }
+
+  /**
+   * "Start inspection" -- REGISTERED to UNDER_INSPECTION. The first half
+   * of the spine that was entirely unwired: `WorkOrderLifecycleService`
+   * has always known this move, and nothing ever pressed the button.
+   */
+  @Post("work-orders/:id/start-inspection")
+  @HttpCode(200)
+  async startInspection(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.start_inspection");
+    await this.view.workCard(staffUserId, tenantId, id);
+    const result = await this.work.startInspection(id, this.actor(session));
+    return { workOrderId: result.workOrderId, status: result.to };
+  }
+
+  /**
+   * "Start work" -- APPROVED_FOR_WORK to IN_PROGRESS. Same gap as
+   * `startInspection`, one stage later in the job.
+   */
+  @Post("work-orders/:id/start-work")
+  @HttpCode(200)
+  async startWork(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.start_work");
+    await this.view.workCard(staffUserId, tenantId, id);
+    const result = await this.work.startWork(id, this.actor(session));
+    return { workOrderId: result.workOrderId, status: result.to };
   }
 
   /**
@@ -359,11 +399,15 @@ export class TechnicianController {
     return this.partRequests.markUsed(id, this.actor(session));
   }
 
+  /**
+   * "Send it back" -- the technician's own half of the returns loop
+   * (`PartRequestService.requestReturn`).
+   */
   @Post("parts/:id/return")
-  async requestReturn(
+  async returnPart(
     @CurrentSession() session: SessionContext,
     @Param("id") id: string,
-    @Body() dto: RequestReturnDto,
+    @Body() dto: ReturnPartDto | RequestReturnDto,
   ) {
     await this.requirePartOnMyJob(session, id);
     return this.partRequests.requestReturn(id, dto.quantity, this.actor(session), dto.reason);
@@ -377,6 +421,22 @@ export class TechnicianController {
   ) {
     await this.requirePartOnMyJob(session, id);
     return this.partRequests.respondToClarification(id, this.actor(session), dto.answer);
+  }
+
+  /**
+   * The technician's answer to the store's clarifying question on a
+   * return-in-progress -- the other end of `inventory.controller.ts`'s
+   * `returns/:id/clarify`. Loops the return back to RETURN_REQUESTED so
+   * the store's next move is the same decision as a first-time request.
+   */
+  @Post("parts/:id/return/respond")
+  async respondToReturnClarification(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: RespondToClarificationDto,
+  ) {
+    await this.requirePartOnMyJob(session, id);
+    return this.partRequests.respondToClarification(id, this.actor(session), dto.response);
   }
 
   @Post("work-orders/:id/external-parts")
@@ -414,23 +474,6 @@ export class TechnicianController {
     return this.work.finishWorkOrder(id, this.actor(session));
   }
 
-  @Post("work-orders/:id/start-inspection")
-  @HttpCode(200)
-  async startInspection(@CurrentSession() session: SessionContext, @Param("id") id: string) {
-    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
-    await this.view.workCard(staffUserId, tenantId, id);
-    const result = await this.work.startInspection(id, this.actor(session));
-    return { workOrderId: result.workOrderId, status: result.to };
-  }
-
-  @Post("work-orders/:id/start-work")
-  @HttpCode(200)
-  async startWork(@CurrentSession() session: SessionContext, @Param("id") id: string) {
-    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
-    await this.view.workCard(staffUserId, tenantId, id);
-    const result = await this.work.startWork(id, this.actor(session));
-    return { workOrderId: result.workOrderId, status: result.to };
-  }
 
   private actor(session: SessionContext) {
     return {

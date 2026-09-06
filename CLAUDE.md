@@ -155,9 +155,20 @@ These are load-bearing. Changing one silently breaks a guarantee elsewhere.
 
 **Start at [`docs/LAUNCH_HANDOVER.md`](docs/LAUNCH_HANDOVER.md)** — what the product actually does today, what is deliberately deferred, and every known gap, each traced to a passing test or marked not-proven. Then [`docs/14-DAY-LAUNCH-SCOPE.md`](docs/14-DAY-LAUNCH-SCOPE.md) for the plan it is measured against. These are the current, living status documents — read them before anything below.
 
-[`docs/corpus/00_DOCUMENTATION_INDEX.md`](docs/corpus/00_DOCUMENTATION_INDEX.md) is a 41-document corpus covering the product, architecture and implementation state in depth, each claim labelled by stage (`[INTENDED]` … `[VERIFIED]`). Written before the launch-scope pivot above, so treat its status claims as dated relative to `LAUNCH_HANDOVER.md` — its product/architecture description is still the deeper reference for a single topic.
+[`docs/corpus/00_DOCUMENTATION_INDEX.md`](docs/corpus/00_DOCUMENTATION_INDEX.md) is a 41-document corpus covering the product, the architecture and the current implementation state, with every claim labelled by its stage (`[INTENDED]` … `[VERIFIED]`). It exists so a session does not begin with codebase archaeology. Twenty minutes there replaces hours of exploration:
 
-Then [`docs/README.md`](docs/README.md). The load-bearing ones:
+| Read first | For |
+|---|---|
+| [`corpus/01_PRODUCT_VISION_AND_PHILOSOPHY.md`](docs/corpus/01_PRODUCT_VISION_AND_PHILOSOPHY.md) | What MOP is and what it refuses to be |
+| [`corpus/18_SUBSYSTEM_CATALOG.md`](docs/corpus/18_SUBSYSTEM_CATALOG.md) | The map of what exists |
+| [`corpus/36_IMPLEMENTATION_STATUS_REGISTER.md`](docs/corpus/36_IMPLEMENTATION_STATUS_REGISTER.md) | Where the build actually is |
+| [`corpus/37_KNOWN_GAPS_AND_TECHNICAL_DEBT.md`](docs/corpus/37_KNOWN_GAPS_AND_TECHNICAL_DEBT.md) | **Every known gap, with an id** — read it so you do not rediscover one and call it a finding |
+| [`corpus/40_AGENT_ENGINEERING_GUIDE.md`](docs/corpus/40_AGENT_ENGINEERING_GUIDE.md) | The rules you will be held to |
+
+The corpus **cites** the canonical trackers rather than duplicating them: page completion stays in `PAGE_INVENTORY.md`, phase status in `PHASE_MAP.md`, session history in `PROJECT_STATE.md`.
+
+Then [`docs/README.md`](docs/README.md). The load-bearing source documents:
+
 
 | Document | For |
 |---|---|

@@ -132,8 +132,6 @@ These are not "a later phase has not run yet." They are finished, tested systems
 | **Clarification reply** | ⚠️ `[IMPLEMENTED]` not `[INTEGRATED]` — no endpoint |
 | Specialisation service cards / measurement forms on the Work Card | 🔴 `[INTENDED]` — definitions and validation are real; no page fills one in |
 | Custom-field capture on inspection | 🔴 `[INTENDED]` — authoring exists, recording does not |
-| Optional per-job review under `DIRECT` | 🔴 `[INTENDED]` — needs its own intent |
-
 
 ---
 
@@ -178,3 +176,4 @@ phones instead, and the request leaves the system entirely.
 A part the workshop has never carried still has no catalogue entry, so
 the page points back at the Work Card's blocker, which remains the door
 for that case.
+

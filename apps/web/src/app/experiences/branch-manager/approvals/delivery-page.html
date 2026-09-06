@@ -67,7 +67,7 @@
                     }
                   </ul>
 
-                  @if (row.unsettledInvoiceId && mayTakePayment()) {
+                  @if ((row.unsettledInvoiceId || row.invoiceId) && mayTakePayment()) {
                     <!--
                       The way OUT of the held state, not just its name.
                       Offered only when there is genuinely money owed AND
@@ -76,7 +76,7 @@
                       and a button that greets half its audience with a
                       403 is worse than no button.
                     -->
-                    <a class="row-pay" [routerLink]="['/branch/payments', row.unsettledInvoiceId]">
+                    <a class="row-pay mop-button mop-button--primary mop-button--small" [routerLink]="['/branch/payments', row.unsettledInvoiceId || row.invoiceId]">
                       Take payment
                     </a>
                   }

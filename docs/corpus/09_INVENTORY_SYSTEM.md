@@ -202,8 +202,6 @@ Inventory does not write invoices. It produces a `ChargeableWorkItem` (`packages
 | ⚠️ `WAREHOUSE_REVIEWING` / `IN_TRANSIT` / `WAITING_TRANSFER` / `WAITING_SUPPLIER` | **Read by three services, written by nothing, unreachable in the graph.** Gap G-INV-01 |
 | `InventoryTransfer` end-to-end (request → in transit → received) | 🟡 — model and status enum exist; the graph has no transfer states, so the multi-warehouse transfer journey is not reachable as a lifecycle |
 | `SupplierOrder` end-to-end | 🟡 — model, permission (`inventory.supplier_order.create`) and status enum exist; no dedicated page completes the loop back to `SUPPLIER_RECEIPT` |
-| Stock adjustment UI | 🟡 — `inventory.stock.adjust` and the `ADJUSTMENT` movement type exist; reconciliation is not yet a first-class page, which §1 argues it must eventually be |
-
 
 ---
 
@@ -297,3 +295,4 @@ shelf.
 Same item twice in one basket is merged into one request for the sum,
 before validation, so the total is what gets range-checked (ceiling 999
 per line — a fat-finger guard, not a stock rule).
+

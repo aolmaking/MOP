@@ -39,6 +39,8 @@ export interface DeliveryCandidate {
    * out from a balance.
    */
   readonly unsettledInvoiceId: string | null;
+  /** Set only when an unsettled invoice is what's holding this car -- M-4. */
+  readonly invoiceId?: string | null;
 }
 
 export interface DeliveryBoard {

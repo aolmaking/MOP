@@ -5,7 +5,7 @@ import { WORK_ORDER_GRAPH, add } from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
-import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
+import { WorkOrderLifecycleService, type LifecycleActor } from "../operations/work-order-lifecycle.service";
 
 /** What the public page is allowed to know. Nothing internal appears here. */
 export interface PublicDecisionItem {
@@ -158,6 +158,14 @@ export class CustomerDecisionService {
     private readonly lifecycle: WorkOrderLifecycleService,
   ) {}
 
+  /**
+   * The customer's own open of the link. Writes `VIEWED` the first time --
+   * `CUSTOMER_DECISION_GRAPH` has declared `SENT -> VIEWED` since the graph
+   * was written, and nothing ever wrote it: a request could sit at `SENT`
+   * forever no matter how many times the customer actually opened it, so
+   * "has this even been seen" was unanswerable from the data. Silent and
+   * best-effort -- a read must never fail because the status write did.
+   */
   async read(token: string): Promise<PublicDecision> {
     const request = await this.resolve(token);
     if (request.status === "SENT") {
@@ -165,10 +173,9 @@ export class CustomerDecisionService {
       // shows "the customer opened this, N hours ago", and a status with
       // no timestamp can only ever answer the first half.
       const viewedAt = new Date();
-      await this.prisma.customerDecisionRequest.update({
-        where: { id: request.id },
-        data: { status: "VIEWED", viewedAt },
-      });
+      await this.prisma.customerDecisionRequest
+        .updateMany({ where: { id: request.id, status: "SENT" }, data: { status: "VIEWED", viewedAt } })
+        .catch(() => undefined);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (request as any).status = "VIEWED";
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -385,7 +392,7 @@ export class CustomerDecisionService {
       }
     }
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       const request = await tx.customerDecisionRequest.create({
         data: {
           tenantId,
@@ -433,21 +440,45 @@ export class CustomerDecisionService {
       return { requestId: request.id, secureToken: request.secureToken };
     });
 
-    // Best-effort work-order move: asking the customer may advance the job
-    // from UNDER_INSPECTION or REGISTERED (when inspection declined) to
-    // AWAITING_CUSTOMER_APPROVAL. Swallowed if the graph does not allow it
-    // from the job's current state — the request itself is the durable fact.
-    try {
-      await this.lifecycle.apply(workOrderId, "REQUEST_APPROVAL", {
-        accountId: actor.accountId,
-        displayName: actor.displayName,
-        actorType: "TENANT_STAFF",
-      });
-    } catch {
-      // Intent not available from current status; request stands alone.
-    }
+    // Outside the write transaction, deliberately: the request/item are
+    // already durable by the time this runs, and a lifecycle move is its
+    // own decision with its own gates -- it must not be able to roll back
+    // the ask itself, and the ask must not roll back because a move it
+    // only optionally implies was refused. REQUEST_APPROVAL covers the
+    // first ask on a job (REGISTERED or UNDER_INSPECTION). Per F-008,
+    // mid-job questions leave the job IN_PROGRESS because WAITING_CUSTOMER
+    // would strand the work order.
+    await this.moveIfPossible(workOrderId, ["REQUEST_APPROVAL"], {
+      accountId: actor.accountId,
+      displayName: actor.displayName,
+      actorType: "TENANT_STAFF",
+    });
 
-    return result;
+    return created;
+  }
+
+  /**
+   * Tries each intent in order, taking the first the graph allows from the
+   * work order's current state, and stays quiet about the rest.
+   *
+   * Only a refused transition (`ConflictException`, from `resolveIntent`
+   * or a gate) is swallowed. Anything else -- a missing work order, a
+   * genuine bug -- propagates, the same discipline
+   * `TechnicianWorkService.moveIfPossible` already uses for blockers.
+   */
+  private async moveIfPossible(
+    workOrderId: string,
+    intents: readonly ("REQUEST_APPROVAL" | "ASK_CUSTOMER" | "APPROVE" | "CUSTOMER_RESPONDED")[],
+    actor: LifecycleActor,
+  ): Promise<void> {
+    for (const intent of intents) {
+      try {
+        await this.lifecycle.apply(workOrderId, intent, actor);
+        return;
+      } catch (error) {
+        if (!(error instanceof ConflictException)) throw error;
+      }
+    }
   }
 
   /**
@@ -498,36 +529,61 @@ export class CustomerDecisionService {
     });
   }
 
-  async cancel(tenantId: string, branchScope: readonly string[], requestId: string, actor: StaffActor): Promise<void> {
-    const request = await this.prisma.customerDecisionRequest.findFirst({
-      where: {
-        id: requestId,
-        tenantId,
-        workOrder: branchScope.length > 0 ? { branchId: { in: [...branchScope] } } : {},
-      },
-      select: DECISION_SELECT,
-    });
-    if (!request) {
-      throw new NotFoundException({ code: "decision_not_found", message: "That decision request was not found." });
+  /**
+   * Staff withdraws an ask nobody has answered yet -- M-3: a request left
+   * at SENT/VIEWED had no way to be taken back, so a technician who asked
+   * about the wrong item, or a job that got resolved another way (the
+   * counter, a phone call recorded elsewhere), left a permanently
+   * outstanding decision with no path off the Approvals chase list.
+   *
+   * Refuses once the customer has answered anything -- `respondedAt` is
+   * the same fact `applyAnswers` sets, so a request with even one real
+   * answer on it is a record, not a draft, and cancelling would discard
+   * it rather than withdraw it.
+   */
+  async cancel(
+    tenantId: string,
+    branchScope: readonly string[],
+    requestId: string,
+    staff: StaffActor,
+  ): Promise<void> {
+    const request = await this.resolveById(tenantId, branchScope, requestId);
+
+    if (request.respondedAt !== null) {
+      throw new ConflictException({
+        code: "decision_already_answered",
+        message: "The customer has already answered this request, so it cannot be cancelled.",
+      });
     }
+
     if (["RESOLVED", "EXPIRED", "CANCELLED"].includes(request.status)) {
-      throw new ConflictException({ code: "decision_already_final", message: "That decision is already final and cannot be cancelled." });
+      throw new ConflictException({
+        code: "decision_already_final",
+        message: "That decision is already final and cannot be cancelled.",
+      });
     }
-    await this.prisma.customerDecisionRequest.update({ where: { id: request.id }, data: { status: "CANCELLED" } });
-    await this.events.emit(
-      {
-        tenantId,
-        eventKey: "customer_decision.cancelled",
-        actorId: actor.accountId,
-        actorName: actor.displayName,
-        actorType: "TENANT_STAFF",
-        targetType: "CustomerDecisionRequest",
-        targetId: request.id,
-        riskLevel: "MEDIUM",
-        payload: { workOrderId: request.workOrderId },
-      },
-      undefined,
-    );
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.customerDecisionRequest.update({
+        where: { id: requestId },
+        data: { status: "CANCELLED" },
+      });
+
+      await this.events.emit(
+        {
+          tenantId,
+          eventKey: "customer_decision.cancelled",
+          actorId: staff.accountId,
+          actorName: staff.displayName,
+          actorType: "TENANT_STAFF",
+          targetType: "CustomerDecisionRequest",
+          targetId: requestId,
+          riskLevel: "LOW",
+          payload: { workOrderId: request.workOrderId },
+        },
+        tx,
+      );
+    });
   }
 
   private async applyAnswers(
@@ -628,7 +684,7 @@ export class CustomerDecisionService {
       request.workOrder.asset.currentOwnerCustomerId !== null &&
       request.workOrder.asset.currentOwnerCustomerId !== request.customerId;
 
-    await this.prisma.$transaction(async (tx) => {
+    const { remaining } = await this.prisma.$transaction(async (tx) => {
       for (const answer of answers) {
         await tx.customerDecisionItem.update({
           where: { id: answer.itemId },
@@ -701,27 +757,34 @@ export class CustomerDecisionService {
         },
         tx,
       );
+
+      return { remaining };
     });
 
-    // Best-effort lifecycle advances: a resolved approval may move the job
-    // from AWAITING_CUSTOMER_APPROVAL → APPROVED_FOR_WORK (APPROVE) and a
-    // mid-job answer may move WAITING_CUSTOMER → IN_PROGRESS
-    // (CUSTOMER_RESPONDED). Outside the transaction and swallowed if the
-    // graph does not allow it from the job's current state.
-    const lifecycleActor = {
-      accountId: actor.actorId,
-      displayName: actor.actorName,
-      actorType: actor.actorType as "TENANT_STAFF" | "CUSTOMER",
-    };
-    try {
-      await this.lifecycle.apply(request.workOrderId, "APPROVE", lifecycleActor);
-    } catch {
-      // Not available from current status; the answer itself is the durable fact.
-    }
-    try {
-      await this.lifecycle.apply(request.workOrderId, "CUSTOMER_RESPONDED", lifecycleActor);
-    } catch {
-      // Likewise best-effort.
+    // Outside the answer transaction, same reasoning as `raiseAndSend`:
+    // the answer is already durable, and a refused lifecycle move must
+    // never undo a real, recorded customer decision. Only fires once the
+    // WHOLE request is settled -- a partial answer on a multi-item
+    // request has nothing yet for the job to act on.
+    if (remaining === 0) {
+      const approvedCount = await this.prisma.customerDecisionItem.count({
+        where: { decisionRequestId: request.id, decision: "APPROVED" },
+      });
+      const lifecycleActor: LifecycleActor = {
+        accountId: actor.actorId,
+        displayName: actor.actorName,
+        actorType: actor.actorType,
+      };
+      // CUSTOMER_RESPONDED covers the mid-job ask (WAITING_CUSTOMER) --
+      // the conversation is settled either way, approved or declined.
+      // APPROVE only applies, and is only attempted, when at least one
+      // item was actually approved: a request answered with nothing but
+      // rejections must not read as the customer having approved the job.
+      await this.moveIfPossible(
+        request.workOrderId,
+        approvedCount > 0 ? ["APPROVE", "CUSTOMER_RESPONDED"] : ["CUSTOMER_RESPONDED"],
+        lifecycleActor,
+      );
     }
   }
 
@@ -783,7 +846,7 @@ export class CustomerDecisionService {
     // Deliberately the same "not found" a wrong id or an out-of-scope one
     // gets -- a manager probing another branch's request ids should not
     // be able to tell a real id from a made-up one by the error shape.
-    if (!request || request.status === "CANCELLED") {
+    if (!request) {
       throw new NotFoundException({ code: "decision_not_found", message: "That decision request was not found." });
     }
     return request;

@@ -17,6 +17,7 @@ function candidate(overrides: Partial<DeliveryCandidate> = {}): DeliveryCandidat
     canLeave: true,
     blockedBy: [],
     unsettledInvoiceId: null,
+    invoiceId: null,
     ...overrides,
   };
 }

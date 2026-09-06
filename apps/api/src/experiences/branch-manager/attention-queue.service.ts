@@ -34,6 +34,8 @@ export interface AttentionItem {
   readonly rank: AttentionRank;
   /** The one action most likely to unstick this, offered on the row itself. */
   readonly primaryAction: PrimaryAction;
+  /** Set only for TAKE_PAYMENT -- M-4: what the row's action button actually opens. */
+  readonly invoiceId: string | null;
 }
 
 export type PrimaryAction =
@@ -221,6 +223,7 @@ export class AttentionQueueService {
         "TAKE_PAYMENT",
         undefined,
         weekendDays,
+        row.id,
       ),
     );
   }
@@ -260,6 +263,7 @@ export class AttentionQueueService {
     primaryAction: PrimaryAction,
     now: Date = new Date(),
     weekendDays: readonly number[] = [],
+    invoiceId: string | null = null,
   ): AttentionItem {
     const rank = rankAttentionItem({ kind, waitingSince }, now, weekendDays);
 
@@ -274,6 +278,7 @@ export class AttentionQueueService {
       waitingSince,
       rank,
       primaryAction,
+      invoiceId,
     };
   }
 }
