@@ -80,3 +80,12 @@
 :where(.history) {
   background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
 }
+
+/* Customer history UX upgrade */
+.history { gap: var(--space-6); max-inline-size: 48rem; margin-inline: auto; }
+.history-title { font-size: clamp(var(--text-lg), 4vw, var(--text-xl)); letter-spacing: -.02em; text-transform: none; }
+.entries { gap: var(--space-4); }
+.entry { padding: var(--space-5); border-inline-start: 5px solid var(--accent-cool); border-radius: var(--radius-lg); background: linear-gradient(145deg, rgb(97 184 255 / .08), transparent 70%), var(--surface); box-shadow: var(--shadow-1); transition: transform var(--duration-base) var(--ease-spring), box-shadow var(--duration-base) var(--easing); }
+.entry:hover { transform: translateX(3px); box-shadow: var(--shadow-2); }
+.entry-asset { font-size: var(--text-md); }
+.entry-summary { color: var(--text); font-size: var(--text-md); line-height: 1.55; }

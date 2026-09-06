@@ -80,3 +80,10 @@
 :where(.decide) {
   background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
 }
+
+/* Customer decision response UX upgrade */
+.decide { gap: var(--space-5); max-inline-size: 42rem; margin-inline: auto; padding: clamp(var(--space-5), 5vw, var(--space-8)); border: 1px solid var(--border); border-block-start: 5px solid var(--warning); border-radius: var(--radius-lg); background: linear-gradient(145deg, rgb(242 184 75 / .1), transparent 68%), var(--surface); box-shadow: var(--shadow-3); }
+.title { font-size: clamp(var(--text-lg), 4vw, var(--text-xl)); letter-spacing: -.02em; }
+.vehicle { color: var(--accent-cool); font-size: var(--text-md); font-weight: 800; }
+.workshop { color: var(--text-muted); }
+.secondary { min-block-size: 3rem; border-radius: var(--radius-md); }

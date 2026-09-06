@@ -119,3 +119,15 @@
 :where(.portal) {
   background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
 }
+
+/* Customer portal UX upgrade */
+.portal { background: radial-gradient(circle at 8% 0%, rgb(226 45 54 / .1), transparent 22rem), var(--bg); }
+.portal-head { position: sticky; top: 0; z-index: 5; min-block-size: 4.5rem; padding-inline: max(var(--space-4), calc((100vw - 48rem) / 2)); box-shadow: 0 8px 24px rgb(0 0 0 / .2); }
+.portal-brand { font-size: var(--text-lg); letter-spacing: .18em; }
+.portal-logout { transition: background-color var(--duration-fast) var(--easing), transform var(--duration-fast) var(--ease-spring); }
+.portal-logout:hover { transform: translateY(-1px); }
+.portal-content { padding: var(--space-6) var(--space-4) calc(var(--portal-tap) + var(--space-8)); }
+.portal-nav { box-shadow: 0 -8px 24px rgb(0 0 0 / .24); }
+.portal-nav-link { transition: background-color var(--duration-fast) var(--easing), color var(--duration-fast) var(--easing); }
+.portal-nav-link:hover { background: rgb(255 255 255 / .08); color: var(--white); }
+@media (min-width: 1024px) { .portal-content { padding-block-start: var(--space-8); } .portal-nav-link { min-block-size: 3.5rem; } }

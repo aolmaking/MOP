@@ -116,3 +116,13 @@
 :where(.invoices) {
   background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
 }
+
+/* Customer invoices UX upgrade */
+.invoices { gap: var(--space-6); max-inline-size: 48rem; margin-inline: auto; }
+.invoices-title { font-size: clamp(var(--text-lg), 4vw, var(--text-xl)); letter-spacing: -.02em; text-transform: none; }
+.list { gap: var(--space-4); }
+.invoice { padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(145deg, rgb(97 184 255 / .08), transparent 68%), var(--surface); box-shadow: var(--shadow-1); transition: transform var(--duration-base) var(--ease-spring), box-shadow var(--duration-base) var(--easing); }
+.invoice:hover { transform: translateY(-3px); box-shadow: var(--shadow-2); }
+.invoice-number { color: var(--accent-cool); font-family: var(--font-mono); font-weight: 800; }
+.amount-value { font-size: var(--text-lg); font-weight: 800; }
+.invoice-flag { color: var(--warning); font-weight: 800; }
