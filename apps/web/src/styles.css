@@ -1078,3 +1078,34 @@ button, a, select, input, textarea {
 
 /* Shared accessibility utility retained during the visual-refresh merge. */
 .visually-hidden { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Final cross-system UX pass — shared safeguards for every role and route. */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+:where(.drawer, .modal, .editor, [role='dialog']) {
+  max-block-size: 100dvh;
+  overscroll-behavior: contain;
+}
+:where(.drawer-body, .modal-body, .editor-body) {
+  overscroll-behavior: contain;
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+:where(.table-scroll, .mop-table-scroll) {
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+:where(.state, .state-error, .empty-state, .error-state) {
+  min-block-size: 10rem;
+  justify-content: center;
+}
+:where(.toast, .toast-container) { z-index: 50; }
+@media (max-width: 640px) {
+  :where(.drawer, .editor) { inline-size: 100vw; }
+  :where(.modal, [role='dialog']) { max-inline-size: calc(100vw - var(--space-4)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}
