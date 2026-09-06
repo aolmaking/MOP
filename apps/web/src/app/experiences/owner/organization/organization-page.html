@@ -218,27 +218,59 @@
 
   @if (showInvite()) {
     <div class="modal-backdrop" (click)="closeInvite()">
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="invite-title" appDismissOnEscape (dismissed)="closeInvite()" (click)="$event.stopPropagation()">
-        <h2 class="modal-title" id="invite-title">Invite Staff</h2>
+      <div class="modal mop-glass" role="dialog" aria-modal="true" aria-labelledby="invite-title" appDismissOnEscape (dismissed)="closeInvite()" (click)="$event.stopPropagation()">
+        <h2 class="modal-title" id="invite-title">Provision Workshop Worker Account</h2>
+
+        <div style="background: var(--surface-raised); border: 1px solid var(--border); padding: 10px; border-radius: var(--radius-md); font-size: var(--text-xs); color: var(--text-muted); margin-bottom: var(--space-4); line-height: 1.4;">
+          ℹ️ <strong>Access Boundary:</strong> The workshop owner provisions all technician, manager, and specialist accounts here. Customers register independently through the customer registration portal.
+        </div>
 
         @if (inviteError(); as err) {
           <app-error-banner [error]="err" />
         }
 
+        <div style="display: flex; gap: 8px; margin-bottom: var(--space-4);">
+          <button
+            type="button"
+            appButton
+            [variant]="creationMode() === 'password' ? 'primary' : 'secondary'"
+            size="small"
+            (click)="creationMode.set('password')"
+          >
+            Direct Account (Set Password)
+          </button>
+          <button
+            type="button"
+            appButton
+            [variant]="creationMode() === 'invite' ? 'primary' : 'secondary'"
+            size="small"
+            (click)="creationMode.set('invite')"
+          >
+            Send Invite Link
+          </button>
+        </div>
+
         <label class="field">
           <span class="field-label">Full name</span>
-          <input type="text" [ngModel]="inviteForm().fullName" (ngModelChange)="updateField('fullName', $event)" />
+          <input type="text" [ngModel]="inviteForm().fullName" (ngModelChange)="updateField('fullName', $event)" placeholder="e.g. Tarek Mahmoud" />
         </label>
 
         <label class="field">
           <span class="field-label">Email</span>
-          <input type="email" [ngModel]="inviteForm().email" (ngModelChange)="updateField('email', $event)" />
+          <input type="email" [ngModel]="inviteForm().email" (ngModelChange)="updateField('email', $event)" placeholder="worker@workshop.local" />
         </label>
 
         <label class="field">
           <span class="field-label">Phone</span>
-          <input type="tel" placeholder="+20100000000" [ngModel]="inviteForm().phone" (ngModelChange)="updateField('phone', $event)" />
+          <input type="tel" placeholder="01000000000 or +20100000000" [ngModel]="inviteForm().phone" (ngModelChange)="updateField('phone', $event)" />
         </label>
+
+        @if (creationMode() === 'password') {
+          <label class="field">
+            <span class="field-label">Initial Password (worker can sign in immediately)</span>
+            <input type="password" [ngModel]="workerPassword()" (ngModelChange)="workerPassword.set($event)" placeholder="At least 8 characters" />
+          </label>
+        }
 
         <label class="field">
           <span class="field-label">Role</span>
@@ -265,8 +297,8 @@
 
         <div class="modal-actions">
           <button appButton variant="secondary" (click)="closeInvite()">Cancel</button>
-          <button appButton variant="primary" [disabled]="submitting()" (click)="submitInvite()">
-            {{ submitting() ? 'Inviting…' : 'Send Invite' }}
+          <button appButton variant="primary" [disabled]="submitting() || (creationMode() === 'password' && workerPassword().length < 8)" (click)="submitInvite()">
+            {{ submitting() ? 'Processing…' : (creationMode() === 'password' ? 'Create Active Worker Account' : 'Send Invite Link') }}
           </button>
         </div>
       </div>

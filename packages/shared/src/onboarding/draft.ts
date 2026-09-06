@@ -62,6 +62,8 @@ export interface WorkshopIdentityDraft {
   readonly businessType: string;
   readonly businessTypeOther?: string;
   readonly primaryCategory: OperatingCategory | "";
+  readonly themePalette?: string;
+  readonly logoUrl?: string;
 }
 
 export interface WorkshopOwnerDraft {

@@ -5,6 +5,7 @@ import { PrismaService } from "../../../runtime/database/prisma.service";
 import { AuditService } from "../../../audit/audit.service";
 import { PlanLimitsService } from "../../../control/platform/plan-limits.service";
 import { sha256 } from "../../../identity/auth/token.util";
+import { hashPassword } from "../../../identity/auth/password.util";
 
 export interface StaffActor {
   readonly accountId: string;
@@ -37,6 +38,7 @@ export interface InviteStaffInput {
   readonly branchScope?: string[];
   readonly warehouseScope?: string[];
   readonly categoryScope?: string[];
+  readonly password?: string;
 }
 
 const ROLES_NEEDING_BRANCH: ReadonlySet<StaffRole> = new Set(["BRANCH_MANAGER"]);
@@ -117,6 +119,7 @@ export class StaffService {
 
     await this.planLimits.assertUserCapacity(tenantId);
 
+    const hasPassword = Boolean(input.password && input.password.trim().length >= 8);
     const rawInviteToken = randomBytes(32).toString("hex");
 
     const staffId = await this.prisma.$transaction(async (tx) => {
@@ -126,10 +129,10 @@ export class StaffService {
           tenantId,
           email: input.email,
           phone: input.phone,
-          passwordHash: null,
-          status: "INVITED",
-          inviteTokenHash: sha256(rawInviteToken),
-          inviteTokenExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+          passwordHash: hasPassword ? hashPassword(input.password!.trim()) : null,
+          status: hasPassword ? "ACTIVE" : "INVITED",
+          inviteTokenHash: hasPassword ? null : sha256(rawInviteToken),
+          inviteTokenExpiresAt: hasPassword ? null : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
         },
       });
 
@@ -153,8 +156,8 @@ export class StaffService {
           actorName: actor.displayName,
           targetType: "StaffUser",
           targetId: staff.id,
-          action: "staff.invited",
-          after: { fullName: input.fullName, role: input.role },
+          action: hasPassword ? "staff.created_direct" : "staff.invited",
+          after: { fullName: input.fullName, role: input.role, directActivation: hasPassword },
           riskLevel: "MEDIUM",
         },
         tx,
@@ -163,7 +166,10 @@ export class StaffService {
       return staff.id;
     });
 
-    return { staffId, inviteLink: `/invite/accept?token=${rawInviteToken}` };
+    return {
+      staffId,
+      inviteLink: hasPassword ? "" : `/invite/accept?token=${rawInviteToken}`,
+    };
   }
 
   async regenerateInviteLink(tenantId: string, staffId: string, actor: StaffActor): Promise<{ inviteLink: string }> {

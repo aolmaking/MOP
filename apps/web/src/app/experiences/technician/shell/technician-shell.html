@@ -4,6 +4,9 @@
     @if (session(); as s) {
       <span class="tech-who">{{ s.displayName }}</span>
     }
+    <div style="margin-left: auto;">
+      <app-theme-toggle />
+    </div>
   </header>
 
   <main class="tech-content">

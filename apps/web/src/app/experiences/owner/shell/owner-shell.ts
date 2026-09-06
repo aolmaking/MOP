@@ -3,6 +3,7 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { AuthStore } from '../../../identity/auth.store';
 import { ToastContainer } from '../../../ui/toast/toast-container';
 import { ButtonDirective } from '../../../ui/button/button.directive';
+import { ShellTopbar } from '../../../ui/shell-topbar/shell-topbar';
 import { visibleNavigation } from '../../../runtime/launch-surface';
 
 /**
@@ -17,7 +18,7 @@ import { visibleNavigation } from '../../../runtime/launch-surface';
  */
 @Component({
   selector: 'app-owner-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, ToastContainer, ButtonDirective],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, ToastContainer, ButtonDirective, ShellTopbar],
   templateUrl: './owner-shell.html',
   styleUrl: './owner-shell.css',
 })
@@ -34,6 +35,7 @@ export class OwnerShell {
    */
   protected readonly navigation = visibleNavigation([
     { label: 'Home', route: '/owner/home' },
+    { label: 'Branding & Theme', route: '/owner/branding' },
     { label: 'Organization', route: '/owner/organization' },
     { label: 'Teams', route: '/owner/organization/teams' },
     { label: 'Forms & Fields', route: '/owner/forms' },

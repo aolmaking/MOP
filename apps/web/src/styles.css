@@ -284,6 +284,204 @@
   --shadow-color: 20 15% 45%;
 }
 
+/* =============================================================================
+ * WORKSHOP CUSTOM UI COLOR PALETTES (Dark & Light Variants)
+ * ============================================================================= */
+
+/* 1. Crimson Turbo (Default) */
+:root[data-palette='crimson'] {
+  --brand: #d41717;
+  --brand-deep: #8e1010;
+  --brand-text: #ef4444;
+  --brand-muted: #2b1414;
+  --accent: #d41717;
+  --accent-hover: #ee2020;
+  --accent-muted: #2b1414;
+  --focus-ring: #ff4b3e;
+}
+:root[data-theme='light'][data-palette='crimson'] {
+  --brand: #c11414;
+  --brand-deep: #8e1010;
+  --brand-text: #c11414;
+  --brand-muted: #fbe9e8;
+  --accent: #c11414;
+  --accent-hover: #a01010;
+  --accent-muted: #fbe9e8;
+  --focus-ring: #d41717;
+}
+
+/* 2. Cyber Cobalt (Diagnostic Blue) */
+:root[data-palette='cobalt'] {
+  --brand: #2563eb;
+  --brand-deep: #1e3a8a;
+  --brand-text: #60a5fa;
+  --brand-muted: #172554;
+  --accent: #2563eb;
+  --accent-hover: #3b82f6;
+  --accent-muted: #172554;
+  --focus-ring: #60a5fa;
+}
+:root[data-theme='light'][data-palette='cobalt'] {
+  --brand: #1d4ed8;
+  --brand-deep: #1e40af;
+  --brand-text: #1d4ed8;
+  --brand-muted: #eff6ff;
+  --accent: #1d4ed8;
+  --accent-hover: #1e40af;
+  --accent-muted: #dbeafe;
+  --focus-ring: #2563eb;
+}
+
+/* 3. Emerald Performance (Apex Precision Green) */
+:root[data-palette='emerald'] {
+  --brand: #059669;
+  --brand-deep: #064e3b;
+  --brand-text: #34d399;
+  --brand-muted: #022c22;
+  --accent: #059669;
+  --accent-hover: #10b981;
+  --accent-muted: #022c22;
+  --focus-ring: #34d399;
+}
+:root[data-theme='light'][data-palette='emerald'] {
+  --brand: #047857;
+  --brand-deep: #065f46;
+  --brand-text: #047857;
+  --brand-muted: #ecfdf5;
+  --accent: #047857;
+  --accent-hover: #065f46;
+  --accent-muted: #d1fae5;
+  --focus-ring: #059669;
+}
+
+/* 4. Electric Amber (Turbo Speed Gold) */
+:root[data-palette='amber'] {
+  --brand: #d97706;
+  --brand-deep: #78350f;
+  --brand-text: #fbbf24;
+  --brand-muted: #451a03;
+  --accent: #d97706;
+  --accent-hover: #f59e0b;
+  --accent-muted: #451a03;
+  --focus-ring: #fbbf24;
+}
+:root[data-theme='light'][data-palette='amber'] {
+  --brand: #b45309;
+  --brand-deep: #92400e;
+  --brand-text: #b45309;
+  --brand-muted: #fffbeb;
+  --accent: #b45309;
+  --accent-hover: #92400e;
+  --accent-muted: #fef3c7;
+  --focus-ring: #d97706;
+}
+
+/* 5. Royal Violet (Luxury GT Purple) */
+:root[data-palette='violet'] {
+  --brand: #7c3aed;
+  --brand-deep: #4c1d95;
+  --brand-text: #a78bfa;
+  --brand-muted: #2e1065;
+  --accent: #7c3aed;
+  --accent-hover: #8b5cf6;
+  --accent-muted: #2e1065;
+  --focus-ring: #a78bfa;
+}
+:root[data-theme='light'][data-palette='violet'] {
+  --brand: #6d28d9;
+  --brand-deep: #5b21b6;
+  --brand-text: #6d28d9;
+  --brand-muted: #f5f3ff;
+  --accent: #6d28d9;
+  --accent-hover: #5b21b6;
+  --accent-muted: #ede9fe;
+  --focus-ring: #7c3aed;
+}
+
+/* 6. Midnight Titanium (Stealth Industrial Slate) */
+:root[data-palette='titanium'] {
+  --brand: #475569;
+  --brand-deep: #1e293b;
+  --brand-text: #94a3b8;
+  --brand-muted: #0f172a;
+  --accent: #64748b;
+  --accent-hover: #94a3b8;
+  --accent-muted: #0f172a;
+  --focus-ring: #cbd5e1;
+}
+:root[data-theme='light'][data-palette='titanium'] {
+  --brand: #334155;
+  --brand-deep: #1e293b;
+  --brand-text: #334155;
+  --brand-muted: #f8fafc;
+  --accent: #475569;
+  --accent-hover: #334155;
+  --accent-muted: #f1f5f9;
+  --focus-ring: #64748b;
+}
+
+/* =============================================================================
+ * RICH MODERN AESTHETIC UTILITIES (Micro-animations, Glass, Glow, Badges)
+ * ============================================================================= */
+
+.mop-glass {
+  background: hsl(var(--shadow-color) / 0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+}
+
+.card-glow {
+  transition: transform var(--duration-base) var(--ease-out),
+              box-shadow var(--duration-base) var(--ease-out),
+              border-color var(--duration-base) var(--ease-out);
+}
+.card-glow:hover {
+  transform: translateY(-2px);
+  border-color: var(--brand);
+  box-shadow: 0 8px 24px -6px hsl(var(--shadow-color) / 0.5), 0 0 12px -2px var(--brand-muted);
+}
+
+@keyframes pulse-live {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(70, 168, 106, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(70, 168, 106, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(70, 168, 106, 0); }
+}
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--success);
+}
+.live-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: pulse-live 2s infinite ease-in-out;
+}
+
+@keyframes stage-fade-slide {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.stage-animated {
+  animation: stage-fade-slide 280ms var(--ease-out) forwards;
+}
+
+
 /* --- base / reset --- */
 
 *,

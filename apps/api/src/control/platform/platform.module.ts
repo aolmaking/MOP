@@ -16,6 +16,7 @@ import { LiveViewController } from "./live-view.controller";
 import { LiveViewService } from "./live-view.service";
 import { OnboardingController } from "./onboarding/onboarding.controller";
 import { OnboardingService } from "./onboarding/onboarding.service";
+import { WorkshopBrandingPublicController } from "./workshop-branding.controller";
 
 @Module({
   imports: [AuditModule, AuthModule, CapabilitiesModule, SpecializationModule],
@@ -32,9 +33,8 @@ import { OnboardingService } from "./onboarding/onboarding.service";
     CapabilitiesController,
     PlatformReportsController,
     LiveViewController,
-    // platform/onboarding -- its own literal prefix, so registration
-    // order against platform/workshops never matters.
     OnboardingController,
+    WorkshopBrandingPublicController,
   ],
   // PlatformGuard isn't exported by AuthModule (only AuthService and
   // SessionGuard are) -- it's small and stateless, so it's simplest to

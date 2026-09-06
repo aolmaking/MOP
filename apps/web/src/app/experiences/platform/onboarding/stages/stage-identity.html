@@ -172,4 +172,42 @@
       }
     </div>
   </fieldset>
+
+  <!-- Workshop Branding: Logo URL -->
+  <div class="onb-field">
+    <label for="ws-logo">Workshop Logo URL (optional)</label>
+    <input
+      id="ws-logo"
+      type="text"
+      autocomplete="off"
+      placeholder="https://example.com/logo.png"
+      [value]="store.draft().identity.logoUrl ?? ''"
+      (input)="onLogo($any($event.target).value)"
+    />
+    <p class="onb-hint">Appears on invoices, customer inspection portals, and staff headers.</p>
+  </div>
+
+  <!-- Workshop Branding: 6 Curated UI Theme Palettes -->
+  <fieldset class="onb-field onb-field--cards">
+    <legend>UI Theme Color Palette (6 Options)</legend>
+    <p class="onb-hint">Every workshop can feature its own signature brand theme, dynamically skinning rails, buttons, and badges.</p>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 10px; margin-top: 8px;">
+      @for (pal of palettes; track pal.key) {
+        <button
+          type="button"
+          class="onb-choice"
+          style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px; text-align: left;"
+          [class.onb-choice--selected]="(store.draft().identity.themePalette || 'crimson') === pal.key"
+          [attr.aria-pressed]="(store.draft().identity.themePalette || 'crimson') === pal.key"
+          (click)="onPalette(pal.key)"
+        >
+          <div style="display: flex; align-items: center; gap: 6px; width: 100%;">
+            <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 4px rgba(0,0,0,0.5);" [style.background]="pal.previewColor"></span>
+            <strong style="font-size: 13px;">{{ pal.name }}</strong>
+          </div>
+          <span style="font-size: 11px; opacity: 0.7;">{{ pal.category }}</span>
+        </button>
+      }
+    </div>
+  </fieldset>
 </div>

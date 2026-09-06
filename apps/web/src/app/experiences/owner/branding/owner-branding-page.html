@@ -1,0 +1,108 @@
+<div class="branding-container stage-animated">
+  <header class="page-header">
+    <div class="header-eyebrow">Workshop Identity & Aesthetics</div>
+    <h1 class="page-title">Branding & Color Theme</h1>
+    <p class="page-sub">Customize your workshop's public brand identity, custom logo, and curated UI color theme across all screens.</p>
+  </header>
+
+  <div class="branding-grid">
+    <!-- Left Column: Branding Settings -->
+    <div class="branding-card mop-glass card-glow">
+      <h2 class="card-title">Workshop Identity</h2>
+      <p class="card-desc">Your workshop name and logo appear on customer invoices, WhatsApp inspection reports, technician job cards, and portal headers.</p>
+
+      <div class="form-group">
+        <label for="ws-name">Workshop Display Name</label>
+        <input
+          id="ws-name"
+          type="text"
+          class="input-field"
+          [ngModel]="workshopName()"
+          (ngModelChange)="workshopName.set($event)"
+          placeholder="e.g. Apex Motors Service Hub"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="ws-logo">Workshop Logo URL</label>
+        <input
+          id="ws-logo"
+          type="text"
+          class="input-field"
+          [ngModel]="logoUrl()"
+          (ngModelChange)="logoUrl.set($event)"
+          placeholder="https://example.com/logo.png"
+        />
+        <span class="field-hint">Paste an image URL (PNG, SVG, or JPEG). Square or transparent formats work best.</span>
+      </div>
+
+      <div class="logo-preview-box">
+        <div class="logo-preview-label">Live Logo Preview</div>
+        <div class="preview-display">
+          @if (logoUrl()) {
+            <img [src]="logoUrl()" alt="Logo preview" class="preview-img" (error)="logoUrl.set('')" />
+          } @else {
+            <div class="preview-placeholder">
+              {{ (workshopName() || 'W').charAt(0).toUpperCase() }}
+            </div>
+          }
+          <div class="preview-meta">
+            <span class="preview-name">{{ workshopName() || 'Precision Motors' }}</span>
+            <span class="preview-badge">Registered Workshop</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Color Palettes -->
+    <div class="branding-card mop-glass card-glow">
+      <h2 class="card-title">Choose Workshop UI Theme Palette</h2>
+      <p class="card-desc">Select from 6 bespoke color palettes. Your choice dynamically skins buttons, active rails, progress rings, and highlights for all your staff and customers.</p>
+
+      <div class="palettes-grid">
+        @for (pal of palettes; track pal.key) {
+          <div
+            class="palette-card"
+            [class.palette-card--active]="selectedPalette() === pal.key"
+            (click)="selectPalette(pal.key)"
+          >
+            <div class="palette-header">
+              <span class="palette-indicator-circle" [style.background]="pal.previewColor"></span>
+              <span class="palette-card-name">{{ pal.name }}</span>
+              @if (selectedPalette() === pal.key) {
+                <span class="active-tag">Active</span>
+              }
+            </div>
+            <p class="palette-category">{{ pal.category }}</p>
+            <p class="palette-desc">{{ pal.description }}</p>
+            <div class="palette-swatches">
+              <span class="color-chip" [style.background]="pal.primary" title="Primary"></span>
+              <span class="color-chip" [style.background]="pal.primaryDeep" title="Deep Header"></span>
+              <span class="color-chip" [style.background]="pal.primaryText" title="Link/Text"></span>
+              <span class="color-chip" [style.background]="pal.primaryMuted" title="Subtle Surface"></span>
+            </div>
+          </div>
+        }
+      </div>
+
+      <div class="theme-mode-preview">
+        <span class="mode-label">Current Mode: <strong>{{ theme.mode() | uppercase }}</strong></span>
+        <button type="button" appButton variant="secondary" size="small" (click)="theme.toggleTheme()">
+          Switch to {{ theme.mode() === 'dark' ? 'Light' : 'Dark' }} Mode
+        </button>
+      </div>
+
+      <div class="save-actions">
+        <button
+          type="button"
+          appButton
+          variant="primary"
+          [disabled]="saving()"
+          (click)="save()"
+        >
+          {{ saving() ? 'Saving Changes…' : 'Save Workshop Branding & Theme' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

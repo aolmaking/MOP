@@ -19,7 +19,8 @@ export const rootRedirectGuard: CanActivateFn = async () => {
     if (target && target !== '/' && target !== '/access-denied') {
       return router.parseUrl(target);
     }
+    return true;
   }
 
-  return true;
+  return router.parseUrl('/login');
 };

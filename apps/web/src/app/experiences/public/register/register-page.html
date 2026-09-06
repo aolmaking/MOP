@@ -1,164 +1,353 @@
 <div class="register-page">
-  <aside class="register-aside" aria-label="MOP account setup introduction">
-    <span class="public-mark">MOP</span>
-    <p class="public-kicker">A better day in the workshop starts here</p>
-    <div class="setup-steps" aria-label="Account setup steps">
-      <span class="setup-step setup-step--active"><b>01</b><span>Connect your workshop</span></span>
-      <span class="setup-step"><b>02</b><span>Tell us about you</span></span>
-      <span class="setup-step"><b>03</b><span>Start with confidence</span></span>
+  <!-- Theme Toggle in Corner -->
+  <div class="register-theme-bar">
+    <app-theme-toggle />
+  </div>
+
+  <!-- Left Aside with Stepped Progress Indicator -->
+  <aside class="register-aside" aria-label="Customer registration steps">
+    <div class="aside-brand">
+      <span class="brand-name">MOP</span>
+      <span class="brand-tag">Customer Portal</span>
+    </div>
+
+    <p class="aside-kicker">A Better Day in the Workshop Starts Here</p>
+    <p class="aside-sub">Register your vehicle once to track inspections, approve repairs on WhatsApp, and inspect full service history.</p>
+
+    <!-- Stepped Progress Ribbon -->
+    <ol class="steps-tracker">
+      <li class="step-item" [class.step-item--active]="currentStage() === 'workshop'" [class.step-item--done]="currentStage() !== 'workshop'">
+        <span class="step-dot">01</span>
+        <div class="step-text">
+          <span class="step-title">Connect Workshop</span>
+          <span class="step-desc">Enter workshop code</span>
+        </div>
+      </li>
+
+      <li class="step-item" [class.step-item--active]="currentStage() === 'identity'" [class.step-item--done]="currentStage() === 'vehicle_security' || currentStage() === 'done'">
+        <span class="step-dot">02</span>
+        <div class="step-text">
+          <span class="step-title">Personal Details</span>
+          <span class="step-desc">WhatsApp mobile identity</span>
+        </div>
+      </li>
+
+      <li class="step-item" [class.step-item--active]="currentStage() === 'vehicle_security'" [class.step-item--done]="currentStage() === 'done'">
+        <span class="step-dot">03</span>
+        <div class="step-text">
+          <span class="step-title">Vehicle & Security</span>
+          <span class="step-desc">Car plate number & password</span>
+        </div>
+      </li>
+
+      <li class="step-item" [class.step-item--active]="currentStage() === 'done'">
+        <span class="step-dot">04</span>
+        <div class="step-text">
+          <span class="step-title">Confirmation</span>
+          <span class="step-desc">Access customer portal</span>
+        </div>
+      </li>
+    </ol>
+
+    <div class="support-note">
+      <span class="support-icon">💬</span>
+      <span>WhatsApp service updates will be linked directly to your car's plate.</span>
     </div>
   </aside>
-  <section class="register">
-  @switch (step()) {
-    @case ('code') {
-      <header class="head">
-        <h1 class="title">Create your account</h1>
-        <p class="body">Enter the code your workshop gave you to get started.</p>
-      </header>
 
-      @if (codeError(); as message) {
-        <p class="error" role="alert">{{ message }}</p>
-      }
+  <!-- Main Card with Animated Stages -->
+  <div class="register-card mop-glass card-glow">
+    <!-- STAGE 1: WORKSHOP -->
+    @if (currentStage() === 'workshop') {
+      <div class="stage-view stage-animated">
+        <div class="stage-header">
+          <span class="stage-eyebrow">Step 01 / 03</span>
+          <h1 class="stage-title">Connect Your Workshop</h1>
+          <p class="stage-desc">Enter the workshop registration code from your printed repair receipt, service banner, or WhatsApp invite.</p>
+        </div>
 
-      <label class="field">
-        <span class="field-label">Workshop code</span>
-        <input
-          type="text"
-          autocomplete="off"
-          [value]="workshopCode()"
-          (input)="workshopCode.set($any($event.target).value)"
-          (keydown.enter)="resolveWorkshop()"
-        />
-      </label>
-
-      <button class="primary" type="button" [disabled]="!workshopCode().trim() || resolving()" (click)="resolveWorkshop()">
-        {{ resolving() ? 'Checking…' : 'Continue' }}
-      </button>
-
-      <a class="link" routerLink="/login">Already have an account? Sign in</a>
-    }
-
-    @case ('form') {
-      @if (workshop(); as ws) {
-        <header class="head">
-          <h1 class="title">Create your account</h1>
-          <p class="body">
-            Registering with <strong>{{ ws.tenantName }}</strong>.
-            <button class="link-button" type="button" (click)="changeWorkshop()">Not your workshop?</button>
-          </p>
-        </header>
-
-        @if (formError(); as message) {
-          <p class="error" role="alert">{{ message }}</p>
+        @if (codeError()) {
+          <div class="error-banner">⚠️ {{ codeError() }}</div>
         }
 
-        <label class="field">
-          <span class="field-label">Full name</span>
-          <input
-            type="text"
-            autocomplete="name"
-            placeholder="e.g. Ahmed Mostafa"
-            [value]="fullName()"
-            (input)="fullName.set($any($event.target).value)"
-          />
-        </label>
+        <div class="field-box">
+          <label for="workshopCode" class="field-label">Workshop Code</label>
+          <div class="input-action-row">
+            <input
+              id="workshopCode"
+              type="text"
+              class="code-input"
+              [ngModel]="workshopCode()"
+              (ngModelChange)="workshopCode.set($event)"
+              placeholder="e.g. DFED5C5C92"
+              autocomplete="off"
+              (keydown.enter)="resolveWorkshop(false)"
+            />
+            <button type="button" class="verify-btn" [disabled]="resolving()" (click)="resolveWorkshop(false)">
+              {{ resolving() ? 'Verifying…' : 'Verify' }}
+            </button>
+          </div>
+        </div>
 
-        <label class="field">
-          <span class="field-label">Mobile number (WhatsApp)</span>
-          <input
-            type="tel"
-            autocomplete="tel"
-            placeholder="e.g. 01000000000 or +20100000000"
-            [value]="phone()"
-            (input)="phone.set($any($event.target).value)"
-          />
-          <span class="hint hint--whatsapp">📱 Must have WhatsApp active (service updates, inspection findings, and approval requests are sent here)</span>
-          @if (phone().trim() && !isPhoneValid()) {
-            <span class="hint hint--warn">⚠️ Enter a valid mobile number (e.g. 01000000000 or +20100000000)</span>
-          } @else if (phone().trim() && isPhoneValid()) {
-            <span class="hint hint--met">✓ Standard format: {{ normalizedPhone() }}</span>
-          }
-        </label>
+        @if (workshop(); as ws) {
+          <div class="workshop-preview-card">
+            <div class="ws-preview-header">
+              @if (ws.logoUrl) {
+                <img [src]="ws.logoUrl" [alt]="ws.tenantName" class="ws-preview-logo" />
+              } @else {
+                <div class="ws-preview-emblem">{{ ws.tenantName.charAt(0) }}</div>
+              }
+              <div class="ws-preview-info">
+                <span class="ws-preview-name">{{ ws.tenantName }}</span>
+                <span class="ws-preview-meta">Verified Workshop · Code: {{ ws.code }}</span>
+              </div>
+              <span class="ws-status-check">✓ Connected</span>
+            </div>
+          </div>
+        }
 
-        <label class="field">
-          <span class="field-label">Car panel / plate number</span>
-          <input
-            type="text"
-            autocomplete="off"
-            placeholder="e.g. ABC-1234 or 123-XYZ"
-            [value]="plateNumber()"
-            (input)="plateNumber.set($any($event.target).value)"
-          />
-          <span class="hint">Your car's primary identifier for all service history, work orders, and inspections</span>
-        </label>
-
-        <label class="field">
-          <span class="field-label">Email (optional)</span>
-          <input type="email" autocomplete="email" [value]="email()" (input)="email.set($any($event.target).value)" />
-        </label>
-
-        <label class="field">
-          <span class="field-label">Password</span>
-          <input
-            type="password"
-            autocomplete="new-password"
-            [value]="password()"
-            (input)="password.set($any($event.target).value)"
-          />
-          <span class="hint" [class.hint--met]="longEnough()">At least 12 characters</span>
-        </label>
-
-        <button class="primary" type="button" [disabled]="submitting()" (click)="submit()">
-          {{ submitting() ? 'Creating…' : 'Create account' }}
-        </button>
-      }
+        <div class="stage-actions">
+          <a class="cancel-link" routerLink="/login">Already registered? Sign in</a>
+          <button
+            type="button"
+            class="action-btn next-btn"
+            [disabled]="resolving() || !workshop()"
+            (click)="proceedToIdentity()"
+          >
+            Next: Tell Us About You →
+          </button>
+        </div>
+      </div>
     }
 
-    @case ('done') {
-      <h1 class="title">Your account is ready</h1>
-      <p class="body">Your profile and vehicle details are registered. Sign in with your phone number and the password you just chose.</p>
-      <button class="primary" type="button" (click)="goToLogin()">Sign in</button>
-    }
-  }
+    <!-- STAGE 2: IDENTITY -->
+    @if (currentStage() === 'identity') {
+      <div class="stage-view stage-animated">
+        <div class="stage-header">
+          <div class="ws-subhead-pill">
+            <span>{{ workshop()?.tenantName }}</span>
+            <button type="button" class="change-ws-btn" (click)="goToStage('workshop', 'prev')">Change</button>
+          </div>
+          <span class="stage-eyebrow">Step 02 / 03</span>
+          <h1 class="stage-title">Customer Identity</h1>
+          <p class="stage-desc">Provide your contact details so our technicians can reach you with inspection video reports and estimate approvals.</p>
+        </div>
 
-  <!-- ── Different Car Confirmation Modal ────────────────────────────────────── -->
+        @if (formError()) {
+          <div class="error-banner">⚠️ {{ formError() }}</div>
+        }
+
+        <div class="form-fields">
+          <div class="field-box">
+            <label for="fullName" class="field-label">Full name</label>
+            <input
+              id="fullName"
+              type="text"
+              class="text-input"
+              [ngModel]="fullName()"
+              (ngModelChange)="fullName.set($event)"
+              placeholder="e.g. Ahmed Salah"
+              autocomplete="name"
+            />
+          </div>
+
+          <div class="field-box">
+            <label for="phone" class="field-label">Mobile number (WhatsApp)</label>
+            <input
+              id="phone"
+              type="tel"
+              class="text-input"
+              [ngModel]="phone()"
+              (ngModelChange)="phone.set($event)"
+              placeholder="e.g. 01000000000 or +20100000000"
+              autocomplete="tel"
+            />
+            <div class="phone-format-feedback">
+              @if (isPhoneValid()) {
+                <span class="feedback-valid">✓ Standard format: {{ normalizedPhone() }}</span>
+              } @else if (phone().length > 3) {
+                <span class="feedback-warn">⚠️ Enter a valid mobile number (e.g. 010..., 011..., or international +...)</span>
+              }
+            </div>
+            <p class="field-hint">📱 Must have WhatsApp active (service updates, inspection findings, and approval requests are sent here).</p>
+          </div>
+
+          <div class="field-box">
+            <label for="email" class="field-label">Email address (optional)</label>
+            <input
+              id="email"
+              type="email"
+              class="text-input"
+              [ngModel]="email()"
+              (ngModelChange)="email.set($event)"
+              placeholder="e.g. customer@example.com"
+              autocomplete="email"
+            />
+          </div>
+        </div>
+
+        <div class="stage-actions">
+          <button type="button" class="action-btn back-btn" (click)="goToStage('workshop', 'prev')">
+            ← Back
+          </button>
+          <button type="button" class="action-btn next-btn" (click)="proceedToVehicle()">
+            Next: Vehicle & Security →
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- STAGE 3: VEHICLE & SECURITY -->
+    @if (currentStage() === 'vehicle_security') {
+      <div class="stage-view stage-animated">
+        <div class="stage-header">
+          <span class="stage-eyebrow">Step 03 / 03</span>
+          <h1 class="stage-title">Vehicle & Security</h1>
+          <p class="stage-desc">Connect your car plate number and create a secure password to access your service records.</p>
+        </div>
+
+        @if (formError()) {
+          <div class="error-banner">⚠️ {{ formError() }}</div>
+        }
+
+        <div class="form-fields">
+          <div class="field-box">
+            <label for="plateNumber" class="field-label">Car panel / plate number</label>
+            <input
+              id="plateNumber"
+              type="text"
+              class="text-input text-uppercase"
+              [ngModel]="plateNumber()"
+              (ngModelChange)="plateNumber.set($event)"
+              placeholder="e.g. dkf344 or ABC-1234"
+              autocomplete="off"
+            />
+            <p class="field-hint">Your vehicle's primary identifier for all service history, work orders, and digital inspections.</p>
+          </div>
+
+          <!-- Stylized Vehicle License Plate Graphic Preview -->
+          <div class="license-plate-preview">
+            <div class="license-plate-badge">
+              <div class="plate-country-bar">
+                <span class="plate-code">EGY</span>
+                <span class="plate-flag">🇪🇬</span>
+              </div>
+              <div class="plate-number-display">
+                {{ plateNumber().trim() ? (plateNumber() | uppercase) : 'PLATE NO' }}
+              </div>
+              <div class="plate-badge-type">PRIVATE VEHICLE</div>
+            </div>
+          </div>
+
+          <div class="field-box">
+            <label for="password" class="field-label">Account Password</label>
+            <input
+              id="password"
+              type="password"
+              class="text-input"
+              [ngModel]="password()"
+              (ngModelChange)="password.set($event)"
+              placeholder="At least 8 characters"
+              autocomplete="new-password"
+            />
+
+            <!-- Password Strength Bar -->
+            <div class="password-meter-wrap">
+              <div class="password-meter-bar" [style.width.%]="passwordStrength()" [class.meter-strong]="passwordStrength() >= 70"></div>
+            </div>
+            <span class="field-hint">Minimum 8 characters. Used to sign into your customer portal.</span>
+          </div>
+        </div>
+
+        <div class="stage-actions">
+          <button type="button" class="action-btn back-btn" (click)="goToStage('identity', 'prev')">
+            ← Back
+          </button>
+          <button
+            type="button"
+            class="action-btn submit-btn"
+            [disabled]="submitting() || !isPlateValid() || !isPasswordValid()"
+            (click)="submit(false)"
+          >
+            {{ submitting() ? 'Creating Your Account…' : 'Complete Registration ✓' }}
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- STAGE 4: DONE / CONFIRMATION -->
+    @if (currentStage() === 'done') {
+      <div class="stage-view stage-animated celebration-view">
+        <div class="celebration-badge">✓</div>
+        <h1 class="celebration-title">Account Created Successfully!</h1>
+        <p class="celebration-sub">Your customer profile and vehicle have been registered in {{ workshop()?.tenantName }}.</p>
+
+        <div class="account-summary-card">
+          <div class="summary-item">
+            <span class="summary-label">Owner</span>
+            <span class="summary-val">{{ fullName() }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Mobile (WhatsApp)</span>
+            <span class="summary-val">{{ normalizedPhone() }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Registered Vehicle</span>
+            <span class="summary-val plate-tag">{{ plateNumber() | uppercase }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Workshop</span>
+            <span class="summary-val">{{ workshop()?.tenantName }}</span>
+          </div>
+        </div>
+
+        <div class="done-actions">
+          <a class="signin-btn" routerLink="/login" [queryParams]="{ code: workshop()?.code }">
+            Sign In to Customer Portal →
+          </a>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Duplicate Phone & Different Car Confirmation Modal -->
   @if (differentCarModal()) {
-    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="diff-car-title">
-      <div class="modal-card">
-        <div class="modal-badge-car">🚗 Vehicle Verification</div>
-        <h2 class="modal-title" id="diff-car-title">New Car Under Your Name?</h2>
-        <p class="modal-prompt">
-          This number is already signed in before and the car panel number is different.
-          Is this a new car under your name?
+    <div class="modal-backdrop">
+      <div class="modal-content mop-glass card-glow stage-animated">
+        <div class="modal-badge-warn">🚗 Vehicle Verification</div>
+        <h2 class="modal-title">New Car Registration</h2>
+        <p class="modal-body">
+          This mobile number (<strong>{{ normalizedPhone() }}</strong>) is already registered in our system, but with a different vehicle.
+        </p>
+        <p class="modal-question">
+          <strong>Is {{ plateNumber() | uppercase }} a new car under your name?</strong>
         </p>
 
-        <div class="modal-plates-summary">
-          @if (existingPlates().length > 0) {
-            <div class="plate-box plate-box--prev">
-              <span class="plate-box-label">Previously registered vehicle</span>
-              <strong class="plate-box-num">{{ existingPlates().join(', ') }}</strong>
-            </div>
-          }
-          <div class="plate-box plate-box--new">
-            <span class="plate-box-label">New vehicle to connect</span>
-            <strong class="plate-box-num">{{ plateNumber() }}</strong>
+        <div class="vehicles-comparison">
+          <div class="vehicle-box old-vehicle">
+            <span class="vehicle-tag">Previous Vehicle</span>
+            <span class="vehicle-plate">{{ existingPlates().join(', ') || 'Registered Asset' }}</span>
+          </div>
+          <span class="comparison-arrow">➔</span>
+          <div class="vehicle-box new-vehicle">
+            <span class="vehicle-tag">New Vehicle</span>
+            <span class="vehicle-plate">{{ plateNumber() | uppercase }}</span>
           </div>
         </div>
 
         <p class="modal-note">
-          Selecting <strong>Yes</strong> will link both cars to your profile and repair history.
+          Selecting <strong>"Yes, this is my new car"</strong> will link both vehicles to your phone number so you can manage them both in your portal.
         </p>
 
         <div class="modal-actions">
-          <button class="primary" type="button" (click)="confirmAddCar()">
-            Yes, this is my new car
+          <button type="button" class="modal-btn btn-secondary" (click)="cancelAddCar()">
+            No, Cancel
           </button>
-          <button class="secondary" type="button" (click)="cancelDifferentCar()">
-            No, change car panel number
+          <button type="button" class="modal-btn btn-primary" [disabled]="submitting()" (click)="confirmAddCar()">
+            {{ submitting() ? 'Linking vehicles…' : 'Yes, this is my new car' }}
           </button>
         </div>
       </div>
     </div>
   }
-</section>
 </div>

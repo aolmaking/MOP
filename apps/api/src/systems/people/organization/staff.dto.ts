@@ -38,6 +38,11 @@ export class InviteStaffDto {
   @IsString({ each: true })
   @IsOptional()
   categoryScope?: string[];
+
+  @IsOptional()
+  @IsString()
+  @Length(8, 100)
+  password?: string;
 }
 
 export class UpdateStaffScopeDto {

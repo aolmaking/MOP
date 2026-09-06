@@ -3,6 +3,7 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { AuthStore } from '../../../identity/auth.store';
 import { ToastContainer } from '../../../ui/toast/toast-container';
 import { ButtonDirective } from '../../../ui/button/button.directive';
+import { ShellTopbar } from '../../../ui/shell-topbar/shell-topbar';
 import { AccessApi } from '../../../identity/access.api';
 
 interface BranchNavItem {
@@ -10,21 +11,9 @@ interface BranchNavItem {
   route: string;
 }
 
-/**
- * The Branch Manager shell -- its own frame, following the same rule as
- * PlatformShell: one shell per role rather than one shell branching on
- * role. A shared shell could only serve six roles by accreting
- * conditionals none of them wants.
- *
- * The rail lists ONLY pages that exist. An entry pointing at an unbuilt
- * route is worse than a short rail: the first dead link teaches the
- * manager that navigation is unreliable, and from then on they navigate
- * by memorised URL. The remaining five pages are specified in
- * docs/phases/PHASE_5.md and each adds its entry here as it lands.
- */
 @Component({
   selector: 'app-branch-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, ToastContainer, ButtonDirective],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, ToastContainer, ButtonDirective, ShellTopbar],
   templateUrl: './branch-shell.html',
   styleUrl: './branch-shell.css',
 })

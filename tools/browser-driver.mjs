@@ -82,6 +82,9 @@ export class BrowserDriver {
       this.ws.onerror = reject;
       this.ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
+        if (this.eventHandler) {
+          try { this.eventHandler(msg); } catch(e) {}
+        }
         if (msg.id && this.pending.has(msg.id)) {
           const { resolve, reject } = this.pending.get(msg.id);
           this.pending.delete(msg.id);

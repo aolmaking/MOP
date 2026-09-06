@@ -7,7 +7,9 @@ import { AuditQueryService } from "./audit-query.service";
 import { OwnerHomeController } from "./owner-home.controller";
 import { OwnerHomeService } from "./owner-home.service";
 import { OwnerHistoryController } from "./history.controller";
+import { OwnerBrandingController } from "./branding.controller";
 import { WorkshopHistoryModule } from "../../systems/operations/history/history.module";
+import { AuditModule } from "../../audit/audit.module";
 
 /**
  * The Tenant Owner's surfaces.
@@ -21,8 +23,8 @@ import { WorkshopHistoryModule } from "../../systems/operations/history/history.
  * lose both questions.
  */
 @Module({
-  imports: [DatabaseModule, AuthModule, AccessModule, WorkshopHistoryModule],
-  controllers: [AuditController, OwnerHomeController, OwnerHistoryController],
+  imports: [DatabaseModule, AuthModule, AccessModule, WorkshopHistoryModule, AuditModule],
+  controllers: [AuditController, OwnerHomeController, OwnerHistoryController, OwnerBrandingController],
   providers: [AuditQueryService, OwnerHomeService],
 })
 export class OwnerModule {}

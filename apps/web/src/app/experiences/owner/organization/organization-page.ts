@@ -70,7 +70,9 @@ export class OrganizationPage {
   private readonly branchNameById = signal<ReadonlyMap<string, string>>(new Map());
 
   protected readonly showInvite = signal(false);
-  protected readonly inviteForm = signal<InviteStaffInput>({ fullName: '', email: '', phone: '', role: 'DATA_ANALYST' });
+  protected readonly creationMode = signal<'password' | 'invite'>('password');
+  protected readonly workerPassword = signal('');
+  protected readonly inviteForm = signal<InviteStaffInput>({ fullName: '', email: '', phone: '', role: 'TECHNICIAN' });
   protected readonly inviteError = signal<PresentedError | null>(null);
   protected readonly submitting = signal(false);
 
@@ -139,7 +141,9 @@ export class OrganizationPage {
   // -- Staff ------------------------------------------------------------
 
   protected openInvite(): void {
-    this.inviteForm.set({ fullName: '', email: '', phone: '', role: 'DATA_ANALYST' });
+    this.inviteForm.set({ fullName: '', email: '', phone: '', role: 'TECHNICIAN' });
+    this.creationMode.set('password');
+    this.workerPassword.set('');
     this.branchScopeText.set('');
     this.warehouseScopeText.set('');
     this.inviteError.set(null);
@@ -158,6 +162,7 @@ export class OrganizationPage {
     const form = this.inviteForm();
     const input: InviteStaffInput = {
       ...form,
+      password: this.creationMode() === 'password' && this.workerPassword().trim() ? this.workerPassword().trim() : undefined,
       branchScope: this.branchScopeText().trim() ? this.branchScopeText().split(',').map((s) => s.trim()) : undefined,
       warehouseScope: this.warehouseScopeText().trim()
         ? this.warehouseScopeText().split(',').map((s) => s.trim())

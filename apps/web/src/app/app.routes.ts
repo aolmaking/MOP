@@ -175,6 +175,10 @@ export const routes: Routes = [
         loadComponent: () => import('./experiences/owner/owner-home-page').then((m) => m.OwnerHomePage),
       },
       {
+        path: 'branding',
+        loadComponent: () => import('./experiences/owner/branding/owner-branding-page').then((m) => m.OwnerBrandingPage),
+      },
+      {
         // The workshop's operational memory: every customer and vehicle
         // that has ever been through, and everything that happened to
         // them. Deliberately NOT the same page as 'audit' below, which

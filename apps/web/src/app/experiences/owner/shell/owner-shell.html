@@ -17,9 +17,13 @@
     </div>
   </nav>
 
-  <main class="rail-content">
-    <router-outlet />
-  </main>
+  <div class="rail-main-container">
+    <app-shell-topbar [session]="session()" roleTitle="Owner" (logout)="logout()" />
+    <main class="rail-content">
+      <router-outlet />
+    </main>
+  </div>
 </div>
 
 <app-toast-container />
+

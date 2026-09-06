@@ -2,6 +2,7 @@ import { Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthStore } from '../../../identity/auth.store';
 import { ToastContainer } from '../../../ui/toast/toast-container';
+import { ThemeToggle } from '../../../ui/theme-toggle/theme-toggle';
 
 /**
  * The Technician shell -- three pages, no admin sidebar, as the spec
@@ -14,7 +15,7 @@ import { ToastContainer } from '../../../ui/toast/toast-container';
  */
 @Component({
   selector: 'app-technician-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, ToastContainer],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, ToastContainer, ThemeToggle],
   templateUrl: './technician-shell.html',
   styleUrl: './technician-shell.css',
 })

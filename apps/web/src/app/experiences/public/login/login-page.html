@@ -1,36 +1,155 @@
 <div class="login-page">
+  <!-- Theme Toggle in Corner -->
+  <div class="login-theme-bar">
+    <app-theme-toggle />
+  </div>
+
   <aside class="login-aside" aria-label="MOP workspace introduction">
     <span class="public-mark">MOP</span>
-    <p class="public-kicker">Workshop operations, in motion</p>
-    <p class="public-aside-copy">Keep every bay, vehicle, customer, and decision moving from one calm control room.</p>
-    <div class="public-signal"><span></span> Platform ready when you are</div>
+    <p class="public-kicker">Workshop Operations Platform</p>
+    <p class="public-aside-copy">Keep every bay, vehicle, technician, and customer decision moving smoothly from one unified control room.</p>
+    
+    <div class="features-list">
+      <div class="feature-item">
+        <span class="feature-icon">⚡</span>
+        <div class="feature-text">
+          <strong>Instant Live Sync</strong>
+          <span>Real-time bay progress & inspection approval</span>
+        </div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">🛡️</span>
+        <div class="feature-text">
+          <strong>Secure Workshop Isolation</strong>
+          <span>Dedicated data isolation & custom branding</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="public-signal">
+      <span class="live-indicator-dot"></span>
+      Platform Ready & Synchronized
+    </div>
   </aside>
-  <div class="login-card">
-    <span class="card-eyebrow">Welcome back</span>
-    <h1>MOP Product Platform</h1>
-    <p class="login-subtitle">Sign in to your workshop</p>
 
-    <app-error-banner [error]="error()" (dismissed)="error.set(null)" />
+  <div class="login-card mop-glass card-glow">
+    <!-- STAGE 1: WORKSHOP CODE -->
+    @if (step() === 'workshop') {
+      <div class="login-stage stage-animated">
+        <span class="card-eyebrow">Stage 01 · Workshop Identification</span>
+        <h1>Enter Workshop Code</h1>
+        <p class="login-subtitle">Connect to your workshop workspace before entering your credentials.</p>
 
-    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-      <label for="email">Email or phone</label>
-      <input id="email" type="text" formControlName="email" autocomplete="username" />
-      @if (form.controls.email.invalid && form.controls.email.touched) {
-        <p class="field-error">Enter your email or phone number.</p>
-      }
+        @if (workshopError()) {
+          <div class="error-box">
+            <span>⚠️ {{ workshopError() }}</span>
+          </div>
+        }
 
-      <label for="password">Password</label>
-      <input id="password" type="password" formControlName="password" autocomplete="current-password" />
-      @if (form.controls.password.invalid && form.controls.password.touched) {
-        <p class="field-error">Password is required.</p>
-      }
+        <div class="workshop-form-box">
+          <label for="workshopCode" class="field-label">Workshop Code / Identifier</label>
+          <div class="code-input-wrapper">
+            <input
+              id="workshopCode"
+              type="text"
+              class="code-input"
+              [ngModel]="workshopCode()"
+              (ngModelChange)="workshopCode.set($event)"
+              placeholder="e.g. DFED5C5C92"
+              autocomplete="off"
+              (keydown.enter)="proceedToCredentials()"
+            />
+          </div>
+          <p class="code-help">Supplied on your workshop invoice, customer receipt, or technician onboarding card.</p>
 
-      <button type="submit" [disabled]="submitting()">
-        {{ submitting() ? 'Signing in…' : 'Sign in' }}
-      </button>
-    </form>
+          <button
+            type="button"
+            class="continue-btn"
+            [disabled]="resolvingWorkshop()"
+            (click)="proceedToCredentials()"
+          >
+            {{ resolvingWorkshop() ? 'Verifying Workshop…' : 'Continue to Sign In →' }}
+          </button>
+        </div>
 
-    <a class="register-link" routerLink="/password-reset">Forgot password?</a>
-    <a class="register-link" routerLink="/register">New customer? Create an account</a>
+        <div class="login-card-footer">
+          <button type="button" class="text-link-btn" (click)="skipToCredentials()">
+            Platform Administrator? Sign in directly →
+          </button>
+          <a class="register-link" [routerLink]="'/register'" [queryParams]="{ code: workshopCode() }">
+            New customer? Create an account for your vehicle →
+          </a>
+        </div>
+      </div>
+    }
+
+    <!-- STAGE 2: CREDENTIALS -->
+    @if (step() === 'credentials') {
+      <div class="login-stage stage-animated">
+        <!-- Confirmed Workshop Header -->
+        <div class="active-workshop-header">
+          @if (branding.activeWorkshop().logoUrl) {
+            <img [src]="branding.activeWorkshop().logoUrl" [alt]="branding.activeWorkshop().name" class="active-ws-logo" />
+          } @else {
+            <div class="active-ws-emblem">
+              {{ branding.activeWorkshop().name.charAt(0) || 'W' }}
+            </div>
+          }
+          <div class="active-ws-meta">
+            <div class="active-ws-name-row">
+              <span class="active-ws-name">{{ branding.activeWorkshop().name }}</span>
+              <span class="active-ws-verified">✓ Verified</span>
+            </div>
+            <span class="active-ws-code">Code: {{ branding.activeWorkshop().code }}</span>
+          </div>
+          <button type="button" class="switch-ws-btn" (click)="switchWorkshop()" title="Switch workshop">
+            Change
+          </button>
+        </div>
+
+        <span class="card-eyebrow">Stage 02 · Authentication</span>
+        <h1>Sign In to Workshop</h1>
+        <p class="login-subtitle">Enter your registered email or mobile number and password.</p>
+
+        <app-error-banner [error]="error()" (dismissed)="error.set(null)" />
+
+        <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+          <label for="email">Email or mobile number (WhatsApp)</label>
+          <input
+            id="email"
+            type="text"
+            formControlName="email"
+            placeholder="e.g. 01000000000 or tech@apex-motors.local"
+            autocomplete="username"
+          />
+          @if (form.controls.email.invalid && form.controls.email.touched) {
+            <p class="field-error">Enter your registered email or mobile number.</p>
+          }
+
+          <label for="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            formControlName="password"
+            placeholder="••••••••••••"
+            autocomplete="current-password"
+          />
+          @if (form.controls.password.invalid && form.controls.password.touched) {
+            <p class="field-error">Password is required.</p>
+          }
+
+          <button type="submit" class="submit-btn" [disabled]="submitting()">
+            {{ submitting() ? 'Verifying & Signing In…' : 'Sign in to Workshop' }}
+          </button>
+        </form>
+
+        <div class="login-links">
+          <a class="register-link" routerLink="/password-reset">Forgot your password?</a>
+          <a class="register-link" [routerLink]="'/register'" [queryParams]="{ code: branding.activeWorkshop().code }">
+            New customer? Create your customer account →
+          </a>
+        </div>
+      </div>
+    }
   </div>
 </div>

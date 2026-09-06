@@ -29,6 +29,7 @@ export interface InviteStaffInput {
   readonly role: StaffRole;
   readonly branchScope?: string[];
   readonly warehouseScope?: string[];
+  readonly password?: string;
 }
 
 export interface BranchListItem {

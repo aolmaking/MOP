@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import { readThrottleSettings } from "../../runtime/config/environment";
 import { RegisterCustomerService } from "./register.service";
@@ -25,6 +25,12 @@ export class RegisterController {
   @Throttle(REGISTER_THROTTLE)
   async workshop(@Query("code") code: string) {
     return this.register.resolveWorkshop(code);
+  }
+
+  @Get("branding/:code")
+  @Throttle(REGISTER_THROTTLE)
+  async branding(@Query("code") queryCode?: string, @Param("code") paramCode?: string) {
+    return this.register.resolveWorkshop(paramCode || queryCode || "");
   }
 
   @Post()

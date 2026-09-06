@@ -1,23 +1,66 @@
-<section class="home">
-  <header class="home-head">
-    <h1 class="home-title">Owner Home</h1>
-    <p class="home-sub">What's true about your workshop right now, and where to act on it.</p>
+<section class="home stage-animated">
+  <!-- Executive Workshop Hero Banner -->
+  <header class="home-hero mop-glass card-glow">
+    <div class="hero-left">
+      <div class="hero-eyebrow">
+        <span class="live-indicator">
+          <span class="live-indicator-dot"></span>
+          Operations Live
+        </span>
+        <span class="hero-date">Executive Command Center</span>
+      </div>
+      <h1 class="hero-title">Workshop Overview</h1>
+      <p class="hero-sub">Real-time pulse of jobs, bays, staff activity, and customer approvals.</p>
+    </div>
+
+    <div class="hero-quick-actions">
+      <a routerLink="/owner/organization" class="hero-action-btn primary-action">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="action-icon">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="8.5" cy="7" r="4"></circle>
+          <line x1="20" y1="8" x2="20" y2="14"></line>
+          <line x1="23" y1="11" x2="17" y2="11"></line>
+        </svg>
+        <span>+ Add Worker</span>
+      </a>
+
+      <a routerLink="/owner/branding" class="hero-action-btn secondary-action">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="action-icon">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
+          <path d="M2 12h20"></path>
+        </svg>
+        <span>Theme & Branding</span>
+      </a>
+
+      <a routerLink="/owner/reports" class="hero-action-btn secondary-action">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="action-icon">
+          <line x1="18" y1="20" x2="18" y2="10"></line>
+          <line x1="12" y1="20" x2="12" y2="4"></line>
+          <line x1="6" y1="20" x2="6" y2="14"></line>
+        </svg>
+        <span>Analytics</span>
+      </a>
+    </div>
   </header>
 
   @switch (state()) {
     @case ('loading') {
-      <p class="state-body" aria-busy="true">Loading…</p>
+      <div class="loading-state mop-glass">
+        <div class="spinner"></div>
+        <p class="state-body" aria-busy="true">Gathering real-time workshop telemetry…</p>
+      </div>
     }
 
     @case ('forbidden') {
-      <div class="state">
+      <div class="state mop-glass">
         <p class="state-title">You don't have access to this page</p>
         <p class="state-body">Owner Home is only visible to the workshop owner.</p>
       </div>
     }
 
     @case ('error') {
-      <div class="state-error">
+      <div class="state-error mop-glass">
         <app-error-banner [error]="error()" />
         <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
       </div>
@@ -25,18 +68,43 @@
 
     @case ('ready') {
       @if (data(); as d) {
-        <p class="workshop-status">
-          <span class="workshop-status-count">{{ d.workshopStatus.activeBranches }}</span> of
-          {{ d.workshopStatus.totalBranches }} branches active ·
-          <span class="workshop-status-count">{{ d.workshopStatus.activeUsers }}</span> active staff
-        </p>
+        <!-- Live Status Metric Strip -->
+        <div class="status-ribbon mop-glass">
+          <div class="ribbon-item">
+            <span class="ribbon-label">Active Branches</span>
+            <span class="ribbon-value">
+              <strong>{{ d.workshopStatus.activeBranches }}</strong> / {{ d.workshopStatus.totalBranches }}
+            </span>
+          </div>
+          <div class="ribbon-divider"></div>
+          <div class="ribbon-item">
+            <span class="ribbon-label">On-Duty Staff</span>
+            <span class="ribbon-value">
+              <strong>{{ d.workshopStatus.activeUsers }}</strong> Members
+            </span>
+          </div>
+          <div class="ribbon-divider"></div>
+          <div class="ribbon-item">
+            <span class="ribbon-label">Network Status</span>
+            <span class="ribbon-value text-success">Synced & Healthy</span>
+          </div>
+        </div>
+
+        <!-- Metric KPI Cards -->
+        <div class="section-title-row">
+          <h2 class="section-title">Attention & Active Work Orders</h2>
+          <span class="section-badge">Live Queues</span>
+        </div>
 
         <ul class="cards">
           @for (card of cards(); track card.key) {
-            <li class="card" [class]="'card--' + card.weight">
+            <li class="card card-glow" [class]="'card--' + card.weight">
               @if (card.link) {
                 <a class="card-link" [routerLink]="card.link">
-                  <span class="card-count">{{ card.count }}</span>
+                  <div class="card-top">
+                    <span class="card-count">{{ card.count }}</span>
+                    <span class="card-weight-tag">{{ card.weight }}</span>
+                  </div>
                   <span class="card-label">{{ card.label }}</span>
                   <span class="card-meaning">{{ card.meaning }}</span>
                 </a>
@@ -45,26 +113,41 @@
           }
         </ul>
 
-        <section class="recent">
-          <h2 class="recent-title">Recent changes</h2>
+        <!-- Recent Operational Timeline -->
+        <section class="recent mop-glass card-glow">
+          <div class="recent-header">
+            <div>
+              <h2 class="recent-title">Recent Workshop Activity</h2>
+              <p class="recent-sub">Audit trail of configuration, state, and management actions.</p>
+            </div>
+            @if (historyVisible) {
+              <a class="recent-more" routerLink="/owner/audit">Full Audit Log →</a>
+            }
+          </div>
+
           @if (d.recentChanges.length === 0) {
-            <p class="state-body">Nothing recorded yet.</p>
+            <div class="empty-recent">
+              <div class="empty-icon">✓</div>
+              <p class="empty-title">All Systems Up to Date</p>
+              <p class="state-body">No pending configuration adjustments or security alerts logged today.</p>
+            </div>
           } @else {
             <ul class="recent-list">
               @for (row of d.recentChanges; track row.id) {
                 <li class="recent-row">
-                  <span class="recent-actor">{{ row.actorName }}</span>
-                  <span class="recent-action">{{ label(row.action) }}</span>
+                  <div class="recent-avatar">{{ row.actorName.charAt(0) }}</div>
+                  <div class="recent-details">
+                    <span class="recent-actor">{{ row.actorName }}</span>
+                    <span class="recent-action">{{ label(row.action) }}</span>
+                  </div>
                   <span class="recent-when">{{ when(row.createdAt) }}</span>
                 </li>
               }
             </ul>
-          }
-          @if (historyVisible) {
-            <a class="recent-more" routerLink="/owner/audit">See full history</a>
           }
         </section>
       }
     }
   }
 </section>
+

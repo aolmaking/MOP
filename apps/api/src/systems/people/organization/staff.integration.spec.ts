@@ -89,6 +89,29 @@ describe("StaffService.invite", () => {
     expect(row.account.inviteTokenHash).not.toBeNull();
   });
 
+  it("creates an active staff account directly when owner provides a password", async () => {
+    const result = await staff.invite(
+      tenantId,
+      {
+        fullName: "Kareem Mechanic",
+        email: `kareem-${SUFFIX}@example.com`,
+        phone: "+201000001002",
+        role: "TECHNICIAN",
+        password: "SuperSecretPassword123!",
+      },
+      actor,
+    );
+
+    const row = await prisma.staffUser.findUniqueOrThrow({
+      where: { id: result.staffId },
+      include: { account: true },
+    });
+    expect(row.role).toBe("TECHNICIAN");
+    expect(row.account.status).toBe("ACTIVE");
+    expect(row.account.passwordHash).not.toBeNull();
+    expect(row.account.inviteTokenHash).toBeNull();
+  });
+
   it("refuses Branch Manager with no branch scope", async () => {
     await expect(
       staff.invite(

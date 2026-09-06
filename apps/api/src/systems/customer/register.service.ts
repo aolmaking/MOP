@@ -7,6 +7,11 @@ import { hashPassword } from "../../identity/auth/password.util";
 export interface WorkshopContext {
   readonly tenantId: string;
   readonly tenantName: string;
+  readonly code: string;
+  readonly slug: string;
+  readonly city?: string | null;
+  readonly logoUrl?: string | null;
+  readonly palette?: string;
 }
 
 export interface RegisterCustomerInput {
@@ -65,11 +70,29 @@ export class RegisterCustomerService {
         OR: [{ slug: trimmed.toLowerCase() }, { customerRegistrationCode: { equals: trimmed, mode: "insensitive" } }],
         status: { notIn: ["FROZEN", "SUSPENDED", "ARCHIVED"] },
       },
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        customerRegistrationCode: true,
+        slug: true,
+        city: true,
+        configuration: {
+          select: { theme: true },
+        },
+      },
     });
 
     if (!tenant) throw this.notFound();
-    return { tenantId: tenant.id, tenantName: tenant.name };
+    const themeConfig = tenant.configuration?.theme as any;
+    return {
+      tenantId: tenant.id,
+      tenantName: tenant.name,
+      code: tenant.customerRegistrationCode,
+      slug: tenant.slug,
+      city: tenant.city,
+      logoUrl: themeConfig?.logoUrl ?? null,
+      palette: themeConfig?.palette ?? "crimson",
+    };
   }
 
   async register(input: RegisterCustomerInput): Promise<RegisterCustomerResult> {

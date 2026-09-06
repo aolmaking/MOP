@@ -1,0 +1,54 @@
+<header class="shell-topbar" aria-label="Workshop header bar">
+  <div class="topbar-left">
+    <div class="workshop-brand-badge">
+      @if (branding.activeWorkshop().logoUrl) {
+        <img [src]="branding.activeWorkshop().logoUrl" [alt]="branding.activeWorkshop().name" class="workshop-logo-img" />
+      } @else {
+        <div class="workshop-logo-emblem">
+          {{ branding.activeWorkshop().name.charAt(0) || 'M' }}
+        </div>
+      }
+      <div class="workshop-info">
+        <span class="workshop-name">{{ branding.activeWorkshop().name }}</span>
+        <span class="workshop-sub">
+          <span class="workshop-code-tag">ID: {{ branding.activeWorkshop().code }}</span>
+          @if (branding.activeWorkshop().city) {
+            <span class="workshop-city">· {{ branding.activeWorkshop().city }}</span>
+          }
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="topbar-center">
+    <div class="live-status-pill">
+      <span class="live-dot"></span>
+      <span class="live-text">Workshop Active</span>
+    </div>
+    <div class="palette-indicator" [title]="'Theme palette: ' + branding.paletteDefinition.name">
+      <span class="palette-swatch" [style.background]="branding.paletteDefinition.previewColor"></span>
+      <span class="palette-name">{{ branding.paletteDefinition.name }}</span>
+    </div>
+  </div>
+
+  <div class="topbar-right">
+    <app-theme-toggle />
+
+    @if (session(); as s) {
+      <div class="user-chip">
+        <div class="user-avatar">{{ s.displayName.charAt(0) || 'U' }}</div>
+        <div class="user-details">
+          <span class="user-name">{{ s.displayName }}</span>
+          <span class="user-role-badge">{{ roleTitle() }}</span>
+        </div>
+      </div>
+      <button type="button" class="logout-btn" (click)="onLogout()" title="Log out">
+        <svg class="logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+      </button>
+    }
+  </div>
+</header>
