@@ -53,29 +53,64 @@ export class TrendChart implements AfterViewInit, OnDestroy, OnChanges {
     if (!canvas) return;
 
     this.chart?.destroy();
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
     this.chart = new Chart(canvas, {
       type: 'line',
       data: {
         labels: [...this.labels()],
-        datasets: this.series().map((s) => ({
-          label: s.label,
-          data: [...s.values],
-          borderColor: s.color,
-          backgroundColor: s.color,
-          tension: 0.25,
-          pointRadius: 2,
-        })),
+        datasets: this.series().map((s) => {
+          const fill = context.createLinearGradient(0, 0, 0, canvas.clientHeight || 280);
+          fill.addColorStop(0, `${s.color}55`);
+          fill.addColorStop(1, `${s.color}00`);
+          return {
+            label: s.label,
+            data: [...s.values],
+            borderColor: s.color,
+            backgroundColor: fill,
+            fill: true,
+            tension: 0.35,
+            borderWidth: 2.5,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBorderWidth: 2,
+            pointHoverBackgroundColor: '#111821',
+          };
+        }),
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: { labels: { color: '#a89f9b' } },
+          legend: {
+            position: 'bottom',
+            labels: { color: '#a8b6c4', usePointStyle: true, pointStyle: 'circle', padding: 18 },
+          },
+          tooltip: {
+            backgroundColor: '#182330',
+            borderColor: '#3b4d5e',
+            borderWidth: 1,
+            titleColor: '#f5f7fa',
+            bodyColor: '#dbe5ee',
+            padding: 12,
+            displayColors: true,
+            usePointStyle: true,
+          },
         },
         scales: {
-          x: { ticks: { color: '#a89f9b' }, grid: { color: 'rgba(255,255,255,0.06)' } },
-          y: { ticks: { color: '#a89f9b' }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true },
+          x: {
+            border: { display: false },
+            ticks: { color: '#7f91a1', maxRotation: 0, autoSkipPadding: 18 },
+            grid: { display: false },
+          },
+          y: {
+            border: { display: false, dash: [4, 4] },
+            ticks: { color: '#7f91a1', padding: 8 },
+            grid: { color: 'rgba(168,182,196,0.12)' },
+            beginAtZero: true,
+          },
         },
       },
     });

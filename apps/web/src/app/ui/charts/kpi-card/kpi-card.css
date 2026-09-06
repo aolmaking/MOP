@@ -52,3 +52,13 @@
   color: var(--text-faint);
   font-size: var(--text-xs);
 }
+
+/* MOP page-scoped visual polish — kpi */
+:where(.kpi) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}
+
+/* Report KPI readability upgrade */
+.kpi { min-block-size: 8rem; padding: var(--space-5); border-radius: var(--radius-md); background: linear-gradient(145deg, rgb(255 255 255 / .035), transparent 60%), var(--surface); box-shadow: var(--shadow-1); }
+.kpi-value { font-size: clamp(var(--text-xl), 3vw, 2rem); letter-spacing: -.03em; }
+.kpi-label { max-inline-size: 14rem; line-height: 1.35; }

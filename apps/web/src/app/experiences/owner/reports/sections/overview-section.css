@@ -43,3 +43,13 @@
   color: var(--text-faint);
   font-size: var(--text-xs);
 }
+
+/* MOP page-scoped visual polish — overview */
+:where(.overview) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}
+
+/* Reports readability upgrade */
+.kpi-grid { gap: var(--space-4); }
+.panel { padding: var(--space-5); border-radius: var(--radius-md); box-shadow: var(--shadow-1); }
+.panel-title { font-size: var(--text-md); }

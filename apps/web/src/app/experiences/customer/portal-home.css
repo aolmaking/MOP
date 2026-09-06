@@ -127,3 +127,25 @@
   color: var(--text-muted);
   font-size: var(--text-base);
 }
+
+/* MOP page-scoped visual polish — home */
+:where(.home) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}
+
+/* Customer home UX upgrade */
+.home { gap: var(--space-6); max-inline-size: 48rem; margin-inline: auto; }
+.decision-banner { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--space-4); padding: var(--space-5); border: 1px solid rgb(242 184 75 / .5); border-inline-start: 5px solid var(--warning); border-radius: var(--radius-lg); background: linear-gradient(110deg, rgb(242 184 75 / .16), transparent 70%), var(--surface); box-shadow: 0 10px 28px rgb(242 184 75 / .1); transition: transform var(--duration-base) var(--ease-spring), box-shadow var(--duration-base) var(--easing); }
+.decision-banner:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgb(242 184 75 / .18); }
+.decision-count { font-size: 2rem; font-weight: 800; color: var(--warning); }
+.decision-text { color: var(--white); font-size: var(--text-md); font-weight: 700; }
+.tiles { grid-template-columns: repeat(3, 1fr); gap: var(--space-4); }
+.tile { min-block-size: 9rem; padding: var(--space-5); border-radius: var(--radius-lg); background: linear-gradient(145deg, rgb(97 184 255 / .1), transparent 70%), var(--surface); box-shadow: var(--shadow-1); transition: transform var(--duration-base) var(--ease-spring), border-color var(--duration-fast) var(--easing), box-shadow var(--duration-base) var(--easing); }
+.tile:hover { transform: translateY(-4px); border-color: var(--accent-cool); box-shadow: var(--shadow-2); }
+.tile-count { font-size: clamp(var(--text-xl), 5vw, 2.25rem); }
+.tile-label { color: var(--text-muted); line-height: 1.3; }
+.section-title { margin-block-start: var(--space-3); font-size: var(--text-md); }
+.activity { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.activity-row { padding: var(--space-4); transition: background-color var(--duration-fast) var(--easing); }
+.activity-row:hover { background: var(--surface-raised); }
+@media (max-width: 520px) { .tiles { grid-template-columns: 1fr; } .decision-banner { grid-template-columns: auto 1fr; } }

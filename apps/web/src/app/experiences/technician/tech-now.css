@@ -196,3 +196,14 @@
   inline-size: 70%;
   block-size: var(--tech-text-xl);
 }
+
+/* MOP page-scoped visual polish — now */
+:where(.now) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}
+
+/* Technician POS overview UX upgrade */
+.now { gap: var(--space-6); }
+.now-title { font-size: clamp(var(--tech-text-lg), 5vw, var(--tech-text-xl)); }
+.job-link, .job-card { border-radius: var(--radius-lg); box-shadow: var(--shadow-1); transition: transform var(--duration-fast) var(--ease-spring), box-shadow var(--duration-fast) var(--easing); }
+.job-link:hover, .job-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-2); }

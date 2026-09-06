@@ -245,6 +245,7 @@
   gap: var(--space-3);
 }
 
+<<<<<<< HEAD
 /* --- the movement drawer editor --------------------------------- */
 
 .editor-scrim {
@@ -319,4 +320,9 @@
   border-radius: var(--radius-sm);
   color: var(--danger);
   font-size: var(--text-sm);
+}
+
+/* MOP page-scoped visual polish — item */
+:where(.item) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
 }

@@ -198,3 +198,14 @@
   color: var(--text-muted);
   font-size: var(--text-base);
 }
+
+/* MOP page-scoped visual polish — usage */
+:where(.usage) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}
+
+/* Reports readability upgrade */
+.reports { gap: var(--space-6); }
+.reports-head { padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(135deg, rgb(97 184 255 / .1), transparent 65%), var(--surface); box-shadow: var(--shadow-2); }
+.reports-title { font-size: clamp(var(--text-lg), 2.5vw, var(--text-xl)); letter-spacing: -.02em; text-transform: none; }
+.panel { border-radius: var(--radius-md); box-shadow: var(--shadow-1); }

@@ -74,3 +74,16 @@
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
+
+/* MOP page-scoped visual polish — bar-list */
+:where(.bar-list) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}
+
+/* Report chart readability upgrade */
+.bar-list { gap: var(--space-3); }
+.bar-row { grid-template-columns: minmax(8rem, 1fr) minmax(8rem, 2fr) auto; gap: var(--space-3); align-items: center; }
+.bar-track { block-size: .75rem; background: var(--neutral-track); border-radius: var(--radius-pill); }
+.bar-fill { border-radius: var(--radius-pill); box-shadow: 0 0 12px rgb(97 184 255 / .28); }
+.bar-label { color: var(--text); font-weight: 600; }
+.bar-value { color: var(--white); font-family: var(--font-mono); font-weight: 700; }

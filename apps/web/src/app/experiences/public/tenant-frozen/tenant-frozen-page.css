@@ -28,3 +28,8 @@
   font-size: var(--text-base);
   line-height: var(--leading-normal);
 }
+
+/* MOP page-scoped visual polish — tenant-frozen */
+:where(.tenant-frozen) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}

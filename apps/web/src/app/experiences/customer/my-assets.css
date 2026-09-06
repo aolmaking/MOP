@@ -63,3 +63,17 @@
   color: var(--text-muted);
   font-size: var(--text-base);
 }
+
+/* MOP page-scoped visual polish — assets */
+:where(.assets) {
+  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
+}
+
+/* Customer assets UX upgrade */
+.assets { gap: var(--space-6); max-inline-size: 48rem; margin-inline: auto; }
+.assets-title { font-size: clamp(var(--text-lg), 4vw, var(--text-xl)); letter-spacing: -.02em; text-transform: none; }
+.grid { gap: var(--space-4); }
+.card { min-block-size: 9rem; padding: var(--space-5); border-radius: var(--radius-lg); background: linear-gradient(145deg, rgb(97 184 255 / .1), transparent 68%), var(--surface); box-shadow: var(--shadow-1); transition: transform var(--duration-base) var(--ease-spring), box-shadow var(--duration-base) var(--easing); }
+.card:hover { transform: translateY(-3px); box-shadow: var(--shadow-2); }
+.card-identifier { font-size: var(--text-lg); font-weight: 800; letter-spacing: .02em; }
+.card-category { color: var(--accent-cool); font-size: var(--text-sm); font-weight: 700; }

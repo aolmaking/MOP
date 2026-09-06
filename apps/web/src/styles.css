@@ -910,24 +910,202 @@ summary,
   color: var(--text-faint);
 }
 
-/*
- * A label present for a screen reader and absent for an eye.
- *
- * Global because it was not: four components had each re-declared it
- * locally, so the fifth to use the class rendered its labels as visible
- * body text -- "Quantity of Front brake pad set" sitting in the middle
- * of a technician's cart row. The per-component copies are identical to
- * this and can go whenever someone is in those files anyway.
- *
- * `clip-path` rather than `display: none` or `width: 0`: both of those
- * take the element out of the accessibility tree too, which removes the
- * label instead of hiding it.
- */
-.visually-hidden {
+/* =====================================================================
+   MOP visual refresh — shared across every experience.
+   The red / black identity remains intact; this adds a deeper workshop
+   control-room surface system, clearer hierarchy, richer data accents,
+   and restrained motion without changing behavior or data.
+   ===================================================================== */
+:root {
+  --bg: #090d12;
+  --surface: #111821;
+  --surface-raised: #182330;
+  --border: #263544;
+  --border-strong: #3b4d5e;
+  --text: #f5f7fa;
+  --text-muted: #a8b6c4;
+  --text-faint: #7f91a1;
+  --brand: #e22d36;
+  --brand-deep: #7d1d2c;
+  --brand-muted: #321823;
+  --brand-text: #ff6b70;
+  --accent: #e22d36;
+  --accent-hover: #ff4853;
+  --accent-muted: #321823;
+  --danger: #ff5f56;
+  --danger-strong: #ff827b;
+  --danger-bg: #3a1b20;
+  --success: #49c58a;
+  --success-bg: #153328;
+  --warning: #f2b84b;
+  --warning-bg: #342815;
+  --info: #61b8ff;
+  --info-bg: #142b3f;
+  --accent-cool: #61b8ff;
+  --neutral-track: #22303d;
+  --shadow-1: 0 2px 8px rgb(0 0 0 / 0.2), 0 1px 0 rgb(255 255 255 / 0.025) inset;
+  --shadow-2: 0 12px 28px rgb(0 0 0 / 0.28), 0 1px 0 rgb(255 255 255 / 0.04) inset;
+  --shadow-3: 0 24px 56px rgb(0 0 0 / 0.42), 0 1px 0 rgb(255 255 255 / 0.05) inset;
+  --shadow-focus: 0 0 0 3px rgb(255 95 86 / 0.24);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --duration-fast: 140ms;
+  --duration-base: 190ms;
+  --duration-slow: 280ms;
+  --ease-spring: cubic-bezier(0.34, 1.25, 0.64, 1);
+}
+
+html { background: var(--bg); }
+body {
+  background:
+    radial-gradient(circle at 100% 0%, rgb(226 45 54 / 0.08), transparent 28rem),
+    radial-gradient(circle at 0% 100%, rgb(97 184 255 / 0.045), transparent 34rem),
+    var(--bg);
+}
+::selection { background: rgb(226 45 54 / 0.36); color: var(--white); }
+
+:where(.mop-page-header, .page-header, .reports-head) { position: relative; }
+:where(.mop-page-header, .page-header, .reports-head)::after {
+  content: '';
   position: absolute;
-  inline-size: 1px;
-  block-size: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+  inset-inline-start: 0;
+  inset-block-end: -0.75rem;
+  inline-size: 3.5rem;
+  block-size: 3px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--brand), var(--warning));
+}
+:where(.mop-page-header-title h1, .page-title, .reports-title, .state-headline) {
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+:where(.card, .panel, .tile, .kpi, .stat, .metric, .state, .state-error,
+  .category-card, .part-card, .return-card, .team-card, .watch-tile,
+  .login-card, .data-table, .mop-table-scroll, .reports-panel) {
+  background: linear-gradient(145deg, rgb(255 255 255 / 0.025), transparent 42%), var(--surface);
+  border-color: var(--border);
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--duration-fast) var(--easing), background-color var(--duration-fast) var(--easing), box-shadow var(--duration-base) var(--easing), transform var(--duration-base) var(--ease-spring);
+}
+:where(.card, .panel, .tile, .kpi, .stat, .metric, .category-card, .part-card,
+  .return-card, .team-card, .watch-tile, .login-card, .reports-panel):hover {
+  border-color: rgb(97 184 255 / 0.36);
+  background-color: #1d2b39;
+  box-shadow: var(--shadow-2);
+  transform: translateY(-2px);
+}
+:where(.tile, .card-link, .job-link, .row-link, .cell-link, .link-button,
+  .portal-nav-link, .rail-link, .tech-nav-link, .shortcut-list a):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+:where(.rail, .tech-head, .portal-head, .portal-nav) {
+  background: linear-gradient(135deg, rgb(226 45 54 / 0.88), rgb(125 29 44 / 0.96)), var(--brand-deep);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.18);
+}
+:where(.rail-brand, .tech-brand, .portal-brand, .shell-brand) {
+  letter-spacing: 0.12em;
+  text-shadow: 0 2px 16px rgb(255 255 255 / 0.16);
+}
+:where(.rail-link, .tech-nav-link, .portal-nav-link) {
+  transition: color var(--duration-fast) var(--easing), background-color var(--duration-fast) var(--easing), border-color var(--duration-fast) var(--easing), transform var(--duration-fast) var(--ease-spring);
+}
+:where(.rail-link, .tech-nav-link, .portal-nav-link):hover {
+  background: rgb(255 255 255 / 0.1);
+  color: var(--white);
+  transform: translateY(-2px);
+}
+
+button, a, select, input, textarea {
+  transition: color var(--duration-fast) var(--easing), background-color var(--duration-fast) var(--easing), border-color var(--duration-fast) var(--easing), box-shadow var(--duration-fast) var(--easing), transform var(--duration-fast) var(--ease-spring);
+}
+:where(button, a[role='button'], .mop-button):active:not(:disabled) { transform: scale(0.975); }
+:where(input, select, textarea):hover:not(:focus) { border-color: var(--accent-cool); box-shadow: 0 0 0 1px rgb(97 184 255 / 0.1); }
+
+:where(.reports, .analytics-page) .panel,
+:where(.reports, .analytics-page) .card { overflow: hidden; }
+:where(.reports, .analytics-page) .panel-head,
+:where(.reports, .analytics-page) .card-head { background: linear-gradient(90deg, rgb(97 184 255 / 0.06), transparent 70%); border-block-end-color: var(--border); }
+.kpi, .stat, .metric { position: relative; overflow: hidden; }
+:where(.kpi, .stat, .metric)::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: 3px;
+  background: linear-gradient(180deg, var(--brand), var(--warning));
+}
+:where(.kpi-value, .stat-value, .metric-value, .tile-count, .tile-value) { letter-spacing: -0.04em; }
+.trend-chart {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: linear-gradient(145deg, rgb(97 184 255 / 0.06), transparent 55%), var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.bar-fill, .bar--created, .bar--closed { background-image: linear-gradient(180deg, rgb(255 255 255 / 0.24), transparent 48%); box-shadow: 0 0 14px rgb(97 184 255 / 0.2); }
+.bar--created { background-color: var(--brand); }
+.bar--closed { background-color: var(--success); }
+
+:where(table) thead th { background: rgb(255 255 255 / 0.035); color: var(--text-muted); letter-spacing: 0.045em; }
+:where(table) tbody tr { transition: background-color var(--duration-fast) var(--easing), transform var(--duration-fast) var(--easing); }
+:where(table) tbody tr:hover { background: rgb(97 184 255 / 0.055); }
+
+@media (max-width: 860px) {
+  .rail-content, .tech-content, .portal-content { padding-inline: clamp(var(--space-3), 4vw, var(--space-6)); }
+}
+@media (max-width: 560px) {
+  :where(.mop-page-header, .page-header, .reports-head) { margin-block-end: var(--space-5); }
+  :where(.mop-page-header-title h1, .page-title, .reports-title) { font-size: clamp(1.35rem, 7vw, var(--text-xl)); }
+  :where(.card, .panel, .tile, .kpi, .stat, .metric) { border-radius: var(--radius-md); }
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(.card, .panel, .tile, .kpi, .stat, .metric, .category-card, .part-card, .return-card, .team-card, .watch-tile, .login-card, button, a) { transform: none !important; }
+}
+
+/* Technician work-card visual polish kept global to protect the component budget. */
+.card-head { gap: var(--space-3); padding: var(--space-5); border: 1px solid var(--border); border-block-end: 3px solid var(--accent-cool); border-radius: var(--radius-lg); background: linear-gradient(135deg, rgb(97 184 255 / .1), transparent 68%), var(--surface); }
+.card-plate { font-size: clamp(var(--tech-text-xl), 6vw, 3rem); letter-spacing: .02em; }
+.tools { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.tools-title { color: var(--accent-cool); border-block-end-color: var(--accent-cool); }
+.task, .part-request { min-block-size: 4.5rem; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); }
+.task--done { border-inline-start: 4px solid var(--success); }
+.tap { border-radius: var(--radius-md); }
+.tap:hover:not(:disabled) { transform: translateY(-2px); }
+
+/* Shared accessibility utility retained during the visual-refresh merge. */
+.visually-hidden { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Final cross-system UX pass — shared safeguards for every role and route. */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+:where(.drawer, .modal, .editor, [role='dialog']) {
+  max-block-size: 100dvh;
+  overscroll-behavior: contain;
+}
+:where(.drawer-body, .modal-body, .editor-body) {
+  overscroll-behavior: contain;
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+:where(.table-scroll, .mop-table-scroll) {
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+:where(.state, .state-error, .empty-state, .error-state) {
+  min-block-size: 10rem;
+  justify-content: center;
+}
+:where(.toast, .toast-container) { z-index: 50; }
+@media (max-width: 640px) {
+  :where(.drawer, .editor) { inline-size: 100vw; }
+  :where(.modal, [role='dialog']) { max-inline-size: calc(100vw - var(--space-4)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
