@@ -287,3 +287,52 @@ export interface TaskPerformanceRecord {
   readonly blockerCount: number;
   readonly reworkCount: number;
 }
+
+// ---------------------------------------------------------------------------
+// Phone Number Normalization & Validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalizes phone numbers to standard E.164 format.
+ * Supports:
+ * - Local Egyptian numbers (e.g. 010..., 011..., 012..., 015...) -> +20...
+ * - Numbers with international prefix (00...) -> +...
+ * - Standard E.164 (+...)
+ * - Numbers with spaces, hyphens, and parentheses
+ */
+export function normalizePhoneNumber(raw: string): string {
+  if (!raw) return "";
+  const cleaned = raw.trim().replace(/[\s\-()]/g, "");
+  if (!cleaned) return "";
+
+  if (cleaned.startsWith("+")) {
+    return cleaned;
+  }
+  if (cleaned.startsWith("00")) {
+    return "+" + cleaned.slice(2);
+  }
+  // Egyptian mobile format: 010..., 011..., 012..., 015... (11 digits)
+  if (/^01[0125]\d{8}$/.test(cleaned)) {
+    return "+20" + cleaned.slice(1);
+  }
+  // Egyptian mobile without leading zero: 10..., 11..., 12..., 15... (10 digits)
+  if (/^1[0125]\d{8}$/.test(cleaned)) {
+    return "+20" + cleaned;
+  }
+  // General digits
+  if (/^\d{8,15}$/.test(cleaned)) {
+    if (cleaned.startsWith("20") && cleaned.length >= 12) {
+      return "+" + cleaned;
+    }
+    if (cleaned.startsWith("0")) {
+      return "+20" + cleaned.slice(1);
+    }
+    return "+" + cleaned;
+  }
+  return cleaned;
+}
+
+export function isValidPhoneNumber(raw: string): boolean {
+  const normalized = normalizePhoneNumber(raw);
+  return /^\+[1-9]\d{1,14}$/.test(normalized);
+}

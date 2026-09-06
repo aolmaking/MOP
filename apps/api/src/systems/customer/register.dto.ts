@@ -16,8 +16,8 @@ export class RegisterCustomerDto {
   @Length(2, 100)
   fullName!: string;
 
-  // E.164, same pattern CreateWorkshopDto already uses for ownerPhone.
-  @Matches(/^\+[1-9]\d{1,14}$/)
+  // Mobile phone number -- accepts E.164 (+20...) or local (01...) format, normalized in service.
+  @Matches(/^(\+|00)?[0-9\s\-()]{8,20}$/, { message: "phone must be a valid mobile phone number" })
   phone!: string;
 
   /** Car panel / plate number -- primary vehicle identity. */

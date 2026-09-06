@@ -281,6 +281,23 @@ describe("register -- car plate and multi-vehicle linking", () => {
     expect(ownership?.asset.currentOwnerCustomerId).toBe(result.customerId);
   });
 
+  it("normalizes local Egyptian mobile numbers (e.g. 010...) to E.164 and creates account", async () => {
+    const localPhone = "01098765432";
+    const plate = `EGY-${SUFFIX}`;
+    const result = await register.register({
+      workshopCode: `register-ws-${SUFFIX}`,
+      fullName: "Ahmed Salah",
+      phone: localPhone,
+      plateNumber: plate,
+      password: "a-real-password-123",
+    });
+
+    const customer = await prisma.customer.findUniqueOrThrow({ where: { id: result.customerId } });
+    expect(customer.phone).toBe("+201098765432");
+    const account = await prisma.account.findUniqueOrThrow({ where: { id: customer.accountId! } });
+    expect(account.phone).toBe("+201098765432");
+  });
+
   it("detects when the same phone registers with a DIFFERENT car panel number and prompts for confirmation", async () => {
     const phone = "+201000000021";
     const plate1 = `FIRST-${SUFFIX}`;

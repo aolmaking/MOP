@@ -68,11 +68,16 @@
           <input
             type="tel"
             autocomplete="tel"
-            placeholder="+20100000000"
+            placeholder="e.g. 01000000000 or +20100000000"
             [value]="phone()"
             (input)="phone.set($any($event.target).value)"
           />
           <span class="hint hint--whatsapp">📱 Must have WhatsApp active (service updates, inspection findings, and approval requests are sent here)</span>
+          @if (phone().trim() && !isPhoneValid()) {
+            <span class="hint hint--warn">⚠️ Enter a valid mobile number (e.g. 01000000000 or +20100000000)</span>
+          } @else if (phone().trim() && isPhoneValid()) {
+            <span class="hint hint--met">✓ Standard format: {{ normalizedPhone() }}</span>
+          }
         </label>
 
         <label class="field">
@@ -103,7 +108,7 @@
           <span class="hint" [class.hint--met]="longEnough()">At least 12 characters</span>
         </label>
 
-        <button class="primary" type="button" [disabled]="!canSubmit()" (click)="submit()">
+        <button class="primary" type="button" [disabled]="submitting()" (click)="submit()">
           {{ submitting() ? 'Creating…' : 'Create account' }}
         </button>
       }

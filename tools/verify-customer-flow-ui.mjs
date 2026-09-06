@@ -184,10 +184,11 @@ async function run() {
     await driver.fill('input[type="tel"], input[name="phone"], #phone, input[autocomplete="tel"], input[autocomplete="username"]', testPhone);
     await driver.fill('input[type="password"]', 'ChangeMe-Customer-123');
     await driver.clickText('Sign in', 'button');
-    await sleep(2500);
+    await sleep(4000);
 
+    console.log('URL after login:', await driver.getUrl());
     await driver.navigate(`${BASE_URL}/customer/assets`);
-    await sleep(2000);
+    await sleep(2500);
 
     const multiAssetsText = await driver.getBodyText();
     console.log('Customer Portal Assets List:', multiAssetsText);

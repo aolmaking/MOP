@@ -1,5 +1,5 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
-import type { EffectiveRole, SessionContext } from "@mop/shared";
+import { normalizePhoneNumber, type EffectiveRole, type SessionContext } from "@mop/shared";
 import { Prisma } from "@mop/database";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { dummyVerifyForTimingSafety, hashPassword, needsRehash, verifyPassword } from "./password.util";
@@ -59,7 +59,16 @@ export class AuthService {
    * MultipleAccountsError handling below already assumes.
    */
   async login(identifier: string, password: string): Promise<LoginResult> {
-    const accounts = await this.prisma.account.findMany({ where: { OR: [{ email: identifier }, { phone: identifier }] } });
+    const normalizedPhone = normalizePhoneNumber(identifier);
+    const accounts = await this.prisma.account.findMany({
+      where: {
+        OR: [
+          { email: identifier },
+          { phone: identifier },
+          ...(normalizedPhone && normalizedPhone !== identifier ? [{ phone: normalizedPhone }] : []),
+        ],
+      },
+    });
 
     if (accounts.length === 0) {
       dummyVerifyForTimingSafety();

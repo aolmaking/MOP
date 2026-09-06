@@ -75,6 +75,7 @@
 .field input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; border-color: var(--focus-ring); }
 .hint { color: var(--text-faint); font-size: var(--text-xs); }
 .hint--met { color: var(--success); }
+.hint--warn { color: var(--warning, #f59e0b); font-weight: 500; }
 .primary {
   padding: var(--space-3) var(--space-4);
   background: var(--accent);

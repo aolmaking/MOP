@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { normalizePhoneNumber } from "@mop/shared";
 import type { Prisma } from "@mop/database";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { hashPassword } from "../../identity/auth/password.util";
@@ -96,10 +97,14 @@ export class RegisterCustomerService {
 
     const rawPlate = (input.plateNumber || input.carPlateNumber || "").trim();
     const normalizedPlate = rawPlate.toUpperCase();
+    const normalizedPhone = normalizePhoneNumber(input.phone) || input.phone.trim();
 
     // Check if phone matches an existing Customer in this workshop
     const phoneMatch = await this.prisma.customer.findFirst({
-      where: { tenantId: workshop.tenantId, phone: input.phone },
+      where: {
+        tenantId: workshop.tenantId,
+        OR: [{ phone: input.phone.trim() }, { phone: normalizedPhone }],
+      },
       select: { id: true, accountId: true, fullName: true },
     });
 
@@ -184,7 +189,7 @@ export class RegisterCustomerService {
             accountType: "CUSTOMER",
             tenantId: workshop.tenantId,
             email: input.email,
-            phone: input.phone,
+            phone: normalizedPhone,
             passwordHash: hashPassword(input.password),
             status: "ACTIVE",
           },
@@ -192,7 +197,7 @@ export class RegisterCustomerService {
 
         const claimed = await tx.customer.updateMany({
           where: { id: phoneMatch.id, accountId: null },
-          data: { accountId: account.id, fullName: input.fullName, email: input.email ?? undefined, portalStatus: "ENABLED" },
+          data: { accountId: account.id, fullName: input.fullName, email: input.email ?? undefined, phone: normalizedPhone, portalStatus: "ENABLED" },
         });
 
         if (claimed.count === 0) {
@@ -215,7 +220,7 @@ export class RegisterCustomerService {
           accountType: "CUSTOMER",
           tenantId: workshop.tenantId,
           email: input.email,
-          phone: input.phone,
+          phone: normalizedPhone,
           passwordHash: hashPassword(input.password),
           status: "ACTIVE",
         },
@@ -226,7 +231,7 @@ export class RegisterCustomerService {
           tenantId: workshop.tenantId,
           accountId: account.id,
           fullName: input.fullName,
-          phone: input.phone,
+          phone: normalizedPhone,
           email: input.email,
           portalStatus: "ENABLED",
         },
