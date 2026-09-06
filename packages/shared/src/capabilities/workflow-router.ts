@@ -213,3 +213,51 @@ export function gatesFor(transition: WorkflowTransition): readonly GateKey[] {
 export function isTerminal(graph: WorkflowGraph, state: string): boolean {
   return graph.terminal.includes(state);
 }
+
+/**
+ * Can this record still arrive at `target` from where it is?
+ *
+ * Forward reachability over the tenant's own effective graph, so the
+ * answer changes with the workshop's shape rather than being a list
+ * somebody has to keep in step with it.
+ *
+ * This exists so that "has this job crossed a boundary yet" can be asked
+ * structurally instead of by comparing statuses. A hardcoded
+ * `status === "IN_PROGRESS" || status === "WAITING_PARTS" || ...` is the
+ * same defect as a hardcoded transition: correct for the profile whoever
+ * wrote it had in mind, and quietly wrong for the next one. Asking the
+ * graph means a profile that reroutes around a state is right for free.
+ */
+export function canStillReach(
+  graph: WorkflowGraph,
+  profile: CapabilityProfile,
+  from: string,
+  target: string,
+  policies: PolicyAnswers = NO_POLICIES,
+  facts: WorkOrderFacts = NO_FACTS,
+): boolean {
+  if (from === target) return true;
+
+  const { transitions } = effectiveGraph(graph, profile, policies, facts);
+
+  const outgoing = new Map<string, string[]>();
+  for (const transition of transitions) {
+    const bucket = outgoing.get(transition.from);
+    if (bucket) bucket.push(transition.to);
+    else outgoing.set(transition.from, [transition.to]);
+  }
+
+  const seen = new Set<string>([from]);
+  const queue = [from];
+  while (queue.length > 0) {
+    const state = queue.shift() as string;
+    for (const next of outgoing.get(state) ?? []) {
+      if (next === target) return true;
+      if (seen.has(next)) continue;
+      seen.add(next);
+      queue.push(next);
+    }
+  }
+
+  return false;
+}

@@ -3,7 +3,7 @@
     <h1 class="title">Technician &amp; Team Analytics</h1>
     <p class="sub">People-and-throughput analysis, company-wide or scoped -- never a revenue figure.</p>
     <app-saved-view-action sourcePage="PEOPLE" defaultName="Technician and team view" [configuration]="viewConfiguration()" />
-    <app-export-action sourcePage="PEOPLE" />
+    <app-export-action sourcePage="PEOPLE" [params]="viewConfiguration()" />
   </header>
 
   @switch (state()) {

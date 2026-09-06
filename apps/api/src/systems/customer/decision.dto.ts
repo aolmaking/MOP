@@ -75,4 +75,26 @@ export class RaiseDecisionDto {
   @IsOptional()
   @Matches(MONEY, { message: "laborPrice must be a money value with at most 2 decimal places, as a string" })
   laborPrice?: string;
+
+  /**
+   * The finding this recommendation answers.
+   *
+   * Optional because a customer may ask for something nobody diagnosed,
+   * but supplied wherever a technician is proposing work off the back of
+   * an inspection -- which is the whole point of inspection-first. It is
+   * what lets history say "we found this, so we proposed that" from
+   * stored evidence rather than by comparing two pieces of free text.
+   */
+  @IsOptional()
+  @IsString()
+  faultId?: string;
+
+  /**
+   * Which catalogued service is being proposed. Carries the service
+   * identity through approval and into the Task that performs it.
+   */
+  @IsOptional()
+  @IsString()
+  @Length(1, 200)
+  serviceKey?: string;
 }

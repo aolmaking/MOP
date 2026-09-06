@@ -1,7 +1,14 @@
 import { Injectable } from "@nestjs/common";
+import type { Prisma, WorkOrderStatus } from "@mop/database";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { resolveDateRange, type ReportQueryParams } from "../owner-reports/date-range.util";
-import { averageMsByStatus, computeStatusDurations, type StatusChangeEvent } from "../owner-reports/lifecycle-duration.util";
+import {
+  averageMsByStatus,
+  computeStatusDurations,
+  type StatusChangeEvent,
+  TERMINAL_STATUSES,
+  type WorkOrderMeta,
+} from "../owner-reports/lifecycle-duration.util";
 import { detectStatusLoops } from "./loop-detection.util";
 
 export type WaitingCause = "PEOPLE" | "INVENTORY" | "APPROVAL" | "PAYMENT" | "QUALITY" | "OTHER";
@@ -57,15 +64,13 @@ export interface BottlenecksReport {
   readonly slaRisk: SlaRiskSummary;
   readonly reworkLoops: readonly ReworkLoopRow[];
   readonly reopenedWorkOrders: number;
+  readonly taskReworkCount: number;
 }
 
 /**
- * Workflow Health -- bottleneck/SLA diagnostics. Deliberately does not
- * duplicate Reports & Analytics' Operations tab (branch/technician
- * comparison already live there) -- this is the deeper, cause-attributed
- * view: not just "how long," but "waiting on what." Built on the same
- * reusable primitives (lifecycle-duration.util.ts) rather than a second
- * status-duration implementation.
+ * Workflow Health -- bottleneck/SLA diagnostics. Attributed by cause and
+ * hardened against historical drift: evaluated against range.to rather than
+ * mutating live timestamps, with terminal statuses excluded from dwell calculations.
  */
 @Injectable()
 export class WorkflowBottlenecksService {
@@ -73,25 +78,60 @@ export class WorkflowBottlenecksService {
 
   async build(tenantId: string, params: ReportQueryParams): Promise<BottlenecksReport> {
     const range = resolveDateRange(params);
+    const branchFilter = params.branchId ? { branchId: params.branchId } : {};
 
     const events = await this.prisma.operationEvent.findMany({
-      where: { tenantId, eventKey: "work_order.status_changed", createdAt: { gte: range.from, lte: range.to } },
-      select: { payload: true, createdAt: true },
+      where: {
+        tenantId,
+        eventKey: "work_order.status_changed",
+        createdAt: { gte: range.from, lte: range.to },
+        ...branchFilter,
+      },
+      select: { payload: true, createdAt: true, workOrderId: true, branchId: true },
     });
-    const statusEvents: StatusChangeEvent[] = events.map((e) => {
+
+    let statusEvents: StatusChangeEvent[] = events.map((e) => {
       const payload = e.payload as { workOrderId?: string; from?: string; to?: string };
       return {
-        workOrderId: payload.workOrderId ?? "unknown",
+        workOrderId: e.workOrderId ?? payload.workOrderId ?? "unknown",
+        branchId: e.branchId ?? undefined,
         from: payload.from ?? "UNKNOWN",
         to: payload.to ?? "UNKNOWN",
         at: e.createdAt,
       };
     });
 
-    const durations = computeStatusDurations(statusEvents, range.to);
+    const workOrderIds = [...new Set(statusEvents.map((e) => e.workOrderId).filter((id) => id !== "unknown"))];
+    const workOrders = await this.prisma.workOrder.findMany({
+      where: { tenantId, id: { in: workOrderIds }, ...branchFilter },
+      select: { id: true, createdAt: true, closedAt: true, status: true, branchId: true },
+    });
+
+    if (params.branchId) {
+      const allowed = new Set(workOrders.map((w) => w.id));
+      statusEvents = statusEvents.filter((e) => allowed.has(e.workOrderId));
+    }
+
+    const metaMap = new Map<string, WorkOrderMeta>(
+      workOrders.map((wo) => [
+        wo.id,
+        {
+          workOrderId: wo.id,
+          createdAt: wo.createdAt,
+          closedAt: wo.closedAt,
+          initialStatus: "DRAFT",
+          branchId: wo.branchId,
+          tenantId,
+        },
+      ]),
+    );
+
+    const durations = computeStatusDurations(statusEvents, range.to, metaMap);
     const averages = averageMsByStatus(durations);
 
+    // Exclude terminal statuses (CLOSED, CANCELLED) so completed jobs do not pollute bottlenecks
     const stageDwell: StageDwellRow[] = Object.entries(averages)
+      .filter(([status]) => !TERMINAL_STATUSES.includes(status))
       .map(([status, ms]) => ({
         status,
         averageHours: ms / (60 * 60 * 1000),
@@ -102,6 +142,7 @@ export class WorkflowBottlenecksService {
     const causeTotals = new Map<WaitingCause, { totalMs: number; workOrders: Set<string> }>();
     for (const d of durations) {
       for (const [status, ms] of Object.entries(d.msByStatus)) {
+        if (TERMINAL_STATUSES.includes(status)) continue;
         const cause = WAITING_CAUSE_BY_STATUS[status];
         if (!cause) continue;
         const entry = causeTotals.get(cause) ?? { totalMs: 0, workOrders: new Set<string>() };
@@ -134,10 +175,21 @@ export class WorkflowBottlenecksService {
       }))
       .sort((a, b) => b.workOrderCount - a.workOrderCount);
 
-    const [slaRisk, reopenedWorkOrders] = await Promise.all([
-      this.slaRisk(tenantId),
+    const now = new Date();
+    const asOf = range.to.getTime() < now.getTime() ? range.to : now;
+
+    const [slaRisk, reopenedWorkOrders, taskReworkCount] = await Promise.all([
+      this.slaRisk(tenantId, asOf, branchFilter),
       this.prisma.workOrder.count({
-        where: { tenantId, relinkedFromWorkOrderId: { not: null }, createdAt: { gte: range.from, lte: range.to } },
+        where: { tenantId, ...branchFilter, relinkedFromWorkOrderId: { not: null }, createdAt: { gte: range.from, lte: range.to } },
+      }),
+      this.prisma.task.count({
+        where: {
+          tenantId,
+          status: "RETURNED_FOR_REWORK",
+          ...(params.branchId ? { workOrder: { branchId: params.branchId } } : {}),
+          updatedAt: { gte: range.from, lte: range.to },
+        },
       }),
     ]);
 
@@ -148,31 +200,44 @@ export class WorkflowBottlenecksService {
       slaRisk,
       reworkLoops,
       reopenedWorkOrders,
+      taskReworkCount,
     };
   }
 
   /**
-   * Current snapshot (not date-ranged) of every non-terminal work order
-   * against its own `promisedAt` -- "breached" already passed it,
-   * "at risk" is within the next 24 hours, "on track" has more runway,
-   * "untracked" never had a promise made at all.
+   * Evaluates SLA risk against asOf (min(range.to, now)).
+   * For historical periods, evaluates against the period end rather than live state.
    */
-  private async slaRisk(tenantId: string): Promise<SlaRiskSummary> {
-    const now = new Date();
-    const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  private async slaRisk(
+    tenantId: string,
+    asOf: Date,
+    branchFilter: { branchId?: string },
+  ): Promise<SlaRiskSummary> {
+    const in24h = new Date(asOf.getTime() + 24 * 60 * 60 * 1000);
+
+    // Active/open work orders as of `asOf`: created <= asOf and not closed before asOf
+    const baseOpenCondition: Prisma.WorkOrderWhereInput = {
+      tenantId,
+      ...branchFilter,
+      createdAt: { lte: asOf },
+      OR: [
+        { status: { notIn: ["CLOSED", "CANCELLED"] as WorkOrderStatus[] } },
+        { closedAt: { gt: asOf } },
+      ],
+    };
 
     const [breached, atRiskWithin24h, onTrack, untracked] = await Promise.all([
       this.prisma.workOrder.count({
-        where: { tenantId, status: { notIn: ["CLOSED", "CANCELLED"] }, promisedAt: { lt: now } },
+        where: { ...baseOpenCondition, promisedAt: { lt: asOf } },
       }),
       this.prisma.workOrder.count({
-        where: { tenantId, status: { notIn: ["CLOSED", "CANCELLED"] }, promisedAt: { gte: now, lte: in24h } },
+        where: { ...baseOpenCondition, promisedAt: { gte: asOf, lte: in24h } },
       }),
       this.prisma.workOrder.count({
-        where: { tenantId, status: { notIn: ["CLOSED", "CANCELLED"] }, promisedAt: { gt: in24h } },
+        where: { ...baseOpenCondition, promisedAt: { gt: in24h } },
       }),
       this.prisma.workOrder.count({
-        where: { tenantId, status: { notIn: ["CLOSED", "CANCELLED"] }, promisedAt: null },
+        where: { ...baseOpenCondition, promisedAt: null },
       }),
     ]);
 

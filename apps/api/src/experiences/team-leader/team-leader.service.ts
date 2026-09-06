@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../runtime/database/prisma.service";
-import { AssetHistoryService } from "../../systems/operations/vehicle-history/asset-history.service";
+import { WorkshopHistoryService } from "../../systems/operations/history/workshop-history.service";
+import type { TechnicianHistoryBrief } from "../../systems/operations/history/workshop-history.types";
 
 export interface TeamLeaderHome {
   readonly managedCount: number;
@@ -67,7 +68,7 @@ export interface TechnicianPerformanceRow {
 export class TeamLeaderService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly assetHistory: AssetHistoryService,
+    private readonly workshopHistory: WorkshopHistoryService,
   ) {}
 
   async home(tenantId: string, managedTechnicianIds: readonly string[]): Promise<TeamLeaderHome> {
@@ -159,7 +160,14 @@ export class TeamLeaderService {
             where: {
               tenantId,
               staffUserId: person.id,
-              task: { status: "DONE", updatedAt: { gte: this.startOfToday() } },
+              unassignedAt: null,
+              task: {
+                status: "DONE",
+              },
+              OR: [
+                { task: { completedAt: { gte: this.startOfToday() } } },
+                { task: { completedAt: null }, assignedAt: { gte: this.startOfToday() } },
+              ],
             },
           }),
         ]);
@@ -276,22 +284,12 @@ export class TeamLeaderService {
    * touching one of their managed technicians, not just their own
    * assignments (P-81, docs/POLICY_DECISION_INVENTORY.md §8.B).
    */
-  async vehicleHistory(tenantId: string, managedTechnicianIds: readonly string[], workOrderId: string) {
-    if (managedTechnicianIds.length === 0) {
-      throw new NotFoundException({ code: "work_order_not_found", message: "That job is not in your team." });
-    }
-
-    const covered = await this.prisma.task.findFirst({
-      where: {
-        tenantId,
-        workOrderId,
-        assignments: { some: { staffUserId: { in: [...managedTechnicianIds] } } },
-      },
-      select: { workOrderId: true },
-    });
-    if (!covered) {
-      throw new NotFoundException({ code: "work_order_not_found", message: "That job is not in your team." });
-    }
+  async vehicleHistory(
+    tenantId: string,
+    managedTechnicianIds: readonly string[],
+    workOrderId: string,
+  ): Promise<TechnicianHistoryBrief> {
+    await this.requireInTeam(tenantId, managedTechnicianIds, workOrderId);
 
     const workOrder = await this.prisma.workOrder.findFirst({
       where: { id: workOrderId, tenantId },
@@ -301,7 +299,53 @@ export class TeamLeaderService {
       throw new NotFoundException({ code: "work_order_not_found", message: "That job is not in your team." });
     }
 
-    return this.assetHistory.build(tenantId, workOrder.assetId, workOrderId);
+    // The SAME projection the technician reads, deliberately.
+    //
+    // This route used to return a second, flat vehicle history that
+    // reported a customer decision as its raw `APPROVED` with no notion
+    // of whether the work was ever done. A team leader checking on a
+    // technician's car would therefore read "approved" for the exact
+    // item the technician's own panel correctly reported as not
+    // performed -- two History projections of one truth, disagreeing.
+    // A supervising technician asks the technician's question, so they
+    // get the technician's answer, money absent and all.
+    return this.workshopHistory.technicianBrief(tenantId, workOrder.assetId, workOrderId);
+  }
+
+  /**
+   * Is this job in this Team Leader's roster at all?
+   *
+   * Scope is a TASK ASSIGNMENT to one of the technicians they manage --
+   * never `branchScope`, because a Team Leader may manage technicians
+   * across branches and must see all of them, and only them. Extracted
+   * so every read reaching a single work order asks the same question:
+   * two surfaces answering "is this mine" separately is how one of them
+   * ends up looser than the other.
+   *
+   * A job outside the roster reads as NOT FOUND, not as forbidden -- a
+   * distinguishable refusal would let a Team Leader enumerate which
+   * work-order ids exist in the rest of the workshop.
+   */
+  async requireInTeam(
+    tenantId: string,
+    managedTechnicianIds: readonly string[],
+    workOrderId: string,
+  ): Promise<void> {
+    const refuse = (): never => {
+      throw new NotFoundException({ code: "work_order_not_found", message: "That job is not in your team." });
+    };
+
+    if (managedTechnicianIds.length === 0) refuse();
+
+    const covered = await this.prisma.task.findFirst({
+      where: {
+        tenantId,
+        workOrderId,
+        assignments: { some: { staffUserId: { in: [...managedTechnicianIds] } } },
+      },
+      select: { workOrderId: true },
+    });
+    if (!covered) refuse();
   }
 
   /** Team Leader's own report, never the company-wide version (Phase 12). */
@@ -318,15 +362,17 @@ export class TeamLeaderService {
     const rows = await Promise.all(
       staff.map(async (person) => {
         const [tasksCompleted, activeTasks, blockers, reworkCount] = await Promise.all([
-          this.prisma.taskAssignment.count({ where: { tenantId, staffUserId: person.id, task: { status: "DONE" } } }),
+          this.prisma.taskAssignment.count({
+            where: { tenantId, staffUserId: person.id, unassignedAt: null, task: { status: "DONE" } },
+          }),
           this.prisma.taskAssignment.count({
             where: { tenantId, staffUserId: person.id, unassignedAt: null, task: { status: "IN_PROGRESS" } },
           }),
           this.prisma.taskBlocker.count({
-            where: { tenantId, task: { assignments: { some: { staffUserId: person.id } } } },
+            where: { tenantId, task: { assignments: { some: { staffUserId: person.id, unassignedAt: null } } } },
           }),
           this.prisma.taskAssignment.count({
-            where: { tenantId, staffUserId: person.id, task: { status: "RETURNED_FOR_REWORK" } },
+            where: { tenantId, staffUserId: person.id, unassignedAt: null, task: { status: "RETURNED_FOR_REWORK" } },
           }),
         ]);
 

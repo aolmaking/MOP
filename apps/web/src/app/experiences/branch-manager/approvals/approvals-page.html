@@ -71,6 +71,9 @@
         @if (r.waiting.length) {
           <section class="band">
             <h2 class="band-title">Waiting on the customer</h2>
+            @if (cancelError(); as message) {
+              <p class="band-error" role="alert">{{ message }}</p>
+            }
             <ul class="rows">
               @for (row of r.waiting; track row.requestId) {
                 <li class="row" [class.row--overdue]="overdue(row)" [class.row--critical]="row.hasCritical">
@@ -101,6 +104,32 @@
                   <button type="button" class="row-record" (click)="openRecording(row.requestId)">
                     Record answer
                   </button>
+
+                  <!--
+                    M-3: the way out of an ask nobody ever answered. Without
+                    it the job sits at AWAITING_CUSTOMER_APPROVAL until the
+                    read-computed expiry passes, and the car sits with it.
+                  -->
+                  @if (confirmingCancel() === row.requestId) {
+                    <span class="row-confirm">
+                      <span class="row-confirm-question">Withdraw this request?</span>
+                      <button
+                        type="button"
+                        class="row-confirm-yes"
+                        [disabled]="cancelling() !== null"
+                        (click)="confirmCancel(row.requestId)"
+                      >
+                        {{ cancelling() === row.requestId ? '…' : 'Yes, withdraw it' }}
+                      </button>
+                      <button type="button" class="row-confirm-no" (click)="askToCancel(row.requestId)">
+                        Keep waiting
+                      </button>
+                    </span>
+                  } @else {
+                    <button type="button" class="row-cancel" (click)="askToCancel(row.requestId)">
+                      Withdraw
+                    </button>
+                  }
                 </li>
               }
             </ul>

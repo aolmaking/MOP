@@ -98,9 +98,43 @@ export class WorkOrdersApi {
     return this.http.get<WorkOrderDetail>(`/api/v1/branch-manager/work-orders/${id}`);
   }
 
-  /** Parity with the technician's own card -- put a task on the job directly. */
-  createTask(id: string, title: string, serviceKey?: string): Observable<unknown> {
-    return this.http.post(`/api/v1/branch-manager/work-orders/${id}/tasks`, { title, serviceKey });
+  /**
+   * CONTRACTS-v0 C3 / Parity with technician card. The manager adds work
+   * the technician did not think to raise. Supports both object payload and title/serviceKey.
+   */
+  createTask(
+    workOrderId: string,
+    task: { title: string; serviceKey?: string; assignToStaffUserId?: string },
+  ): Observable<WorkOrderTask>;
+  createTask(
+    workOrderId: string,
+    title: string,
+    serviceKey?: string,
+  ): Observable<WorkOrderTask>;
+  createTask(
+    workOrderId: string,
+    taskOrTitle: string | { title: string; serviceKey?: string; assignToStaffUserId?: string },
+    serviceKey?: string,
+  ): Observable<WorkOrderTask> {
+    const body =
+      typeof taskOrTitle === 'string'
+        ? { title: taskOrTitle, serviceKey }
+        : taskOrTitle;
+    return this.http.post<WorkOrderTask>(`/api/v1/branch-manager/work-orders/${workOrderId}/tasks`, body);
+  }
+
+  /**
+   * CONTRACTS-v0 C4. The manager's explicit door to "ask the customer",
+   * for the job that has a priced recommendation sitting on it and never
+   * moved. Refused with 409 `transition_not_allowed` when the live graph
+   * has no such edge from where the job is -- the refusal message is the
+   * server's and is shown verbatim.
+   */
+  requestApproval(workOrderId: string): Observable<{ workOrderId: string; status: string }> {
+    return this.http.post<{ workOrderId: string; status: string }>(
+      `/api/v1/branch-manager/work-orders/${workOrderId}/request-approval`,
+      {},
+    );
   }
 
   /** Parity with the technician's own "ask the customer" press. */

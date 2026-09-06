@@ -321,11 +321,32 @@ export class WorkflowIntegrityService {
       .sort((a, b) => rank[a.severity] - rank[b.severity] || b.total - a.total);
   }
 
-  /** IssuedItem.arrivedAt still null, beyond the configured threshold since issuedAt. */
+  /**
+   * IssuedItem.arrivedAt still null, beyond the configured threshold
+   * since issuedAt -- and the request still genuinely in transit.
+   *
+   * The status filter is load-bearing and was missing. `arrivedAt` was
+   * written by nothing at all until the part hand-over began stamping it
+   * (`PartRequestService.stampHandover`), so this check reported every
+   * part the workshop had ever issued, forever, including ones long
+   * since fitted to a car. Even with the stamping in place the filter is
+   * still required: the graph lets an in-house hand-over go straight
+   * from ISSUED to RECEIVED_BY_TECHNICIAN without an ARRIVED anybody
+   * witnessed, so those rows keep a null `arrivedAt` on purpose.
+   *
+   * A request that reached the technician, was fitted, or came back has
+   * had the arrival question answered by a later fact. Only one that is
+   * still out there is unconfirmed.
+   */
   private async partArrivalUnconfirmed(tenantId: string): Promise<DetectedIssue[]> {
     const cutoff = new Date(Date.now() - PART_ARRIVAL_THRESHOLD_HOURS * 60 * 60 * 1000);
     const rows = await this.prisma.issuedItem.findMany({
-      where: { tenantId, arrivedAt: null, issuedAt: { lt: cutoff } },
+      where: {
+        tenantId,
+        arrivedAt: null,
+        issuedAt: { lt: cutoff },
+        partRequest: { status: { in: ["ISSUED", "IN_TRANSIT"] } },
+      },
       select: { id: true, issuedAt: true, partRequest: { select: { workOrderId: true } } },
       take: 200,
     });

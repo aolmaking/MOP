@@ -4,7 +4,10 @@
 > **Purpose:** the technician's whole job, end to end — what they see, what they can do, what each action changes downstream.
 > **Authority:** DESCRIPTIVE.
 > **Scope:** the three technician pages, `TechnicianController`, `TechnicianWorkService`, `TechnicianWorkViewService`.
-> **Last verified:** 2026-09-01 against commit `a8c8bb5`.
+> **Last verified:** 2026-09-01 against commit `a8c8bb5`; the catalog-driven
+> part request (section appended at the end) verified 2026-09-03 against the
+> working tree, by `apps/api/src/testing/catalog-cart.http.spec.ts` and a
+> browser journey.
 > **Source of truth:** `apps/api/src/experiences/technician/`, `apps/api/src/systems/operations/technician-work.service.ts`, `apps/web/src/app/experiences/technician/`, `docs/detailed-specs/technician.md`, `docs/phases/PHASE_6.md`.
 > **Related:** 07 (lifecycle), 09 (parts), 05 (permissions), 27 (why the UI is shaped this way).
 
@@ -129,4 +132,48 @@ These are not "a later phase has not run yet." They are finished, tested systems
 | **Clarification reply** | ⚠️ `[IMPLEMENTED]` not `[INTEGRATED]` — no endpoint |
 | Specialisation service cards / measurement forms on the Work Card | 🔴 `[INTENDED]` — definitions and validation are real; no page fills one in |
 | Custom-field capture on inspection | 🔴 `[INTENDED]` — authoring exists, recording does not |
-| Optional per-job review under `DIRECT` | 🔴 `[INTENDED]` — needs its own intent |
+
+---
+
+## Appendix A — Asking the store for parts, as shopping `[VERIFIED]`
+
+> Added 2026-09-03. Route `/tech/card/:id/parts`
+> (`apps/web/src/app/experiences/technician/parts-catalog.*`). Proven by
+> `apps/api/src/testing/catalog-cart.http.spec.ts` and a browser journey.
+
+The Work Card's inline parts picker was cards rather than a SKU box,
+which was right, but it had no categories, no filters, and asked for one
+part per press. A brake job is four presses and four trips through the
+same list.
+
+It is now a page rather than a panel: browse a category, cut it down
+with the filters that category actually offers, add what you need to a
+basket, check it, send it once. `parts-picker.*` was deleted rather than
+left beside it — two doors to the same job is how one of them goes
+stale.
+
+**This page invents no taxonomy.** Categories, filters and filter values
+all arrive from the server, configured by the inventory manager. There
+is no `VEHICLE_TYPES` constant in the component and there must never be
+one: the moment it hardcodes a filter it stops showing the workshop its
+own catalogue. The `@for` over `filters()` is the whole mechanism.
+
+What the cart is and is not: it is an intention, not a transaction.
+Nothing is reserved, nothing is priced against the customer, no stock
+moves. On submit it becomes real `PartRequest` rows that the existing
+store queue already reads, and everything after that is unchanged —
+approve, issue, stock movement, receive, fit, bill once at the price
+snapshotted when it was issued.
+
+The basket survives a reload (session storage, per work order) together
+with the `cartKey` that makes re-submitting it harmless. Losing an
+unsent basket is a nuisance; sending it twice costs the store real work.
+
+Out-of-stock parts are **said, not blocked** — "The store will have to
+order this." A technician who cannot ask for an out-of-stock part simply
+phones instead, and the request leaves the system entirely.
+
+A part the workshop has never carried still has no catalogue entry, so
+the page points back at the Work Card's blocker, which remains the door
+for that case.
+

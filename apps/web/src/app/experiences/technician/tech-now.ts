@@ -51,6 +51,30 @@ export class TechNow {
     if (job) void this.router.navigate(['/tech/card', job.workOrderId]);
   }
 
+  protected postureLabel(job: TechnicianJob): string {
+    if (job.blocked) return 'Attention required · Blocker reported';
+    if (job.active) return 'In progress · Current hands-on job';
+    if (job.status === 'UNDER_INSPECTION') return 'Action required · Vehicle inspection';
+    if (job.status === 'REGISTERED') return 'Next up · Ready to begin';
+    return 'Assigned · Ready for action';
+  }
+
+  protected statusExplanation(job: TechnicianJob): string | null {
+    if (job.blocked) {
+      return 'Blocked — a problem was reported on this job. Your branch manager has been notified.';
+    }
+    if (job.status === 'UNDER_INSPECTION') {
+      return 'Vehicle is under inspection. Open the work card to record findings or complete inspection.';
+    }
+    if (job.status === 'AWAITING_CUSTOMER_APPROVAL') {
+      return 'Inspection complete. Waiting for customer approval before repairs can begin.';
+    }
+    if (job.status === 'WAITING_PARTS') {
+      return 'Waiting for parts to be issued by the store.';
+    }
+    return null;
+  }
+
   protected since(hours: number): string {
     if (hours < 1) return 'just now';
     if (hours < 24) return `${Math.floor(hours)}h`;

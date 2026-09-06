@@ -41,7 +41,16 @@ export const GATE_KEYS = [
 
 export type GateKey = (typeof GATE_KEYS)[number];
 
-export type GateCheckpoint = "FINISH" | "DELIVERY";
+/**
+ * Where a gate is asked.
+ *
+ * AUTHORIZATION is the newest and the earliest: the moment a job crosses
+ * into APPROVED_FOR_WORK. It exists because FINISH was too late to be the
+ * only checkpoint -- a condition first enforced when the technician
+ * presses "done" has already let the labour be spent and the parts be
+ * fitted, so refusing there traps the car instead of preventing the work.
+ */
+export type GateCheckpoint = "AUTHORIZATION" | "FINISH" | "DELIVERY";
 
 export interface GateDefinition {
   readonly key: GateKey;
@@ -74,9 +83,15 @@ export interface GateDefinition {
 const DEFINITIONS: readonly GateDefinition[] = [
   {
     key: "inspection_completed",
-    checkpoint: "FINISH",
+    // Moved from FINISH. It guards the authorization boundary now, which
+    // is the only place it can actually do its job: asked at FINISH it
+    // could not stop unauthorized work, only refuse to let the job end
+    // afterwards. It still rides the FINISH edges as well, so a job that
+    // reached authorization legitimately and then had its inspection
+    // removed is still caught.
+    checkpoint: "AUTHORIZATION",
     owner: null,
-    blockedMessage: "Complete the inspection before finishing.",
+    blockedMessage: "Record the inspection before this job is approved for work.",
     satisfiedMessage: "Inspection is complete.",
   },
   {

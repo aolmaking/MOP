@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, ForbiddenException, Get, HttpCode, Param, Post, Query, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
 import { SessionGuard } from "../../identity/auth/session.guard";
 import { CurrentSession } from "../../identity/auth/current-session.decorator";
@@ -8,16 +8,23 @@ import { WorkflowJourneyService } from "../../systems/operations/workflow-journe
 import { TechnicianWorkViewService } from "./technician-work-view.service";
 import { CustomerDecisionService } from "../../systems/customer/decision.service";
 import { PartRequestService } from "../../systems/inventory/part-request.service";
-import { CatalogService } from "../../systems/inventory/catalog.service";
+import { CatalogBrowseService } from "../../systems/inventory/catalog-browse.service";
+import { parseAttributeQuery } from "../../systems/inventory/inventory.controller";
 import {
   ReportBlockerDto,
   CreateFaultDto,
   RequestPartDto,
   RecordInspectionDto,
   CompleteTaskDto,
+  RequestReturnDto,
   ReturnPartDto,
+  ClarificationDto,
   RespondToClarificationDto,
+  ExternalPartDto,
+  SubmitCartDto,
+  SubmitSpecializationEntryDto,
 } from "./technician.dto";
+import { SpecializationService } from "../../systems/people/specialization/specialization.service";
 import { RaiseDecisionDto } from "../../systems/customer/decision.dto";
 
 /**
@@ -36,8 +43,9 @@ export class TechnicianController {
     private readonly access: EffectiveAccessService,
     private readonly decisions: CustomerDecisionService,
     private readonly partRequests: PartRequestService,
-    private readonly catalog: CatalogService,
+    private readonly browse: CatalogBrowseService,
     private readonly journey: WorkflowJourneyService,
+    private readonly specialization: SpecializationService,
   ) {}
 
   /** Home: the car in front of them, if there is one. */
@@ -70,14 +78,61 @@ export class TechnicianController {
   async journeyFor(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
     await this.view.workCard(staffUserId, tenantId, id);
-    return this.journey.forWorkOrder(tenantId, id, "TECHNICIAN");
+    // The viewer is a permission ORACLE, not a session: the journey
+    // decides which moves the graph allows, this decides which of them
+    // this person may make, and neither has to know the other's rules.
+    return this.journey.forWorkOrder(tenantId, id, "TECHNICIAN", {
+      can: (permission) => this.access.can(session, permission),
+    });
   }
 
-  /** "Previous history detected" -- P-81, docs/POLICY_DECISION_INVENTORY.md §8.B. */
+  /**
+   * The vehicle's decision-support history -- P-81,
+   * docs/POLICY_DECISION_INVENTORY.md §8.B.
+   *
+   * Deliberately NOT the owner's history record: same underlying truth,
+   * arranged around "what do I need to know before I decide", and with
+   * no money in it at all. Scope is the technician's own assignment,
+   * resolved from the session, never from the URL.
+   */
   @Get("work-orders/:id/vehicle-history")
   async vehicleHistory(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
     return this.view.vehicleHistory(staffUserId, tenantId, id);
+  }
+
+  /** Specialization forms and service cards available for this workshop. */
+  @Get("work-orders/:id/specialization-forms")
+  async specializationForms(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.specialization.listDefinitions(tenantId);
+  }
+
+  /** Specialization measurements/cards recorded against this work order. */
+  @Get("work-orders/:id/specialization-entries")
+  async specializationEntries(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.specialization.entriesFor(tenantId, id);
+  }
+
+  /** Record a specialization measurement or service card entry for this job. */
+  @Post("work-orders/:id/specialization-entries")
+  async submitSpecializationEntry(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: SubmitSpecializationEntryDto,
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.complete");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.specialization.fillEntry(
+      tenantId,
+      dto.definitionId,
+      staffUserId,
+      dto.values,
+      { workOrderId: id, taskId: dto.taskId },
+    );
   }
 
   @Post("tasks/:id/start")
@@ -111,10 +166,12 @@ export class TechnicianController {
    * has always known this move, and nothing ever pressed the button.
    */
   @Post("work-orders/:id/start-inspection")
+  @HttpCode(200)
   async startInspection(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.start_inspection");
     await this.view.workCard(staffUserId, tenantId, id);
-    return this.work.startInspection(id, this.actor(session));
+    const result = await this.work.startInspection(id, this.actor(session));
+    return { workOrderId: result.workOrderId, status: result.to };
   }
 
   /**
@@ -122,10 +179,12 @@ export class TechnicianController {
    * `startInspection`, one stage later in the job.
    */
   @Post("work-orders/:id/start-work")
+  @HttpCode(200)
   async startWork(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.start_work");
     await this.view.workCard(staffUserId, tenantId, id);
-    return this.work.startWork(id, this.actor(session));
+    const result = await this.work.startWork(id, this.actor(session));
+    return { workOrderId: result.workOrderId, status: result.to };
   }
 
   /**
@@ -163,6 +222,7 @@ export class TechnicianController {
         // truthful about that rather than inventing fields.
         fields: {},
         note: dto.note,
+        actualMinutes: dto.actualMinutes,
       },
       this.actor(session),
     );
@@ -176,7 +236,14 @@ export class TechnicianController {
   ) {
     await this.requireTechnician(session, "inspection.full.create");
     return this.work.createFault(
-      { workOrderId: id, description: dto.description, severity: dto.severity },
+      {
+        workOrderId: id,
+        description: dto.description,
+        severity: dto.severity,
+        code: dto.code,
+        recommendedService: dto.recommendedService,
+        inspectionId: dto.inspectionId,
+      },
       this.actor(session),
     );
   }
@@ -202,22 +269,53 @@ export class TechnicianController {
     return this.decisions.raiseAndSend(
       tenantId,
       id,
-      { name: dto.name, explanation: dto.explanation, importance: dto.importance, price: dto.price, laborPrice: dto.laborPrice },
+      {
+        name: dto.name,
+        explanation: dto.explanation,
+        importance: dto.importance,
+        price: dto.price,
+        laborPrice: dto.laborPrice,
+        // Inspection -> Fault -> Recommendation, carried as stored
+        // evidence rather than reconstructed from matching strings later.
+        faultId: dto.faultId,
+        serviceKey: dto.serviceKey,
+      },
       { accountId: session.accountId, displayName: session.displayName },
     );
   }
 
   /**
-   * The parts a technician may put on a job, POS-card style -- the same
-   * catalog Catalog Control writes, filtered to what a work order can
-   * use and never carrying cost (a technician has no reason to see
-   * margin). No ownership check: this is workshop-wide reference data,
-   * not this technician's own record.
+   * The parts catalogue, as something to shop rather than something to
+   * search.
+   *
+   * Categories, filters and filter values all come from what the
+   * inventory manager configured -- this endpoint has no taxonomy of its
+   * own, and adding a hardcoded "Vehicle Type" here would put the
+   * technician's page and the manager's page permanently out of step.
+   * The same `CatalogBrowseService.browse` answers the manager's
+   * preview, so what is previewed is literally what is served.
+   *
+   * No ownership check: this is workshop-wide reference data, not this
+   * technician's own record. Cost is not merely unread here -- a
+   * `BrowseCard` has no field for it.
    */
   @Get("parts-catalog")
-  async partsCatalog(@CurrentSession() session: SessionContext, @Query("q") q?: string) {
+  async partsCatalog(
+    @CurrentSession() session: SessionContext,
+    @Query("q") q?: string,
+    @Query("categoryId") categoryId?: string,
+    @Query("attributes") attributes?: string,
+    @Query("inStockOnly") inStockOnly?: string,
+    @Query("page") page?: string,
+  ) {
     const { tenantId } = await this.requireTechnician(session, "inventory.request.create");
-    return this.catalog.list(tenantId, { query: q, workOrderUsable: true, pageSize: 50 }, false);
+    return this.browse.browse(tenantId, {
+      query: q,
+      categoryId,
+      attributes: parseAttributeQuery(attributes),
+      inStockOnly: inStockOnly === "true",
+      page: page ? Number(page) : 1,
+    });
   }
 
   /**
@@ -238,7 +336,45 @@ export class TechnicianController {
     // Ownership before anything else, same rule as every other write here.
     await this.view.workCard(staffUserId, tenantId, id);
     return this.partRequests.request(
-      { tenantId, workOrderId: id, inventoryItemId: dto.inventoryItemId, quantity: dto.quantity, reason: dto.reason },
+      {
+        tenantId,
+        workOrderId: id,
+        inventoryItemId: dto.inventoryItemId,
+        quantity: dto.quantity,
+        reason: dto.reason,
+        inspectionId: dto.inspectionId,
+      },
+      this.actor(session),
+    );
+  }
+
+  /**
+   * The cart, submitted.
+   *
+   * One request per line, in one transaction, under one `cartKey` --
+   * see `PartRequestService.requestMany` for why this is not a
+   * shopping-order entity and why the key is required rather than
+   * optional. Same permission and the same ownership check as the
+   * single-part path above: a cart is a faster way to ask for parts, not
+   * a way to ask for more of them.
+   */
+  @Post("work-orders/:id/parts/cart")
+  async submitCart(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: SubmitCartDto,
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "inventory.request.create");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.partRequests.requestMany(
+      {
+        tenantId,
+        workOrderId: id,
+        lines: dto.lines,
+        cartKey: dto.cartKey,
+        reason: dto.reason,
+        inspectionId: dto.inspectionId,
+      },
       this.actor(session),
     );
   }
@@ -265,16 +401,26 @@ export class TechnicianController {
 
   /**
    * "Send it back" -- the technician's own half of the returns loop
-   * (`PartRequestService.requestReturn`). Existed at the service layer,
-   * tested, and unreachable: the Inventory Manager's accept/reject/clarify
-   * routes (`inventory.controller.ts`) were the only door into the returns
-   * table, and none of them starts a return -- they only ever decide one
-   * already raised. Same ownership check as receive/used above.
+   * (`PartRequestService.requestReturn`).
    */
   @Post("parts/:id/return")
-  async returnPart(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: ReturnPartDto) {
+  async returnPart(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: ReturnPartDto | RequestReturnDto,
+  ) {
     await this.requirePartOnMyJob(session, id);
     return this.partRequests.requestReturn(id, dto.quantity, this.actor(session), dto.reason);
+  }
+
+  @Post("parts/:id/clarification")
+  async answerClarification(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: ClarificationDto,
+  ) {
+    await this.requirePartOnMyJob(session, id);
+    return this.partRequests.respondToClarification(id, this.actor(session), dto.answer);
   }
 
   /**
@@ -291,6 +437,17 @@ export class TechnicianController {
   ) {
     await this.requirePartOnMyJob(session, id);
     return this.partRequests.respondToClarification(id, this.actor(session), dto.response);
+  }
+
+  @Post("work-orders/:id/external-parts")
+  async addExternalPart(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: ExternalPartDto,
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "inventory.request.create");
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.work.addExternalPartLine(id, dto, this.actor(session));
   }
 
   /** What the Finish Gate would say, asked before anything is pressed. */
@@ -316,6 +473,7 @@ export class TechnicianController {
     await this.view.workCard(staffUserId, tenantId, id);
     return this.work.finishWorkOrder(id, this.actor(session));
   }
+
 
   private actor(session: SessionContext) {
     return {

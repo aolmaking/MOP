@@ -92,15 +92,21 @@ export class CustomerPortalController {
   /**
    * Where this customer's car actually is, as a strip they can read.
    *
-   * Scoped by asking the portal service for the customer's own jobs
-   * first: a work-order id from somebody else's car reads as not-found,
-   * because the id is not a capability here, the session is.
+   * Scoped by OWNERSHIP, not by the job still being open. It used to ask
+   * `currentService` -- the list of jobs in a live status -- which meant
+   * a customer watching their repair was refused the second it closed,
+   * on the one screen whose whole job is telling them it finished.
+   *
+   * No viewer is passed, so no actions come back: the customer's journey
+   * is a status they read, not a console they drive. Their one real
+   * action, answering a decision, has its own page reached from the
+   * portal, and a second door to it here would be a second way to change
+   * their mind with different consequences.
    */
   @Get("service/:workOrderId/journey")
   async serviceJourney(@CurrentSession() session: SessionContext, @Param("workOrderId") workOrderId: string) {
     const { tenantId, customerId } = this.require(session);
-    const mine = await this.portal.currentService(tenantId, customerId);
-    if (!mine.some((job) => job.workOrderId === workOrderId)) {
+    if (!(await this.portal.ownsWorkOrder(tenantId, customerId, workOrderId))) {
       throw new ForbiddenException({ code: "forbidden", message: "You do not have access to this page." });
     }
     return this.journey.forWorkOrder(tenantId, workOrderId, "CUSTOMER");

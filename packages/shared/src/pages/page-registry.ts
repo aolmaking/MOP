@@ -38,9 +38,12 @@ export const ROLE_PAGES: Readonly<Record<StaffRole, readonly string[]>> = {
     "branch_manager.home",
     "branch_manager.team-setup",
   ],
-  TECHNICIAN: ["technician.home", "technician.my-work", "technician.work-card"],
+  TECHNICIAN: ["technician.home", "technician.my-work", "technician.work-card", "technician.parts-catalog"],
   INVENTORY_MANAGER: [
     "inventory_manager.pos-catalog-control",
+    // The catalog's structure, as distinct from its items: categories,
+    // the filter vocabulary, and what a technician will see.
+    "inventory_manager.catalog-builder",
     "inventory_manager.technician-requests",
     "inventory_manager.quantity-control-stock-status",
     "inventory_manager.returns-movements",

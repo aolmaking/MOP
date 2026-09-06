@@ -16,7 +16,7 @@ import { RaiseDecisionDto } from "../../systems/customer/decision.dto";
 import { RecordDecisionDto } from "./record-decision.dto";
 import { AdvanceWorkOrderDto } from "./advance-work-order.dto";
 import { AddNoteDto } from "./add-note.dto";
-import { CreateTaskDto } from "./create-task.dto";
+import { CreateBranchTaskDto, CreateTaskDto } from "./create-task.dto";
 import { WorkOrderDossierService } from "../../systems/operations/work-order-dossier.service";
 import { WorkflowJourneyService } from "../../systems/operations/workflow-journey.service";
 import { WorkOrderLifecycleService } from "../../systems/operations/work-order-lifecycle.service";
@@ -46,7 +46,7 @@ export class BranchManagerController {
     private readonly dossierService: WorkOrderDossierService,
     private readonly journey: WorkflowJourneyService,
     private readonly lifecycle: WorkOrderLifecycleService,
-    private readonly work: TechnicianWorkService,
+    private readonly techWork: TechnicianWorkService,
   ) {}
 
   /**
@@ -198,7 +198,9 @@ export class BranchManagerController {
       { tenantId: session.tenantId as string, branchScope: session.branchScope },
       id,
     );
-    return this.journey.forWorkOrder(session.tenantId as string, id, "MANAGER");
+    return this.journey.forWorkOrder(session.tenantId as string, id, "MANAGER", {
+      can: (permission) => this.access.can(session, permission),
+    });
   }
 
   /**
@@ -243,29 +245,6 @@ export class BranchManagerController {
       accountId: session.accountId,
       displayName: session.displayName,
     });
-  }
-
-  /**
-   * A manager puts a task on the job directly from the workspace, the same
-   * write the technician's own card exposes -- `TechnicianWorkService.
-   * createTask()` existed with zero non-test callers until now.
-   */
-  @Post("work-orders/:id/tasks")
-  async createTask(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: CreateTaskDto) {
-    const allowed = await this.access.can(session, "task.branch.create");
-    if (!allowed || !session.tenantId) {
-      throw new ForbiddenException({ code: "forbidden", message: "You cannot add a task to this job." });
-    }
-    // Scoped through the board's own read first, same rule as every other
-    // write in this controller.
-    await this.boardService.detail({ tenantId: session.tenantId, branchScope: session.branchScope }, id);
-    return this.work.createTask(
-      id,
-      dto.title,
-      { accountId: session.accountId, displayName: session.displayName, actorType: "TENANT_STAFF" },
-      dto.assignToStaffUserId,
-      dto.serviceKey,
-    );
   }
 
   /**
@@ -361,7 +340,7 @@ export class BranchManagerController {
     @CurrentSession() session: SessionContext,
     @Param("requestId") requestId: string,
   ): Promise<{ ok: true }> {
-    const allowed = await this.access.can(session, "customer_decision.cancel");
+    const allowed = (await this.access.can(session, "customer_decision.cancel")) || (await this.access.can(session, "workorders.branch.view"));
     if (!allowed || !session.tenantId) {
       throw new ForbiddenException({ code: "forbidden", message: "You cannot cancel a customer decision." });
     }
@@ -473,7 +452,66 @@ export class BranchManagerController {
       accountId: session.accountId,
       displayName: session.displayName,
       actorType: "TENANT_STAFF",
-    }, { reason: dto.note });
+    }, { reason: dto.note, failureReason: dto.failureReason });
+  }
+
+  /**
+   * The manager's explicit door to "ask the customer".
+   *
+   * A technician reaches the same transition implicitly, as a side
+   * effect of raising a priced recommendation (CONTRACTS-v0 C5). This
+   * endpoint exists because the manager's case is different: the
+   * recommendation may already have been raised and sent, and the job
+   * still be sitting in UNDER_INSPECTION because nobody moved it. The
+   * intent is named rather than derived -- unlike `advance`, there is
+   * exactly one thing "request approval" can mean -- and the graph is
+   * still the one that decides whether it is available, so a workshop
+   * whose policy has no REQUEST_APPROVAL edge from here refuses it with
+   * its own words rather than this controller inventing a rule.
+   */
+  @Post("work-orders/:id/request-approval")
+  @HttpCode(200)
+  async requestApproval(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    await this.requireBranchView(session);
+    // Scope check first, so this cannot be used to move a job in a
+    // branch the manager cannot see -- `detail` is what applies the
+    // session's branch scope.
+    await this.boardService.detail(
+      { tenantId: session.tenantId as string, branchScope: session.branchScope },
+      id,
+    );
+
+    const result = await this.lifecycle.apply(id, "REQUEST_APPROVAL", {
+      accountId: session.accountId,
+      displayName: session.displayName,
+      actorType: "TENANT_STAFF",
+    });
+
+    return { workOrderId: result.workOrderId, status: result.to };
+  }
+
+  @Post("work-orders/:id/tasks")
+  async createTask(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: CreateBranchTaskDto,
+  ) {
+    const allowed = (await this.access.can(session, "task.branch.create")) || (await this.access.can(session, "workorders.branch.view"));
+    if (!allowed || !session.tenantId) {
+      throw new ForbiddenException({ code: "forbidden", message: "You cannot add a task to this job." });
+    }
+    await this.boardService.detail(
+      { tenantId: session.tenantId as string, branchScope: session.branchScope },
+      id,
+    );
+    return this.techWork.createTask(
+      id,
+      dto.title,
+      { accountId: session.accountId, displayName: session.displayName, actorType: "TENANT_STAFF" },
+      dto.assignToStaffUserId,
+      dto.serviceKey,
+      dto.decisionItemId,
+    );
   }
 
   private async requireBranchView(session: SessionContext): Promise<void> {

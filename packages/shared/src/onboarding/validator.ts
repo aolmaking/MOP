@@ -1,4 +1,5 @@
-import { isCapabilityActive, type CapabilityKey } from "../capabilities/types";
+import { CAPABILITY_KEYS, isCapabilityActive, type CapabilityKey } from "../capabilities/types";
+import { capabilityDefinition } from "../capabilities/registry";
 import { validateCapabilityProfile } from "../capabilities/validator";
 import { POLICY_DEFINITIONS } from "../policies/registry";
 import { BUSINESS_TYPES, INITIAL_STATUSES } from "../platform/workshop-options";
@@ -52,6 +53,7 @@ export type DraftFindingCode =
   | "UNKNOWN_INITIAL_STATUS"
   // capability engine (lifted from validateCapabilityProfile)
   | "CAPABILITY_INVALID"
+  | "CAPABILITY_NOT_PERMITTED_BY_PLAN"
   // structure
   | "NO_BRANCH"
   | "MULTI_BRANCH_NEEDS_TWO"
@@ -68,6 +70,7 @@ export type DraftFindingCode =
   // specialization
   | "UNKNOWN_SPECIALIZATION_PACK"
   | "PACK_WRONG_CATEGORY"
+  | "SPECIALIZATION_CAPABILITY_INCOMPATIBLE"
   | "NO_SPECIALIZATION"
   // policies
   | "POLICY_NOT_ANSWERED"
@@ -117,7 +120,7 @@ export function validateDraft(draft: WorkshopDraft, planLimits?: PlanLimits): Dr
 
   validateIdentity(draft, add);
   validateOwnerAndPlan(draft, add);
-  validateCapabilities(draft, add);
+  validateCapabilities(draft, planLimits, add);
   validateSpecialization(draft, add);
   validatePolicies(draft, add);
   validateResponsibility(draft, add);
@@ -296,7 +299,11 @@ function validateOwnerAndPlan(draft: WorkshopDraft, add: (finding: DraftFinding)
  * findings here, keeping their own wording, because that wording is
  * already written for a human who has to act on it.
  */
-function validateCapabilities(draft: WorkshopDraft, add: (finding: DraftFinding) => void): void {
+function validateCapabilities(
+  draft: WorkshopDraft,
+  planLimits: PlanLimits | undefined,
+  add: (finding: DraftFinding) => void,
+): void {
   const result = validateCapabilityProfile(draft.capabilities);
   for (const issue of result.issues) {
     add({
@@ -306,6 +313,25 @@ function validateCapabilities(draft: WorkshopDraft, add: (finding: DraftFinding)
       message: issue.message,
       subject: issue.subject ?? issue.entity,
     });
+  }
+
+  // Plan capability entitlement: if the chosen plan explicitly restricts allowedModules (length > 0),
+  // ensure every active capability whose governing module is defined is permitted.
+  if (planLimits?.allowedModules && planLimits.allowedModules.length > 0) {
+    const allowed = new Set(planLimits.allowedModules);
+    for (const key of CAPABILITY_KEYS) {
+      if (!isCapabilityActive(draft.capabilities, key)) continue;
+      const def = capabilityDefinition(key);
+      if (def?.governingModule && !allowed.has(def.governingModule)) {
+        add({
+          code: "CAPABILITY_NOT_PERMITTED_BY_PLAN",
+          severity: "BLOCKER",
+          stage: "CAPABILITIES",
+          message: `${key} requires the ${def.governingModule} module, which is not permitted under the selected plan.`,
+          subject: key,
+        });
+      }
+    }
   }
 }
 
@@ -331,6 +357,20 @@ function validateSpecialization(draft: WorkshopDraft, add: (finding: DraftFindin
         message: `"${pack.title}" does not apply to this workshop's category. Changing the category above dropped it.`,
         subject: key,
       });
+    }
+
+    if (pack.requiredCapabilities && pack.requiredCapabilities.length > 0) {
+      for (const requiredCap of pack.requiredCapabilities) {
+        if (!isCapabilityActive(draft.capabilities, requiredCap)) {
+          add({
+            code: "SPECIALIZATION_CAPABILITY_INCOMPATIBLE",
+            severity: "BLOCKER",
+            stage: "SPECIALIZATION",
+            message: `Specialization "${pack.title}" requires capability ${requiredCap}, which is not active for this workshop.`,
+            subject: key,
+          });
+        }
+      }
     }
   }
 

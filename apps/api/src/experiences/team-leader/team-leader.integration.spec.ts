@@ -15,11 +15,12 @@ import { PrismaClient } from "@mop/database";
 import { DEFAULT_ROLE_PERMISSIONS } from "@mop/shared";
 import { TeamLeaderService } from "./team-leader.service";
 import { AssetHistoryService } from "../../systems/operations/vehicle-history/asset-history.service";
+import { WorkshopHistoryService } from "../../systems/operations/history/workshop-history.service";
 import type { PrismaService } from "../../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
-const service = new TeamLeaderService(asService, new AssetHistoryService(asService));
+const service = new TeamLeaderService(asService, new WorkshopHistoryService(asService, new AssetHistoryService(asService)));
 
 const SUFFIX = `tl-${Date.now()}`;
 let planId: string;

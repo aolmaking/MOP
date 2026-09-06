@@ -29,8 +29,8 @@
     <!-- Not an error and not a failure: they simply have not started
          anything. It points at the one place that can change that. -->
     <div class="state">
-      <p class="state-title">Nothing started</p>
-      <p class="state-body">Pick a job to begin.</p>
+      <p class="state-title">No active work in progress</p>
+      <p class="state-body">You don't have a car in your bay right now. Pick an assigned job from My Work to begin.</p>
       <a class="big-button" routerLink="/tech/work">My work</a>
     </div>
   }
@@ -39,17 +39,25 @@
     @if (job(); as j) {
       <!-- The entire card is the tap target. Nothing to aim at. -->
       <button class="now" type="button" (click)="openCard()">
-        <span class="now-label">On now</span>
+        <span class="now-label">{{ postureLabel(j) }}</span>
         <span class="now-plate"><mop-identifier [value]="j.identifier ?? '—'" /></span>
         <span class="now-customer">{{ j.customerName }}</span>
 
+        @if (j.complaint) {
+          <p class="now-complaint">
+            <strong class="now-complaint-label">Customer concern:</strong> {{ j.complaint }}
+          </p>
+        }
+
         <span class="now-facts">
-          <span class="now-fact">{{ j.myOpenTaskCount }} of {{ j.myTaskCount }} left</span>
+          <span class="now-fact">{{ j.myOpenTaskCount }} of {{ j.myTaskCount }} tasks left</span>
           <span class="now-fact">{{ since(j.sinceHours) }}</span>
         </span>
 
-        @if (j.blocked) {
-          <span class="now-blocked">Blocked — you reported a problem on this job</span>
+        @if (statusExplanation(j); as explanation) {
+          <span class="now-status-banner" [class.now-status-banner--danger]="j.blocked">
+            {{ explanation }}
+          </span>
         }
 
         @if (j.inspectionDeclined) {

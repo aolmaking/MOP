@@ -1,9 +1,19 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { gateDefinition, type GateEvaluation, type GateKey } from "@mop/shared";
+import {
+  PART_REQUEST_GRAPH,
+  canTransition,
+  gateDefinition,
+  type GateEvaluation,
+  type GateKey,
+} from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
+import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 import { WorkOrderLifecycleService } from "../../systems/operations/work-order-lifecycle.service";
 import { AssetHistoryService } from "../../systems/operations/vehicle-history/asset-history.service";
+import { WorkshopHistoryService } from "../../systems/operations/history/workshop-history.service";
+import type { TechnicianHistoryBrief } from "../../systems/operations/history/workshop-history.types";
+import { SpecializationService, type DefinitionSummary, type EntrySummary } from "../../systems/people/specialization/specialization.service";
 
 export interface TechnicianJob {
   readonly workOrderId: string;
@@ -52,14 +62,77 @@ export interface WorkCardPart {
   /** Human words for the state, never the enum. */
   readonly statusText: string;
   readonly waitingOn: "STORE" | "YOU" | "NOBODY";
+  /** The one action available to the technician right now, if any. */
+  readonly action: "RECEIVE" | "MARK_USED" | null;
   /**
    * Every action available to the technician right now -- plural, because
    * a received part offers a real choice (fit it, or send it back), not
    * a single next step. Empty when nothing is theirs to do.
    */
   readonly actions: readonly ("RECEIVE" | "MARK_USED" | "RETURN" | "RESPOND_CLARIFICATION")[];
-  /** What the store actually asked, when RESPOND_CLARIFICATION is one of the actions above. */
+  /**
+   * Whether sending this part back is a move this workshop actually has.
+   *
+   * Asked of the part-request graph under the tenant's own capability
+   * profile rather than compared against a list of statuses here: a
+   * workshop with PART_RETURNS removed has no RETURN_REQUESTED edge at
+   * all, and a hardcoded `status === "RECEIVED_BY_TECHNICIAN"` would put
+   * a button on the tablet that the service layer then refuses. The
+   * button dies with the capability that owns it.
+   */
+  readonly returnable: boolean;
+  /** The store asked a question about the return and is waiting on an answer. */
+  readonly clarificationPending: boolean;
+  /** What they asked, when they asked something. */
   readonly clarificationQuestion: string | null;
+}
+
+/**
+ * The single lifecycle move a technician can make on the JOB itself
+ * right now -- not on a task, not on a part.
+ *
+ * Derived from `WorkOrderLifecycleService.availableIntents`, which asks
+ * the workshop's effective graph, so a profile that routes around
+ * inspection never offers "Start inspection". The label is written here
+ * because it is technician-facing wording, not a graph fact.
+ */
+export interface WorkCardPrimaryAction {
+  readonly intent: "START_INSPECTION" | "START_WORK";
+  readonly label: string;
+}
+
+/**
+ * Mission 1 on the Work Card: where the inspection stands, and whether
+ * repair work is legal yet.
+ *
+ * This is the server's answer, not the page's opinion. A disabled button
+ * is not enforcement -- anyone can open developer tools on a workshop
+ * tablet and call the endpoint directly -- so the card reports the same
+ * decision the write paths will make, and the UI's job is only to say it
+ * clearly. `lockReason` is the sentence the technician reads; it comes
+ * from the same lifecycle service that would refuse the request.
+ */
+export interface WorkCardInspection {
+  readonly id: string | null;
+  readonly state: "REQUIRED" | "IN_PROGRESS" | "COMPLETED" | "DECLINED";
+  /** When the diagnosis finished, for the card to show it was done first. */
+  readonly completedAt: string | null;
+  /** How long it took, when the workshop tracks time. */
+  readonly actualMinutes: number | null;
+  /** Findings recorded against this job so far. */
+  readonly faultCount: number;
+}
+
+export type FindingDecisionStatus = "NOT_REQUESTED" | "PENDING" | "APPROVED" | "REJECTED";
+
+export interface WorkCardFinding {
+  readonly id: string;
+  readonly description: string;
+  readonly severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  readonly code: string | null;
+  readonly recommendedService: string | null;
+  readonly inspectionId: string | null;
+  readonly decisionStatus: FindingDecisionStatus;
 }
 
 export interface WorkCard {
@@ -70,9 +143,27 @@ export interface WorkCard {
   readonly complaint: string | null;
   readonly inspectionDeclined: boolean;
   readonly timeTracking: "OFF" | "OPTIONAL" | "REQUIRED";
+  /** Mission 1. Always present -- a job with no inspection still has a state. */
+  readonly inspection: WorkCardInspection;
+  /**
+   * The list of findings logged against this work order, including their
+   * customer decision status.
+   */
+  readonly findings: readonly WorkCardFinding[];
+  /**
+   * Whether repair work is legal on this job right now, asked of the same
+   * authority that guards every write.
+   */
+  readonly repairLocked: boolean;
+  /** Why repair is locked, in the technician's words. Null when it is not. */
+  readonly repairLockReason: string | null;
   readonly tasks: readonly TechnicianTask[];
   readonly parts: readonly WorkCardPart[];
+  readonly specializationForms: readonly DefinitionSummary[];
+  readonly specializationEntries: readonly EntrySummary[];
   readonly finish: FinishCheck;
+  /** Null when the job is not waiting on a move only this technician can make. */
+  readonly primaryAction: WorkCardPrimaryAction | null;
 }
 
 /**
@@ -138,7 +229,10 @@ export class TechnicianWorkViewService {
     private readonly prisma: PrismaService,
     private readonly lifecycle: WorkOrderLifecycleService,
     private readonly assetHistory: AssetHistoryService,
+    private readonly workshopHistory: WorkshopHistoryService,
     private readonly policies: PolicyResolutionService,
+    private readonly capabilities: CapabilityResolutionService,
+    private readonly specialization?: SpecializationService,
   ) {}
 
   async myWork(staffUserId: string, tenantId: string): Promise<readonly TechnicianJob[]> {
@@ -203,7 +297,12 @@ export class TechnicianWorkViewService {
    */
   async activeJob(staffUserId: string, tenantId: string): Promise<TechnicianJob | null> {
     const work = await this.myWork(staffUserId, tenantId);
-    return work.find((job) => job.active) ?? null;
+    return (
+      work.find((job) => job.active) ??
+      work.find((job) => job.status === "UNDER_INSPECTION") ??
+      work.find((job) => job.status === "REGISTERED") ??
+      null
+    );
   }
 
   async workCard(staffUserId: string, tenantId: string, workOrderId: string): Promise<WorkCard> {
@@ -246,10 +345,63 @@ export class TechnicianWorkViewService {
       throw new NotFoundException({ code: "work_order_not_found", message: "That job is not assigned to you." });
     }
 
-    const [complaints, timeTracking] = await Promise.all([
+    const [complaints, timeTracking, profile, intents, inspection, repairLockReason, faults, [specializationForms, specializationEntries]] = await Promise.all([
       this.assetHistory.complaintText(tenantId, [workOrder.id]),
       this.policies.resolveValue(tenantId, "TIME_TRACKING") as Promise<"OFF" | "OPTIONAL" | "REQUIRED">,
+      this.capabilities.resolveCurrent(tenantId),
+      this.lifecycle.availableIntents(workOrder.id),
+      this.inspectionState(workOrder.id, workOrder.status, workOrder.inspectionDeclined),
+      // Asked of the authority itself rather than inferred from status.
+      // The card must say exactly what the write paths will do, or the
+      // technician is told one thing and refused another.
+      this.repairLockReason(workOrder.id),
+      this.prisma.fault.findMany({
+        where: { workOrderId: workOrder.id, tenantId },
+        select: {
+          id: true,
+          description: true,
+          severity: true,
+          code: true,
+          recommendedService: true,
+          inspectionId: true,
+          decisionItems: {
+            where: { tenantId },
+            select: { id: true, decision: true },
+            orderBy: { id: "desc" },
+            take: 1,
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+      this.specialization
+        ? Promise.all([
+            this.specialization.listDefinitions(tenantId),
+            this.specialization.entriesFor(tenantId, workOrder.id),
+          ])
+        : Promise.resolve([[], []] as const),
     ]);
+
+    const findings: WorkCardFinding[] = faults.map((f) => {
+      const latestDecision = f.decisionItems[0]?.decision;
+      const decisionStatus: FindingDecisionStatus =
+        latestDecision === "PENDING"
+          ? "PENDING"
+          : latestDecision === "APPROVED"
+            ? "APPROVED"
+            : latestDecision === "REJECTED"
+              ? "REJECTED"
+              : "NOT_REQUESTED";
+
+      return {
+        id: f.id,
+        description: f.description,
+        severity: f.severity as WorkCardFinding["severity"],
+        code: f.code,
+        recommendedService: f.recommendedService,
+        inspectionId: f.inspectionId,
+        decisionStatus,
+      };
+    });
 
     // Every part request on the job, not only this technician's own:
     // a second technician's request is still what is holding the car,
@@ -263,6 +415,10 @@ export class TechnicianWorkViewService {
         status: true,
         inventoryItem: { select: { name: true, sku: true } },
         issuedItems: { select: { quantity: true } },
+        // The question the store asked, read from the return request
+        // itself. Without it the card can say "they asked you
+        // something" and never say what, which is a prompt a technician
+        // cannot answer.
         returnRequest: { select: { clarificationQuestion: true } },
       },
       orderBy: { createdAt: "asc" },
@@ -276,6 +432,10 @@ export class TechnicianWorkViewService {
       complaint: complaints.get(workOrder.id) ?? null,
       inspectionDeclined: workOrder.inspectionDeclined,
       timeTracking,
+      inspection,
+      findings,
+      repairLocked: repairLockReason !== null,
+      repairLockReason,
       tasks: workOrder.tasks.map((task) => ({
         id: task.id,
         title: task.title,
@@ -299,22 +459,40 @@ export class TechnicianWorkViewService {
           status: request.status,
           statusText: state.text,
           waitingOn: state.waitingOn,
+          action: state.actions.includes("RECEIVE")
+            ? "RECEIVE"
+            : state.actions.includes("MARK_USED")
+              ? "MARK_USED"
+              : null,
           actions: state.actions,
+          returnable: canTransition(PART_REQUEST_GRAPH, profile, request.status, "RETURN_REQUESTED"),
+          clarificationPending: request.status === "RETURN_CLARIFICATION_REQUESTED",
           clarificationQuestion: request.returnRequest?.clarificationQuestion ?? null,
         };
       }),
+      specializationForms,
+      specializationEntries,
       finish: await this.finishCheck(workOrderId),
+      primaryAction: primaryActionFor(intents),
     };
   }
 
   /**
    * "Previous history detected" (docs/POLICY_DECISION_INVENTORY.md
-   * §8.B, P-81) -- reuses the same ownership check `workCard` already
-   * does (a technician can only pull history for a job actually
-   * assigned to them), then hands off to the shared, role-agnostic
-   * history builder.
+   * §8.B, P-81) -- what this vehicle has been through, arranged around
+   * the decision the technician is about to make.
+   *
+   * Reuses the exact ownership check `workCard` already does: a
+   * technician can only pull history for a job actually assigned to
+   * them, and the asset id is read from the job THEY are assigned to
+   * rather than accepted from the caller. A route that took an assetId
+   * would let any technician read any vehicle in the workshop.
+   *
+   * The projection itself comes from the shared history service, which
+   * omits money entirely for this reader -- the price fields are absent
+   * from the response, not blanked in the template.
    */
-  async vehicleHistory(staffUserId: string, tenantId: string, workOrderId: string) {
+  async vehicleHistory(staffUserId: string, tenantId: string, workOrderId: string): Promise<TechnicianHistoryBrief> {
     const workOrder = await this.prisma.workOrder.findFirst({
       where: {
         id: workOrderId,
@@ -330,7 +508,71 @@ export class TechnicianWorkViewService {
       throw new NotFoundException({ code: "work_order_not_found", message: "That job is not assigned to you." });
     }
 
-    return this.assetHistory.build(tenantId, workOrder.assetId, workOrderId);
+    return this.workshopHistory.technicianBrief(tenantId, workOrder.assetId, workOrderId);
+  }
+
+  /**
+   * Mission 1's state, from stored facts only.
+   *
+   * DECLINED outranks everything: a customer who refused a diagnostic is
+   * not looking at an outstanding step, and showing them one would put a
+   * permanent red mark on a job that is behaving exactly as agreed.
+   *
+   * COMPLETED needs a completed row, not merely an existing one -- the
+   * same distinction the finish gate now makes, so the card and the gate
+   * cannot disagree about whether the inspection is done.
+   */
+  private async inspectionState(
+    workOrderId: string,
+    status: string,
+    declined: boolean,
+  ): Promise<WorkCardInspection> {
+    const [latest, faultCount] = await Promise.all([
+      this.prisma.inspection.findFirst({
+        where: { workOrderId },
+        orderBy: [{ completedAt: "desc" }, { startedAt: "desc" }],
+        select: { id: true, completedAt: true, actualMinutes: true },
+      }),
+      this.prisma.fault.count({ where: { workOrderId } }),
+    ]);
+
+    const state: WorkCardInspection["state"] = declined
+      ? "DECLINED"
+      : latest?.completedAt
+        ? "COMPLETED"
+        : latest || status === "UNDER_INSPECTION"
+          ? "IN_PROGRESS"
+          : "REQUIRED";
+
+    return {
+      id: latest?.id ?? null,
+      state,
+      completedAt: latest?.completedAt?.toISOString() ?? null,
+      actualMinutes: latest?.actualMinutes ?? null,
+      faultCount,
+    };
+  }
+
+  /**
+   * Why repair work is locked, or null when it is not.
+   *
+   * Deliberately implemented by CALLING the guard and catching its
+   * refusal rather than by re-deriving the rule. Two copies of an
+   * authorization rule is how a screen ends up promising something the
+   * server then refuses -- and this way the sentence the technician reads
+   * is literally the sentence the write path would have produced.
+   */
+  private async repairLockReason(workOrderId: string): Promise<string | null> {
+    try {
+      await this.lifecycle.assertOperationalWorkAuthorized(workOrderId);
+      return null;
+    } catch (error) {
+      const response = (error as { response?: { code?: string; message?: string } }).response;
+      if (response?.code === "work_not_authorized" || response?.code === "work_order_closed") {
+        return response.message ?? "This job is not authorized for work yet.";
+      }
+      throw error;
+    }
   }
 
   /**
@@ -367,6 +609,29 @@ export class TechnicianWorkViewService {
       })),
     };
   }
+}
+
+/**
+ * The one job-level move to put in front of the technician, in the
+ * technician's words.
+ *
+ * Only the two intents a technician has a door for. `availableIntents`
+ * also returns moves that belong to other people (a manager's review
+ * decision, the store's part hand-over), and offering those here would
+ * put a button on the tablet that the controller's own permission check
+ * then refuses -- a dead button, which is the thing the surface sweep
+ * exists to eliminate.
+ *
+ * At most one of the two is ever live: they leave from different
+ * statuses (REGISTERED and APPROVED_FOR_WORK). The order below is
+ * therefore a tie-break that never fires, kept explicit so a future
+ * graph change picks the earlier stage rather than whichever the Set
+ * happened to yield first.
+ */
+function primaryActionFor(intents: readonly string[]): WorkCardPrimaryAction | null {
+  if (intents.includes("START_INSPECTION")) return { intent: "START_INSPECTION", label: "Start inspection" };
+  if (intents.includes("START_WORK")) return { intent: "START_WORK", label: "Start work" };
+  return null;
 }
 
 /**

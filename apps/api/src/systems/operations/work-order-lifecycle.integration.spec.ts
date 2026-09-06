@@ -145,6 +145,29 @@ async function settleInvoice(fixture: Fixture, workOrderId: string) {
   });
 }
 
+/**
+ * A completed inspection, recorded before the job is approved for work.
+ *
+ * The APPROVE edges carry `inspection_completed`, so this is part of the
+ * legal route now rather than something a test can add afterwards -- which
+ * is the point of the gate: an inspection written after the repair used to
+ * satisfy the finish gate identically to one done before it.
+ */
+async function inspect(tenantId: string, workOrderId: string) {
+  const now = new Date();
+  await prisma.inspection.create({
+    data: {
+      tenantId,
+      workOrderId,
+      technicianId: "tech-1",
+      type: "QUICK",
+      fields: {},
+      startedAt: now,
+      completedAt: now,
+    },
+  });
+}
+
 async function drive(workOrderId: string, intents: readonly WorkflowIntent[]) {
   const path: string[] = [];
   for (const intent of intents) {
@@ -161,6 +184,8 @@ async function cleanup(fixture: Fixture) {
   await prisma.operationEvent.deleteMany({ where });
   await prisma.auditLog.deleteMany({ where });
   await prisma.invoice.deleteMany({ where });
+  await prisma.fault.deleteMany({ where });
+  await prisma.inspection.deleteMany({ where });
   await prisma.workOrder.deleteMany({ where });
   await prisma.asset.deleteMany({ where });
   await prisma.customer.deleteMany({ where });
@@ -181,7 +206,12 @@ describe("a work order reaches CLOSED under three different capability profiles"
     fixtures.push(fixture);
     const workOrder = await newWorkOrder(fixture);
 
-    const toWork = await drive(workOrder.id, ["REGISTER", "START_INSPECTION", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
+    // Recorded while the job is UNDER_INSPECTION, which is when it really
+    // happens -- APPROVE will not pass its gate without it.
+    await drive(workOrder.id, ["REGISTER", "START_INSPECTION"]);
+    await inspect(fixture.tenantId, workOrder.id);
+
+    const toWork = ["REGISTERED", "UNDER_INSPECTION", ...(await drive(workOrder.id, ["REQUEST_APPROVAL", "APPROVE", "START_WORK"]))];
     expect(toWork).toEqual([
       "REGISTERED",
       "UNDER_INSPECTION",
@@ -190,12 +220,8 @@ describe("a work order reaches CLOSED under three different capability profiles"
       "IN_PROGRESS",
     ]);
 
-    // Inspection exists, no tasks, no decisions, no blockers -- the finish
-    // gates pass on their own merits, not because they were skipped.
-    await prisma.inspection.create({
-      data: { tenantId: fixture.tenantId, workOrderId: workOrder.id, technicianId: "tech-1", type: "QUICK", fields: {} },
-    });
-
+    // No tasks, no decisions, no blockers -- the finish gates pass on
+    // their own merits, not because they were skipped.
     const rest = await drive(workOrder.id, ["FINISH", "REVIEW_PASSED", "QC_PASSED"]);
     expect(rest).toEqual(["READY_FOR_TEAM_REVIEW", "READY_FOR_QC", "PAYMENT_PENDING"]);
 
@@ -328,19 +354,17 @@ describe("a policy narrows the graph, for real, against Postgres", () => {
 
     // Clean job -- no faults at all -- finishes straight to invoicing.
     const clean = await newWorkOrder(fixture);
-    await drive(clean.id, ["REGISTER", "START_INSPECTION", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
-    await prisma.inspection.create({
-      data: { tenantId: fixture.tenantId, workOrderId: clean.id, technicianId: "tech-1", type: "QUICK", fields: {} },
-    });
+    await drive(clean.id, ["REGISTER", "START_INSPECTION"]);
+    await inspect(fixture.tenantId, clean.id);
+    await drive(clean.id, ["REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
     const cleanPath = await drive(clean.id, ["FINISH"]);
     expect(cleanPath).toEqual(["PAYMENT_PENDING"]);
 
     // Same shape, but this job carries a CRITICAL fault -- QC is not optional.
     const risky = await newWorkOrder(fixture);
-    await drive(risky.id, ["REGISTER", "START_INSPECTION", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
-    await prisma.inspection.create({
-      data: { tenantId: fixture.tenantId, workOrderId: risky.id, technicianId: "tech-1", type: "QUICK", fields: {} },
-    });
+    await drive(risky.id, ["REGISTER", "START_INSPECTION"]);
+    await inspect(fixture.tenantId, risky.id);
+    await drive(risky.id, ["REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
     await prisma.fault.create({
       data: { tenantId: fixture.tenantId, workOrderId: risky.id, description: "Brake line leak", severity: "CRITICAL" },
     });
@@ -350,10 +374,9 @@ describe("a policy narrows the graph, for real, against Postgres", () => {
     // A HIGH-severity fault, one notch below CRITICAL, still does not
     // trip it -- the fact is specifically about CRITICAL, not "any fault".
     const moderate = await newWorkOrder(fixture);
-    await drive(moderate.id, ["REGISTER", "START_INSPECTION", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
-    await prisma.inspection.create({
-      data: { tenantId: fixture.tenantId, workOrderId: moderate.id, technicianId: "tech-1", type: "QUICK", fields: {} },
-    });
+    await drive(moderate.id, ["REGISTER", "START_INSPECTION"]);
+    await inspect(fixture.tenantId, moderate.id);
+    await drive(moderate.id, ["REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
     await prisma.fault.create({
       data: { tenantId: fixture.tenantId, workOrderId: moderate.id, description: "Worn pad", severity: "HIGH" },
     });

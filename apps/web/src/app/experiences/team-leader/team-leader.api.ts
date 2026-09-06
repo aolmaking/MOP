@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import type { Observable } from 'rxjs';
+import type { PresentedJourney } from '../../domain/journey/workflow-strip';
 
 export interface TeamLeaderHome {
   readonly managedCount: number;
@@ -66,6 +67,18 @@ export class TeamLeaderApi {
 
   workOrders(): Observable<readonly ManagedWorkOrder[]> {
     return this.http.get<readonly ManagedWorkOrder[]>('/api/v1/team-leader/work-orders');
+  }
+
+  /**
+   * One job's live journey, in the managerial vocabulary.
+   *
+   * The same projection the technician working the job and the customer
+   * waiting for it are reading -- different words, one state. That is
+   * the point: a Team Leader chasing a job must never be looking at a
+   * different story than the person holding the spanner.
+   */
+  journey(workOrderId: string): Observable<PresentedJourney> {
+    return this.http.get<PresentedJourney>(`/api/v1/team-leader/work-orders/${workOrderId}/journey`);
   }
 
   reports(): Observable<readonly TechnicianPerformanceRow[]> {

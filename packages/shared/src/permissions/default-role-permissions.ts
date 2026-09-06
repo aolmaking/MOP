@@ -53,6 +53,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "reports.owner.view": true,
     "reports.company.view": true,
     "audit.own_tenant.view": true,
+    // The complete operational record of every customer and vehicle.
+    // Owner-level by default and nothing below it: the index alone
+    // exposes every customer the workshop has ever had, which is a
+    // different order of disclosure from the one job a manager or
+    // technician is working. They get history through their own scoped
+    // surfaces instead.
+    "history.workshop.view": true,
   },
   TENANT_ADMIN: {
     "dashboard.owner.view": true,
@@ -64,6 +71,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "reports.owner.view": true,
     "reports.company.view": true,
     "audit.own_tenant.view": true,
+    "history.workshop.view": true,
   },
   BRANCH_MANAGER: {
     "workorders.branch.view": true,

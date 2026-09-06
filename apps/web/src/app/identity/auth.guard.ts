@@ -14,5 +14,6 @@ export const authGuard: CanActivateFn = async (_route, state) => {
   const session = await authStore.bootstrap();
   if (session) return true;
 
-  return router.createUrlTree(['/login'], { queryParams: { redirectTo: state.url } });
+  const redirectTo = state.url && state.url !== '/' ? state.url : null;
+  return router.createUrlTree(['/login'], redirectTo ? { queryParams: { redirectTo } } : {});
 };

@@ -292,6 +292,7 @@ export class FinanceService {
       const invoice = await tx.invoice.create({
         data: {
           tenantId,
+          branchId: workOrder.branchId,
           workOrderId,
           invoiceNumber: await this.nextInvoiceNumber(tx, tenantId),
           subtotal: computed.subtotal,
@@ -665,6 +666,27 @@ export class FinanceService {
         code: "refund_not_pending",
         message: `This refund is already ${refund.status.toLowerCase()}.`,
       });
+    }
+
+    const authority = await this.policies.resolveValue(refund.tenantId, "REFUND_AUTHORITY");
+    if (authority === "OWNER_ONLY") {
+      const staffUser = await this.prisma.staffUser.findFirst({
+        where: { accountId: actor.accountId, tenantId: refund.tenantId },
+        select: { role: true },
+      });
+      if (staffUser?.role !== "TENANT_OWNER" && actor.actorType !== "PLATFORM") {
+        throw new ForbiddenException({
+          code: "refund_approval_restricted",
+          message: "Only the workshop owner may approve a refund under this workshop's policy.",
+        });
+      }
+    } else if (authority === "DIFFERENT_FROM_REQUESTER") {
+      if (refund.requestedById && refund.requestedById === actor.accountId) {
+        throw new ForbiddenException({
+          code: "self_approval_forbidden",
+          message: "You cannot approve a refund request that you created yourself.",
+        });
+      }
     }
 
     const creditNote = await this.prisma.$transaction(async (tx) => {

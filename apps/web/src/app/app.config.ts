@@ -13,14 +13,10 @@ export const appConfig: ApplicationConfig = {
     // declares it rather than reaching into ActivatedRoute and unwrapping
     // an observable to get one string.
     provideRouter(routes, withComponentInputBinding()),
-    // refreshInterceptor after errorInterceptor: interceptors run
-    // request-order left-to-right and response-order right-to-left, so
-    // this ordering puts refreshInterceptor closest to the backend --
-    // it sees the raw HttpErrorResponse (status 401) and, once it has
-    // either recovered or given up, whatever it produces is what
-    // errorInterceptor normalizes into a PresentedError. The reverse
-    // order would hand refreshInterceptor an already-normalized error
-    // with no HttpErrorResponse to inspect.
-    provideHttpClient(withFetch(), withInterceptors([errorInterceptor, refreshInterceptor]))
+    // Order matters: `refreshInterceptor` sits OUTSIDE `errorInterceptor`,
+    // so by the time it sees a failure the error is already the single
+    // PresentedError shape the rest of the app deals in, and its retry
+    // re-enters the chain normally.
+    provideHttpClient(withFetch(), withInterceptors([refreshInterceptor, errorInterceptor]))
   ]
 };

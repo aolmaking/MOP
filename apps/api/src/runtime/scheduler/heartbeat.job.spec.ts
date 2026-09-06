@@ -46,7 +46,7 @@ describe("HeartbeatJob", () => {
     job.onModuleInit();
     // onModuleInit fires the tick without awaiting it (boot must not
     // block on a lock acquisition), so give the microtask queue a turn.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
     expect(job.getLastRunAt()).not.toBeNull();
   });

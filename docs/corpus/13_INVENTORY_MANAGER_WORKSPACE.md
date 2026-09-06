@@ -4,7 +4,10 @@
 > **Purpose:** the storekeeper's whole job — every screen, every control, and what each one changes in the ledger.
 > **Authority:** DESCRIPTIVE.
 > **Scope:** the six Inventory Manager pages and `InventoryController`.
-> **Last verified:** 2026-09-01 against commit `a8c8bb5`.
+> **Last verified:** 2026-09-01 against commit `a8c8bb5`; the catalog-driven
+> part request (section appended at the end) verified 2026-09-03 against the
+> working tree, by `apps/api/src/testing/catalog-cart.http.spec.ts` and a
+> browser journey.
 > **Source of truth:** `apps/api/src/systems/inventory/`, `apps/web/src/app/experiences/inventory/`, `docs/detailed-specs/inventory-manager.md`, `docs/phases/PHASE_7.md`.
 > **Related:** 09 (the system beneath this workspace), 12 (the technician's half), 05 (permissions).
 
@@ -126,4 +129,91 @@ Net effect in the running product: the Returns queue can only ever be populated 
 | **Stock adjustment as a first-class action** | 🟡 — `inventory.stock.adjust` and the `ADJUSTMENT` movement type exist; reconciliation is not yet its own page, which doc 09 §1 argues it must eventually be |
 | **Inventory transfers between warehouses** | 🟡 — model, `TransferStatus` and `inventory.transfer.create` exist; no graph states, no endpoint, no page |
 | **Supplier orders** | 🟡 — model, `SupplierOrderStatus` and `inventory.supplier_order.create` exist; no endpoint completes the loop back to `SUPPLIER_RECEIPT` |
-| `WAREHOUSE_REVIEWING` / `IN_TRANSIT` / `WAITING_TRANSFER` / `WAITING_SUPPLIER` | ⚠️ read by Home and the requests view, written by nothing — gap G-INV-01 |
+
+---
+
+## Appendix A — Catalog Builder, the seventh page `[VERIFIED]`
+
+> Added 2026-09-03. Route `/inventory/catalog-builder`
+> (`apps/web/src/app/experiences/inventory/catalog-builder.*`). Proven by
+> `apps/api/src/testing/catalog-cart.http.spec.ts` and a browser journey.
+
+Catalog Control (page 2 above) answers "what is this item and what does
+it cost". Catalog Builder answers the question the storekeeper actually
+owns and previously could not express: **what will a technician see when
+they go looking for a part?**
+
+Three panels and a preview, on one route, because they are one decision:
+
+1. **Categories** — create, rename, nest one level, deactivate, and hide
+   from technicians. Each row carries its item count and filter count,
+   because both are what a manager needs before deactivating anything.
+   A banner counts parts filed under nothing at all, since those are
+   invisible to a technician browsing by category.
+2. **Filters** — invent a dimension ("Vehicle Type") and give it values
+   (Sedan, SUV, Truck). Each value shows how many parts already carry
+   it, read before hiding it.
+3. **Which filters each category offers** — set as a whole set per
+   category rather than one toggle at a time, because the manager is
+   answering "what does someone filtering brake pads need?" once, not
+   five times.
+4. **What the technician will see** — the preview.
+
+Splitting these across three routes would mean creating a filter,
+navigating away, and hoping you remembered to attach it.
+
+### A.1 The preview is not a mock-up
+
+It calls `GET /inventory/catalog-preview`, which is
+`CatalogBrowseService.browse` — the same method, with the same
+arguments, that answers the technician's own page. A category left
+`technicianVisible: false` vanishes from both together; a category with
+no filters attached says so in the preview, in the words the manager
+needs ("A technician browsing it can only search and scroll").
+
+A preview drawn from local form state would agree with the form and
+disagree with the product, which is the exact lie a preview exists to
+prevent.
+
+### A.2 Nothing here deletes
+
+A category with parts filed under it and a filter value stamped on a
+hundred of them are both referenced by records that outlive the decision
+to stop using them. Deactivating removes them from the technician's
+browse while leaving every existing part readable — which a delete
+cannot do.
+
+### A.3 Permissions
+
+Every write on this page is behind `inventory.catalog.manage`, which
+`INVENTORY_MANAGER` holds by default and `TECHNICIAN` does not. The
+spec asserts a technician is refused the configuration endpoint, the
+preview endpoint, and category creation. The technician's own catalogue
+read is behind `inventory.request.create` — consuming the catalogue and
+authoring it are different rights.
+
+### A.4 What the item editor gained
+
+Catalog Control's editor now files a part under a category (a select,
+not free text) and stamps it with the filter values **that category and
+its parent offer** — so a wiper blade is never offered "Engine Size".
+`imageUrl` and `summary` are new: a technician recognises a part by
+sight before they read its name, and `summary` is the one line under
+the name on their card (distinct from `notes`, which stays the
+storekeeper's own memo and is never shown).
+
+### A.5 Ordering
+
+Categories, filters and filter values each carry a `sortOrder` that the
+technician's browse honours, and Catalog Builder sets it with up/down
+controls. Alphabetical is a stranger's guess: a workshop that does
+brakes all day wants Brakes first.
+
+Each move sends the **whole sibling group**, not one row's new number —
+a single number is how two rows end up sharing a position and the order
+silently reverts. A list that omits a sibling, repeats one, or carries
+one from another workshop is refused (`reorder_mismatch`) rather than
+half-applied: it means the page is working from a stale picture, and
+ordering the rest would leave the missing row wherever it was with
+nothing to show anything went wrong.
+

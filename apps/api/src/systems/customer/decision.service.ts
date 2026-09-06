@@ -169,9 +169,17 @@ export class CustomerDecisionService {
   async read(token: string): Promise<PublicDecision> {
     const request = await this.resolve(token);
     if (request.status === "SENT") {
+      // `viewedAt` alongside the status, in the same write: the journey
+      // shows "the customer opened this, N hours ago", and a status with
+      // no timestamp can only ever answer the first half.
+      const viewedAt = new Date();
       await this.prisma.customerDecisionRequest
-        .updateMany({ where: { id: request.id, status: "SENT" }, data: { status: "VIEWED" } })
+        .updateMany({ where: { id: request.id, status: "SENT" }, data: { status: "VIEWED", viewedAt } })
         .catch(() => undefined);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (request as any).status = "VIEWED";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (request as any).viewedAt = viewedAt;
     }
     return this.present(request, await this.pricingVisible(request.tenantId), await this.approvalWeight(request.tenantId));
   }
@@ -336,7 +344,17 @@ export class CustomerDecisionService {
   async raiseAndSend(
     tenantId: string,
     workOrderId: string,
-    item: { readonly name: string; readonly explanation: string; readonly importance: string; readonly price: string; readonly laborPrice?: string },
+    item: {
+      readonly name: string;
+      readonly explanation: string;
+      readonly importance: string;
+      readonly price: string;
+      readonly laborPrice?: string;
+      /** The finding this answers -- see CustomerDecisionItem.faultId. */
+      readonly faultId?: string;
+      /** The catalogued service being proposed -- see CustomerDecisionItem.serviceKey. */
+      readonly serviceKey?: string;
+    },
     actor: StaffActor,
   ): Promise<{ readonly requestId: string; readonly secureToken: string }> {
     const workOrder = await this.prisma.workOrder.findUnique({
@@ -357,6 +375,23 @@ export class CustomerDecisionService {
     const total = add(item.price, laborPrice);
     const secureToken = randomBytes(24).toString("hex");
 
+    // A finding from ANOTHER job must not be citable here, for the same
+    // reason `createTask` refuses a recommendation from another job: a
+    // history that can be pointed at someone else's vehicle is worse than
+    // one with a gap in it, because it reads as evidence.
+    if (item.faultId) {
+      const fault = await this.prisma.fault.findFirst({
+        where: { id: item.faultId, tenantId, workOrderId },
+        select: { id: true },
+      });
+      if (!fault) {
+        throw new NotFoundException({
+          code: "fault_not_on_this_job",
+          message: "That finding does not belong to this job.",
+        });
+      }
+    }
+
     const created = await this.prisma.$transaction(async (tx) => {
       const request = await tx.customerDecisionRequest.create({
         data: {
@@ -375,6 +410,8 @@ export class CustomerDecisionService {
         data: {
           tenantId,
           decisionRequestId: request.id,
+          faultId: item.faultId ?? null,
+          serviceKey: item.serviceKey ?? null,
           name: item.name,
           explanation: item.explanation,
           importance: item.importance as SeverityLevel,
@@ -408,11 +445,10 @@ export class CustomerDecisionService {
     // own decision with its own gates -- it must not be able to roll back
     // the ask itself, and the ask must not roll back because a move it
     // only optionally implies was refused. REQUEST_APPROVAL covers the
-    // first ask on a job (REGISTERED or UNDER_INSPECTION); ASK_CUSTOMER
-    // covers a further ask raised mid-job (IN_PROGRESS). Exactly one
-    // applies given the work order's real state; the other is a routine,
-    // swallowed refusal, not a bug.
-    await this.moveIfPossible(workOrderId, ["REQUEST_APPROVAL", "ASK_CUSTOMER"], {
+    // first ask on a job (REGISTERED or UNDER_INSPECTION). Per F-008,
+    // mid-job questions leave the job IN_PROGRESS because WAITING_CUSTOMER
+    // would strand the work order.
+    await this.moveIfPossible(workOrderId, ["REQUEST_APPROVAL"], {
       accountId: actor.accountId,
       displayName: actor.displayName,
       actorType: "TENANT_STAFF",
@@ -517,6 +553,13 @@ export class CustomerDecisionService {
       throw new ConflictException({
         code: "decision_already_answered",
         message: "The customer has already answered this request, so it cannot be cancelled.",
+      });
+    }
+
+    if (["RESOLVED", "EXPIRED", "CANCELLED"].includes(request.status)) {
+      throw new ConflictException({
+        code: "decision_already_final",
+        message: "That decision is already final and cannot be cancelled.",
       });
     }
 
@@ -803,7 +846,7 @@ export class CustomerDecisionService {
     // Deliberately the same "not found" a wrong id or an out-of-scope one
     // gets -- a manager probing another branch's request ids should not
     // be able to tell a real id from a made-up one by the error shape.
-    if (!request || request.status === "CANCELLED") {
+    if (!request) {
       throw new NotFoundException({ code: "decision_not_found", message: "That decision request was not found." });
     }
     return request;

@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './identity/auth.guard';
+import { rootRedirectGuard } from './identity/root-redirect.guard';
 import { TEAM_API_BASE_PATH, TeamApi } from './experiences/branch-manager/team/team.api';
 
 export const routes: Routes = [
@@ -174,6 +175,14 @@ export const routes: Routes = [
         loadComponent: () => import('./experiences/owner/owner-home-page').then((m) => m.OwnerHomePage),
       },
       {
+        // The workshop's operational memory: every customer and vehicle
+        // that has ever been through, and everything that happened to
+        // them. Deliberately NOT the same page as 'audit' below, which
+        // answers a different question -- see the comment there.
+        path: 'history',
+        loadComponent: () => import('./experiences/owner/history/history-page').then((m) => m.OwnerHistoryPage),
+      },
+      {
         path: 'audit',
         loadComponent: () => import('./experiences/owner/audit-page').then((m) => m.AuditPage),
       },
@@ -301,6 +310,15 @@ export const routes: Routes = [
         loadComponent: () => import('./experiences/inventory/inventory-catalog').then((m) => m.InventoryCatalog),
       },
       {
+        // The catalog's STRUCTURE, as distinct from its items:
+        // categories, the filter vocabulary, which filters each category
+        // offers, and a preview of the technician's own browse. Its own
+        // route because it is configuration -- a manager visits it when
+        // the catalogue's shape changes, not when a price does.
+        path: 'catalog-builder',
+        loadComponent: () => import('./experiences/inventory/catalog-builder').then((m) => m.CatalogBuilder),
+      },
+      {
         path: 'reports',
         loadComponent: () => import('./experiences/inventory/inventory-reports').then((m) => m.InventoryReportsPage),
       },
@@ -335,6 +353,15 @@ export const routes: Routes = [
       {
         path: 'card/:id',
         loadComponent: () => import('./experiences/technician/tech-work-card').then((m) => m.TechWorkCard),
+      },
+      {
+        // Asking the store for parts: browse the workshop's own
+        // catalogue, filter it by whatever the inventory manager
+        // configured, build a basket, send it once. A page rather than a
+        // panel on the card -- shopping does not fit beside a fault form
+        // on a phone.
+        path: 'card/:id/parts',
+        loadComponent: () => import('./experiences/technician/parts-catalog').then((m) => m.PartsCatalog),
       },
     ],
   },
@@ -385,7 +412,7 @@ export const routes: Routes = [
   {
     // The fallback frame, for roles whose own shell is not built yet.
     path: '',
-    canActivate: [authGuard],
+    canActivate: [authGuard, rootRedirectGuard],
     loadComponent: () => import('./experiences/home/shell/shell').then((m) => m.Shell),
     children: [
       { path: '', loadComponent: () => import('./experiences/home/placeholder-home').then((m) => m.PlaceholderHome) },

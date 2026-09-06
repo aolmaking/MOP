@@ -17,6 +17,7 @@
  */
 
 import type { GateKey } from "./gates";
+import type { ModuleKey } from "../permissions/permission-manifest";
 
 export const CAPABILITY_KEYS = [
   "MULTI_BRANCH",
@@ -254,9 +255,17 @@ export interface RemovalPolicy {
   readonly customerSafeMessage?: string;
 }
 
+export type CapabilitySemanticType = "BOOLEAN" | "MODE_BASED";
+
 export interface CapabilityDefinition {
   readonly key: CapabilityKey;
   readonly owningSystem: OwningSystem;
+  /** Semantic type: binary toggle vs mode-based (e.g. internal vs external). */
+  readonly type: CapabilitySemanticType;
+  /** Supported runtime statuses in MOP (from CAPABILITY_STATUSES). */
+  readonly supportedStatuses: readonly CapabilityStatus[];
+  /** Canonical module that entitles this capability under Plan.allowedModules. */
+  readonly governingModule?: ModuleKey;
   /** Must be active for this capability to function. */
   readonly dependencies: readonly CapabilityKey[];
   /** Cannot be active at the same time as this capability. */
@@ -271,6 +280,8 @@ export interface CapabilityDefinition {
    * Enforced by the validator, not by convention.
    */
   readonly removal: RemovalPolicy | null;
+  /** Concrete runtime services, layers, and state machines that consume this capability. */
+  readonly runtimeConsumers: readonly string[];
 }
 
 // ---------------------------------------------------------------------------

@@ -17,6 +17,9 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
   {
     key: "MULTI_BRANCH",
     owningSystem: "OPERATIONS",
+    type: "BOOLEAN",
+    supportedStatuses: ["ENABLED", "DISABLED", "LOCKED"],
+    governingModule: "ORGANIZATION",
     dependencies: [],
     conflicts: [],
     affectedGates: [],
@@ -25,10 +28,6 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
     historicalRecordPolicy: "PRESERVE_ACTIVE",
     reversible: true,
     removal: {
-      // Rule 1: behaviour and presentation change, the data shape does
-      // not. The tenant keeps exactly one Branch row and branchId stays
-      // required, so re-enabling is a config change, not a migration,
-      // and records created meanwhile are still well-formed.
       behavior: "DROP_STEP",
       statesToDisable: [],
       gatesToDrop: [],
@@ -36,10 +35,14 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
       existingRecordsPolicy: "PRESERVE_READ_ONLY",
       orphanedRolePolicy: "READ_ONLY_ROLE",
     },
+    runtimeConsumers: ["PlanLimitsService", "StructureValidator", "SessionContext"],
   },
   {
     key: "MULTI_WAREHOUSE",
     owningSystem: "INVENTORY",
+    type: "BOOLEAN",
+    supportedStatuses: ["ENABLED", "DISABLED", "LOCKED"],
+    governingModule: "INVENTORY",
     dependencies: ["INVENTORY"],
     conflicts: [],
     affectedGates: [],
@@ -55,6 +58,7 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
       existingRecordsPolicy: "PRESERVE_READ_ONLY",
       orphanedRolePolicy: "HIDE_ROLE",
     },
+    runtimeConsumers: ["PlanLimitsService", "StructureValidator", "StockTransferService"],
   },
 
   // -------------------------------------------------------------------
@@ -63,6 +67,9 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
   {
     key: "INVENTORY",
     owningSystem: "INVENTORY",
+    type: "BOOLEAN",
+    supportedStatuses: ["ENABLED", "DISABLED", "READ_ONLY", "LOCKED"],
+    governingModule: "INVENTORY",
     dependencies: [],
     conflicts: [],
     affectedGates: ["parts.received_used_or_returned"],
@@ -71,26 +78,22 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
     historicalRecordPolicy: "PRESERVE_READ_ONLY",
     reversible: true,
     removal: {
-      // The case that proves the model. Dropping the parts gate checks is
-      // not a convenience -- leaving them in place is what strands every
-      // job in a workshop that has no way to issue or return a part.
       behavior: "REROUTE",
       statesToDisable: ["WAITING_PARTS"],
-      // No replacement edge is needed: a workshop without stock records a
-      // parts wait as a blocker (BlockerReason.WAITING_PART), and
-      // IN_PROGRESS <-> BLOCKED already exists unguarded.
-      // parts.no_pending_return belongs to PART_RETURNS, which depends on
-      // INVENTORY and therefore drops it itself when this goes.
       gatesToDrop: ["parts.received_used_or_returned"],
       gatesToKeep: ["approved_work_completed", "no_open_blocker", "customer_decisions_resolved"],
       existingRecordsPolicy: "PRESERVE_READ_ONLY",
       orphanedRolePolicy: "REQUIRE_REASSIGNMENT",
       customerSafeMessage: "We are waiting for a required part. The branch will update you when it arrives.",
     },
+    runtimeConsumers: ["PartRequestService", "StockService", "TenantCapabilityLayer", "WorkOrderLifecycleService", "StructureValidator"],
   },
   {
     key: "PART_RETURNS",
     owningSystem: "INVENTORY",
+    type: "BOOLEAN",
+    supportedStatuses: ["ENABLED", "DISABLED", "LOCKED"],
+    governingModule: "INVENTORY",
     dependencies: ["INVENTORY"],
     conflicts: [],
     affectedGates: ["parts.no_pending_return"],
@@ -106,10 +109,14 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
       existingRecordsPolicy: "REQUIRE_MANUAL_RESOLUTION",
       orphanedRolePolicy: "HIDE_ROLE",
     },
+    runtimeConsumers: ["PartRequestService", "TenantCapabilityLayer", "GateEvaluatorService"],
   },
   {
     key: "EXTERNAL_PARTS",
     owningSystem: "OPERATIONS",
+    type: "BOOLEAN",
+    supportedStatuses: ["ENABLED", "DISABLED", "LOCKED"],
+    governingModule: "OPERATIONS",
     dependencies: [],
     conflicts: [],
     affectedGates: ["parts.external_resolved"],
@@ -125,6 +132,7 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
       existingRecordsPolicy: "PRESERVE_READ_ONLY",
       orphanedRolePolicy: "HIDE_ROLE",
     },
+    runtimeConsumers: ["TechnicianWorkService", "GateEvaluatorService"],
   },
 
   // -------------------------------------------------------------------
@@ -133,6 +141,9 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
   {
     key: "TEAMS",
     owningSystem: "PEOPLE_PERFORMANCE",
+    type: "BOOLEAN",
+    supportedStatuses: ["ENABLED", "DISABLED", "LOCKED"],
+    governingModule: "TEAM_MANAGEMENT",
     dependencies: [],
     conflicts: [],
     affectedGates: [],
@@ -145,14 +156,17 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
       statesToDisable: [],
       gatesToDrop: [],
       gatesToKeep: [],
-      // Who supervised job #123 last year must stay answerable.
       existingRecordsPolicy: "PRESERVE_READ_ONLY",
       orphanedRolePolicy: "REQUIRE_REASSIGNMENT",
     },
+    runtimeConsumers: ["TeamSetupService", "TenantCapabilityLayer", "TechnicianShiftService"],
   },
   {
     key: "TEAM_REVIEW",
     owningSystem: "PEOPLE_PERFORMANCE",
+    type: "BOOLEAN",
+    supportedStatuses: ["ENABLED", "DISABLED", "LOCKED"],
+    governingModule: "TEAM_MANAGEMENT",
     dependencies: ["TEAMS"],
     conflicts: [],
     affectedGates: ["review.team_review_passed"],
@@ -163,17 +177,19 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
     removal: {
       behavior: "REROUTE",
       statesToDisable: ["READY_FOR_TEAM_REVIEW"],
-      // Finish already has QC and finance-direct routes in the base
-      // graph; removing the review edges is enough to reroute it.
       gatesToDrop: ["review.team_review_passed"],
       gatesToKeep: ["approved_work_completed"],
       existingRecordsPolicy: "MIGRATE_TO_TERMINAL",
       orphanedRolePolicy: "REQUIRE_REASSIGNMENT",
     },
+    runtimeConsumers: ["WorkOrderLifecycleService", "TenantCapabilityLayer", "GateEvaluatorService"],
   },
   {
     key: "QC",
     owningSystem: "OPERATIONS",
+    type: "BOOLEAN",
+    supportedStatuses: ["ENABLED", "DISABLED", "LOCKED"],
+    governingModule: "OPERATIONS",
     dependencies: [],
     conflicts: [],
     affectedGates: ["qc.passed"],
@@ -189,6 +205,7 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
       existingRecordsPolicy: "MIGRATE_TO_TERMINAL",
       orphanedRolePolicy: "HIDE_ROLE",
     },
+    runtimeConsumers: ["WorkOrderLifecycleService", "GateEvaluatorService"],
   },
 
   // -------------------------------------------------------------------
@@ -197,6 +214,9 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
   {
     key: "CUSTOMER_PORTAL",
     owningSystem: "OPERATIONS",
+    type: "BOOLEAN",
+    supportedStatuses: ["ENABLED", "DISABLED", "LOCKED"],
+    governingModule: "CUSTOMER_PORTAL",
     dependencies: [],
     conflicts: [],
     affectedGates: [],
@@ -205,11 +225,6 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
     historicalRecordPolicy: "PRESERVE_READ_ONLY",
     reversible: true,
     removal: {
-      // Rule 2: the STEP is core, the CHANNEL is optional. Customer
-      // approval does not disappear -- it moves to the counter, recorded
-      // by staff, with the same acknowledgement record and audit weight.
-      // Without this replacement edge, every decision request would
-      // strand at PENDING and no work could ever be approved.
       behavior: "REROUTE",
       statesToDisable: ["SENT", "VIEWED", "PARTIALLY_RESPONDED"],
       addTransitions: [
@@ -221,6 +236,7 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
       existingRecordsPolicy: "PRESERVE_READ_ONLY",
       orphanedRolePolicy: "HIDE_ROLE",
     },
+    runtimeConsumers: ["CustomerPortalController", "CustomerDecisionService", "TenantCapabilityLayer"],
   },
 
   // -------------------------------------------------------------------
@@ -229,6 +245,9 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
   {
     key: "FINANCE_CORE",
     owningSystem: "FINANCE_CORE",
+    type: "MODE_BASED",
+    supportedStatuses: ["ENABLED", "DISABLED", "EXTERNAL", "READ_ONLY", "LOCKED"],
+    governingModule: "FINANCE",
     dependencies: [],
     conflicts: [],
     affectedGates: ["payment.settled_or_policy_allows"],
@@ -237,9 +256,6 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
     historicalRecordPolicy: "PRESERVE_READ_ONLY",
     reversible: true,
     removal: {
-      // "External Finance Mode": MOP runs operations, money is handled
-      // outside. Delivery must still be reachable, so finish routes
-      // straight to delivery readiness.
       behavior: "EXTERNALIZE",
       statesToDisable: ["PAYMENT_PENDING"],
       addTransitions: [
@@ -257,23 +273,22 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
       existingRecordsPolicy: "PRESERVE_READ_ONLY",
       orphanedRolePolicy: "READ_ONLY_ROLE",
     },
+    runtimeConsumers: ["FinanceService", "PlatformService", "TenantCapabilityLayer", "GateEvaluatorService", "WorkOrderLifecycleService"],
   },
   {
     key: "BILLING",
     owningSystem: "BILLING",
+    type: "MODE_BASED",
+    supportedStatuses: ["ENABLED", "DISABLED", "EXTERNAL", "READ_ONLY", "LOCKED"],
+    governingModule: "FINANCE",
     dependencies: ["FINANCE_CORE"],
     conflicts: [],
     affectedGates: ["invoice.issued"],
     affectedRoles: [],
     affectedReports: ["reports.billing.compliance"],
-    // An issued legal invoice can never be rewritten or removed, only
-    // referenced -- which is why Billing is its own bounded system.
     historicalRecordPolicy: "EXTERNAL_REFERENCE_ONLY",
     reversible: true,
     removal: {
-      // "External Billing Mode": MOP tracks charges and payments; the
-      // legal invoice is issued elsewhere and its reference recorded.
-      // Finance Core is untouched -- this is the split earning its keep.
       behavior: "EXTERNALIZE",
       statesToDisable: [],
       gatesToDrop: ["invoice.issued"],
@@ -281,6 +296,7 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
       existingRecordsPolicy: "PRESERVE_READ_ONLY",
       orphanedRolePolicy: "READ_ONLY_ROLE",
     },
+    runtimeConsumers: ["BillingService", "FinanceService", "GateEvaluatorService"],
   },
 
   // -------------------------------------------------------------------
@@ -289,6 +305,9 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
   {
     key: "QUICK_INSPECTION",
     owningSystem: "OPERATIONS",
+    type: "MODE_BASED",
+    supportedStatuses: ["ENABLED", "DISABLED", "LOCKED"],
+    governingModule: "OPERATIONS",
     dependencies: [],
     conflicts: [],
     affectedGates: [],
@@ -297,7 +316,6 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
     historicalRecordPolicy: "PRESERVE_READ_ONLY",
     reversible: true,
     removal: {
-      // Inspection is core; Quick Inspection is a mode of it.
       behavior: "DROP_STEP",
       statesToDisable: [],
       gatesToDrop: [],
@@ -305,6 +323,7 @@ const DEFINITIONS: readonly CapabilityDefinition[] = [
       existingRecordsPolicy: "PRESERVE_READ_ONLY",
       orphanedRolePolicy: "HIDE_ROLE",
     },
+    runtimeConsumers: ["TechnicianInspectionService"],
   },
 ];
 

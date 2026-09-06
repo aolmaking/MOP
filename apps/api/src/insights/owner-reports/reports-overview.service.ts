@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { fromMinor, toMinor } from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import {
   percentChange,
@@ -43,6 +44,22 @@ export interface OverviewReport {
   readonly alerts: readonly OverviewAlert[];
 }
 
+function validInvoiceWhere(branchId?: string) {
+  return {
+    ...(branchId
+      ? {
+          OR: [{ branchId }, { branchId: null, workOrder: { branchId } }],
+        }
+      : {}),
+    NOT: {
+      OR: [
+        { status: "REFUNDED" as const },
+        { workOrder: { status: "CANCELLED" as const }, paid: 0 },
+      ],
+    },
+  };
+}
+
 /**
  * Executive Overview -- the first screen, per the reporting brief: "the
  * Owner should be able to quickly understand current business health."
@@ -57,7 +74,8 @@ export class ReportsOverviewService {
   async build(tenantId: string, params: ReportQueryParams): Promise<OverviewReport> {
     const range = resolveDateRange(params);
     const previous = previousPeriod(range);
-    const branchFilter = params.branchId ? { branchId: params.branchId } : {};
+    const branchId = params.branchId;
+    const branchFilter = branchId ? { branchId } : {};
 
     const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { currency: true } });
 
@@ -77,12 +95,13 @@ export class ReportsOverviewService {
       inventoryValue,
       lowStockCount,
       overdueInvoiceCount,
+      invoiceCountCurrent,
     ] = await Promise.all([
-      this.revenueInRange(tenantId, range, branchFilter),
-      this.revenueInRange(tenantId, previous, branchFilter),
-      this.collectedInRange(tenantId, range, branchFilter),
-      this.collectedInRange(tenantId, previous, branchFilter),
-      this.currentOutstanding(tenantId, branchFilter),
+      this.revenueInRange(tenantId, range, branchId),
+      this.revenueInRange(tenantId, previous, branchId),
+      this.collectedInRange(tenantId, range, branchId),
+      this.collectedInRange(tenantId, previous, branchId),
+      this.currentOutstanding(tenantId, branchId),
       this.prisma.workOrder.count({ where: { tenantId, ...branchFilter, createdAt: { gte: range.from, lte: range.to } } }),
       this.prisma.workOrder.count({ where: { tenantId, ...branchFilter, createdAt: { gte: previous.from, lte: previous.to } } }),
       this.prisma.workOrder.count({
@@ -96,12 +115,15 @@ export class ReportsOverviewService {
       this.activeCustomerCount(tenantId, previous, branchFilter),
       this.inventoryValue(tenantId),
       this.lowStockCount(tenantId),
-      this.overdueInvoiceCount(tenantId),
+      this.overdueInvoiceCount(tenantId, branchId),
+      this.prisma.invoice.count({
+        where: {
+          tenantId,
+          issuedAt: { gte: range.from, lte: range.to },
+          ...validInvoiceWhere(branchId),
+        },
+      }),
     ]);
-
-    const invoiceCountCurrent = await this.prisma.invoice.count({
-      where: { tenantId, workOrder: branchFilter, issuedAt: { gte: range.from, lte: range.to } },
-    });
 
     const alerts: OverviewAlert[] = [];
     if (lowStockCount > 0) {
@@ -141,34 +163,84 @@ export class ReportsOverviewService {
     return { current, previous, percentChange: percentChange(current, previous) };
   }
 
-  private async revenueInRange(tenantId: string, range: ReportDateRange, branchFilter: object): Promise<number> {
-    const result = await this.prisma.invoice.aggregate({
-      where: { tenantId, workOrder: branchFilter, issuedAt: { gte: range.from, lte: range.to } },
-      _sum: { total: true },
+  private async revenueInRange(tenantId: string, range: ReportDateRange, branchId: string | undefined): Promise<number> {
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        tenantId,
+        issuedAt: { gte: range.from, lte: range.to },
+        ...validInvoiceWhere(branchId),
+      },
+      select: { total: true },
     });
-    return toDecimalNumber(result._sum.total);
+
+    const creditNotes = await this.prisma.creditNote.findMany({
+      where: {
+        tenantId,
+        createdAt: { gte: range.from, lte: range.to },
+        invoice: validInvoiceWhere(branchId),
+      },
+      select: { amount: true },
+    });
+
+    let totalMinor = 0;
+    for (const inv of invoices) {
+      totalMinor += toMinor(inv.total.toFixed(2));
+    }
+    for (const cn of creditNotes) {
+      totalMinor = Math.max(0, totalMinor - toMinor(cn.amount.toFixed(2)));
+    }
+
+    return Number(fromMinor(totalMinor));
   }
 
-  private async collectedInRange(tenantId: string, range: ReportDateRange, branchFilter: object): Promise<number> {
-    const result = await this.prisma.payment.aggregate({
+  private async collectedInRange(tenantId: string, range: ReportDateRange, branchId: string | undefined): Promise<number> {
+    const payments = await this.prisma.payment.findMany({
       where: {
         tenantId,
         status: "CONFIRMED",
         createdAt: { gte: range.from, lte: range.to },
-        invoice: { workOrder: branchFilter },
+        invoice: validInvoiceWhere(branchId),
       },
-      _sum: { amount: true },
+      select: { amount: true },
     });
-    return toDecimalNumber(result._sum.amount);
+
+    const refunds = await this.prisma.refundRequest.findMany({
+      where: {
+        tenantId,
+        status: "COMPLETED",
+        decidedAt: { gte: range.from, lte: range.to },
+        invoice: validInvoiceWhere(branchId),
+      },
+      select: { amount: true },
+    });
+
+    let collectedMinor = 0;
+    for (const p of payments) {
+      collectedMinor += toMinor(p.amount.toFixed(2));
+    }
+    for (const r of refunds) {
+      collectedMinor = Math.max(0, collectedMinor - toMinor(r.amount.toFixed(2)));
+    }
+
+    return Number(fromMinor(collectedMinor));
   }
 
   /** Current exposure -- deliberately not date-ranged, this is "what is owed right now." */
-  private async currentOutstanding(tenantId: string, branchFilter: object): Promise<number> {
-    const result = await this.prisma.invoice.aggregate({
-      where: { tenantId, workOrder: branchFilter, balance: { gt: 0 } },
-      _sum: { balance: true },
+  private async currentOutstanding(tenantId: string, branchId: string | undefined): Promise<number> {
+    const unpaid = await this.prisma.invoice.findMany({
+      where: {
+        tenantId,
+        balance: { gt: 0 },
+        ...validInvoiceWhere(branchId),
+      },
+      select: { balance: true },
     });
-    return toDecimalNumber(result._sum.balance);
+
+    let balanceMinor = 0;
+    for (const inv of unpaid) {
+      balanceMinor += toMinor(inv.balance.toFixed(2));
+    }
+    return Number(fromMinor(balanceMinor));
   }
 
   /**
@@ -223,12 +295,19 @@ export class ReportsOverviewService {
     }).length;
   }
 
-  private async overdueInvoiceCount(tenantId: string): Promise<number> {
+  private async overdueInvoiceCount(tenantId: string, branchId: string | undefined): Promise<number> {
     const config = await this.prisma.financeConfiguration.findUnique({ where: { tenantId } });
     const dueInDays = config?.defaultDueInDays ?? 0;
     if (dueInDays <= 0) return 0;
 
     const cutoff = new Date(Date.now() - dueInDays * 24 * 60 * 60 * 1000);
-    return this.prisma.invoice.count({ where: { tenantId, balance: { gt: 0 }, issuedAt: { lt: cutoff } } });
+    return this.prisma.invoice.count({
+      where: {
+        tenantId,
+        balance: { gt: 0 },
+        issuedAt: { lt: cutoff },
+        ...validInvoiceWhere(branchId),
+      },
+    });
   }
 }

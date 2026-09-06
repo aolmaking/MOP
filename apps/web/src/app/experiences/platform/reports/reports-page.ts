@@ -1,6 +1,6 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { Subject, debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
+import { Subject, debounceTime, switchMap } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ErrorBanner } from '../../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../../ui/button/button.directive';
@@ -63,8 +63,13 @@ export class ReportsPage {
   constructor() {
     this.searches
       .pipe(
+        // Debounce only. NOT distinctUntilChanged: this subject carries
+        // `void`, so every emission compares equal to the last one and
+        // the operator drops all of them after the first. The symptom is
+        // a search that works once and then freezes on "Loading…" --
+        // including when it is cleared, because clearing is just another
+        // identical emission.
         debounceTime(400),
-        distinctUntilChanged(),
         switchMap(() => this.api.overview(this.filters())),
         takeUntilDestroyed(),
       )

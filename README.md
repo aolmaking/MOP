@@ -3,6 +3,8 @@
 
 **MOP is a multi-tenant SaaS platform for running maintenance and service workshops.** One codebase serves many workshops, each with its own staff, customers, branches, warehouses, inventory and pricing — and, critically, **its own shape**: a one-bay quick-service shop and a twelve-branch dealership run the same code with different capabilities switched on, where switching one off *rewires the process* rather than hiding a button. The product exists because a single vehicle repair is a distributed transaction across five roles who act at different times from different devices, each seeing a different slice of the truth, and at the end money changes hands based on what everyone believes happened. **MOP's job is to make sure that transaction never silently lies to anyone.**
 
+> **Status (2026-09-02):** a 14-day launch sprint (Strategy B — the Quick-Service Vertical) built and proved a real, deployable golden journey — intake through delivery — end to end over real HTTP against real Postgres. **Read [`docs/LAUNCH_HANDOVER.md`](docs/LAUNCH_HANDOVER.md) first** — what the product actually does today, everything deliberately deferred, and every known gap, each traced to a passing test or marked not-proven. [`docs/PAGE_INVENTORY.md`](docs/PAGE_INVENTORY.md) and [`docs/PHASE_MAP.md`](docs/PHASE_MAP.md) still hold the fuller, pre-sprint page-by-page and phase-by-phase picture.
+>
 > **This document is written for technical due diligence, not for marketing.** It distinguishes throughout between what was intended, what was designed, what was built, what was connected, and what was verified. Where the repository contradicts a document, the repository wins and the contradiction is named. Where something is unfinished, unreachable, or diverged from its design, this document says so with evidence.
 
 ---
@@ -226,6 +228,15 @@ flowchart TB
 **Each arrow is a real dependency, not a sequence.** Policies are only *asked* when their capabilities are active. Responsibility questions are only raised for capabilities that are on. Pages only appear for roles whose permissions survived every ceiling above them.
 
 **And it is also the failure chain.** A break high up is invisible until it surfaces low down: enabling `INVENTORY` in a workshop with no storekeeper produced part requests that **no account on earth was permitted to approve** — a capability turned on, a permission nobody held, and a job that stuck. That specific hole is why the Responsibility stage exists.
+
+> ### ▶ **Start here if you need to run MOP locally: [`docs/MOP-OPERATIONS-RUNBOOK.md`](docs/MOP-OPERATIONS-RUNBOOK.md)**
+>
+> The complete operations manual — fresh-machine install, database startup, environment variables, starting and stopping the stack, seeded login credentials, the golden journey step by step, per-role runbooks, testing, backups, troubleshooting and recovery. Every command in it was checked against this repository, and the ones that were actually executed are marked as such.
+>
+> **Read its first two warnings before anything else.** On the machine this was written on, `docker compose up -d` does **not** work (Docker is not installed) and PostgreSQL is started by a script that lives outside this repository; and the repository is worked on by several agents across several branches at once, so `git status -sb` is the first command of any session.
+
+Shorter path, plus the three environment traps this project has actually hit: **[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)**.
+
 
 ---
 
@@ -2545,6 +2556,7 @@ corepack pnpm db:deploy        # apply
 corepack pnpm db:test:prepare  # ← the trap: run after EVERY new migration
 corepack pnpm db:seed          # two differently-shaped tenants
 corepack pnpm db:seed:demo     # rich operational data on top
+>>>>>>> main
 ```
 
 ⚠️ **The seed is currently the only writer of `Task`** — demo data therefore contains something the running application cannot produce.
@@ -3482,6 +3494,8 @@ corepack pnpm run doctor && corepack pnpm test
 ```
 
 `doctor` checks every environment failure mode encountered so far and tells you how to fix each one.
+
+> The `docker compose` line above is the **portable** path. If Docker is unavailable — as it is on the primary development machine — see [§5 of the runbook](docs/MOP-OPERATIONS-RUNBOOK.md#5-database-startup) for the user-space PostgreSQL alternative.
 
 ### Commands
 

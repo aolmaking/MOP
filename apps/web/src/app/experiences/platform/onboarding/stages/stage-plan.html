@@ -84,17 +84,4 @@
     </div>
   </fieldset>
 
-  <div class="onb-field">
-    <label class="onb-checkbox">
-      <input
-        type="checkbox"
-        [checked]="store.draft().plan.enableDemoData"
-        (change)="store.patchPlan({ enableDemoData: $any($event.target).checked })"
-      />
-      <span>
-        <strong>Add demo data</strong>
-        <span class="onb-hint">Sample customers, staff and a few work orders, so the owner can explore before entering anything real.</span>
-      </span>
-    </label>
-  </div>
 </div>

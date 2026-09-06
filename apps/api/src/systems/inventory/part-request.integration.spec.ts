@@ -21,6 +21,7 @@ import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.se
 import { AuditService } from "../../audit/audit.service";
 import { TechnicianWorkViewService } from "../../experiences/technician/technician-work-view.service";
 import { AssetHistoryService } from "../operations/vehicle-history/asset-history.service";
+import { WorkshopHistoryService } from "../operations/history/workshop-history.service";
 import type { PrismaService } from "../../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
@@ -38,7 +39,15 @@ const lifecycle = new WorkOrderLifecycleService(
   policies,
 );
 const parts = new PartRequestService(asService, capabilities, stock, events, policies, lifecycle);
-const techView = new TechnicianWorkViewService(asService, lifecycle, new AssetHistoryService(asService), policies);
+const assetHistory = new AssetHistoryService(asService);
+const techView = new TechnicianWorkViewService(
+  asService,
+  lifecycle,
+  assetHistory,
+  new WorkshopHistoryService(asService, assetHistory),
+  policies,
+  capabilities,
+);
 
 const ACTOR = { accountId: "store-1", displayName: "Storekeeper", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `pr-${Date.now()}`;

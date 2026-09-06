@@ -132,13 +132,107 @@ export class InventoryApi {
     return this.http.get<InventoryHome>('/api/v1/inventory/home');
   }
 
-  catalog(filters: { q?: string; category?: string; stockTracked?: boolean; page?: number }): Observable<CatalogPage> {
+  catalog(filters: { q?: string; categoryId?: string; stockTracked?: boolean; page?: number }): Observable<CatalogPage> {
     const params: Record<string, string> = {};
     if (filters.q) params['q'] = filters.q;
-    if (filters.category) params['category'] = filters.category;
+    // 'none' is a real filter -- the items nobody has filed yet.
+    if (filters.categoryId) params['categoryId'] = filters.categoryId;
     if (filters.stockTracked !== undefined) params['stockTracked'] = String(filters.stockTracked);
     if (filters.page) params['page'] = String(filters.page);
     return this.http.get<CatalogPage>('/api/v1/inventory/catalog', { params });
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Catalog configuration
+   * ---------------------------------------------------------------- */
+
+  catalogConfiguration(): Observable<CatalogConfiguration> {
+    return this.http.get<CatalogConfiguration>('/api/v1/inventory/catalog-config');
+  }
+
+  /**
+   * Returns the created row, id included -- callers that create a
+   * category inline (from the item editor, or from Catalog Builder's own
+   * "new category" flow) need it immediately, to select it or to keep
+   * editing it, without a second round trip to find out what id it got.
+   */
+  createCategory(draft: CategoryDraft): Observable<CategoryRecord> {
+    return this.http.post<CategoryRecord>('/api/v1/inventory/catalog-config/categories', draft);
+  }
+
+  updateCategory(id: string, draft: CategoryDraft): Observable<CategoryRecord> {
+    return this.http.post<CategoryRecord>(`/api/v1/inventory/catalog-config/categories/${id}`, draft);
+  }
+
+  setCategoryAttributes(id: string, attributeIds: readonly string[]): Observable<unknown> {
+    return this.http.post(`/api/v1/inventory/catalog-config/categories/${id}/attributes`, { attributeIds });
+  }
+
+  /**
+   * The order a technician reads. Sends the whole sibling group, not one
+   * row's new position -- a single number is how two rows end up sharing
+   * one and the order quietly reverts to alphabetical.
+   */
+  reorderCategories(parentId: string | null, orderedIds: readonly string[]): Observable<unknown> {
+    return this.http.post('/api/v1/inventory/catalog-config/categories/reorder', {
+      orderedIds,
+      ...(parentId ? { parentId } : {}),
+    });
+  }
+
+  reorderAttributes(orderedIds: readonly string[]): Observable<unknown> {
+    return this.http.post('/api/v1/inventory/catalog-config/attributes/reorder', { orderedIds });
+  }
+
+  reorderAttributeValues(attributeId: string, orderedIds: readonly string[]): Observable<unknown> {
+    return this.http.post(`/api/v1/inventory/catalog-config/attributes/${attributeId}/values/reorder`, { orderedIds });
+  }
+
+  createAttribute(draft: AttributeDraft): Observable<AttributeRecord> {
+    return this.http.post<AttributeRecord>('/api/v1/inventory/catalog-config/attributes', draft);
+  }
+
+  updateAttribute(id: string, draft: AttributeDraft): Observable<AttributeRecord> {
+    return this.http.post<AttributeRecord>(`/api/v1/inventory/catalog-config/attributes/${id}`, draft);
+  }
+
+  /**
+   * Returns the created value, id included -- creating a filter's first
+   * value inline (right after inventing the filter) needs that id to
+   * stamp it on the part being edited in the same motion.
+   */
+  addAttributeValue(attributeId: string, draft: AttributeValueDraft): Observable<AttributeValueRecord> {
+    return this.http.post<AttributeValueRecord>(`/api/v1/inventory/catalog-config/attributes/${attributeId}/values`, draft);
+  }
+
+  updateAttributeValue(id: string, draft: AttributeValueDraft): Observable<AttributeValueRecord> {
+    return this.http.post<AttributeValueRecord>(`/api/v1/inventory/catalog-config/attribute-values/${id}`, draft);
+  }
+
+  /**
+   * "This is what the technician will see."
+   *
+   * Hits the same browse the technician's page hits, so a
+   * misconfiguration that would hide a part from them hides it here too.
+   */
+  catalogPreview(filters: {
+    q?: string;
+    categoryId?: string;
+    attributes?: Readonly<Record<string, readonly string[]>>;
+    inStockOnly?: boolean;
+    page?: number;
+  }): Observable<PreviewPage> {
+    const params: Record<string, string> = {};
+    if (filters.q) params['q'] = filters.q;
+    if (filters.categoryId) params['categoryId'] = filters.categoryId;
+    const encoded = Object.entries(filters.attributes ?? {})
+      .filter(([, values]) => values.length > 0)
+      .map(([attributeId, values]) => `${attributeId}:${values.join(',')}`)
+      .join(';');
+    if (encoded) params['attributes'] = encoded;
+    if (filters.inStockOnly) params['inStockOnly'] = 'true';
+    if (filters.page && filters.page > 1) params['page'] = String(filters.page);
+    return this.http.get<PreviewPage>('/api/v1/inventory/catalog-preview', { params });
   }
 
   createItem(draft: CatalogDraft): Observable<CatalogItem> {
@@ -196,8 +290,8 @@ export interface CatalogItem {
   readonly sku: string;
   readonly name: string;
   readonly itemType: string;
-  readonly category: string | null;
-  readonly subcategory: string | null;
+  readonly catalogCategoryId: string | null;
+  readonly categoryName: string | null;
   readonly compatibleCategories: readonly string[];
   readonly lowStockThreshold: number;
   readonly criticalStockThreshold: number;
@@ -210,21 +304,24 @@ export interface CatalogItem {
   readonly barcode: string | null;
   readonly supplier: string | null;
   readonly notes: string | null;
+  readonly imageUrl: string | null;
+  readonly summary: string | null;
+  readonly attributeValueIds: readonly string[];
   readonly onHand: number;
 }
 
 export interface CatalogPage {
   readonly items: readonly CatalogItem[];
   readonly total: number;
-  readonly categories: readonly string[];
+  /** The workshop's configured categories, flat, for the list filter. */
+  readonly categories: readonly { id: string; name: string; parentId: string | null; isActive: boolean }[];
 }
 
 export interface CatalogDraft {
   sku: string;
   name: string;
   itemType: string;
-  category?: string;
-  subcategory?: string;
+  catalogCategoryId?: string;
   compatibleCategories?: string[];
   lowStockThreshold?: number;
   criticalStockThreshold?: number;
@@ -236,6 +333,150 @@ export interface CatalogDraft {
   barcode?: string;
   supplier?: string;
   notes?: string;
+  imageUrl?: string;
+  summary?: string;
+  /**
+   * Absent means "leave the part's filters alone"; an empty array means
+   * "it has none". The editor always sends it, so a save is always the
+   * whole truth about this part.
+   */
+  attributeValueIds?: string[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Catalog configuration -- what the technician's catalog is made of.
+ * ------------------------------------------------------------------ */
+
+/** The bare shape a create/update on a category actually returns. */
+export interface CategoryRecord {
+  readonly id: string;
+  readonly name: string;
+  readonly parentId: string | null;
+}
+
+/** The bare shape a create/update on a filter actually returns. */
+export interface AttributeRecord {
+  readonly id: string;
+  readonly label: string;
+}
+
+/** The bare shape adding or editing a filter value actually returns. */
+export interface AttributeValueRecord {
+  readonly id: string;
+  readonly label: string;
+}
+
+export interface ConfiguredCategory {
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string;
+  readonly parentId: string | null;
+  readonly description: string | null;
+  readonly sortOrder: number;
+  readonly isActive: boolean;
+  readonly technicianVisible: boolean;
+  readonly itemCount: number;
+  readonly attributeIds: readonly string[];
+  readonly children: readonly ConfiguredCategory[];
+}
+
+export interface ConfiguredAttributeValue {
+  readonly id: string;
+  readonly value: string;
+  readonly label: string;
+  readonly sortOrder: number;
+  readonly isActive: boolean;
+  /** How many parts already carry it -- read before deactivating. */
+  readonly itemCount: number;
+}
+
+export interface ConfiguredAttribute {
+  readonly id: string;
+  readonly key: string;
+  readonly label: string;
+  readonly showOnCard: boolean;
+  readonly sortOrder: number;
+  readonly isActive: boolean;
+  readonly usedByCategoryIds: readonly string[];
+  readonly values: readonly ConfiguredAttributeValue[];
+}
+
+export interface CatalogConfiguration {
+  readonly categories: readonly ConfiguredCategory[];
+  readonly attributes: readonly ConfiguredAttribute[];
+  readonly uncategorisedItemCount: number;
+}
+
+export interface CategoryDraft {
+  name: string;
+  parentId?: string | null;
+  description?: string;
+  sortOrder?: number;
+  isActive?: boolean;
+  technicianVisible?: boolean;
+}
+
+export interface AttributeDraft {
+  label: string;
+  showOnCard?: boolean;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export interface AttributeValueDraft {
+  label: string;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+/** Exactly the shape the technician's page receives -- see PreviewPage. */
+export interface PreviewCard {
+  readonly id: string;
+  readonly sku: string;
+  readonly name: string;
+  readonly summary: string | null;
+  readonly imageUrl: string | null;
+  readonly categoryId: string | null;
+  readonly categoryName: string | null;
+  readonly sellingPrice: string;
+  readonly stockTracked: boolean;
+  readonly onHand: number;
+  readonly availability: 'IN_STOCK' | 'LOW' | 'OUT_OF_STOCK' | 'NOT_TRACKED';
+  readonly attributes: readonly { attributeId: string; label: string; valueLabel: string }[];
+}
+
+export interface PreviewCategoryNode {
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string;
+  readonly parentId: string | null;
+  readonly itemCount: number;
+  readonly children: readonly PreviewCategoryNode[];
+}
+
+export interface PreviewFilter {
+  readonly attributeId: string;
+  readonly key: string;
+  readonly label: string;
+  readonly options: readonly { valueId: string; value: string; label: string; count: number; selected: boolean }[];
+}
+
+/**
+ * The preview response.
+ *
+ * Identical to the technician's `PartsCatalogPage` because it comes from
+ * the same server method with the same arguments. Two shapes here would
+ * be the first crack in the guarantee the preview exists to give.
+ */
+export interface PreviewPage {
+  readonly categories: readonly PreviewCategoryNode[];
+  readonly filters: readonly PreviewFilter[];
+  readonly items: readonly PreviewCard[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+  readonly categoryId: string | null;
+  readonly query: string | null;
 }
 
 export interface InventoryReports {

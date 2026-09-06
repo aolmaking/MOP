@@ -1,17 +1,18 @@
-import { Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Identifier } from '../../ui/identifier/identifier';
-import { WorkflowStrip } from '../../domain/journey/workflow-strip';
-import { PartsPicker, type PartRequestChoice } from './parts-picker';
+import { WorkflowStrip, type JourneyAction } from '../../domain/journey/workflow-strip';
+import { PartList, type PartClarification, type PartReturn } from './part-list';
+import { TechVehicleHistory } from './tech-vehicle-history';
 import { pollJourney, type JourneyFeed } from '../../domain/journey/journey-poller';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import {
   TechnicianApi,
-  type AssetHistorySummary,
-  type PartCard,
+  type FindingDecisionStatus,
+  type RecordInspectionPayload,
   type TechnicianTask,
   type WorkCard,
+  type WorkCardFinding,
   type WorkCardPart,
 } from './technician.api';
 
@@ -45,7 +46,7 @@ const BLOCKER_REASONS = [
  */
 @Component({
   selector: 'app-tech-work-card',
-  imports: [RouterLink, Identifier, DatePipe, WorkflowStrip, PartsPicker],
+  imports: [RouterLink, Identifier, WorkflowStrip, PartList, TechVehicleHistory],
   templateUrl: './tech-work-card.html',
   styleUrl: './tech-work-card.css',
 })
@@ -75,11 +76,17 @@ export class TechWorkCard {
   protected readonly actionError = signal<string | null>(null);
 
   /** Which panel is open. Only one at a time -- this is a small screen. */
-  protected readonly panel = signal<'none' | 'blocker' | 'fault' | 'parts' | 'inspection'>('none');
+  protected readonly panel = signal<'none' | 'blocker' | 'fault' | 'external'>('none');
   protected readonly faultText = signal('');
   protected readonly inspectionNote = signal('');
   protected readonly faultSeverity = signal('MEDIUM');
   protected readonly taskMinutes = signal<Record<string, string>>({});
+
+  /** Active Inspection Workspace signals */
+  protected readonly missionFindingOpen = signal(false);
+  protected readonly inspectionType = signal<'QUICK' | 'FULL'>('QUICK');
+  protected readonly inspectionOdometer = signal('');
+  protected readonly inspectionMinutes = signal('');
 
   /**
    * "Ask the customer" -- folded into the same panel as logging the
@@ -95,126 +102,117 @@ export class TechWorkCard {
   protected readonly reasons = BLOCKER_REASONS;
 
   /**
-   * The parts picker. Cards, not a text box: a technician knows the part
-   * by sight and by price, and typing a SKU one-handed at a car is how
-   * the wrong part gets requested. Loaded on first open only -- the
-   * catalog does not change while somebody stands at a vehicle.
+   * Only the parts still needing somebody -- settled ones are history.
+   *
+   * A part the technician could still send back counts as open even
+   * when nobody is formally waiting on it: RECEIVED_BY_TECHNICIAN reads
+   * as "yours to fit", and hiding the return door until something has
+   * gone wrong is how a wrong part ends up fitted.
    */
-  protected readonly partsCatalog = signal<readonly PartCard[] | null>(null);
-  protected readonly partsLoading = signal(false);
-  protected togglePartsPanel(): void {
-    const opening = this.panel() !== 'parts';
-    this.panel.set(opening ? 'parts' : 'none');
-    if (opening && this.partsCatalog() === null) {
-      this.partsLoading.set(true);
-      this.api.partsCatalog().subscribe({
-        next: (page) => {
-          this.partsLoading.set(false);
-          this.partsCatalog.set(page.items);
-        },
-        error: (err: PresentedError) => {
-          this.partsLoading.set(false);
-          this.partsCatalog.set([]);
-          this.actionError.set(err.message ?? "Couldn't load the parts catalogue.");
-        },
-      });
-    }
-  }
-
-  protected requestPart(choice: PartRequestChoice): void {
-    this.panel.set('none');
-    this.run('part', this.api.requestPart(this.id(), choice.part.id, choice.quantity));
-  }
-
-  /** Only the parts still needing somebody -- settled ones are history. */
   protected readonly openParts = computed(
-    () => this.card()?.parts.filter((part) => part.waitingOn !== 'NOBODY') ?? [],
+    () => this.card()?.parts.filter((part) => part.waitingOn !== 'NOBODY' || part.returnable) ?? [],
   );
 
   /**
-   * A received part offers a real choice -- fit it or send it back -- so
-   * this dispatches on the specific action pressed rather than assuming
-   * the part's only action, and RETURN/RESPOND_CLARIFICATION open a small
-   * inline panel for the quantity/response instead of firing immediately.
+   * A move offered by the journey, performed.
+   *
+   * Routed by the server's own action KEY rather than by reading the
+   * job's status here: which move is available from where is the
+   * workflow graph's business, and re-deriving it on the tablet is how
+   * the button and the endpoint come to disagree. An unrecognised key is
+   * ignored rather than guessed at -- a new server-side action reaches
+   * this client as nothing, never as the wrong request.
    */
-  protected actOnPart(part: WorkCardPart, action: WorkCardPart['actions'][number]): void {
-    if (action === 'RECEIVE') {
-      this.run(`part-${part.partRequestId}`, this.api.receivePart(part.partRequestId));
-    } else if (action === 'MARK_USED') {
-      this.run(`part-${part.partRequestId}`, this.api.usePart(part.partRequestId));
-    } else {
-      const opening = this.activePartPanel() !== part.partRequestId;
-      this.activePartPanel.set(opening ? part.partRequestId : null);
-      if (opening && action === 'RETURN' && !this.returnQuantity()[part.partRequestId]) {
-        this.returnQuantity.update((current) => ({ ...current, [part.partRequestId]: String(part.issued) }));
-      }
+  protected runJourneyAction(action: JourneyAction): void {
+    switch (action.key) {
+      case 'start_inspection':
+        this.run('primary', this.api.startInspection(this.id()));
+        return;
+      case 'start_work':
+        this.run('primary', this.api.startWork(this.id()));
+        return;
+      default:
+        return;
     }
   }
 
-  protected partActionLabel(action: WorkCardPart['actions'][number]): string {
-    switch (action) {
-      case 'RECEIVE':
-        return "I've got it";
-      case 'MARK_USED':
-        return "It's fitted";
-      case 'RETURN':
-        return 'Send it back';
-      case 'RESPOND_CLARIFICATION':
-        return 'Answer';
-    }
+  protected receivePart(part: WorkCardPart): void {
+    this.run(`part-${part.partRequestId}`, this.api.receivePart(part.partRequestId));
   }
 
-  /** Which part's return/respond panel is open. Only one at a time. */
-  protected readonly activePartPanel = signal<string | null>(null);
-  protected readonly returnQuantity = signal<Record<string, string>>({});
-  protected readonly clarificationResponse = signal<Record<string, string>>({});
-
-  protected setReturnQuantity(partRequestId: string, value: string): void {
-    this.returnQuantity.update((current) => ({ ...current, [partRequestId]: value }));
+  protected usePart(part: WorkCardPart): void {
+    this.run(`part-${part.partRequestId}`, this.api.usePart(part.partRequestId));
   }
 
-  protected setClarificationResponse(partRequestId: string, value: string): void {
-    this.clarificationResponse.update((current) => ({ ...current, [partRequestId]: value }));
+  protected returnPart(event: PartReturn): void {
+    this.run(
+      `return-${event.part.partRequestId}`,
+      this.api.returnPart(event.part.partRequestId, event.quantity, event.reason),
+    );
   }
 
-  protected submitReturn(part: WorkCardPart): void {
-    const raw = this.returnQuantity()[part.partRequestId]?.trim() ?? '';
-    const quantity = Number(raw);
-    if (!Number.isInteger(quantity) || quantity < 1) {
-      this.actionError.set('Enter a whole number of at least 1 to send back.');
-      return;
-    }
-    this.activePartPanel.set(null);
-    this.run(`part-${part.partRequestId}`, this.api.returnPart(part.partRequestId, quantity));
-  }
-
-  protected submitClarificationResponse(part: WorkCardPart): void {
-    const response = this.clarificationResponse()[part.partRequestId]?.trim() ?? '';
-    if (response.length < 1) {
-      this.actionError.set('Write a reply before sending it.');
-      return;
-    }
-    this.activePartPanel.set(null);
-    this.run(`part-${part.partRequestId}`, this.api.respondToReturnClarification(part.partRequestId, response));
+  protected answerClarification(event: PartClarification): void {
+    this.run(
+      `clarify-${event.part.partRequestId}`,
+      this.api.answerClarification(event.part.partRequestId, event.answer),
+    );
   }
 
   /**
-   * The part isn't in the catalogue. Falls back to the blocker, which is
-   * what this whole panel replaced for catalogued parts -- a technician
-   * still has to be able to say "I'm stuck without a part" for one the
-   * workshop has never stocked.
+   * A part the workshop never held. Offered as its own door rather than
+   * inside the picker, because the picker searches the workshop's own
+   * catalogue and this part is by definition not in it.
    */
-  protected blockOnUncataloguedPart(): void {
-    this.reportBlocker('WAITING_PART');
+  protected readonly externalPartName = signal('');
+  protected readonly externalProvenance = signal<'CUSTOMER_SUPPLIED' | 'EXTERNAL_PURCHASE'>('CUSTOMER_SUPPLIED');
+  protected readonly externalQuantity = signal('1');
+  protected readonly externalNameValid = computed(() => this.externalPartName().trim().length >= 1);
+
+  protected addExternalPart(): void {
+    if (!this.externalNameValid()) return;
+    const quantity = Number(this.externalQuantity().trim());
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      this.actionError.set('Say how many — a whole number, at least one.');
+      return;
+    }
+
+    const name = this.externalPartName().trim();
+    const provenance = this.externalProvenance();
+    this.panel.set('none');
+    this.externalPartName.set('');
+    this.externalQuantity.set('1');
+    this.run('external', this.api.addExternalPart(this.id(), name, provenance, quantity));
   }
 
-  /** Loaded lazily, on request -- not every job has history, and most visits are a single one. */
-  protected readonly vehicleHistory = signal<AssetHistorySummary | null>(null);
-  protected readonly vehicleHistoryOpen = signal(false);
-  protected readonly vehicleHistoryLoading = signal(false);
-
   constructor() {
-    queueMicrotask(() => this.load());
+    // Keyed on the route id, not run once.
+    //
+    // Angular reuses this component when only the `:id` parameter
+    // changes, so a one-shot load in the constructor left the previous
+    // car's card, parts and history on screen after navigating from one
+    // job to another. On a workshop tablet that is not a cosmetic bug:
+    // it is a technician reading the wrong vehicle's parts and blockers
+    // while holding a different car's key. The history panel below keys
+    // itself off the same id for the same reason.
+    effect(() => {
+      const id = this.id();
+      if (!id) return;
+      untracked(() => this.reset());
+      untracked(() => this.load());
+    });
+  }
+
+  /** Everything that belongs to ONE job, cleared before another is loaded. */
+  private reset(): void {
+    this.card.set(null);
+    this.state.set('loading');
+    this.busy.set(null);
+    this.actionError.set(null);
+    this.panel.set('none');
+    this.missionFindingOpen.set(false);
+    this.inspectionType.set('QUICK');
+    this.inspectionOdometer.set('');
+    this.inspectionMinutes.set('');
   }
 
   protected load(): void {
@@ -300,17 +298,73 @@ export class TechWorkCard {
     return minutes;
   }
 
+  protected startInspection(): void {
+    this.run('start-inspection', this.api.startInspection(this.id()));
+  }
+
+
   /**
-   * One press per inspection type. The category-specific measurement
-   * form is Phase 15/16 work; a type and a note is what a technician can
-   * honestly record today, and the finish gate only asks whether an
-   * inspection happened.
+   * Complete inspection with full metadata support for the Active Inspection Workspace.
+   * Sends the canonical RecordInspectionPayload object.
    */
-  protected recordInspection(type: 'QUICK' | 'FULL'): void {
-    const note = this.inspectionNote().trim();
-    this.panel.set('none');
-    this.inspectionNote.set('');
-    this.run('inspection', this.api.recordInspection(this.id(), type, note || undefined));
+  protected completeInspection(typeOverride?: 'QUICK' | 'FULL'): void {
+    const type = typeOverride ?? this.inspectionType();
+    const noteRaw = this.inspectionNote().trim();
+    const odoRaw = this.inspectionOdometer().trim();
+    const minsRaw = this.inspectionMinutes().trim();
+
+    let odometerOrHours: number | undefined = undefined;
+    if (odoRaw !== '') {
+      const parsed = Number(odoRaw);
+      if (isNaN(parsed) || parsed < 0) {
+        this.actionError.set('Enter a valid odometer or engine hours number.');
+        return;
+      }
+      odometerOrHours = parsed;
+    }
+
+    let actualMinutes: number | undefined = undefined;
+    if (minsRaw !== '') {
+      const parsed = Number(minsRaw);
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        this.actionError.set('Enter whole diagnostic minutes.');
+        return;
+      }
+      actualMinutes = parsed;
+    }
+
+    if (this.card()?.timeTracking === 'REQUIRED' && actualMinutes === undefined) {
+      this.actionError.set('Diagnostic minutes are required.');
+      return;
+    }
+
+    const payload: RecordInspectionPayload = {
+      type,
+      ...(odometerOrHours !== undefined ? { odometerOrHours } : {}),
+      ...(actualMinutes !== undefined ? { actualMinutes } : {}),
+      ...(noteRaw ? { note: noteRaw } : {}),
+    };
+
+    this.run('complete-inspection', this.api.recordInspection(this.id(), payload));
+  }
+
+  protected findingDecisionStatus(finding: WorkCardFinding): FindingDecisionStatus {
+    return (finding.decisionStatus ?? (finding as any).customerDecisionStatus ?? 'NOT_REQUESTED') as FindingDecisionStatus;
+  }
+
+  protected findingDecisionLabel(status: FindingDecisionStatus): string {
+    switch (status) {
+      case 'NOT_REQUESTED':
+        return 'Internal / No customer decision requested';
+      case 'PENDING':
+        return 'Pending customer';
+      case 'APPROVED':
+        return 'Approved';
+      case 'REJECTED':
+        return 'Rejected';
+      default:
+        return 'Internal / No customer decision requested';
+    }
   }
 
   protected reportBlocker(reason: string): void {
@@ -337,13 +391,15 @@ export class TechWorkCard {
     const askCustomer = this.askCustomer();
     const price = this.faultPrice().trim();
     const laborPrice = this.faultLaborPrice().trim();
+    const inspectionId = this.card()?.inspection.id ?? undefined;
 
     this.busy.set('fault');
     this.actionError.set(null);
 
-    this.api.createFault(this.id(), description, severity).subscribe({
-      next: () => {
+    this.api.createFault(this.id(), description, severity, inspectionId).subscribe({
+      next: (fault) => {
         this.faultText.set('');
+        this.missionFindingOpen.set(false);
         if (!askCustomer) {
           this.busy.set(null);
           this.load();
@@ -357,6 +413,7 @@ export class TechWorkCard {
             importance: severity,
             price,
             laborPrice: laborPrice || undefined,
+            faultId: fault.id,
           })
           .subscribe({
             next: () => {
@@ -369,7 +426,11 @@ export class TechWorkCard {
             error: (err: PresentedError) => {
               this.busy.set(null);
               // The fault is already logged -- only the ask failed.
-              this.actionError.set(err.message ?? 'Logged, but asking the customer did not go through.');
+              this.actionError.set(
+                err.message
+                  ? `Logged finding, but asking the customer did not go through: ${err.message}`
+                  : 'Logged finding, but asking the customer did not go through.',
+              );
               this.load();
             },
           });
@@ -412,18 +473,4 @@ export class TechWorkCard {
     return value.toLowerCase().replace(/_/g, ' ');
   }
 
-  protected toggleVehicleHistory(): void {
-    const opening = !this.vehicleHistoryOpen();
-    this.vehicleHistoryOpen.set(opening);
-    if (opening && !this.vehicleHistory()) {
-      this.vehicleHistoryLoading.set(true);
-      this.api.vehicleHistory(this.id()).subscribe({
-        next: (summary) => {
-          this.vehicleHistoryLoading.set(false);
-          this.vehicleHistory.set(summary);
-        },
-        error: () => this.vehicleHistoryLoading.set(false),
-      });
-    }
-  }
 }

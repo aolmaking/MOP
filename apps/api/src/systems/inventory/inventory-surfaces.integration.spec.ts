@@ -80,6 +80,10 @@ beforeAll(async () => {
   mainId = (await prisma.warehouse.create({ data: { tenantId, name: "Main store", code: "MS" } })).id;
   annexeId = (await prisma.warehouse.create({ data: { tenantId, name: "Annexe", code: "AX" } })).id;
 
+  const brakesCategoryId = (
+    await prisma.catalogCategory.create({ data: { tenantId, name: "Brakes", slug: `brakes-${SUFFIX}` } })
+  ).id;
+
   splitItemId = (
     await prisma.inventoryItem.create({
       data: {
@@ -89,7 +93,7 @@ beforeAll(async () => {
         itemType: "PART",
         sellingPrice: "300.00",
         cost: "180.00",
-        category: "Brakes",
+        catalogCategoryId: brakesCategoryId,
         lowStockThreshold: 10,
         criticalStockThreshold: 4,
       },

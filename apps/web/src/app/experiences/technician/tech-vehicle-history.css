@@ -1,0 +1,254 @@
+/*
+ * The vehicle history panel on the Work Card.
+ *
+ * Its own stylesheet because it is its own component -- the two
+ * together passed the per-component CSS budget, which is the budget
+ * telling the truth: this panel answers a different question from the
+ * card around it.
+ */
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-block-end: var(--space-3);
+}
+
+.history-toggle {
+  min-block-size: var(--tap);
+  padding-inline: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--tech-text-sm);
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+
+.history-loading,
+.history-empty {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+}
+
+.history-summary {
+  color: var(--text);
+  font-size: var(--tech-text-sm);
+  font-weight: 600;
+}
+
+.history-owner-note {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+/*
+ * Vehicle history, as decision support.
+ *
+ * Grouped by question rather than by visit: a technician asks "has this
+ * been complained about before", "what did we find", "what did we
+ * recommend and did it happen" -- three questions, three groups. A
+ * visit-by-visit list makes all three of them a reading exercise.
+ *
+ * Everything is sized off the technician scale (`--tech-text-*`, `--tap`)
+ * rather than the desktop one: this is read at arm's length on a tablet
+ * with dirty hands, and every control clears the 44px target the
+ * touch-target linter enforces.
+ */
+
+.history-alert {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: var(--warning-bg);
+  border-inline-start: 3px solid var(--warning);
+  border-radius: var(--radius-sm);
+}
+
+.history-alert-title {
+  color: var(--warning);
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.history-alert-line {
+  color: var(--text);
+  font-size: var(--tech-text-sm);
+}
+
+.history-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+}
+
+.history-group-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.history-count {
+  padding-inline: var(--space-2);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-block: var(--space-2);
+  border-block-end: 1px solid var(--border);
+}
+
+.history-item:last-of-type {
+  border-block-end: none;
+}
+
+.history-item-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--text);
+  font-size: var(--tech-text-sm);
+  font-weight: 600;
+  text-align: start;
+}
+
+.history-item-line {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+}
+
+.history-item-meta {
+  color: var(--text-faint);
+  font-size: var(--tech-text-sm);
+}
+
+.history-severity {
+  padding-inline: var(--space-2);
+  background: var(--neutral-badge-bg);
+  border-radius: var(--radius-sm);
+  color: var(--neutral-badge);
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.history-severity--high,
+.history-severity--critical {
+  background: var(--danger-bg);
+  color: var(--danger-strong);
+}
+
+.history-severity--medium {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+/*
+ * "Performed" is the only green, and every flavour of agreed-and-not-done
+ * shares one warning colour. A technician glancing at this list should
+ * learn ONE signal, not four -- the point of the whole module is that
+ * "we said we would and did not" cannot be missed.
+ */
+.history-rec {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  padding: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: start;
+}
+
+.history-outcome {
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.history-outcome--good {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.history-outcome--warn {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.history-outcome--plain {
+  background: var(--neutral-badge-bg);
+  color: var(--neutral-badge);
+}
+
+.history-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+}
+
+.history-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+}
+
+.history-evidence li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+}
+
+.history-evidence-when {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+
+.history-more {
+  align-self: flex-start;
+  min-block-size: var(--tap);
+  padding-inline: var(--space-2);
+  background: none;
+  border: none;
+  color: var(--brand-text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--tech-text-sm);
+  font-weight: 600;
+  text-decoration: underline;
+}

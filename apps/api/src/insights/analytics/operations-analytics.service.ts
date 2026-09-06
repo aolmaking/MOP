@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { Prisma } from "@mop/database";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { resolveDateRange, resolveGranularity, type ReportQueryParams } from "../owner-reports/date-range.util";
-import { averageMsByStatus, computeStatusDurations, type StatusChangeEvent, TERMINAL_STATUSES } from "../owner-reports/lifecycle-duration.util";
+import { averageMsByStatus, computeStatusDurations, type StatusChangeEvent, TERMINAL_STATUSES, type WorkOrderMeta } from "../owner-reports/lifecycle-duration.util";
 import { isMultiBranch, workOrderScopeFilter, type AnalyticsScope } from "./analytics-scope.util";
 
 export interface VolumePoint {
@@ -141,26 +141,53 @@ export class OperationsAnalyticsService {
     scope: AnalyticsScope,
     range: { from: Date; to: Date },
   ): Promise<TimeInStatusRow[]> {
+    const branchFilter =
+      scope.branchIds.length > 0 ? { branchId: { in: [...scope.branchIds] } } : {};
+
     const events = await this.prisma.operationEvent.findMany({
-      where: { tenantId, eventKey: "work_order.status_changed", createdAt: { gte: range.from, lte: range.to } },
-      select: { payload: true, createdAt: true },
+      where: {
+        tenantId,
+        eventKey: "work_order.status_changed",
+        createdAt: { gte: range.from, lte: range.to },
+        ...branchFilter,
+      },
+      select: { payload: true, createdAt: true, workOrderId: true, branchId: true },
     });
+
     let statusEvents: StatusChangeEvent[] = events.map((e) => {
       const payload = e.payload as { workOrderId?: string; from?: string; to?: string };
-      return { workOrderId: payload.workOrderId ?? "unknown", from: payload.from ?? "UNKNOWN", to: payload.to ?? "UNKNOWN", at: e.createdAt };
+      return {
+        workOrderId: e.workOrderId ?? payload.workOrderId ?? "unknown",
+        branchId: e.branchId ?? undefined,
+        from: payload.from ?? "UNKNOWN",
+        to: payload.to ?? "UNKNOWN",
+        at: e.createdAt,
+      };
     });
 
-    if (scope.branchIds.length > 0 || scope.categoryIds.length > 0) {
-      const ids = [...new Set(statusEvents.map((e) => e.workOrderId))];
-      const inScope = await this.prisma.workOrder.findMany({
-        where: { tenantId, id: { in: ids }, ...workOrderScopeFilter(scope) },
-        select: { id: true },
-      });
-      const allowed = new Set(inScope.map((w) => w.id));
-      statusEvents = statusEvents.filter((e) => allowed.has(e.workOrderId));
-    }
+    const ids = [...new Set(statusEvents.map((e) => e.workOrderId).filter((id) => id !== "unknown"))];
+    const inScope = await this.prisma.workOrder.findMany({
+      where: { tenantId, id: { in: ids }, ...workOrderScopeFilter(scope) },
+      select: { id: true, createdAt: true, closedAt: true, status: true, branchId: true },
+    });
+    const allowed = new Set(inScope.map((w) => w.id));
+    statusEvents = statusEvents.filter((e) => allowed.has(e.workOrderId));
 
-    const durations = computeStatusDurations(statusEvents, range.to);
+    const metaMap = new Map<string, WorkOrderMeta>(
+      inScope.map((wo) => [
+        wo.id,
+        {
+          workOrderId: wo.id,
+          createdAt: wo.createdAt,
+          closedAt: wo.closedAt,
+          initialStatus: "DRAFT",
+          branchId: wo.branchId,
+          tenantId,
+        },
+      ]),
+    );
+
+    const durations = computeStatusDurations(statusEvents, range.to, metaMap);
     const averages = averageMsByStatus(durations);
     return Object.entries(averages)
       // Same exclusion as the Owner-facing report: a terminal state's
@@ -225,19 +252,25 @@ export class OperationsAnalyticsService {
         tenantId,
         eventKey: "work_order.status_changed",
         createdAt: { gte: range.from, lte: range.to },
+        ...(scope.branchIds.length > 0 ? { branchId: { in: [...scope.branchIds] } } : {}),
       },
-      select: { payload: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+      select: { payload: true, createdAt: true, workOrderId: true, branchId: true },
     });
 
-    const deliveryEvents = reachedDelivery.filter((e) => (e.payload as { to?: string }).to === "READY_FOR_DELIVERY");
+    const deliveryEvents = reachedDelivery.filter((e) => {
+      const payload = e.payload as { to?: string };
+      return payload.to === "READY_FOR_DELIVERY";
+    });
+
     const closedWorkOrders = await this.prisma.workOrder.findMany({
       where: { tenantId, status: "CLOSED", closedAt: { gte: range.from, lte: range.to }, ...workOrderScopeFilter(scope) },
       select: { id: true, closedAt: true },
     });
 
     let scopedDeliveryEvents = deliveryEvents;
-    if (scope.branchIds.length > 0 || scope.categoryIds.length > 0) {
-      const ids = [...new Set(deliveryEvents.map((e) => (e.payload as { workOrderId?: string }).workOrderId))].filter(
+    if (scope.categoryIds.length > 0) {
+      const ids = [...new Set(deliveryEvents.map((e) => e.workOrderId ?? (e.payload as { workOrderId?: string }).workOrderId))].filter(
         (id): id is string => Boolean(id),
       );
       const inScope = await this.prisma.workOrder.findMany({
@@ -245,13 +278,17 @@ export class OperationsAnalyticsService {
         select: { id: true },
       });
       const allowed = new Set(inScope.map((w) => w.id));
-      scopedDeliveryEvents = deliveryEvents.filter((e) => allowed.has((e.payload as { workOrderId?: string }).workOrderId ?? ""));
+      scopedDeliveryEvents = deliveryEvents.filter((e) =>
+        allowed.has(e.workOrderId ?? (e.payload as { workOrderId?: string }).workOrderId ?? ""),
+      );
     }
 
     const deliveryAtByWorkOrder = new Map<string, Date>();
     for (const event of scopedDeliveryEvents) {
-      const workOrderId = (event.payload as { workOrderId?: string }).workOrderId;
-      if (workOrderId) deliveryAtByWorkOrder.set(workOrderId, event.createdAt);
+      const workOrderId = event.workOrderId ?? (event.payload as { workOrderId?: string }).workOrderId;
+      if (workOrderId && !deliveryAtByWorkOrder.has(workOrderId)) {
+        deliveryAtByWorkOrder.set(workOrderId, event.createdAt);
+      }
     }
 
     const closedIds = new Set(closedWorkOrders.map((w) => w.id));
@@ -260,8 +297,11 @@ export class OperationsAnalyticsService {
     for (const wo of closedWorkOrders) {
       const deliveredAt = deliveryAtByWorkOrder.get(wo.id);
       if (deliveredAt && wo.closedAt) {
-        totalGapHours += (wo.closedAt.getTime() - deliveredAt.getTime()) / (60 * 60 * 1000);
-        gapCount += 1;
+        const gapMs = wo.closedAt.getTime() - deliveredAt.getTime();
+        if (gapMs >= 0) {
+          totalGapHours += gapMs / (60 * 60 * 1000);
+          gapCount += 1;
+        }
       }
     }
 

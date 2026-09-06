@@ -88,7 +88,6 @@ export function draftFromValidateDto(dto: ValidateDraftDto): WorkshopDraft {
     plan: {
       planId: dto.planId ?? "",
       initialStatus: dto.initialStatus ?? "",
-      enableDemoData: false,
     },
     capabilities: (dto.capabilities ?? {}) as CapabilityProfile,
     specializationPacks: dto.specializationPacks ?? [],

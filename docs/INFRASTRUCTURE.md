@@ -52,6 +52,40 @@ Choosing this late is how "the customer got four identical reminder messages" ha
 - **Validate configuration at boot and refuse to start if it is wrong (`TODO`).** A missing `DATABASE_URL` should be a startup crash with a clear message, not a runtime failure on the first request. Same for `CORS_ORIGIN`, cookie domain, and session secrets.
 - **`NODE_ENV` currently controls a security-critical flag.** `cookie.util.ts` sets `secure: process.env.NODE_ENV === "production"`. If that variable is ever unset or misspelled in production, session cookies silently start travelling over plain HTTP. Boot-time validation must assert this explicitly rather than inferring it.
 
+### 3a. The database must run on UTC (`DONE` — enforced)
+
+Every timestamp column in the schema is `timestamp without time zone`, and **64 of them carry
+`@default(now())`**. Postgres casts `CURRENT_TIMESTAMP` into such a column *through the session
+timezone*. Values the application writes go in as UTC, because Prisma serialises a JS `Date` — an
+absolute instant — as its UTC wall clock.
+
+So on any server whose `timezone` is not UTC, the database's own defaults and the application's own
+writes are in **two different clocks**, offset by that server's UTC offset. Anything that subtracts
+one from the other — a wait duration, an SLA overrun, a session expiry check, a daily revenue bucket
+— is wrong by exactly that offset, and wrong quietly.
+
+This is a deployment requirement, not a preference:
+
+- `docker-compose.yml` states it explicitly (`command: postgres -c timezone=UTC`, plus `TZ`/`PGTZ`).
+  `postgres:16-alpine` already defaults to UTC, so the setting changes nothing today — it is there so
+  a future image, a managed instance provisioned in a customer's region, or a local install that
+  inherited the host's zone cannot change it silently.
+- CI pins the same values on its Postgres service.
+- `pnpm run doctor` reads `SHOW TimeZone` and **fails** when the server is not on UTC. It previously
+  checked only that Postgres answered, not which clock it answered in, which is how this stayed
+  invisible.
+
+Discovered on 2026-08-26: the first cluster installed outside Docker came up on `Africa/Cairo` and six
+integration tests failed, two of them short by exactly three hours.
+
+**Still open**: whether the columns should move to `@db.Timestamptz`, so the type carries the zone and
+the cast stops depending on a server setting at all; and whether reporting buckets should be
+per-tenant-local (`date_trunc(g, ts AT TIME ZONE tenant.timezone)`) rather than uniform — `tenants`
+carries both `country` and `timezone`, so the product clearly intends local days. Both are migrations
+across 64 columns and need an explicit product decision first. Note that `reports-financial.service.ts`
+and `reports-operations.service.ts` currently carry comments claiming `date_trunc` "stays correct
+across timezones"; on a naive column it is timezone-*blind*, which is not the same thing.
+
 ## 4. Security posture — what is missing right now
 
 `apps/api/src/main.ts` today sets a global prefix, CORS with credentials, `cookie-parser`, a global exception filter, and a strict `ValidationPipe` (`whitelist` + `forbidNonWhitelisted` — good, that closes mass-assignment). It does **not** have the following, and each is a real exposure:

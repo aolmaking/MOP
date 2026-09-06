@@ -1,4 +1,5 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ErrorBanner } from '../../../ui/error-banner/error-banner';
@@ -57,6 +58,7 @@ function defaultFrom(): string {
 })
 export class ReportsPage {
   private readonly api = inject(ReportsApi);
+  private readonly http = inject(HttpClient);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly tabs = TABS;
@@ -67,6 +69,8 @@ export class ReportsPage {
   protected readonly from = signal(defaultFrom());
   protected readonly to = signal(isoDate(new Date()));
   protected readonly groupBy = signal<'day' | 'week' | 'month'>('day');
+  protected readonly branchId = signal<string>('');
+  protected readonly branches = signal<readonly { id: string; name: string }[]>([]);
 
   protected readonly overview = signal<OverviewReport | null>(null);
   protected readonly operations = signal<OperationsReport | null>(null);
@@ -78,9 +82,17 @@ export class ReportsPage {
     from: this.from(),
     to: this.to(),
     groupBy: this.groupBy(),
+    ...(this.branchId() ? { branchId: this.branchId() } : {}),
   }));
 
   constructor() {
+    this.http
+      .get<{ branches?: readonly { id: string; name: string }[] }>('/api/v1/organization/infrastructure')
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => this.branches.set(res.branches ?? []),
+        error: () => {},
+      });
     this.load();
   }
 

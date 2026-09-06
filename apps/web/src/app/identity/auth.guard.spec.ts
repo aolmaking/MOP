@@ -31,4 +31,16 @@ describe('authGuard', () => {
 
     expect(result.toString()).toBe(expectedTree.toString());
   });
+
+  it('redirects to /login without query params when attempted URL is root /', async () => {
+    configure(null);
+    const router = TestBed.inject(Router);
+    const expectedTree = router.createUrlTree(['/login']);
+
+    const result = await TestBed.runInInjectionContext(() =>
+      authGuard({} as never, { url: '/' } as never),
+    );
+
+    expect(result.toString()).toBe(expectedTree.toString());
+  });
 });

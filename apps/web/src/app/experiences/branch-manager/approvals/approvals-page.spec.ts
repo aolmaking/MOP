@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
+import { vi } from 'vitest';
 import { ApprovalsPage } from './approvals-page';
 import { ApprovalsApi, type ApprovalRow, type ApprovalsResult } from './approvals.api';
 
@@ -24,14 +25,17 @@ function row(overrides: Partial<ApprovalRow> = {}): ApprovalRow {
 
 function render(result: Partial<ApprovalsResult> | { error: unknown }) {
   const api = {
-    approvals: () => ('error' in result ? throwError(() => result.error) : of({ waiting: [], unsent: [], ...result })),
+    approvals: vi.fn(() =>
+      'error' in result ? throwError(() => result.error) : of({ waiting: [], unsent: [], ...result }),
+    ),
+    cancelApproval: vi.fn(() => of({ ok: true as const })),
   };
   TestBed.configureTestingModule({
     providers: [provideRouter([]), { provide: ApprovalsApi, useValue: api }],
   });
   const fixture = TestBed.createComponent(ApprovalsPage);
   fixture.detectChanges();
-  return { fixture, element: fixture.nativeElement as HTMLElement };
+  return { fixture, api, element: fixture.nativeElement as HTMLElement };
 }
 
 describe('ApprovalsPage', () => {
@@ -85,5 +89,59 @@ describe('ApprovalsPage', () => {
     const { element } = render({ waiting: [row({ waitingHours: 74 })] });
 
     expect(element.querySelector('.row-waited')?.textContent?.trim()).toBe('3 days');
+  });
+
+  describe('withdrawing an unanswered ask (M-3)', () => {
+    const press = (element: HTMLElement, label: string) => {
+      const button = [...element.querySelectorAll('button')].find((b) => b.textContent?.trim() === label);
+      if (!button) throw new Error(`no button labelled "${label}"`);
+      (button as HTMLButtonElement).click();
+    };
+
+    /**
+     * The deadlock guard. Without a way out, an ask the customer never
+     * answers holds the job at AWAITING_CUSTOMER_APPROVAL until the
+     * read-computed expiry passes, and the car sits with it.
+     */
+    it('withdraws the request and re-reads the board', () => {
+      const { api, fixture, element } = render({ waiting: [row()] });
+      const readsBefore = api.approvals.mock.calls.length;
+
+      press(element, 'Withdraw');
+      fixture.detectChanges();
+      press(element, 'Yes, withdraw it');
+      fixture.detectChanges();
+
+      expect(api.cancelApproval).toHaveBeenCalledWith('r1');
+      // Cancelling frees the job to move, and where it moved is the
+      // server's answer -- not something to patch in locally.
+      expect(api.approvals.mock.calls.length).toBeGreaterThan(readsBefore);
+    });
+
+    /**
+     * Not undoable, and the customer may be about to answer. One tap
+     * must not withdraw an ask.
+     */
+    it('asks before it acts', () => {
+      const { api, element } = render({ waiting: [row()] });
+
+      press(element, 'Withdraw');
+
+      expect(api.cancelApproval).not.toHaveBeenCalled();
+    });
+
+    it('keeps a refusal on the page rather than in a toast', () => {
+      const { api, fixture, element } = render({ waiting: [row()] });
+      api.cancelApproval.mockReturnValueOnce(
+        throwError(() => ({ httpStatus: 409, code: 'already_resolved', message: 'The customer has already answered.' })),
+      );
+
+      press(element, 'Withdraw');
+      fixture.detectChanges();
+      press(element, 'Yes, withdraw it');
+      fixture.detectChanges();
+
+      expect(element.querySelector('.band-error')?.textContent).toContain('already answered');
+    });
   });
 });

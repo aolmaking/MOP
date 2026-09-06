@@ -13,7 +13,18 @@
         <span>To</span>
         <input type="date" [ngModel]="to()" (ngModelChange)="to.set($event)" />
       </label>
-      @if (activeTab() === 'financial') {
+      @if (branches().length > 0) {
+        <label class="filter-field">
+          <span>Branch</span>
+          <select [ngModel]="branchId()" (ngModelChange)="branchId.set($event)">
+            <option value="">All branches</option>
+            @for (b of branches(); track b.id) {
+              <option [value]="b.id">{{ b.name }}</option>
+            }
+          </select>
+        </label>
+      }
+      @if (activeTab() === 'financial' || activeTab() === 'operations') {
         <label class="filter-field">
           <span>Group by</span>
           <select [ngModel]="groupBy()" (ngModelChange)="groupBy.set($event)">

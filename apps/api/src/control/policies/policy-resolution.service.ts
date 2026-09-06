@@ -61,18 +61,33 @@ export class PolicyResolutionService {
    * declared specialization" reading `isCapabilityActive` already uses
    * for an absent capability row.
    */
-  async isRelevant(tenantId: string, policyKey: string, specializations: ReadonlySet<string> = new Set()): Promise<boolean> {
+  async isRelevant(
+    tenantId: string,
+    policyKey: string,
+    specializations?: ReadonlySet<string>,
+    tx?: Prisma.TransactionClient,
+  ): Promise<boolean> {
     const definition = policyDefinition(policyKey);
     if (!definition) {
       throw new NotFoundException({ code: "unknown_policy", message: `"${policyKey}" is not a registered policy.` });
     }
 
+    const client = tx ?? this.prisma;
+    let effectiveSpecializations = specializations;
+    if (!effectiveSpecializations || effectiveSpecializations.size === 0) {
+      const rows = await client.workshopSpecialization.findMany({
+        where: { tenantId },
+        select: { specializationKey: true },
+      });
+      effectiveSpecializations = new Set(rows.map((r) => r.specializationKey));
+    }
+
     const [profile, allAnswers] = await Promise.all([
-      this.capabilities.resolveCurrent(tenantId),
-      this.resolveCurrent(tenantId),
+      this.capabilities.resolveCurrent(tenantId, client),
+      this.resolveCurrent(tenantId, client),
     ]);
 
-    return isPolicyRelevant(definition, profile, specializations, allAnswers);
+    return isPolicyRelevant(definition, profile, effectiveSpecializations, allAnswers);
   }
 
   /** Every policy this workshop has an explicit row for right now. Registry defaults fill in the rest -- use `resolveValue` for one key's effective value. */

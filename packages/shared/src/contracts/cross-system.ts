@@ -259,7 +259,8 @@ export interface GateEvaluation {
 }
 
 export interface GateResult {
-  readonly checkpoint: "FINISH" | "DELIVERY";
+  /** See GateCheckpoint -- AUTHORIZATION guards the entry to APPROVED_FOR_WORK. */
+  readonly checkpoint: "AUTHORIZATION" | "FINISH" | "DELIVERY";
   readonly passed: boolean;
   /** Only gates live under this tenant's capabilities -- dropped gates never appear. */
   readonly evaluations: readonly GateEvaluation[];

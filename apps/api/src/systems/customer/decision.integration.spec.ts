@@ -62,6 +62,19 @@ async function makeRequest(
     data: { tenantId, branchId, assetId, customerId, status: (options.workOrderStatus ?? "AWAITING_CUSTOMER_APPROVAL") as never },
   });
 
+  const now = new Date();
+  await prisma.inspection.create({
+    data: {
+      tenantId,
+      workOrderId: workOrder.id,
+      technicianId: "tech-1",
+      type: "QUICK",
+      fields: {},
+      startedAt: now,
+      completedAt: now,
+    },
+  });
+
   const request = await prisma.customerDecisionRequest.create({
     data: {
       tenantId,
@@ -176,6 +189,7 @@ afterAll(async () => {
   await prisma.operationEvent.deleteMany({ where });
   await prisma.auditLog.deleteMany({ where });
   await prisma.customerTimelineEvent.deleteMany({ where });
+  await prisma.inspection.deleteMany({ where });
   await prisma.workOrder.deleteMany({ where });
   await prisma.assetOwnershipHistory.deleteMany({ where });
   await prisma.asset.deleteMany({ where });
@@ -678,7 +692,7 @@ describe("raiseAndSend -- a technician actually asking the customer something", 
     expect(after.status).toBe("AWAITING_CUSTOMER_APPROVAL");
   });
 
-  it("moves an in-progress job to WAITING_CUSTOMER via ASK_CUSTOMER, not APPROVE", async () => {
+  it("[F-008] leaves an in-progress job IN_PROGRESS rather than stranding it in WAITING_CUSTOMER", async () => {
     const workOrder = await prisma.workOrder.create({
       data: { tenantId, branchId, assetId, customerId, status: "IN_PROGRESS" as never },
     });
@@ -691,7 +705,7 @@ describe("raiseAndSend -- a technician actually asking the customer something", 
     );
 
     const after = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrder.id } });
-    expect(after.status).toBe("WAITING_CUSTOMER");
+    expect(after.status).toBe("IN_PROGRESS");
   });
 
   it("does not blow up asking on a job with no live REQUEST_APPROVAL/ASK_CUSTOMER edge", async () => {
@@ -759,7 +773,7 @@ describe("answering a decision moves the work order", () => {
 
   it("CUSTOMER_RESPONDED clears a mid-job WAITING_CUSTOMER ask, approved or not", async () => {
     const workOrder = await prisma.workOrder.create({
-      data: { tenantId, branchId, assetId, customerId, status: "IN_PROGRESS" as never },
+      data: { tenantId, branchId, assetId, customerId, status: "WAITING_CUSTOMER" as never },
     });
     const raised = await decisions.raiseAndSend(
       tenantId,
@@ -767,8 +781,7 @@ describe("answering a decision moves the work order", () => {
       { name: "Mid-job ask", explanation: "Found while apart.", importance: "LOW", price: "80.00" },
       STAFF,
     );
-    // raiseAndSend already moved this to WAITING_CUSTOMER -- confirms the
-    // fixture before the assertion that matters.
+    // Fixture is at WAITING_CUSTOMER before response
     expect((await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrder.id } })).status).toBe(
       "WAITING_CUSTOMER",
     );
@@ -1008,5 +1021,38 @@ describe("APPROVAL_WEIGHT -- how heavy a decision request is", () => {
     } finally {
       await policies.set(tenantId, "APPROVAL_WEIGHT", "TWO_TIER", STAFF, "PLATFORM", "test: restore two tier");
     }
+  });
+});
+
+describe("VIEWED + CANCEL (W2-A3-007)", () => {
+  it("read transitions SENT->VIEWED idempotently", async () => {
+    const made = await makeRequest();
+    const before = await prisma.customerDecisionRequest.findUniqueOrThrow({ where: { id: made.requestId }, select: { status: true } });
+    expect(before.status).toBe("SENT");
+    await decisions.read(made.token);
+    const afterFirst = await prisma.customerDecisionRequest.findUniqueOrThrow({ where: { id: made.requestId }, select: { status: true } });
+    expect(afterFirst.status).toBe("VIEWED");
+    await decisions.read(made.token);
+    const afterSecond = await prisma.customerDecisionRequest.findUniqueOrThrow({ where: { id: made.requestId }, select: { status: true } });
+    expect(afterSecond.status).toBe("VIEWED");
+  });
+
+  it("cancel sets CANCELLED and second cancel is rejected", async () => {
+    const made = await makeRequest();
+    const staff = { accountId: "staff-1", displayName: "Test Staff" };
+    // Use a branchScope that matches the workOrder's branch - empty scope means tenant-wide in test setup
+    await decisions.cancel(tenantId, [], made.requestId, staff);
+    const cancelled = await prisma.customerDecisionRequest.findUniqueOrThrow({ where: { id: made.requestId }, select: { status: true } });
+    expect(cancelled.status).toBe("CANCELLED");
+    await expect(decisions.cancel(tenantId, [], made.requestId, staff)).rejects.toMatchObject({ response: { code: "decision_already_final" } });
+  });
+
+  it("CANCELLED no longer blocks customer_decisions_resolved gate", async () => {
+    const made = await makeRequest();
+    const staff = { accountId: "staff-1", displayName: "Test Staff" };
+    const reqBefore = await prisma.customerDecisionRequest.findUniqueOrThrow({ where: { id: made.requestId }, select: { workOrderId: true } });
+    await decisions.cancel(tenantId, [], made.requestId, staff);
+    const open = await prisma.customerDecisionRequest.count({ where: { workOrderId: reqBefore.workOrderId, status: { notIn: ["RESOLVED", "EXPIRED", "CANCELLED"] } } });
+    expect(open).toBe(0);
   });
 });

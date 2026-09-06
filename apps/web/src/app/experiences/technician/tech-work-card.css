@@ -42,6 +42,31 @@
   font-size: var(--tech-text);
 }
 
+.card-complaint {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--surface-raised, var(--surface));
+  border-inline-start: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+}
+
+.card-complaint-label {
+  font-size: var(--tech-text-xs, 0.75rem);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--accent);
+}
+
+.card-complaint-text {
+  font-size: var(--tech-text);
+  line-height: var(--leading-normal);
+  color: var(--text);
+  font-weight: 500;
+}
+
 .card-note {
   padding-inline-start: var(--space-3);
   border-inline-start: 3px solid var(--border-strong);
@@ -419,69 +444,6 @@
   inline-size: 70%;
   block-size: var(--tech-text-xl);
 }
-
-.history {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin-block-end: var(--space-3);
-}
-
-.history-toggle {
-  min-block-size: var(--tap);
-  padding-inline: var(--space-3);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font-size: var(--tech-text-sm);
-  font-weight: 600;
-  text-align: start;
-  cursor: pointer;
-}
-
-.history-loading,
-.history-empty {
-  color: var(--text-muted);
-  font-size: var(--tech-text-sm);
-}
-
-.history-summary {
-  color: var(--text);
-  font-size: var(--tech-text-sm);
-  font-weight: 600;
-}
-
-.history-owner-note {
-  color: var(--text-faint);
-  font-weight: 400;
-}
-
-.history-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.history-visit {
-  padding: var(--space-2) var(--space-3);
-  background: var(--surface);
-  border-inline-start: 3px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-
-.history-visit-head {
-  color: var(--text-muted);
-  font-size: var(--tech-text-sm);
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.history-line {
-  color: var(--text);
-  font-size: var(--tech-text-sm);
-}
-
 /* --- parts on the job ---------------------------------------------- */
 /*
  * Distinct from the picker above: this is what has already been asked
@@ -490,53 +452,348 @@
  * edge, in words, and by weight rather than by colour alone.
  */
 
-.part-requests {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+/* --- the one job-level move ---------------------------------------- */
+
+/* Its own band above everything else. What the job is waiting for from
+   this technician should not be something they have to scroll to find. */
+.primary {
+  margin-block-end: var(--space-4);
 }
 
-.part-request {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  background: var(--surface);
-  /* Carried transparent so the "yours" state does not shift the text. */
-  border-inline-start: 4px solid transparent;
-  border-radius: var(--radius-sm);
-}
-
-.part-request--mine {
-  border-inline-start-color: var(--accent);
-}
-
-.part-request-main {
+/* Mission 1 -- the inspection.
+ *
+ * First block on the card, and the only one with a step number. The
+ * numbering exists because the order is the rule here: repair work is not
+ * legal until this is done, so the card is laid out in the sequence the
+ * job actually runs rather than by how often a control is tapped.
+ *
+ * Border on the inline-start edge, matching `.blocked` above: the same
+ * visual grammar for "this row is telling you the state of something",
+ * with the colour carrying which state. Logical properties throughout --
+ * Arabic is a primary market and `border-left` would put the marker on
+ * the wrong side of the card.
+ */
+.mission {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  min-inline-size: 0;
+  margin-block-start: var(--space-4);
+  padding: var(--space-4);
+  background: var(--surface-raised, var(--surface));
+  border-inline-start: 4px solid var(--border);
+  border-radius: var(--radius-sm);
 }
 
-.part-request-name {
-  font-size: var(--tech-text);
+/* Completed is the only state that earns colour. The others are the
+ * ordinary condition of a job that has just arrived, and painting them
+ * amber would make every new car look like a problem. */
+.mission[data-state='COMPLETED'] {
+  background: var(--success-bg);
+  border-inline-start-color: var(--success);
+}
+
+.mission-step {
+  font-size: var(--tech-text-sm);
   font-weight: 700;
-  line-height: var(--leading-tight);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--text-faint);
 }
 
-.part-request-qty {
-  font-variant-numeric: tabular-nums;
+.mission-title {
+  font-size: var(--tech-text-lg, var(--tech-text-md));
+  font-weight: 700;
 }
 
-.part-request-status {
-  color: var(--text-muted);
+.mission-state {
+  font-weight: 600;
+}
+
+.mission-state--done {
+  color: var(--success);
+}
+
+.mission-note {
+  color: var(--text-faint);
   font-size: var(--tech-text-sm);
-  line-height: var(--leading-normal);
 }
 
-.part-request-partial {
-  color: var(--text-muted);
+.mission-actions {
+  margin-block-start: var(--space-3);
+}
+
+.mission[data-state='IN_PROGRESS'] {
+  border-inline-start-color: var(--accent);
+}
+
+.mission-locked-banner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-block-start: var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface);
+  border-inline-start: 4px solid var(--warning);
+  border-radius: var(--radius-sm);
+}
+
+.mission-locked-title {
+  margin: 0;
   font-size: var(--tech-text-sm);
-  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--warning, #b45309);
+}
+
+.mission-locked-text {
+  margin: 0;
+  font-size: var(--tech-text);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.mission-locked-reason {
+  margin: 0;
+  font-size: var(--tech-text-sm);
+  color: var(--text-muted);
+}
+
+.mission-status-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-block-end: var(--space-2);
+}
+
+.mission-subheading {
+  margin: 0;
+  padding-block-end: var(--space-1);
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--text-muted);
+}
+
+.mission-findings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-block-start: var(--space-3);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border);
+}
+
+.findings-empty {
+  margin: 0;
+  padding: var(--space-2) 0;
+  color: var(--text-faint);
+  font-size: var(--tech-text-sm);
+  font-style: italic;
+}
+
+.findings-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.finding-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.finding-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.severity-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--tech-text-xs, 0.75rem);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+}
+
+.severity-badge[data-severity='CRITICAL'] {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.severity-badge[data-severity='HIGH'] {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.severity-badge[data-severity='MEDIUM'] {
+  background: var(--surface-raised, var(--surface));
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+
+.severity-badge[data-severity='LOW'] {
+  background: var(--surface-raised, var(--surface));
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.finding-code {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--tech-text-xs, 0.75rem);
+  color: var(--text-muted);
+  padding: 2px var(--space-1);
+  background: var(--surface-raised, var(--surface));
+  border-radius: var(--radius-sm);
+}
+
+.decision-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--tech-text-xs, 0.75rem);
+  font-weight: 600;
+  margin-inline-start: auto;
+}
+
+.decision-badge[data-decision='PENDING'] {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.decision-badge[data-decision='APPROVED'] {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.decision-badge[data-decision='REJECTED'] {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.decision-badge[data-decision='NOT_REQUESTED'] {
+  background: var(--surface-raised, var(--surface));
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.finding-desc {
+  margin: 0;
+  font-size: var(--tech-text);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.finding-service {
+  margin: 0;
+  font-size: var(--tech-text-sm);
+  color: var(--text-muted);
+}
+
+.mission-log-finding {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-block-start: var(--space-3);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border);
+}
+
+.mission-fault-form {
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.mission-complete-inspection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-block-start: var(--space-3);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border);
+}
+
+.completion-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.completion-type-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.completion-type-toggle {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.completion-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.completion-field-label {
+  font-size: var(--tech-text-sm);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.completion-input,
+.completion-textarea {
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--tech-text);
+}
+
+.tap--toggle {
+  flex: 1 1 0;
+}
+
+/* Why the repair rows below are inert.
+ *
+ * Stated, never merely implied by a greyed-out button: a disabled control
+ * with no reason is the one a technician taps twice and then walks to the
+ * office about. The sentence is the server's own refusal text, so what is
+ * read here and what the API would say are the same words.
+ */
+.tools-locked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--danger-bg);
+  border-inline-start: 4px solid var(--warning);
+  border-radius: var(--radius-sm);
+}
+
+.tools-locked-title {
+  font-weight: 700;
+}
+
+.tools-locked-why {
+  font-size: var(--tech-text-sm);
 }

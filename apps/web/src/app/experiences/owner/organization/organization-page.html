@@ -3,7 +3,10 @@
     <div>
       <h1 class="title">Organization &amp; Access</h1>
       <p class="sub">
-        Staff, Branches, and Warehouses. <a routerLink="/owner/organization/teams">Teams</a> is its own page.
+        Staff, Branches, and Warehouses.
+        @if (teamsVisible) {
+          <a routerLink="/owner/organization/teams">Teams</a> is its own page.
+        }
       </p>
     </div>
     @if (state() === 'ready' && tab() === 'staff') {

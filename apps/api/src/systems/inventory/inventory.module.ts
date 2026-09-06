@@ -15,6 +15,8 @@ import { InventoryHomeService } from "./inventory-home.service";
 import { CatalogService } from "./catalog.service";
 import { InventoryReportsService } from "./inventory-reports.service";
 import { WarehouseService } from "./warehouse.service";
+import { CatalogConfigService } from "./catalog-config.service";
+import { CatalogBrowseService } from "./catalog-browse.service";
 
 /**
  * Inventory.
@@ -49,9 +51,14 @@ import { WarehouseService } from "./warehouse.service";
     InventoryViewService,
     InventoryHomeService,
     CatalogService,
+    CatalogConfigService,
+    // Exported: the technician's catalog and the manager's preview are
+    // the same query engine, and `experiences/technician` calls it
+    // rather than owning a second one.
+    CatalogBrowseService,
     InventoryReportsService,
     WarehouseService,
   ],
-  exports: [StockService, PartRequestService, InventoryReportsService, CatalogService],
+  exports: [StockService, PartRequestService, InventoryReportsService, CatalogService, CatalogBrowseService],
 })
 export class InventoryModule {}

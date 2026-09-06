@@ -28,6 +28,7 @@ import { AuditService } from "../../audit/audit.service";
 import { AttentionQueueService } from "../branch-manager/attention-queue.service";
 import { TechnicianWorkViewService } from "./technician-work-view.service";
 import { AssetHistoryService } from "../../systems/operations/vehicle-history/asset-history.service";
+import { WorkshopHistoryService } from "../../systems/operations/history/workshop-history.service";
 import type { PrismaService } from "../../runtime/database/prisma.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 
@@ -56,7 +57,15 @@ const lifecycle = new WorkOrderLifecycleService(
 );
 const intake = new IntakeService(asService, events, lifecycle);
 const techWork = new TechnicianWorkService(asService, events, lifecycle, policiesForTest);
-const techView = new TechnicianWorkViewService(asService, lifecycle, new AssetHistoryService(asService), policiesForTest);
+const assetHistoryForTest = new AssetHistoryService(asService);
+const techView = new TechnicianWorkViewService(
+  asService,
+  lifecycle,
+  assetHistoryForTest,
+  new WorkshopHistoryService(asService, assetHistoryForTest),
+  policiesForTest,
+  new CapabilityResolutionService(asService),
+);
 const attention = new AttentionQueueService(asService, policiesForTest);
 
 const ACTOR = { accountId: "tech-1", displayName: "Hassan Fathy", actorType: "TENANT_STAFF" as const };
@@ -100,6 +109,29 @@ async function bookIn(plate: string): Promise<string> {
     ACTOR,
   );
   return result.workOrderId;
+}
+
+/**
+ * Walks a booked-in job to the point where repair work is legal.
+ *
+ * A Task means authorized work, so these tests can no longer plan or
+ * start one straight off an intake -- that was the bypass the
+ * inspection-first boundary closed. The journey here is the real one a
+ * technician makes under this tenant's default policies: start the
+ * inspection, record it, and take the APPROVAL_REQUIRED_SCOPE =
+ * BEYOND_INITIAL_SCOPE route that lets agreed work proceed without a
+ * customer decision it never needed.
+ */
+async function authorizeForWork(workOrderId: string): Promise<void> {
+  await lifecycle.apply(workOrderId, "START_INSPECTION", ACTOR);
+  await techWork.recordInspection(
+    { workOrderId, technicianId: mineStaffId, type: "QUICK", fields: {}, note: "Road tested." },
+    ACTOR,
+  );
+  const order = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrderId }, select: { status: true } });
+  if (order.status !== "APPROVED_FOR_WORK") {
+    await lifecycle.apply(workOrderId, "APPROVE", ACTOR);
+  }
 }
 
 beforeAll(async () => {
@@ -146,10 +178,14 @@ beforeAll(async () => {
 
   await prisma.workOrderAssignment.create({ data: { tenantId, workOrderId: myJobId, staffUserId: mineStaffId } });
   await prisma.workOrderAssignment.create({ data: { tenantId, workOrderId: theirJobId, staffUserId: theirsStaffId } });
+
+  await authorizeForWork(myJobId);
+  await authorizeForWork(theirJobId);
 }, 180_000);
 
 afterAll(async () => {
   const where = { tenantId };
+  await prisma.inspection.deleteMany({ where });
   await prisma.taskBlocker.deleteMany({ where });
   await prisma.taskAssignment.deleteMany({ where });
   await prisma.task.deleteMany({ where });

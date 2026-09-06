@@ -15,6 +15,11 @@ import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { WorkflowJourneyService } from "./workflow-journey.service";
 import { JourneyFactsService } from "./journey-facts.service";
+import { JourneyEventsService } from "./journey-events.service";
+import { WorkOrderLifecycleService } from "./work-order-lifecycle.service";
+import { GateEvaluatorService } from "./gate-evaluator.service";
+import { OperationEventsService } from "./operation-events.service";
+import { CustomerSafeProjectionService } from "./customer-safe-projection.service";
 import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 import { AuditService } from "../../audit/audit.service";
@@ -24,11 +29,25 @@ const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
 
 const capabilities = new CapabilityResolutionService(asService);
+const audit = new AuditService(asService);
+const policies = new PolicyResolutionService(asService, audit, capabilities);
+// The real lifecycle service, not a stub: `actions` is only worth
+// asserting if the domain half of the answer came from the same graph
+// walk production uses.
+const lifecycle = new WorkOrderLifecycleService(
+  asService,
+  capabilities,
+  new OperationEventsService(asService, audit, new CustomerSafeProjectionService()),
+  new GateEvaluatorService(asService, policies),
+  policies,
+);
 const journeys = new WorkflowJourneyService(
   asService,
   capabilities,
-  new PolicyResolutionService(asService, new AuditService(asService), capabilities),
+  policies,
   new JourneyFactsService(asService),
+  new JourneyEventsService(asService),
+  lifecycle,
 );
 
 const SUFFIX = `jrn-${Date.now()}`;

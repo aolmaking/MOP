@@ -82,16 +82,16 @@ export class ReportingService {
       technicians.map(async (person) => {
         const [tasksCompleted, activeTasks, blockers, reworkCount] = await Promise.all([
           this.prisma.taskAssignment.count({
-            where: { tenantId, staffUserId: person.id, task: { status: "DONE", workOrder: scopeFilter } },
+            where: { tenantId, staffUserId: person.id, unassignedAt: null, task: { status: "DONE", workOrder: scopeFilter } },
           }),
           this.prisma.taskAssignment.count({
             where: { tenantId, staffUserId: person.id, unassignedAt: null, task: { status: "IN_PROGRESS", workOrder: scopeFilter } },
           }),
           this.prisma.taskBlocker.count({
-            where: { tenantId, task: { assignments: { some: { staffUserId: person.id } }, workOrder: scopeFilter } },
+            where: { tenantId, task: { assignments: { some: { staffUserId: person.id, unassignedAt: null } }, workOrder: scopeFilter } },
           }),
           this.prisma.taskAssignment.count({
-            where: { tenantId, staffUserId: person.id, task: { status: "RETURNED_FOR_REWORK", workOrder: scopeFilter } },
+            where: { tenantId, staffUserId: person.id, unassignedAt: null, task: { status: "RETURNED_FOR_REWORK", workOrder: scopeFilter } },
           }),
         ]);
 

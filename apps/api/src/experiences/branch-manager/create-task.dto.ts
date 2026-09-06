@@ -5,7 +5,7 @@ import { IsOptional, IsString, Length } from "class-validator";
  * the same write `TechnicianWorkService.createTask()` always exposed, now
  * reachable from a second, manager-facing door.
  */
-export class CreateTaskDto {
+export class CreateBranchTaskDto {
   @IsString()
   @Length(1, 200)
   title!: string;
@@ -19,4 +19,18 @@ export class CreateTaskDto {
   @IsOptional()
   @IsString()
   assignToStaffUserId?: string;
+
+  /**
+   * The approved customer recommendation this task carries out, when it
+   * carries one out. Optional, because most tasks are ordinary work that
+   * was never a recommendation -- but supplying it is the only way the
+   * history can later say this recommendation was PERFORMED rather than
+   * "approved, no work linked".
+   */
+  @IsOptional()
+  @IsString()
+  decisionItemId?: string;
 }
+
+export { CreateBranchTaskDto as CreateTaskDto };
+

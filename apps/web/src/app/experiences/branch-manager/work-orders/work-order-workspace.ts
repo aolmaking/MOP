@@ -5,7 +5,7 @@ import { Identifier } from '../../../ui/identifier/identifier';
 import { ErrorBanner } from '../../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../../ui/button/button.directive';
 import { DossierDrawer } from '../../../domain/dossier/dossier-drawer';
-import { WorkflowStrip } from '../../../domain/journey/workflow-strip';
+import { WorkflowStrip, type JourneyAction } from '../../../domain/journey/workflow-strip';
 import { pollJourney, type JourneyFeed } from '../../../domain/journey/journey-poller';
 import type { PresentedError } from '../../../runtime/http/error.interceptor';
 import { WorkOrdersApi, type WorkOrderDetail } from './work-orders.api';
@@ -67,92 +67,93 @@ export class WorkOrderWorkspace {
       },
     });
   }
-  protected readonly error = signal<PresentedError | null>(null);
-  protected readonly state = signal<State>('loading');
-  protected readonly showDossier = signal(false);
-
   /**
-   * Add-task and request-approval, the manager's own doors into the same
-   * writes the technician's Work Card already exposes -- see
-   * `WorkOrdersApi.createTask`/`raiseDecision`. Only one panel open at a
-   * time, same discipline as the Work Card's own tool panels.
+   * CONTRACTS-v0 C3. The counter's own "and while it is in, do this
+   * too": work the technician did not think to raise, added by the
+   * person the customer is standing in front of.
    */
-  protected readonly panel = signal<'none' | 'task' | 'decision'>('none');
-  protected readonly panelBusy = signal(false);
-  protected readonly panelError = signal<string | null>(null);
+  protected readonly addingTask = signal(false);
+  protected readonly newTaskTitle = signal('');
+  protected readonly taskError = signal<string | null>(null);
+  protected readonly savingTask = signal(false);
+  protected readonly taskTitleValid = computed(() => this.newTaskTitle().trim().length > 0);
 
-  protected readonly taskTitle = signal('');
-  protected readonly taskServiceKey = signal('');
-
-  protected readonly decisionName = signal('');
-  protected readonly decisionExplanation = signal('');
-  protected readonly decisionImportance = signal('MEDIUM');
-  protected readonly decisionPrice = signal('');
-  protected readonly decisionLaborPrice = signal('');
-  private static readonly MONEY = /^\d+(\.\d{1,2})?$/;
-  protected readonly decisionPriceValid = computed(() => WorkOrderWorkspace.MONEY.test(this.decisionPrice().trim()));
-
-  protected togglePanel(next: 'task' | 'decision'): void {
-    this.panelError.set(null);
-    this.panel.set(this.panel() === next ? 'none' : next);
+  protected toggleAddTask(): void {
+    this.addingTask.update((open) => !open);
+    this.newTaskTitle.set('');
+    this.taskError.set(null);
   }
 
   protected addTask(): void {
-    const title = this.taskTitle().trim();
-    if (title.length < 1) return;
-    const serviceKey = this.taskServiceKey().trim() || undefined;
-
-    this.panelBusy.set(true);
-    this.panelError.set(null);
-    this.api.createTask(this.id(), title, serviceKey).subscribe({
+    if (!this.taskTitleValid()) return;
+    this.savingTask.set(true);
+    this.taskError.set(null);
+    this.api.createTask(this.id(), { title: this.newTaskTitle().trim() }).subscribe({
       next: () => {
-        this.panelBusy.set(false);
-        this.panel.set('none');
-        this.taskTitle.set('');
-        this.taskServiceKey.set('');
+        this.savingTask.set(false);
+        this.addingTask.set(false);
+        this.newTaskTitle.set('');
+        // The server decides what the write did -- creating a task can
+        // move the job -- so the page re-reads rather than pushing the
+        // new row into the local list.
         this.load();
+        this.feed?.refresh();
       },
       error: (err: PresentedError) => {
-        this.panelBusy.set(false);
-        this.panelError.set(err.message ?? 'That did not work.');
+        this.savingTask.set(false);
+        this.taskError.set(err.message ?? 'That task did not save.');
       },
     });
   }
 
-  protected requestApproval(): void {
-    const name = this.decisionName().trim();
-    const explanation = this.decisionExplanation().trim();
-    if (name.length < 1 || explanation.length < 1 || !this.decisionPriceValid()) return;
+  /**
+   * CONTRACTS-v0 C4. The job that has a priced recommendation sitting on
+   * it and never moved, because the technician raised it and nobody
+   * pressed anything since.
+   *
+   * Reached through the journey's own action list, which is the only
+   * place that has asked BOTH questions: does the workshop's graph allow
+   * this move from here, and does this manager hold the permission. This
+   * page used to decide for itself from the status alone -- an
+   * approximation that offered the button on jobs the graph would refuse.
+   */
+  protected readonly requestingApproval = signal(false);
+  protected readonly approvalError = signal<string | null>(null);
 
-    this.panelBusy.set(true);
-    this.panelError.set(null);
-    this.api
-      .raiseDecision(this.id(), {
-        name,
-        explanation,
-        importance: this.decisionImportance(),
-        price: this.decisionPrice().trim(),
-        laborPrice: this.decisionLaborPrice().trim() || undefined,
-      })
-      .subscribe({
-        next: () => {
-          this.panelBusy.set(false);
-          this.panel.set('none');
-          this.decisionName.set('');
-          this.decisionExplanation.set('');
-          this.decisionPrice.set('');
-          this.decisionLaborPrice.set('');
-          this.load();
-          this.feed?.refresh();
-        },
-        error: (err: PresentedError) => {
-          this.panelBusy.set(false);
-          this.panelError.set(err.message ?? 'That did not work.');
-        },
-      });
+  /**
+   * An action the server offered, performed.
+   *
+   * Routed by the server's action KEY. An unrecognised key does nothing
+   * rather than guessing: a new server-side action reaches an old client
+   * as nothing, never as the wrong request.
+   */
+  protected runJourneyAction(action: JourneyAction): void {
+    if (action.key === 'request_approval') this.requestApproval();
   }
 
+  private requestApproval(): void {
+    this.requestingApproval.set(true);
+    this.approvalError.set(null);
+    this.api.requestApproval(this.id()).subscribe({
+      next: () => {
+        this.requestingApproval.set(false);
+        this.load();
+        this.feed?.refresh();
+      },
+      error: (err: PresentedError) => {
+        this.requestingApproval.set(false);
+        this.approvalError.set(err.message ?? 'That did not go through.');
+      },
+    });
+  }
+
+  protected readonly error = signal<PresentedError | null>(null);
+  protected readonly state = signal<State>('loading');
+  protected readonly showDossier = signal(false);
+
   protected readonly cancellingRequestId = signal<string | null>(null);
+  protected readonly panelError = signal<string | null>(null);
+  protected readonly cancelError = signal<string | null>(null);
 
   /** Only meaningful before the customer has answered anything. */
   protected canCancelDecision(request: { status: string }): boolean {

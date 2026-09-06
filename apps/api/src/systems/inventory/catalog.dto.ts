@@ -17,15 +17,15 @@ export class CatalogItemDto {
   @Length(1, 40)
   itemType!: string;
 
+  /**
+   * The configured category, by id. Free text was removed deliberately
+   * -- see the migration note on `inventory_items`: two taxonomies is
+   * how the manager's page and the technician's page stopped agreeing.
+   */
   @IsOptional()
   @IsString()
-  @Length(1, 80)
-  category?: string;
-
-  @IsOptional()
-  @IsString()
-  @Length(1, 80)
-  subcategory?: string;
+  @Length(1, 40)
+  catalogCategoryId?: string;
 
   /**
    * A part that fits cars and motorcycles is entered ONCE with both,
@@ -83,4 +83,25 @@ export class CatalogItemDto {
   @IsString()
   @Length(1, 2000)
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 2000)
+  imageUrl?: string;
+
+  /** The one line a technician reads under the name on a card. */
+  @IsOptional()
+  @IsString()
+  @Length(1, 200)
+  summary?: string;
+
+  /**
+   * The filter values this part carries. Absent means "leave them
+   * alone"; an empty array means "it has none", and the two are
+   * deliberately different on update.
+   */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  attributeValueIds?: string[];
 }

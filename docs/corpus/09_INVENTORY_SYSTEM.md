@@ -4,7 +4,10 @@
 > **Purpose:** how a part moves from a shelf into a car, how it comes back, and how the ledger stays honest about where it is.
 > **Authority:** DESCRIPTIVE.
 > **Scope:** catalogue, warehouses, stock balances, part requests, issues, returns, movements, transfers, supplier orders.
-> **Last verified:** 2026-09-01 against commit `a8c8bb5`.
+> **Last verified:** 2026-09-01 against commit `a8c8bb5`; the catalog-driven
+> part request (section appended at the end) verified 2026-09-03 against the
+> working tree, by `apps/api/src/testing/catalog-cart.http.spec.ts` and a
+> browser journey.
 > **Source of truth:** `apps/api/src/systems/inventory/`, `packages/shared/src/capabilities/workflow-graphs.ts` (`PART_REQUEST_GRAPH`), `packages/database/prisma/schema.prisma`.
 > **Related:** 06 (entities), 07/08 (lifecycle), 10 (the billing consequence), 13 (the Inventory Manager's workspace), 12 (the technician's half).
 
@@ -199,4 +202,97 @@ Inventory does not write invoices. It produces a `ChargeableWorkItem` (`packages
 | ⚠️ `WAREHOUSE_REVIEWING` / `IN_TRANSIT` / `WAITING_TRANSFER` / `WAITING_SUPPLIER` | **Read by three services, written by nothing, unreachable in the graph.** Gap G-INV-01 |
 | `InventoryTransfer` end-to-end (request → in transit → received) | 🟡 — model and status enum exist; the graph has no transfer states, so the multi-warehouse transfer journey is not reachable as a lifecycle |
 | `SupplierOrder` end-to-end | 🟡 — model, permission (`inventory.supplier_order.create`) and status enum exist; no dedicated page completes the loop back to `SUPPLIER_RECEIPT` |
-| Stock adjustment UI | 🟡 — `inventory.stock.adjust` and the `ADJUSTMENT` movement type exist; reconciliation is not yet a first-class page, which §1 argues it must eventually be |
+
+---
+
+## Appendix A — Catalog configuration `[VERIFIED]`
+
+> Added 2026-09-03. Proven by `apps/api/src/testing/catalog-cart.http.spec.ts`
+> (22 cases, real HTTP, real Postgres) and a browser journey on the demo tenant.
+
+The catalogue described above answered "what is this item and what does
+it cost". It could not answer **"where would somebody look for it?"** —
+and that is the question a technician actually asks. `category` and
+`subcategory` were free text nobody read back, so the storekeeper typed
+a taxonomy into a field that never became navigation.
+
+### A.1 The four configuration tables
+
+| Table | What it holds | Why it is separate |
+|---|---|---|
+| `CatalogCategory` | Name, slug, one optional parent, `isActive`, `technicianVisible` | Where a part is *found*. One level of nesting: a technician on a phone at a car cannot drill four deep |
+| `CatalogAttribute` | A filter dimension the manager invents — "Vehicle Type", "Brand", "Engine Size" | The vocabulary is the workshop's, not the product's |
+| `CatalogAttributeValue` | The values that dimension offers — Sedan, SUV, Truck | One row per value, so filtering is a join and not a JSON scan |
+| `CatalogCategoryAttribute` | Which filters a category offers | Without it, every technician sees every filter in the workshop, including "Engine Size" while browsing wiper blades |
+| `InventoryItemAttributeValue` | What a part actually is, in that vocabulary | One row per value: a part fitting Toyota and Hyundai is two rows, both indexable |
+
+**Why not `CustomFieldDefinition`.** That table is additive form capture:
+its values are copied into each consuming record's own `fields` JSON at
+fill time and are never read back to filter anything. A catalog filter
+is the opposite — it must be indexable and joinable, because filtering
+the catalogue is the hot path a technician waits on. Reusing it would
+have made "show me Toyota sedan pads" a full scan over JSON.
+
+### A.2 The taxonomy is now singular
+
+`inventory_items.category` and `.subcategory` were **dropped**, not kept
+alongside the new tables. Migration
+`20260902090000_catalog_taxonomy_and_attributes` first mints a real
+category per distinct string per tenant (parent from `category`, child
+from `subcategory`), repoints every item at the deepest one it had, and
+only then drops the columns. Two shapes of "which kind of thing is this"
+is precisely the drift the feature exists to remove: the manager typed
+one and the technician browsed the other, with nothing keeping them in
+step.
+
+`InventoryReportsService`'s category chart now groups by the **root**
+category through the relation — a manager reading "where does the money
+go" wants Brakes, not seven rows for its sub-categories.
+
+### A.3 One browse engine
+
+`CatalogBrowseService.browse` is the only code that answers "what does
+somebody browsing this catalogue see". It serves both
+`GET /technician/parts-catalog` and `GET /inventory/catalog-preview`,
+with the same arguments and the same response shape. The spec asserts
+the two are equal for an identical query, so the manager's preview
+cannot agree with the form and disagree with the product.
+
+Its three standing refusals:
+
+- **It never returns cost.** `BrowseCard` has no field for it, so a
+  preview cannot leak margin the way a nulled field eventually does.
+- **It never invents taxonomy.** An unconfigured workshop browses as an
+  unconfigured workshop; there is no hardcoded fallback category.
+- **It reads stock, never writes it.** `onHand` is a balance owned by
+  `StockService`.
+
+Filter semantics: **AND across attributes, OR within one** — Sedan+SUV
+widens, Sedan+Toyota narrows. Facet counts exclude a facet's own
+selection from its own count, so choosing "Toyota" does not make every
+other brand read zero and strand the technician with a filter they
+cannot back out of.
+
+### A.4 The cart is not a new domain
+
+`PartRequestService.requestMany` turns a basket into **N ordinary
+`PartRequest` rows in one transaction**, applying `REQUEST_PART` to the
+work order once rather than once per line. There is deliberately no
+shopping-order entity: the store approves, issues and returns each line
+independently and those statuses genuinely diverge, so a wrapper would
+have to be kept in step with N of them and the store's queue would end
+up with two answers to "what is outstanding?".
+
+Idempotency is a client-minted `cartKey` with a unique index on
+`(tenantId, cartKey, inventoryItemId)`. Postgres treats NULLs as
+distinct, so every request raised outside a cart is unconstrained. A
+second submit of the same basket returns the requests the first created
+(`replayed: true`) rather than doubling the store's work — the failure
+this defends against is a stalled connection on a workshop phone, and a
+duplicate part request is only ever noticed when somebody counts the
+shelf.
+
+Same item twice in one basket is merged into one request for the sum,
+before validation, so the total is what gets range-checked (ceiling 999
+per line — a fat-finger guard, not a stock rule).
+

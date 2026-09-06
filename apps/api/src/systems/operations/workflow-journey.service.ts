@@ -1,38 +1,103 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { WORK_ORDER_GRAPH, workflowJourney, type JourneyStage } from "@mop/shared";
+import {
+  WORK_ORDER_GRAPH,
+  workflowJourney,
+  type JourneyAction,
+  type JourneyAudience,
+  type JourneyCurrentStage,
+  type JourneyStage,
+  type PresentedJourney,
+  type PresentedJourneyStage,
+} from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 import { JourneyFactsService, type JourneyFacts, type StageFact } from "./journey-facts.service";
+import { JourneyEventsService } from "./journey-events.service";
+import { WorkOrderLifecycleService } from "./work-order-lifecycle.service";
 
-/** Who is looking. The same journey reads differently to each of them. */
-export type JourneyAudience = "CUSTOMER" | "TECHNICIAN" | "MANAGER";
+export type { JourneyAudience, PresentedJourney } from "@mop/shared";
 
-export interface PresentedStage extends JourneyStage {
-  /** Plain words for this audience. Never the enum. */
+/** Kept as a local alias: the shape is published in `@mop/shared`. */
+export type PresentedStage = PresentedJourneyStage;
+
+/**
+ * The reader, as far as this projection needs to know them.
+ *
+ * Only a permission oracle, deliberately. Access control lives in
+ * `identity/`, and a `systems/` service reaching into it would put the
+ * permission resolver behind a business projection where nobody looks
+ * for it. The controller already holds the session and the access
+ * service, so it passes the ANSWER in rather than the machinery.
+ *
+ * Absent means "do not offer any action" -- a surface that has not said
+ * who is looking gets no buttons rather than everyone's buttons.
+ */
+export interface JourneyViewer {
+  can(permission: string): Promise<boolean>;
+}
+
+/**
+ * An action a role has a real door for, and the permission behind it.
+ *
+ * Only intents this audience can actually reach through a controller
+ * appear here. `availableIntents` also returns moves belonging to other
+ * people -- a manager's review decision, the store's hand-over -- and
+ * offering those to a technician would put a button on the tablet that
+ * the controller then refuses. A dead button teaches people not to press
+ * buttons, which is worse than showing none.
+ */
+interface ActionOffer {
+  readonly key: string;
   readonly label: string;
-  /** One line of real detail, or null when there is nothing true to add. */
-  readonly detail: string | null;
-  /** Progressive disclosure: the facts behind the line. */
-  readonly facts: readonly StageFact[];
+  readonly hint: string | null;
+  readonly permission: string;
 }
 
-export interface PresentedJourney {
-  readonly stages: readonly PresentedStage[];
-  readonly finished: boolean;
-  readonly waiting: boolean;
-  readonly blocked: boolean;
-  /** Where are we, and why. */
-  readonly headline: string;
-  /** What happened to get here. Null at the very start. */
-  readonly happened: string | null;
-  /** What happens next. Null once terminal. */
-  readonly next: string | null;
-  /** Who owes the move, in this audience's words. Null when nobody does. */
-  readonly waitingOn: { readonly who: string; readonly since: string | null } | null;
-  /** Real events, safe for this audience. */
-  readonly history: readonly { readonly at: string; readonly message: string }[];
-}
+const ACTIONS: Record<JourneyAudience, Partial<Record<string, ActionOffer>>> = {
+  TECHNICIAN: {
+    START_INSPECTION: {
+      key: "start_inspection",
+      label: "Start inspection",
+      hint: "The vehicle is checked in and waiting on you.",
+      permission: "task.view_assigned",
+    },
+    START_WORK: {
+      key: "start_work",
+      label: "Start work",
+      hint: "The work is approved and nothing is holding it.",
+      permission: "task.view_assigned",
+    },
+  },
+  MANAGER: {
+    // Exactly ONE offer, and not because the manager has only one move.
+    //
+    // Review, QC and delivery are all real manager moves, and all three
+    // already have a dedicated control on the surface that owns them --
+    // the workspace's own Pass/Send back pair, and the delivery board's
+    // release, which additionally asks finance whether the invoice is
+    // settled. Repeating them here would put a second, thinner door
+    // beside a considered one: a single "Decide team review" button
+    // cannot express pass-or-fail, and a "Release" that skipped the
+    // settlement question would be the more dangerous of the two doors.
+    //
+    // "Ask the customer" is different. It is a genuine one-press move,
+    // it has no control anywhere on this page, and its endpoint exists
+    // precisely because jobs sit in UNDER_INSPECTION with a
+    // recommendation already raised and nobody having moved them.
+    REQUEST_APPROVAL: {
+      key: "request_approval",
+      label: "Ask the customer",
+      hint: "The recommendation is ready to send for approval.",
+      permission: "workorders.branch.view",
+    },
+  },
+  // The customer's journey is a status they read, not a console they
+  // drive. Their one real action -- answering a decision -- has its own
+  // page, reached from the portal, and duplicating it here would give
+  // them two doors to the same answer with different consequences.
+  CUSTOMER: {},
+};
 
 /**
  * The stage names each audience reads.
@@ -150,9 +215,30 @@ export class WorkflowJourneyService {
     private readonly capabilities: CapabilityResolutionService,
     private readonly policies: PolicyResolutionService,
     private readonly facts: JourneyFactsService,
+    private readonly journeyEvents: JourneyEventsService,
+    private readonly lifecycle: WorkOrderLifecycleService,
   ) {}
 
-  async forWorkOrder(tenantId: string, workOrderId: string, audience: JourneyAudience): Promise<PresentedJourney> {
+  /**
+   * One work order's journey, for one reader.
+   *
+   * `workOrderId` is looked up WITH `tenantId` in the same query, and a
+   * miss is a 404 rather than a 403. Both halves matter: the tenant
+   * filter is what makes the isolation guarantee real rather than
+   * advisory, and answering "not found" is what stops a caller using
+   * this endpoint to discover which ids exist in another workshop.
+   *
+   * Callers are still expected to have applied their own scope first --
+   * this method knows nothing about branches, rosters or customers, and
+   * a controller that hands it a raw path parameter without asking its
+   * own scoping service is the bug, not this method.
+   */
+  async forWorkOrder(
+    tenantId: string,
+    workOrderId: string,
+    audience: JourneyAudience,
+    viewer?: JourneyViewer,
+  ): Promise<PresentedJourney> {
     const workOrder = await this.prisma.workOrder.findFirst({
       where: { id: workOrderId, tenantId },
       select: { status: true },
@@ -161,11 +247,12 @@ export class WorkflowJourneyService {
       throw new NotFoundException({ code: "work_order_not_found", message: "Work order not found." });
     }
 
-    const [profile, history, facts, approvalScope] = await Promise.all([
+    const [profile, history, facts, approvalScope, events] = await Promise.all([
       this.capabilities.resolveCurrent(tenantId),
       this.statusHistory(tenantId, workOrderId),
       this.facts.gather(tenantId, workOrderId),
       this.policies.resolveValue(tenantId, "APPROVAL_REQUIRED_SCOPE"),
+      this.journeyEvents.forWorkOrder(tenantId, workOrderId, audience),
     ]);
 
     const journey = workflowJourney(WORK_ORDER_GRAPH, profile, workOrder.status, history, {
@@ -190,22 +277,207 @@ export class WorkflowJourneyService {
 
     const status = workOrder.status;
     const blocked = journey.blocked || blockedByTask;
+    const asOf = new Date();
+
+    const headline = blockedByTask
+      ? this.blockerHeadline(audience, facts)
+      : (this.headline(status, audience, facts) ?? this.movingHeadline(audience, facts));
+    const upNext = journey.finished ? null : this.next(journey.stages, status, audience, facts);
+    const waitingOn = blockedByTask
+      ? { who: OWNER.BLOCKED[audience], since: facts.blockers[0].since }
+      : this.waitingOn(status, audience, facts);
 
     return {
+      workOrderId,
       stages,
       finished: journey.finished,
       waiting: journey.waiting && !blockedByTask,
       blocked,
-      headline: blockedByTask
-        ? this.blockerHeadline(audience, facts)
-        : (this.headline(status, audience, facts) ?? this.movingHeadline(audience, facts)),
+      headline,
       happened: this.happened(journey.stages, audience, facts),
-      next: journey.finished ? null : this.next(journey.stages, status, audience, facts),
-      waitingOn: blockedByTask
-        ? { who: OWNER.BLOCKED[audience], since: facts.blockers[0].since }
-        : this.waitingOn(status, audience, facts),
-      history: await this.safeHistory(tenantId, workOrderId, audience),
+      next: upNext,
+      waitingOn,
+      current: this.currentStage(
+        { status, audience, facts, events, waitingOn, next: upNext, blocked, finished: journey.finished },
+        asOf,
+      ),
+      events,
+      actions: await this.actionsFor(workOrderId, audience, viewer),
+      asOf: asOf.toISOString(),
     };
+  }
+
+  /**
+   * Where the job is, since when, for how long, and what has to happen
+   * next -- the panel somebody reads before they read the strip.
+   *
+   * `since` is the moment the job ENTERED this status, taken from the
+   * last real `work_order.status_changed` event rather than from
+   * `WorkOrder.updatedAt`. They are not the same thing: a job that has
+   * sat in WAITING_PARTS for two days but had a note added an hour ago
+   * has an `updatedAt` of an hour ago, and a duration computed from it
+   * would understate the delay by a factor of forty-eight. The attention
+   * queue's own comment already admits it uses `updatedAt` as a proxy
+   * "until the lifecycle records a real state-entry timestamp"; the
+   * event stream IS that timestamp, and no new column was needed.
+   *
+   * `waitingSince` is deliberately separate, and is often EARLIER: the
+   * customer has owed an answer since they were asked, which may be
+   * before the work order was moved into a waiting state at all.
+   * Collapsing the two would quietly reset the clock every time the job
+   * changed status, hiding exactly the delay a manager is looking for.
+   */
+  private currentStage(
+    input: {
+      status: string;
+      audience: JourneyAudience;
+      facts: JourneyFacts;
+      events: readonly { readonly at: string; readonly stage: string | null }[];
+      waitingOn: { who: string; since: string | null } | null;
+      next: string | null;
+      blocked: boolean;
+      finished: boolean;
+    },
+    asOf: Date,
+  ): JourneyCurrentStage {
+    const since = this.enteredCurrentStatusAt(input.events, input.status);
+    const waitingSince = input.waitingOn?.since ?? null;
+
+    return {
+      status: input.status,
+      label: JOURNEY_LABELS[input.audience][input.status] ?? input.status,
+      since,
+      forMinutes: this.minutesSince(since, asOf),
+      waitingOn: input.waitingOn?.who ?? null,
+      waitingSince,
+      waitingForMinutes: this.minutesSince(waitingSince, asOf),
+      reason: this.stoppedReason(input.status, input.audience, input.facts, input.blocked),
+      next: input.finished ? null : input.next,
+    };
+  }
+
+  /**
+   * The last time the job entered the status it is in now.
+   *
+   * The LAST, not the first: a job that failed QC, was reworked and came
+   * back has been in READY_FOR_QC twice, and "how long has this been
+   * waiting for QC" means since it got here this time. The strip's own
+   * stage timestamp deliberately shows the FIRST entry -- that is when
+   * the stage was reached in the job's story -- so the two answer
+   * different questions and are computed separately on purpose.
+   */
+  private enteredCurrentStatusAt(
+    events: readonly { readonly at: string; readonly stage: string | null }[],
+    status: string,
+  ): string | null {
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      if (events[index].stage === status) return events[index].at;
+    }
+    return null;
+  }
+
+  /**
+   * Computed once, server-side, and sent as a number.
+   *
+   * Three surfaces deriving "how long" from a timestamp is three
+   * chances to derive it differently -- and one of them would be a
+   * workshop phone whose clock is wrong.
+   */
+  private minutesSince(iso: string | null, asOf: Date): number | null {
+    if (!iso) return null;
+    const elapsed = Math.floor((asOf.getTime() - new Date(iso).getTime()) / 60_000);
+    // A negative elapsed time means the row is dated in the future --
+    // clock skew, not a real duration. Zero is the honest floor.
+    return elapsed < 0 ? 0 : elapsed;
+  }
+
+  /**
+   * Why the job is stopped, in one line -- or null when it is simply
+   * moving, which is a real answer and not a missing one.
+   */
+  private stoppedReason(
+    status: string,
+    audience: JourneyAudience,
+    facts: JourneyFacts,
+    blocked: boolean,
+  ): string | null {
+    if (blocked && facts.blockers.length > 0) {
+      const first = facts.blockers[0];
+      return audience === "CUSTOMER"
+        ? "Work is paused while we sort something out."
+        : (first.note ?? first.reason.toLowerCase().replace(/_/g, " "));
+    }
+
+    switch (status) {
+      case "AWAITING_CUSTOMER_APPROVAL":
+      case "WAITING_CUSTOMER": {
+        // money-lint-ok: a count of decision items, not a currency amount.
+        const unanswered = facts.decisionsTotal - facts.decisionsAnswered;
+        if (unanswered <= 0) return null;
+        return audience === "CUSTOMER"
+          ? `${unanswered} item${unanswered === 1 ? "" : "s"} still need your answer.`
+          : `${unanswered} item${unanswered === 1 ? "" : "s"} unanswered by the customer.`;
+      }
+
+      case "WAITING_PARTS": {
+        const parts = facts.partsOutstanding;
+        if (parts.length === 0) return null;
+        return audience === "CUSTOMER"
+          ? `Waiting for ${parts.length} part${parts.length === 1 ? "" : "s"} to arrive.`
+          : parts.map((part) => `${part.name} ×${part.quantity}`).join(" · ");
+      }
+
+      case "PAYMENT_PENDING": {
+        const due = facts.invoice?.outstanding;
+        if (!due) return null;
+        return audience === "CUSTOMER" ? `${due} outstanding.` : `${due} outstanding on the invoice.`;
+      }
+
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * The moves this reader may actually make on this job, right now.
+   *
+   * BOTH halves are checked, and neither alone is enough. The domain
+   * half comes from `availableIntents`, which asks the workshop's own
+   * effective graph -- so a shop that routes around inspection never
+   * offers "Start inspection". The authorization half is the viewer's
+   * real permission, resolved through the full layered resolver by the
+   * controller that owns the session.
+   *
+   * An empty list is a real answer. Offering an action the server would
+   * then refuse is the dead-button failure the work card's own
+   * `primaryActionFor` already avoids, and this follows the same rule
+   * for the same reason.
+   */
+  private async actionsFor(
+    workOrderId: string,
+    audience: JourneyAudience,
+    viewer?: JourneyViewer,
+  ): Promise<readonly JourneyAction[]> {
+    if (!viewer) return [];
+
+    const catalogue = ACTIONS[audience];
+    if (Object.keys(catalogue).length === 0) return [];
+
+    const intents = await this.lifecycle.availableIntents(workOrderId);
+    const offers = intents.map((intent) => catalogue[intent]).filter((offer): offer is ActionOffer => !!offer);
+    if (offers.length === 0) return [];
+
+    // One permission question per distinct PERMISSION rather than per
+    // offer: two offers behind the same key would otherwise send the
+    // full layered resolver down the same path twice.
+    const permissions = [...new Set(offers.map((offer) => offer.permission))];
+    const granted = new Map(
+      await Promise.all(permissions.map(async (permission) => [permission, await viewer.can(permission)] as const)),
+    );
+
+    return offers
+      .filter((offer) => granted.get(offer.permission) === true)
+      .map((offer) => ({ key: offer.key, label: offer.label, hint: offer.hint }));
   }
 
   /**
@@ -597,65 +869,6 @@ export class WorkflowJourneyService {
             : null;
 
     return { who, since };
-  }
-
-  /**
-   * The real event stream, reduced to what this audience may read.
-   *
-   * A customer gets their own safe timeline -- the one
-   * `CustomerSafeProjectionService` already writes -- rather than a
-   * filtered view of internal events, because "filter the internal log"
-   * is exactly how internal words eventually leak. Staff get the
-   * operational events.
-   */
-  private async safeHistory(
-    tenantId: string,
-    workOrderId: string,
-    audience: JourneyAudience,
-  ): Promise<readonly { at: string; message: string }[]> {
-    if (audience === "CUSTOMER") {
-      // TWO real sources, merged.
-      //
-      // `CustomerTimelineEvent` carries the milestones that are not
-      // status changes -- a decision answered, an invoice issued, a
-      // payment taken -- already written through
-      // CustomerSafeProjectionService. The status changes themselves
-      // carry the shape of the repair, and are projected through the
-      // CUSTOMER label table, which is curated vocabulary a test already
-      // refuses to let become an enum in disguise.
-      //
-      // Neither alone tells the story: timeline events know nothing
-      // about the vehicle moving through the workshop, and status events
-      // know nothing about the customer's own decision landing.
-      const [timeline, statuses] = await Promise.all([
-        this.prisma.customerTimelineEvent.findMany({
-          where: { tenantId, workOrderId },
-          select: { message: true, createdAt: true },
-          orderBy: { createdAt: "asc" },
-          take: 50,
-        }),
-        this.statusEvents(tenantId, workOrderId),
-      ]);
-
-      const merged = [
-        ...timeline.map((row) => ({ at: row.createdAt.toISOString(), message: row.message })),
-        ...statuses.map((event) => ({
-          at: event.at,
-          message: JOURNEY_LABELS.CUSTOMER[event.status] ?? event.status,
-        })),
-      ];
-      return merged.sort((a, b) => a.at.localeCompare(b.at));
-    }
-
-    const events = await this.statusEvents(tenantId, workOrderId);
-
-    // `OperationEvent` carries actorId but not a name, and joining
-    // AuditLog purely to decorate a timeline is not worth the read --
-    // the manager already sees who is on the job on the stage itself.
-    return events.map((event) => ({
-      at: event.at,
-      message: JOURNEY_LABELS[audience][event.status] ?? event.status,
-    }));
   }
 
   /**

@@ -36,8 +36,8 @@ export class ReportsController {
     @Query("to") to?: string,
     @Query("branchId") branchId?: string,
   ) {
-    const tenantId = await this.require(session);
-    return this.wrap(() => this.overview.build(tenantId, { from, to, branchId }));
+    const { tenantId, effectiveBranchId } = await this.require(session, branchId);
+    return this.wrap(() => this.overview.build(tenantId, { from, to, branchId: effectiveBranchId }));
   }
 
   @Get("operations")
@@ -51,8 +51,8 @@ export class ReportsController {
     // day/week/month control to day on this tab only.
     @Query("groupBy") groupBy?: string,
   ) {
-    const tenantId = await this.require(session);
-    return this.wrap(() => this.operations.build(tenantId, { from, to, branchId, groupBy }));
+    const { tenantId, effectiveBranchId } = await this.require(session, branchId);
+    return this.wrap(() => this.operations.build(tenantId, { from, to, branchId: effectiveBranchId, groupBy }));
   }
 
   @Get("financial")
@@ -63,8 +63,8 @@ export class ReportsController {
     @Query("branchId") branchId?: string,
     @Query("groupBy") groupBy?: string,
   ) {
-    const tenantId = await this.require(session);
-    return this.wrap(() => this.financial.build(tenantId, { from, to, branchId, groupBy }));
+    const { tenantId, effectiveBranchId } = await this.require(session, branchId);
+    return this.wrap(() => this.financial.build(tenantId, { from, to, branchId: effectiveBranchId, groupBy }));
   }
 
   @Get("inventory")
@@ -72,9 +72,10 @@ export class ReportsController {
     @CurrentSession() session: SessionContext,
     @Query("from") from?: string,
     @Query("to") to?: string,
+    @Query("branchId") branchId?: string,
   ) {
-    const tenantId = await this.require(session);
-    return this.wrap(() => this.inventory.build(tenantId, { from, to }));
+    const { tenantId, effectiveBranchId } = await this.require(session, branchId);
+    return this.wrap(() => this.inventory.build(tenantId, { from, to, branchId: effectiveBranchId }));
   }
 
   @Get("customers")
@@ -82,9 +83,10 @@ export class ReportsController {
     @CurrentSession() session: SessionContext,
     @Query("from") from?: string,
     @Query("to") to?: string,
+    @Query("branchId") branchId?: string,
   ) {
-    const tenantId = await this.require(session);
-    return this.wrap(() => this.customers.build(tenantId, { from, to }));
+    const { tenantId, effectiveBranchId } = await this.require(session, branchId);
+    return this.wrap(() => this.customers.build(tenantId, { from, to, branchId: effectiveBranchId }));
   }
 
   private async wrap<T>(fn: () => Promise<T>): Promise<T> {
@@ -98,11 +100,24 @@ export class ReportsController {
     }
   }
 
-  private async require(session: SessionContext): Promise<string> {
+  private async require(session: SessionContext, requestedBranchId?: string): Promise<{ tenantId: string; effectiveBranchId?: string }> {
     const allowed = await this.access.can(session, "reports.owner.view");
     if (!allowed || !session.tenantId) {
       throw new ForbiddenException({ code: "forbidden", message: "You do not have access to Reports & Analytics." });
     }
-    return session.tenantId;
+    const branchScope = session.branchScope ?? [];
+    if (branchScope.length > 0) {
+      if (requestedBranchId) {
+        if (!branchScope.includes(requestedBranchId)) {
+          throw new ForbiddenException({ code: "forbidden_branch", message: "You do not have access to this branch." });
+        }
+        return { tenantId: session.tenantId, effectiveBranchId: requestedBranchId };
+      }
+      if (branchScope.length === 1) {
+        return { tenantId: session.tenantId, effectiveBranchId: branchScope[0] };
+      }
+      throw new ForbiddenException({ code: "branch_scope_required", message: "Please specify a branch within your authorized scope." });
+    }
+    return { tenantId: session.tenantId, effectiveBranchId: requestedBranchId };
   }
 }

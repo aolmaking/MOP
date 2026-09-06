@@ -2,95 +2,338 @@
 
 > **Purpose:** everything needed to continue MOP in a fresh session without the previous conversation.
 > **Companion:** [`CLAUDE.md`](./CLAUDE.md) holds permanent knowledge (architecture, rules, toolchain). This holds *where we are*.
-> **Last updated:** 2026-09-02 — the mission is now governed by
-> [`docs/STRATEGY_B_EXECUTION_LEDGER.md`](./docs/STRATEGY_B_EXECUTION_LEDGER.md). Read that file first; it is the live queue. See the entry directly below for what just landed, then the entries after it for the history this new mission builds on.
+> **Last updated:** 2026-09-05 — Phase T2 officially closed (Mission 1: Inspection, Findings & Customer Lineage Experience).
+> Previous entries: 2026-09-03 (catalog-driven part requests & journey projection), 2026-09-02 (reconciliation).
+> **Read [`docs/LAUNCH_HANDOVER.md`](docs/LAUNCH_HANDOVER.md) first** — it is the live, current status document going forward alongside this file.
 > **Keep this current.** Update it at the end of any phase task, and before ending a long session.
 
 ---
 
-## 0. Mission pivot: Strategy B — Quick-Service Vertical, 14-day contract (2026-09-02)
+## Phase T2 — Official Closure: Mission 1 Inspection, Findings & Customer Lineage Experience (2026-09-05)
 
-The owner gave a full 14-day product-scope contract directly in chat (four
-strategies compared — Minimal OS, Quick-Service Vertical, Configurable
-Core, Pilot Product — with Strategy B chosen: the existing
-`SINGLE_BAY_QUICK_SERVICE` capability profile shipped as the product,
-`BILLING=EXTERNAL` as the compliance seam since no country adapter
-exists) and instructed this session to self-manage the mission queue,
-work it continuously across sessions without stopping for confirmation,
-and resume automatically after any usage/token limit recharges. The full
-MUST/SHOULD/DEFERRED/FORBIDDEN contract, current code-verified status per
-item, and the next-item pointer live in
-[`docs/STRATEGY_B_EXECUTION_LEDGER.md`](./docs/STRATEGY_B_EXECUTION_LEDGER.md)
-— that file, not this section, is the live queue going forward.
-`docs/UI_UX_EXECUTION_LEDGER.md`'s remaining items were folded into the
-new ledger's "Also queued" section rather than abandoned.
+**Status:** `COMPLETE` (Formally closed after passing Final Regression Audit with zero regressions).
 
-**First slice shipped this pass — M-1 (spine ignition, backend) + M-3
-(decision lifecycle hygiene):** a code-verified audit (Explore agent, full
-file:line citations) found the six lifecycle intents `START_INSPECTION`,
-`REQUEST_APPROVAL`, `APPROVE`, `START_WORK`, `ASK_CUSTOMER`,
-`CUSTOMER_RESPONDED` had zero production callers — a job could be booked
-in and could never move again except through a test calling
-`WorkOrderLifecycleService.apply()` directly. Fixed:
+### 1. Delivered Scope
+The completed Phase T2 delivered a cohesive, end-to-end Technician operational workflow across Steps 3 through 7:
+- **Step 3 — Frontend API Contract Alignment:** Aligned Angular Technician contracts (`technician.api.ts`) with the authoritative backend WorkCard projection, introducing `WorkCardFinding`, typed `decisionStatus` (`NOT_REQUESTED`, `PENDING`, `APPROVED`, `DECLINED`), and canonical payload-object contracts (`RecordInspectionPayload`).
+- **Step 4 — Frontend Data Lineage Repair:** Preserved strict data lineage from `Inspection` → `Fault` → `CustomerDecisionItem`. `createFault` passes the active `inspectionId`, and decision raising binds directly to the server-minted `fault.id` without fake IDs or orphaned records.
+- **Step 5A — Mission 1 UX Foundation:** Replaced passive status displays with an active operational entry point. Made customer complaint prominent and established the authoritative `Start inspection` CTA for assigned technicians on `REGISTERED` jobs.
+- **Step 5B — Active Inspection Workspace:** Operationalized `UNDER_INSPECTION` (`IN_PROGRESS`). Delivered the active inspection workspace with real-time findings display, inline `+ Log finding` form with severity/description/actionable pricing, and formal `Complete inspection` metadata capture (odometer, duration, notes).
+- **Step 5C — Post-Inspection Lifecycle UX Fix:** Resolved post-inspection discontinuity. Read-only findings display persists when `inspection.state === 'COMPLETED'`. Added contextual `.mission-locked-banner` surfacing `repairLockReason` during `AWAITING_CUSTOMER_APPROVAL` and `UNDER_INSPECTION`, ensuring technicians clearly understand why repair work is locked.
+- **Step 6 — Inspection Decoupled from Exception Handling:** Decoupled normal inspection from exception handling. Removed duplicate `Record inspection` controls and panels from `Something's wrong` tools, eliminating duplicate lifecycles and restoring single-responsibility semantics.
+- **Step 7 — Tech Now vs My Work Orientation & Messaging:** Clarified the distinct responsibilities of the two technician views:
+  - **Tech Now (`/tech/now`):** Single active bay focus; answers "What am I working on right now?" with customer complaint, operational posture, and direct Work Card navigation.
+  - **Tech My Work (`/tech/my-work`):** Full shift queue; answers "What else is mine today?" with shift workload counters and human-readable operational status badges (`Needs Inspection`, `Under Inspection`, `Awaiting Customer Approval`, `Ready to Start`, `Work in Progress`, `Paused / Blocked`).
 
-- `TechnicianWorkService.startInspection`/`.startWork` (new), exposed at
-  `POST technician/work-orders/:id/start-inspection`/`start-work`.
-- `CustomerDecisionService.raiseAndSend`/`applyAnswers`
-  (`apps/api/src/systems/customer/decision.service.ts`) now call the
-  lifecycle service themselves, outside their own write transactions, via
-  a new `moveIfPossible` that swallows only a refused transition
-  (`ConflictException`) — a genuine bug still propagates.
-  `raiseAndSend` tries `REQUEST_APPROVAL` then `ASK_CUSTOMER`;
-  `applyAnswers` tries `APPROVE` (only when at least one item was actually
-  approved — a full rejection must never read as an approval) then
-  `CUSTOMER_RESPONDED`, and only once the whole request is resolved, not
-  on a partial answer.
-- Branch Manager gained parity endpoints — `POST
-  branch-manager/work-orders/:id/tasks` and `.../decisions` — reusing the
-  exact same `TechnicianWorkService.createTask`/`CustomerDecisionService.
-  raiseAndSend` the technician's own card calls, so both doors into the
-  same action agree by construction.
-- **M-3:** `CustomerDecisionService.read()` now writes `SENT -> VIEWED`
-  (best-effort; a read must never fail because the status write did) —
-  `CUSTOMER_DECISION_GRAPH` had declared that edge since it was written
-  and nothing wrote it. New `cancel()` lets staff withdraw an ask nobody
-  has answered yet (refuses once `respondedAt` is set), wired at `POST
-  branch-manager/approvals/:requestId/cancel`.
-- New permission keys (all in `packages/shared/src/permissions/`):
-  `task.start_inspection`, `task.start_work`, `task.branch.create`,
-  `customer_decision.cancel` — granted to TECHNICIAN/BRANCH_MANAGER by
-  default respectively. **Note:** existing seeded tenants will not have
-  these rows until re-seeded or backfilled; new tenants get them
-  automatically since onboarding seeds from this map.
+### 2. Verified Architectural Guarantees & Invariants
+- **Lineage Chain:** `Inspection` → `Fault` → `CustomerDecisionItem`.
+- **Backend Lifecycle Authority:** Inspection lifecycle transitions are strictly owned by `WorkOrderLifecycleService` and `TechnicianWorkService`.
+- **Mission 1 Sole Initiation:** Inspection is initiated only through Mission 1 via `POST /technician/work-orders/:id/start-inspection`.
+- **Active Controls Scope:** Active inspection controls (logging findings, completing inspection) exist only while `card.status === 'UNDER_INSPECTION'` and `card.inspection.state === 'IN_PROGRESS'`.
+- **Read-Only Post-Inspection:** Completed inspections (`COMPLETED`) are strictly read-only; findings and customer decision outcomes remain fully visible without mutation controls.
+- **Lineage Integrity:** `inspectionId` is preserved when creating faults during inspection; server-generated `fault.id` is used when raising customer decisions.
+- **Fault Resilience:** Partial failure when raising a decision preserves the successfully created fault record.
+- **Repair Authorization Authority:** `repairLocked` and `repairLockReason` remain authoritative backend projections; the frontend cannot bypass repair authorization.
+- **Separation of Concerns:** Inspection is a normal operational stage and not an exception workflow.
+- **Operational Clarity:** Tech Now and Tech My Work have distinct roles and do not duplicate queue mechanics.
 
-**Verified:** 15 new integration tests against real Postgres
-(`decision.integration.spec.ts`, `technician-work.integration.spec.ts`),
-full gate green — 884/885 API tests (the one failure,
-`scheduler-lock.integration.spec.ts`, is a pre-existing flaky
-advisory-lock race under full-suite load; confirmed unrelated, passes
-clean in isolation), 243 shared tests, all 6 custom lints, `apps/api` +
-`packages/shared` typecheck, full build (API + web).
+### 3. Verification Record
+All verification passed with zero failures and zero regressions:
+- **Frontend Unit & Component Suites:** 62 test files passed, 368 tests passed (`corepack pnpm --filter @mop/web test`).
+  - `tech-work-card.spec.ts`: 58 tests passed
+  - `tech-now.spec.ts`: 7 tests passed
+  - `tech-my-work.spec.ts`: 4 tests passed
+- **Backend Suites:**
+  - `technician-work-view.service.spec.ts`: 10 tests passed
+  - `technician-inspection-lifecycle.integration.spec.ts`: 15 tests passed
+- **Production Build:** PASSED (`corepack pnpm --filter @mop/web build`, Exit Code 0).
 
-**Web wiring shipped in a second commit the same pass** (`1c6ef0a`): the
-Tech Work Card's contextual primary action (Start inspection / Start
-work, computed from job status) and the BM workspace's Add-task /
-Ask-the-customer panels plus a Cancel action on unanswered decisions.
-272/272 web tests, full build clean. See the ledger's "Next item" (M-5,
-the technician part-return leg) for the exact resume point.
+---
 
-**Pre-existing uncommitted work found at session start, left untouched by
-this pass, on purpose:** `apps/api/src/control/platform/
-plan-limits.service.ts` had an uncommitted, substantial extension in the
-working tree (a per-tenant `ControlSetting`-backed override on top of the
-plan default — `EffectiveLimit`, `effectiveLimit(s)`, an
-`activeOverride` read) referencing a `TenantLimitOverrideService` in
-`apps/api/src/control/governance/` that does not yet exist. It typechecks
-and builds cleanly standalone (confirmed as part of this pass's full
-gate) but is not part of the Strategy B mission and was not started by
-this session, so it was left exactly as found rather than committed,
-discarded, or finished. It appears to be the "per-tenant override" item
-the 2026-08-25 Plan-ceilings entry below named as explicitly not done —
-worth finishing as its own slice, but not this one.
+## 0. The live Work Order Journey — one car, one journey, three audiences (2026-09-03)
+
+The product now answers, on every role surface and from real records:
+where is this vehicle, what has happened, when, what are we waiting for,
+why, what happens next, and who may act.
+
+**The decision that shaped everything else: a projection, not a store.**
+There is no `JourneyEvent` table. `JourneyEventsService`
+(`apps/api/src/systems/operations/journey-events.service.ts`) assembles
+~28 event kinds by reading back the records that already prove each thing
+happened, dated by those records' own timestamps. A second event log
+would have been a second source of truth about the same repair, and the
+two would eventually have disagreed.
+
+Because both an `OperationEvent` row and a record column can often date
+the same happening, **the sources are split by kind and never overlap**:
+the event spine supplies status changes, task starts/completions and
+blockers (a `Task` has no `startedAt`); the records supply the decision
+cycle, the whole parts loop, the invoice and the payments, because those
+carry per-hand-over timestamps no event duplicates and join to the work
+order by a real foreign key rather than a JSON payload. Inspections and
+findings were moved from the spine onto their own rows after a test
+caught the event landing 11ms after the record it described — records
+date records.
+
+Ordering is total and stable: time, then a **causal** tie-break (the
+thing that caused a status change sorts before it), then the source row's
+id. Two reads of one job give the same story.
+
+The contract lives in `packages/shared/src/operations/journey-contract.ts`
+so both sides of the wire share one definition — the web app used to
+re-declare it and the two drifted. It adds a `current` panel (since,
+duration in server-measured minutes, who is owed and since when, why,
+what next), the `events` list, and `actions`.
+
+**Actions are checked twice.** The graph half comes from
+`availableIntents`; the authorization half from the viewer's real
+permission, passed in by the controller as an oracle so a `systems/`
+service never reaches into `identity/`. The technician work card's own
+`primaryAction` and the manager workspace's "Ask the customer" each asked
+only the graph, so either could offer a button the controller then
+refused; both now come from the journey.
+
+Team Leader had no journey at all and now has one, scoped to the managed
+technician roster (never `branchScope`) and refused as not-found so ids
+cannot be enumerated.
+
+### Three defects found on the way, all the same shape
+
+A field something reads and nothing writes.
+
+- `IssuedItem.arrivedAt`/`receivedAt`/`usedAt` have existed since the
+  model was written and **nothing ever set any of them**, while two
+  places read them. Now stamped at the single transition choke point in
+  `PartRequestService` — including `resolveRejectedReturn`, which reaches
+  USED without going through `move()`.
+- Consequently the Owner's `PART_ARRIVAL_UNCONFIRMED` health check, which
+  filtered `arrivedAt: null` with no status filter, reported every part
+  the workshop had ever issued as an unconfirmed arrival, forever. Now
+  scoped to requests genuinely still in transit — still required even
+  with the stamping, because the graph deliberately lets an in-house
+  hand-over skip ARRIVED rather than write one nobody witnessed.
+- The customer's journey was scoped through `currentService`, so it 403'd
+  the moment their job closed — on the one screen whose purpose is to say
+  it finished. Now scoped by ownership of the work order.
+
+Three timestamp columns were added
+(`20260903090000_journey_event_timestamps`) for the three events no
+existing record could date honestly: `CustomerDecisionRequest.viewedAt`,
+`PartRequest.approvedAt`, and the `PartReturnRequest` clarification pair.
+That closes `LAUNCH_HANDOVER.md` §3.4.
+
+### Proof
+
+`apps/api/src/testing/journey.http.spec.ts` (12) drives intake → CLOSED
+over real HTTP with a parts loop in the middle, asserting each event's
+timestamp equals the column that produced it, plus three-audience
+agreement and cross-technician / cross-team / cross-tenant refusal.
+`journey-events.integration.spec.ts` (8) covers the projection rules.
+
+Browser-verified on one real job across all three surfaces: the strip
+auto-scrolls to where the car actually is (it did not, and on a phone the
+current stage sat off-screen — the one question the strip exists to
+answer); the history renders in order with real actors; issuing a part
+from a separate session took the open journey from "Waiting for parts /
+23 events" to "In progress / 25 events" with no reload; and the manager's
+one offered action moved the job for real and then disappeared. The
+customer's copy of that job carries 17 events where staff see 23, with no
+staff name, no warehouse and no shop-floor reason anywhere in it.
+
+**Deliberately not fixed:** the `ASK_CUSTOMER`/`WAITING_CUSTOMER` dead
+edge (`LAUNCH_HANDOVER.md` §3.3). The journey shows the truth — the job
+reads IN_PROGRESS with the outstanding decision in its history — rather
+than inventing a stage the workflow never entered.
+
+---
+
+## 0. The catalog-driven part request (2026-09-03)
+
+Technicians now ask the store for parts by **shopping a catalogue the
+inventory manager built**, rather than by filling in one form per part.
+
+### What changed, in one sentence each
+
+**One taxonomy, not two.** `InventoryItem.category`/`subcategory` were
+free text typed by the storekeeper and read by nobody who mattered; the
+technician's picker had no categories at all. Both columns are gone,
+replaced by `CatalogCategory` (one level of nesting, tenant-scoped,
+deactivatable, with a `technicianVisible` flag). The migration
+(`20260902090000_catalog_taxonomy_and_attributes`) backfills a real
+category row per distinct string per tenant before dropping the columns,
+so no workshop loses the taxonomy it had.
+
+**A filter vocabulary the manager invents.** `CatalogAttribute` +
+`CatalogAttributeValue` ("Vehicle Type" → Sedan/SUV/Truck),
+`CatalogCategoryAttribute` (which filters a category offers), and
+`InventoryItemAttributeValue` (what a part actually is). Deliberately
+NOT `CustomFieldDefinition`: that table is additive form capture whose
+values are copied into each record's own JSON and never queried back,
+whereas a catalog filter has to be indexable and joinable because
+filtering is the hot path a technician waits on.
+
+**One browse engine, two surfaces.** `CatalogBrowseService` answers both
+`GET /technician/parts-catalog` and `GET /inventory/catalog-preview`
+with the same method and the same arguments. The manager's "what the
+technician will see" panel is therefore not a mock-up — a
+`catalog-cart.http.spec.ts` case asserts the two responses are
+byte-identical for the same query. Two renderers was the obvious
+shortcut and the wrong one: a preview exists to catch a
+misconfiguration, and one drawn from local state proves nothing.
+
+**A cart, not a shopping-order subsystem.** `PartRequestService.requestMany`
+creates N ordinary `PartRequest` rows in one transaction, applies
+`REQUEST_PART` to the work order once, and is idempotent on a
+client-minted `cartKey` (unique index on `(tenantId, cartKey,
+inventoryItemId)`; NULLs stay distinct, so every request raised any
+other way is untouched). No order entity: the store approves, issues and
+returns each line independently and genuinely can diverge, so a wrapper
+would need keeping in step with N statuses and the store's queue would
+have two answers to "what is outstanding?".
+
+### Pages
+
+- `/inventory/catalog-builder` — categories, filters, filter values,
+  per-category filter assignment, and the live technician preview.
+- `/inventory/catalog` — the item editor now files a part under a
+  category and stamps it with the filter values that category (and its
+  parent) offers; `imageUrl` and `summary` are new catalog fields.
+- `/tech/card/:id/parts` — the technician's catalogue: search,
+  category chips with counts, dynamic filters with facet counts, product
+  cards, a persistent cart, one submit.
+
+### Three defects found by driving the real UI, not by the tests
+
+1. `<select [value]="…">` with `@for`-rendered options resolves to the
+   first option, because the options do not exist when the binding
+   applies. An item that *was* filed read "— not filed —" on open, and
+   saving would have unfiled it. Fixed with `[selected]` per option, in
+   both the item editor and the builder's parent picker.
+2. `distinctUntilChanged()` on a `Subject<void>` compares every emission
+   equal to the last, so the technician's search worked exactly once and
+   then froze on "Loading parts…". (The same pattern is still present on
+   two platform pages — see Known gaps.)
+3. `.visually-hidden` was never global; four components had each
+   re-declared it locally, so the fifth to use it rendered screen-reader
+   labels as visible body text. Now defined once in `styles.css`.
+
+### Proof
+
+- `apps/api/src/testing/catalog-cart.http.spec.ts` — 22 cases over real
+  HTTP and real Postgres: configuration, nesting refusals, cross-tenant
+  refusals, technician-cannot-author, dynamic filters per category,
+  AND-across/OR-within filter semantics, facet counts, search over the
+  configured vocabulary, preview≡technician, cart consolidation,
+  idempotent replay, whole-cart refusal on a foreign part, and the
+  existing loop (approve → issue → stock movement → receive → use →
+  billed once at the snapshotted price).
+- Browser journey run end to end on the demo tenant: manager created a
+  "Suspension" category and a "Position/Front/Rear" filter, attached it
+  to Brakes, stamped Front on the brake pads; the technician then saw
+  Position with a live count, filtered on it, searched "Toyota", built a
+  three-line cart, edited it, submitted, and the store approved and
+  issued — stock 21 → 19 with `beforeQty`/`afterQty` and a
+  `PartRequest` reference on the movement, then received, fitted, and
+  billed once at 1800.00.
+
+### Known gaps (genuine)
+
+- `reports-page.ts` and `workshops-page.ts` still carry defect (2)
+  above. Out of this sprint's scope and not browser-verified here, so
+  left as a flagged follow-up rather than an unverified edit.
+- Opening stock still has no endpoint — a catalogued part starts at zero
+  and the only way to put a balance on a shelf is a direct write. This
+  is the finding already recorded in `parts-loop.http.spec.ts`'s header,
+  unchanged by this work and now more visible, since a technician can
+  browse a part the store cannot actually stock through the product.
+- Category *ordering* is a `sortOrder` the API accepts but no page
+  exposes a control for; categories currently sort by name within their
+  level.
+
+### Closed the same day
+
+Category and filter **ordering** was the third gap on this list: three
+read paths honoured `sortOrder` and nothing could write it, so the
+technician's chip rail and filter panel were stuck alphabetical.
+`POST .../categories/reorder`, `.../attributes/reorder` and
+`.../attributes/:id/values/reorder` each take the whole sibling group
+and assign 0..n-1 in one transaction — a single row's new number is how
+two rows end up sharing a position and the order quietly reverts. A
+partial, duplicated or foreign list is refused (`reorder_mismatch`)
+rather than half-applied. Up/down controls on Catalog Builder; proven by
+three more cases in `catalog-cart.http.spec.ts` and in the browser
+(moved Fluids above Electrical and SUV after Truck, both of which the
+technician's own endpoint then read back).
+
+The category `description` was the same shape of defect in miniature —
+writable, and rendered nowhere — and now shows under the category name.
+
+One route trap worth remembering: `categories/reorder` had to be
+declared **above** `categories/:id`. Nest matches in declaration order,
+so a parameterised route declared first swallows every literal segment
+after it and `reorder` arrives as a category id.
+
+## 0.1 Reconciling two independent sessions that built the same mission in parallel (2026-09-02)
+
+A chat session (this one) spent a full pass building "Strategy B" — the
+same 14-day quick-service-vertical launch plan — directly on `main`,
+producing M-1 (spine ignition), M-3 (decision VIEWED+cancel), M-4 (Take
+Payment reachability), M-5 (part returns), M-6 (session refresh), M-11
+(access logging), and unverified Dockerfiles for M-9, across 8 commits.
+
+Unknown to that session: a **separate multi-agent fleet** (worktrees at
+`E:\mop-fleet\w-a3`, `w-infra`, `w-int`, coordinated through
+`E:\mop-fleet\board\`, tracks `track/a2-frontend`/`track/a3-backend`/
+`infra/ci-fixes` integrating into a `develop` branch) had been building
+**the exact same launch plan** independently, from the same base commit
+(`a8c8bb5`), going substantially further: a real HTTP-level Honesty
+Harness (`apps/api/src/testing/*.http.spec.ts`), the parts-loop and
+decision-deadlock proven over HTTP, a contrast-profile walkthrough, real
+TLS staging over the LAN (no Docker available, so `tools/staging/`
+proxies a production-mode API instead — see D-002 in the board's
+`decisions.md`), an executed backup/restore drill, and — critically — a
+**more correct M-4**: the delivery board asks `FinanceService.settlement()`
+for whether an invoice is paid rather than reading `Invoice.balance`
+directly, avoiding a second source of truth for a question that gets a
+refund wrong if answered independently.
+
+Neither branch had been pushed to GitHub before this reconciliation.
+
+**Resolution:** `develop`'s implementation is authoritative wherever the
+two overlap — it is more thoroughly proven and, on inspection, more
+correct (the M-4 settlement question above; reusing `task.view_assigned`/
+`workorders.branch.view` rather than adding new permission keys for the
+same checks). This session's branch (`main`) is reconciled onto
+`develop`'s tip on a new branch, keeping only what `main` had that
+`develop` did not touch at all:
+
+- `docs/corpus/*` — the 41-document architecture/product corpus, restored
+  and cross-referenced from `CLAUDE.md` alongside `LAUNCH_HANDOVER.md`.
+- M-11, access logging (`accessLogMiddleware`, `ApiExceptionFilter`'s
+  `rid=` on a 500) — `develop` never built this.
+- `apps/api/Dockerfile`/`apps/web/Dockerfile`/`nginx.conf` — kept as a
+  documented, still-unverified alternative path to `develop`'s proven
+  `tools/staging/` approach, in case Docker ever becomes available on
+  this machine.
+
+Dropped, not merged: this session's own M-1/M-3/M-4/M-5/M-6 code and its
+`docs/STRATEGY_B_EXECUTION_LEDGER.md` (superseded by
+`docs/LAUNCH_HANDOVER.md`, which already accounts for the same items more
+accurately) and its new permission-manifest keys (unused once `develop`'s
+simpler permission reuse was adopted).
+
+Both `main` and `develop` on GitHub now point at this reconciled state —
+see the commit this entry ships with for the exact SHA. The fleet's own
+`E:\mop-fleet\w-int` worktree is now behind `origin/develop` by this
+reconciliation commit; a `git pull` there picks it up.
+
+**Lesson for future sessions, stated plainly:** before starting a large,
+open-ended mission on a repo, check `git branch -a` and any external
+coordination directory (`E:\mop-fleet\board\` here) for concurrent work
+*before* assuming `main` is the only truth. This session did not, and
+the cost was a full pass of now-superseded work — not wasted (the reading
+and reasoning transferred), but the code itself was redundant.
+
 
 ---
 

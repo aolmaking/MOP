@@ -108,6 +108,206 @@ export interface BottlenecksReport {
   readonly slaRisk: SlaRiskSummary;
   readonly reworkLoops: readonly ReworkLoopRow[];
   readonly reopenedWorkOrders: number;
+  readonly taskReworkCount?: number;
+}
+
+export interface QcSummary {
+  readonly qcEvaluationsCount: number;
+  readonly firstPassEvaluations: number;
+  readonly firstPassPassed: number;
+  readonly firstPassYield: number | null;
+  readonly qcFailures: number;
+  readonly qcFailureRate: number | null;
+}
+
+export interface TaskReworkSummary {
+  readonly completedTasks: number;
+  readonly tasksWithRework: number;
+  readonly reworkTaskCount: number;
+  readonly taskReworkRate: number | null;
+}
+
+export interface WorkOrderQualitySummary {
+  readonly completedWorkOrders: number;
+  readonly workOrdersWithQcFailure: number;
+  readonly workOrdersWithTaskRework: number;
+  readonly reopenedWorkOrders: number;
+  readonly workOrdersWithQualityRework: number;
+  readonly workOrderReworkRate: number | null;
+}
+
+export interface VehicleRepeatSummary {
+  readonly repeatVehicleVisitsWithin30Days: number;
+  readonly uniqueVehiclesWithRepeatVisitWithin30Days: number;
+  readonly faultRecurrenceCount: number;
+}
+
+export interface QualityCostDrag {
+  readonly reworkLaborMinutes: number;
+  readonly reworkLaborCost: null;
+  readonly reworkLaborCostNotComputableReason: string;
+  readonly reworkPartsCost: null;
+  readonly reworkPartsCostNotComputableReason: string;
+  readonly totalMeasurableQualityCost: null;
+  readonly totalMeasurableQualityCostNotComputableReason: string;
+}
+
+export interface ReasonBreakdownItem {
+  readonly reason: string;
+  readonly count: number;
+  readonly percentage: number | null;
+}
+
+export interface BranchQualityContributor {
+  readonly branchId: string;
+  readonly branchName: string;
+  readonly qcEvaluations: number;
+  readonly firstPassEvaluations: number;
+  readonly firstPassPassed: number;
+  readonly firstPassYield: number | null;
+  readonly qcFailures: number;
+  readonly qcFailureRate: number | null;
+  readonly completedTasks: number;
+  readonly tasksWithRework: number;
+  readonly reworkTaskCount: number;
+  readonly reworkRate: number | null;
+}
+
+export interface ServiceQualityContributor {
+  readonly serviceKey: string;
+  readonly serviceTitle: string;
+  readonly completedTasks: number;
+  readonly tasksWithRework: number;
+  readonly reworkTaskCount: number;
+  readonly reworkRate: number | null;
+}
+
+export interface TechnicianQualityContributor {
+  readonly staffUserId: string;
+  readonly staffName: string;
+  readonly completedTasks: number;
+  readonly reworkTasks: number;
+  readonly reworkRate: number | null;
+  readonly insufficientSampleSize: boolean;
+  readonly rankingSuppressed: boolean;
+}
+
+export interface QualityIntegrityAnomalies {
+  readonly qcFailedWithoutStructuredReason: number;
+  readonly qcFailedWithoutNote: number;
+  readonly reworkWithoutOriginalTask: number;
+  readonly repeatVisitsUnlinked: number;
+}
+
+export interface QualityIntelligenceReport {
+  readonly range: { from: string; to: string };
+  readonly qc: QcSummary;
+  readonly rework: TaskReworkSummary;
+  readonly workOrders: WorkOrderQualitySummary;
+  readonly vehicleRepeats: VehicleRepeatSummary;
+  readonly costDrag: QualityCostDrag;
+  readonly qcFailureReasons: readonly ReasonBreakdownItem[];
+  readonly reworkReasons: readonly ReasonBreakdownItem[];
+  readonly contributors: {
+    readonly byBranch: readonly BranchQualityContributor[];
+    readonly byService: readonly ServiceQualityContributor[];
+    readonly byTechnician: readonly TechnicianQualityContributor[];
+  };
+  readonly integrity: QualityIntegrityAnomalies;
+}
+
+export type DiagnosticSubject =
+  | 'WORK_ORDER_DELAY'
+  | 'WORKFLOW_BOTTLENECK'
+  | 'QC_FAILURE'
+  | 'TASK_REWORK'
+  | 'REPEAT_VEHICLE_VISIT'
+  | 'FAULT_RECURRENCE'
+  | 'CUSTOMER_DECISION_DROP_OFF'
+  | 'DELIVERY_DELAY';
+
+export type DiagnosticEvidenceLevel =
+  | 'OBSERVED_FACT'
+  | 'RULE_BASED_CONTRIBUTOR'
+  | 'STRONG_ASSOCIATION'
+  | 'CAUSAL_LINK'
+  | 'INSUFFICIENT_EVIDENCE';
+
+export interface DiagnosticEvidenceReference {
+  readonly type: 'WORK_ORDER' | 'TASK' | 'EVENT' | 'FAULT' | 'DECISION_ITEM' | 'BLOCKER';
+  readonly id: string;
+  readonly label?: string;
+  readonly workOrderId?: string;
+  readonly timestamp?: string;
+}
+
+export interface DiagnosticFact {
+  readonly key: string;
+  readonly label: string;
+  readonly value: string | number;
+  readonly unit?: string;
+  readonly evidenceLevel: 'OBSERVED_FACT';
+  readonly explanation: string;
+  readonly evidenceIds?: readonly string[];
+}
+
+export interface DiagnosticFactor {
+  readonly key: string;
+  readonly label: string;
+  readonly category: string;
+  readonly observedCount?: number;
+  readonly baselineCount?: number;
+  readonly rate?: number | null;
+  readonly baselineRate?: number | null;
+  readonly delta?: number | null;
+  readonly evidenceLevel: DiagnosticEvidenceLevel;
+  readonly explanation: string;
+  readonly evidenceIds?: readonly string[];
+}
+
+export interface DiagnosticUnknown {
+  readonly key: string;
+  readonly question: string;
+  readonly reason: string;
+}
+
+export interface DiagnosticIntegrity {
+  readonly sampleSize: number;
+  readonly baselineAvailable: boolean;
+  readonly baselineSampleSize?: number;
+  readonly insufficientSampleSize: boolean;
+  readonly historicalAttributionComplete: boolean;
+  readonly causalInferenceSupported: boolean;
+  readonly financialAttributionComputable: boolean;
+  readonly financialAttributionNote?: string;
+}
+
+export interface DiagnosticOutcomeSummary {
+  readonly title: string;
+  readonly description: string;
+  readonly metricName: string;
+  readonly metricValue: number | string | null;
+  readonly metricUnit?: string;
+}
+
+export interface RootCauseAnalysisReport {
+  readonly subject: DiagnosticSubject;
+  readonly period: { readonly from: string; readonly to: string };
+  readonly scope: {
+    readonly tenantId: string;
+    readonly branchId?: string;
+    readonly serviceKey?: string;
+    readonly technicianId?: string;
+    readonly workOrderId?: string;
+  };
+  readonly outcome: DiagnosticOutcomeSummary;
+  readonly evidenceLevel: DiagnosticEvidenceLevel;
+  readonly summary: string;
+  readonly observedFacts: readonly DiagnosticFact[];
+  readonly contributingFactors: readonly DiagnosticFactor[];
+  readonly evidenceReferences: readonly DiagnosticEvidenceReference[];
+  readonly unknowns: readonly DiagnosticUnknown[];
+  readonly integrity: DiagnosticIntegrity;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -145,5 +345,33 @@ export class WorkflowHealthApi {
     if (from) params['from'] = from;
     if (to) params['to'] = to;
     return this.http.get<BottlenecksReport>('/api/v1/organization/workflow-health/bottlenecks', { params });
+  }
+
+  quality(from?: string, to?: string, branchId?: string): Observable<QualityIntelligenceReport> {
+    const params: Record<string, string> = {};
+    if (from) params['from'] = from;
+    if (to) params['to'] = to;
+    if (branchId) params['branchId'] = branchId;
+    return this.http.get<QualityIntelligenceReport>('/api/v1/organization/workflow-health/quality', { params });
+  }
+
+  rootCause(query: {
+    subject?: DiagnosticSubject;
+    from?: string;
+    to?: string;
+    branchId?: string;
+    serviceKey?: string;
+    technicianId?: string;
+    workOrderId?: string;
+  }): Observable<RootCauseAnalysisReport> {
+    const params: Record<string, string> = {};
+    if (query.subject) params['subject'] = query.subject;
+    if (query.from) params['from'] = query.from;
+    if (query.to) params['to'] = query.to;
+    if (query.branchId) params['branchId'] = query.branchId;
+    if (query.serviceKey) params['serviceKey'] = query.serviceKey;
+    if (query.technicianId) params['technicianId'] = query.technicianId;
+    if (query.workOrderId) params['workOrderId'] = query.workOrderId;
+    return this.http.get<RootCauseAnalysisReport>('/api/v1/organization/workflow-health/root-cause', { params });
   }
 }

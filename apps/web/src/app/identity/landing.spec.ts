@@ -20,9 +20,15 @@ describe('landingRouteFor', () => {
     ).toBe('/platform/workshops');
   });
 
-  it('sends a team leader to their own shell', () => {
+  /**
+   * Both roles have complete, working shells; the launch sprint holds
+   * their whole surface back (TEAMS is off in the launch profile, and a
+   * one-bay shop employs no analyst). Landing them on an empty rail
+   * would be worse than telling them plainly.
+   */
+  it('sends a team leader to the access boundary while their surface is held back', () => {
     expect(landingRouteFor({ role: 'TEAM_LEADER', landingPage: 'team-leader-home' } as SessionContext)).toBe(
-      '/team-leader',
+      '/access-denied',
     );
   });
 
@@ -38,9 +44,9 @@ describe('landingRouteFor', () => {
     );
   });
 
-  it('sends a data analyst to their own shell', () => {
+  it('sends a data analyst to the access boundary while their surface is held back', () => {
     expect(landingRouteFor({ role: 'DATA_ANALYST', landingPage: 'analytics-home' } as SessionContext)).toBe(
-      '/analyst/home',
+      '/access-denied',
     );
   });
 

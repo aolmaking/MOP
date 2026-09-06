@@ -4,8 +4,18 @@ name: CI
 # unnoticed -- the old project had no CI at all.
 on:
   push:
-    branches: [main]
+    # The launch fleet integrates on `develop` and works on `track/*`;
+    # CI that only watched `main` would go quiet for exactly the weeks
+    # it matters most.
+    branches: [main, develop, "track/**", "infra/**"]
   pull_request:
+
+# A quick second push should cancel the run it supersedes rather than
+# queue behind it -- during integration windows the queue is the
+# bottleneck, not the runner.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ci:
@@ -21,6 +31,17 @@ jobs:
           POSTGRES_USER: mop_dev
           POSTGRES_PASSWORD: mop_dev_secret
           POSTGRES_DB: mop_platform_test
+          # Pinned, not inherited. 64 columns carry `@default(now())`,
+          # which Postgres casts through the *session* timezone on the
+          # way into a `timestamp without time zone` column: on a non-UTC
+          # server those land in local time while values written by the
+          # application land in UTC, and every duration and date bucket
+          # that mixes them is silently off by the offset. This image
+          # happens to default to UTC, so today the pin changes nothing
+          # -- which is the point. It stops CI from quietly agreeing with
+          # a differently-configured server later.
+          TZ: UTC
+          PGTZ: UTC
         ports:
           - 5432:5432
         options: >-
@@ -80,12 +101,43 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      # Runs @mop/shared's Jest suite (the capability reachability
-      # validator -- every shipped workshop profile is proven unable to
-      # strand a work order), apps/api's Jest suite (unit + real-DB
-      # integration tests), and apps/web's Vitest suite.
-      - name: Test
-        run: pnpm test
+      # The three suites the root `pnpm test` chains, spelled out as
+      # separate steps for two reasons. Machine-readable results have to
+      # be requested per runner. And the root script chains with `&&`, so
+      # one red package means the later ones never run and their state is
+      # simply unknown -- which is how the Day-1 baseline nearly went
+      # recorded without the web suite in it at all. `if: always()` means
+      # a red API suite no longer hides whether web is passing.
+      #
+      # Same commands, same order, `build:shared` already done above.
+      - name: Test — shared
+        id: test_shared
+        run: pnpm --filter @mop/shared test -- --ci --json --outputFile="$RUNNER_TEMP/results-shared.json"
+
+      - name: Test — api
+        id: test_api
+        if: always() && steps.test_shared.conclusion != 'cancelled'
+        run: pnpm --filter @mop/api test -- --ci --json --outputFile="$RUNNER_TEMP/results-api.json"
+
+      # No JSON for web: its builder writes the report through the *first*
+      # configured reporter only, so asking for JSON here would replace
+      # the human-readable log rather than accompany it. The two Jest
+      # suites are the ones worth capturing anyway.
+      - name: Test — web
+        id: test_web
+        if: always() && steps.test_shared.conclusion != 'cancelled'
+        run: pnpm --filter @mop/web test
+
+      # Uploaded on failure too -- a red run is exactly when the detail is
+      # worth having, and reading it beats re-reading a truncated log.
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jest-results-${{ github.run_id }}
+          path: ${{ runner.temp }}/results-*.json
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Build
         run: pnpm build

@@ -14,6 +14,11 @@ import { FeatureAdoptionAnalyticsService } from "./feature-adoption-analytics.se
 import { AnalystSavedViewsService } from "./saved-views.service";
 import { CreateAnalystSavedViewDto, RenameAnalystSavedViewDto } from "./saved-views.dto";
 import { AnalyticsExportService } from "./analytics-export.service";
+import { QualityAnalyticsService } from "./quality-analytics.service";
+import { RootCauseAnalysisService } from "./root-cause-analysis.service";
+import { UniversalDrillDownService } from "./universal-drill-down.service";
+import type { DiagnosticSubject } from "./root-cause-analysis.types";
+import type { DrillDownQuery, EvidenceEntityType } from "./drill-down.types";
 
 /**
  * Data Analyst (docs/detailed-specs/data-analyst.md) -- analytical views
@@ -31,6 +36,9 @@ export class AnalyticsController {
     private readonly people: PeopleAnalyticsService,
     private readonly inventory: InventoryAnalyticsService,
     private readonly decisions: DecisionsAnalyticsService,
+    private readonly quality: QualityAnalyticsService,
+    private readonly rootCause: RootCauseAnalysisService,
+    private readonly drillDownService: UniversalDrillDownService,
     private readonly featureAdoption: FeatureAdoptionAnalyticsService,
     private readonly savedViews: AnalystSavedViewsService,
     private readonly exportService: AnalyticsExportService,
@@ -73,6 +81,42 @@ export class AnalyticsController {
     return this.wrap(() => this.decisions.build(tenantId, resolveScope(session), { from, to }));
   }
 
+  @Get("quality")
+  async getQuality(
+    @CurrentSession() session: SessionContext,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("branchId") branchId?: string,
+  ) {
+    const tenantId = await this.require(session, "analytics.operations.view");
+    return this.wrap(() => this.quality.build(tenantId, resolveScope(session), { from, to, branchId }));
+  }
+
+  @Get("root-cause")
+  async getRootCause(
+    @CurrentSession() session: SessionContext,
+    @Query("subject") subject?: DiagnosticSubject,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("branchId") branchId?: string,
+    @Query("serviceKey") serviceKey?: string,
+    @Query("technicianId") technicianId?: string,
+    @Query("workOrderId") workOrderId?: string,
+  ) {
+    const tenantId = await this.require(session, "analytics.operations.view");
+    return this.wrap(() =>
+      this.rootCause.analyze(tenantId, resolveScope(session), {
+        subject,
+        from,
+        to,
+        branchId,
+        serviceKey,
+        technicianId,
+        workOrderId,
+      }),
+    );
+  }
+
   @Get("feature-adoption")
   async getFeatureAdoption(
     @CurrentSession() session: SessionContext,
@@ -100,6 +144,81 @@ export class AnalyticsController {
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
     res.send(result.csv);
+  }
+
+  @Get("drill-down")
+  async getDrillDown(
+    @CurrentSession() session: SessionContext,
+    @Query("metric") metric: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("branchId") branchId?: string,
+    @Query("serviceKey") serviceKey?: string,
+    @Query("technicianId") technicianId?: string,
+    @Query("workOrderId") workOrderId?: string,
+    @Query("dimension") dimension?: string,
+    @Query("dimensionValue") dimensionValue?: string,
+    @Query("cursor") cursor?: string,
+    @Query("limit") limit?: string,
+  ) {
+    const tenantId = await this.require(session, "analytics.home.view");
+    return this.wrap(() =>
+      this.drillDownService.drillDown(tenantId, resolveScope(session), {
+        metric,
+        from,
+        to,
+        branchId,
+        serviceKey,
+        technicianId,
+        workOrderId,
+        dimension,
+        dimensionValue,
+        cursor,
+        limit: limit ? parseInt(limit, 10) : undefined,
+      }),
+    );
+  }
+
+  @Get("drill-down/export")
+  async exportDrillDownCsv(
+    @CurrentSession() session: SessionContext,
+    @Res() res: Response,
+    @Query("metric") metric: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("branchId") branchId?: string,
+    @Query("serviceKey") serviceKey?: string,
+    @Query("technicianId") technicianId?: string,
+    @Query("workOrderId") workOrderId?: string,
+    @Query("dimension") dimension?: string,
+    @Query("dimensionValue") dimensionValue?: string,
+  ): Promise<void> {
+    const tenantId = await this.require(session, "analytics.export");
+    const result = await this.drillDownService.exportCsv(tenantId, resolveScope(session), {
+      metric,
+      from,
+      to,
+      branchId,
+      serviceKey,
+      technicianId,
+      workOrderId,
+      dimension,
+      dimensionValue,
+    });
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
+    res.send(result.csv);
+  }
+
+  @Get("drill-down/evidence/:type/:id")
+  async getEvidence(
+    @CurrentSession() session: SessionContext,
+    @Param("type") type: EvidenceEntityType,
+    @Param("id") id: string,
+  ) {
+    const tenantId = await this.require(session, "analytics.home.view");
+    return this.wrap(() => this.drillDownService.resolveEvidence(tenantId, resolveScope(session), type, id));
   }
 
   @Get("saved-views")

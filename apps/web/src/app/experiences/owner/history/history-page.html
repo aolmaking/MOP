@@ -1,0 +1,162 @@
+<section class="history">
+  <header class="head">
+    <h1 class="title">History</h1>
+    <p class="sub">
+      Every customer and vehicle that has ever been through this workshop — what they came in for, what was found,
+      what was agreed, what was actually done, and what it came to.
+    </p>
+  </header>
+
+  <!--
+    Controls are always visible rather than behind a toggle. This page is
+    opened to answer a specific question -- "what have we done to
+    ABC-1234 before" -- and hiding the way to ask it costs a click every
+    single time.
+  -->
+  <div class="controls">
+    <label class="control control--search">
+      <span class="control-label">Search</span>
+      <input
+        type="search"
+        class="search-input"
+        placeholder="Name, phone, plate, VIN or serial"
+        [value]="search()"
+        (input)="onSearch($any($event.target).value)"
+        autocomplete="off"
+      />
+    </label>
+
+    <div class="control">
+      <span class="control-label">Show</span>
+      <div class="segmented" role="group" aria-label="Filter by what is open">
+        @for (option of activities; track option.key) {
+          <button
+            type="button"
+            class="segment"
+            [class.segment--on]="activity() === option.key"
+            [attr.aria-pressed]="activity() === option.key"
+            (click)="setActivity(option.key)"
+          >
+            {{ option.label }}
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+
+  @switch (state()) {
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">You don't have access to this workshop's history</p>
+        <p class="state-body">Reading every customer's record is an owner-level permission. Ask your workshop owner.</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @default {
+      <div class="table-wrap" [attr.aria-busy]="state() === 'loading'">
+        <table class="table">
+          <thead>
+            <tr>
+              @for (column of columns; track column.label) {
+                <th scope="col" [class.numeric]="column.numeric">
+                  @if (column.key) {
+                    <button type="button" class="sort" (click)="sortBy(column)">
+                      {{ column.label }}<span class="sort-mark" aria-hidden="true">{{ sortIndicator(column) }}</span>
+                    </button>
+                  } @else {
+                    {{ column.label }}
+                  }
+                </th>
+              }
+              <th scope="col"><span class="sr-only">Full history</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.key) {
+              <tr>
+                <td>
+                  <span class="customer">{{ row.customerName }}</span>
+                  <span class="cell-meta"><mop-identifier [value]="row.customerPhone" /></span>
+                </td>
+                <td>{{ label(row.category) }}</td>
+                <td><mop-identifier [value]="identifierFor(row)" /></td>
+                <td class="numeric">{{ row.visits }}</td>
+                <td>{{ onlyDate(row.lastVisitAt) }}</td>
+                <td>
+                  @if (row.openVisits > 0) {
+                    <span class="chip chip--open">{{ label(row.lastStatus) }}</span>
+                    @if (row.openVisits > 1) {
+                      <span class="cell-meta">{{ row.openVisits }} open</span>
+                    }
+                  } @else {
+                    <span class="chip">nothing open</span>
+                  }
+                </td>
+                <td class="complaint">{{ row.lastComplaint ?? '—' }}</td>
+                <td class="numeric money" [class.money--owing]="row.outstanding !== '0.00'">{{ row.outstanding }}</td>
+                <td class="numeric">
+                  <button type="button" class="more" (click)="open(row)">More</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+
+        @if (state() === 'empty') {
+          <div class="state">
+            <p class="state-title">Nothing to show</p>
+            <p class="state-body">
+              @if (search()) {
+                No customer or vehicle matches “{{ search() }}”.
+              } @else if (activity() !== 'all') {
+                Nothing matches this filter. Try “Everyone”.
+              } @else {
+                No vehicle has been booked in yet. The moment one is, it appears here.
+              }
+            </p>
+          </div>
+        }
+      </div>
+
+      <footer class="foot">
+        <p class="foot-count">
+          @if (total() > 0) {
+            Showing {{ showingFrom() }}–{{ showingTo() }} of {{ total() }}
+            {{ total() === 1 ? 'customer and vehicle' : 'customers and vehicles' }}
+          } @else {
+            Nothing to show
+          }
+          @if (generatedAt()) {
+            <span class="foot-when">· read at {{ when(generatedAt()) }}</span>
+          }
+        </p>
+
+        <div class="pager">
+          <button appButton variant="secondary" size="small" [disabled]="page() <= 1" (click)="turnPage(-1)">
+            Newer
+          </button>
+          <span class="pager-position">Page {{ page() }} of {{ pageCount() }}</span>
+          <button appButton variant="secondary" size="small" [disabled]="page() >= pageCount()" (click)="turnPage(1)">
+            Older
+          </button>
+          <button appButton variant="secondary" size="small" (click)="load()">Refresh</button>
+        </div>
+      </footer>
+    }
+  }
+</section>
+
+@if (openRecord(); as target) {
+  <app-history-record-drawer
+    [customerId]="target.customerId"
+    [assetId]="target.assetId"
+    (closed)="openRecord.set(null)"
+  />
+}

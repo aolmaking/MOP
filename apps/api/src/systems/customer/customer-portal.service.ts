@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { sum } from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { AWAITING_CUSTOMER_STATUSES } from "./decision.service";
+import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 
 export interface PortalHome {
   readonly assetCount: number;
@@ -24,6 +25,7 @@ export interface CurrentServiceItem {
   readonly status: string;
   readonly asset: string;
   readonly createdAt: string;
+  readonly promisedAt?: string | null;
 }
 
 export interface InvoiceStatusRow {
@@ -73,7 +75,10 @@ const CURRENT_SERVICE_STATUSES = [
  */
 @Injectable()
 export class CustomerPortalService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly policies?: PolicyResolutionService,
+  ) {}
 
   async home(tenantId: string, customerId: string): Promise<PortalHome> {
     const [assetCount, currentService, pendingDecisions, invoices, activity] = await Promise.all([
@@ -130,23 +135,50 @@ export class CustomerPortalService {
   }
 
   async currentService(tenantId: string, customerId: string): Promise<readonly CurrentServiceItem[]> {
-    const rows = await this.prisma.workOrder.findMany({
-      where: { tenantId, customerId, status: { in: [...CURRENT_SERVICE_STATUSES] } },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        status: true,
-        createdAt: true,
-        asset: { select: { plateNumber: true, vinOrChassisNumber: true } },
-      },
-    });
+    const [visibility, rows] = await Promise.all([
+      this.policies ? this.policies.resolveValue(tenantId, "PROMISED_TIME_VISIBILITY") : "VISIBLE",
+      this.prisma.workOrder.findMany({
+        where: { tenantId, customerId, status: { in: [...CURRENT_SERVICE_STATUSES] } },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          promisedAt: true,
+          asset: { select: { plateNumber: true, vinOrChassisNumber: true } },
+        },
+      }),
+    ]);
 
     return rows.map((row) => ({
       workOrderId: row.id,
       status: row.status,
       asset: row.asset.plateNumber ?? row.asset.vinOrChassisNumber ?? "Unknown vehicle",
       createdAt: row.createdAt.toISOString(),
+      promisedAt: visibility === "VISIBLE" ? row.promisedAt?.toISOString() ?? null : null,
     }));
+  }
+
+  /**
+   * Is this work order this customer's own?
+   *
+   * ANY status, deliberately. Access is a question about whose car it is,
+   * not about whether the job is still running -- and the two were
+   * conflated: the journey endpoint scoped itself through
+   * `currentService`, so a customer watching their repair was refused the
+   * moment it closed. The last thing their journey is for is telling them
+   * it finished, and the page broke exactly then.
+   *
+   * Scoped by `customerId` AND `tenantId` in the query, so a work-order
+   * id from another customer -- or another workshop -- is simply not
+   * theirs. The id in the URL is never the capability; the session is.
+   */
+  async ownsWorkOrder(tenantId: string, customerId: string, workOrderId: string): Promise<boolean> {
+    const mine = await this.prisma.workOrder.findFirst({
+      where: { id: workOrderId, tenantId, customerId },
+      select: { id: true },
+    });
+    return mine !== null;
   }
 
   async invoiceStatus(tenantId: string, customerId: string): Promise<readonly InvoiceStatusRow[]> {

@@ -4,6 +4,7 @@ import { SessionGuard } from "../../identity/auth/session.guard";
 import { CurrentSession } from "../../identity/auth/current-session.decorator";
 import { EffectiveAccessService } from "../../identity/access/effective-access.service";
 import { TeamLeaderService } from "./team-leader.service";
+import { WorkflowJourneyService } from "../../systems/operations/workflow-journey.service";
 import { SupervisionNoteDto } from "./team-leader.dto";
 
 /**
@@ -18,6 +19,7 @@ export class TeamLeaderController {
   constructor(
     private readonly service: TeamLeaderService,
     private readonly access: EffectiveAccessService,
+    private readonly journey: WorkflowJourneyService,
   ) {}
 
   @Get("home")
@@ -59,6 +61,31 @@ export class TeamLeaderController {
   async workOrders(@CurrentSession() session: SessionContext) {
     const tenantId = await this.require(session, "team.workorders.view");
     return this.service.workOrders(tenantId, session.managedTechnicianIds);
+  }
+
+  /**
+   * One job's live journey, in the managerial vocabulary.
+   *
+   * The SAME projection the technician and the customer read -- the
+   * words differ, the state does not, which is what stops a Team Leader
+   * chasing a job their technician is being told something else about.
+   *
+   * Scoped through `requireInTeam` FIRST, so a work-order id belonging
+   * to a technician outside this roster is refused before any journey is
+   * built. The id in the path is never a capability: the session's
+   * managed roster is.
+   *
+   * No viewer is passed, and so no actions come back. A Team Leader's
+   * levers on a job -- reassigning it, clearing a blocker -- belong to
+   * the branch manager's surface and are gated by permissions this
+   * controller does not hold; offering them here would be a button that
+   * the other controller then refuses.
+   */
+  @Get("work-orders/:id/journey")
+  async workOrderJourney(@CurrentSession() session: SessionContext, @Param("id") id: string) {
+    const tenantId = await this.require(session, "team.workorders.view");
+    await this.service.requireInTeam(tenantId, session.managedTechnicianIds, id);
+    return this.journey.forWorkOrder(tenantId, id, "MANAGER");
   }
 
   /** "Previous history detected" -- P-81, docs/POLICY_DECISION_INVENTORY.md §8.B. */
