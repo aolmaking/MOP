@@ -208,31 +208,47 @@ export class InventoryViewService {
    * change.
    */
   async item(tenantId: string, itemId: string) {
-    const item = await this.prisma.inventoryItem.findFirst({
-      where: { id: itemId, tenantId },
-      select: {
-        id: true,
-        sku: true,
-        name: true,
-        itemType: true,
-        lowStockThreshold: true,
-        criticalStockThreshold: true,
-        sellingPrice: true,
-        stockBalances: {
-          select: {
-            warehouseId: true,
-            availableQty: true,
-            reservedQty: true,
-            damagedQty: true,
-            warehouse: { select: { name: true, code: true } },
+    const [item, warehouses] = await Promise.all([
+      this.prisma.inventoryItem.findFirst({
+        where: { id: itemId, tenantId },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          itemType: true,
+          lowStockThreshold: true,
+          criticalStockThreshold: true,
+          sellingPrice: true,
+          stockBalances: {
+            select: {
+              warehouseId: true,
+              availableQty: true,
+              reservedQty: true,
+              damagedQty: true,
+              warehouse: { select: { name: true, code: true } },
+            },
           },
         },
-      },
-    });
+      }),
+      this.prisma.warehouse.findMany({
+        where: { tenantId, isActive: true },
+        select: { id: true, name: true, code: true },
+        orderBy: { code: "asc" },
+      }),
+    ]);
 
     if (!item) {
       throw new NotFoundException({ code: "item_not_found", message: "That item is not in this workshop." });
     }
+
+    const byId = new Map(item.stockBalances.map((b) => [b.warehouseId, b]));
+    const stockBalances = warehouses.map((w) => ({
+      warehouseId: w.id,
+      availableQty: byId.get(w.id)?.availableQty ?? 0,
+      reservedQty: byId.get(w.id)?.reservedQty ?? 0,
+      damagedQty: byId.get(w.id)?.damagedQty ?? 0,
+      warehouse: { name: w.name, code: w.code },
+    }));
 
     const movements = await this.prisma.stockMovement.findMany({
       where: { tenantId, inventoryItemId: itemId },
@@ -252,7 +268,13 @@ export class InventoryViewService {
       },
     });
 
-    return { item, movements };
+    return {
+      item: {
+        ...item,
+        stockBalances,
+      },
+      movements,
+    };
   }
 
   /** Requested vs handed over, for one request. Delegated, never re-derived. */

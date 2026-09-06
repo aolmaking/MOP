@@ -12,12 +12,16 @@ export interface PublicDecisionItem {
   readonly id: string;
   readonly name: string;
   readonly explanation: string;
+  /** Problem / finding found during vehicle inspection. */
+  readonly inspectionFinding: string | null;
   /** Plain words, never the internal severity enum. */
   readonly importance: "Low" | "Medium" | "High" | "Critical";
   readonly decision: "PENDING" | "APPROVED" | "REJECTED";
   /** Null when the workshop withholds pricing from customers. */
   readonly price: string | null;
+  readonly partsPrice: string | null;
   readonly labour: string | null;
+  readonly servicePrice: string | null;
   readonly total: string | null;
   /**
    * APPROVAL_WEIGHT, resolved server-side: whether declining THIS item
@@ -28,6 +32,7 @@ export interface PublicDecisionItem {
    */
   readonly requiresAcknowledgement: boolean;
 }
+
 
 export type DecisionLinkState = "OPEN" | "EXPIRED" | "ANSWERED";
 
@@ -90,10 +95,17 @@ const DECISION_SELECT = {
       price: true,
       laborPrice: true,
       total: true,
+      fault: {
+        select: {
+          description: true,
+          code: true,
+        },
+      },
     },
     orderBy: { importance: "desc" },
   },
 } satisfies Prisma.CustomerDecisionRequestSelect;
+
 
 /**
  * The states in which a decision is genuinely waiting on the customer.
@@ -880,25 +892,38 @@ export class CustomerDecisionService {
       price: Prisma.Decimal;
       laborPrice: Prisma.Decimal;
       total: Prisma.Decimal;
+      fault?: {
+        description: string;
+        code: string | null;
+      } | null;
     },
     pricingVisible: boolean,
     approvalWeight: string,
   ): PublicDecisionItem {
+    const partsFormatted = pricingVisible ? item.price.toFixed(2) : null;
+    const serviceFormatted = pricingVisible ? item.laborPrice.toFixed(2) : null;
+    const totalFormatted = pricingVisible ? item.total.toFixed(2) : null;
+    const finding = item.fault?.description || item.explanation;
+
     return {
       id: item.id,
       name: item.name,
       explanation: item.explanation,
+      inspectionFinding: finding || null,
       importance: IMPORTANCE[item.importance] ?? "Medium",
       decision: item.decision as PublicDecisionItem["decision"],
       // Absent, not zeroed. A withheld price must not look like a free
       // item -- money is a string across the API, and null means "not
       // shown" rather than "nothing".
-      price: pricingVisible ? item.price.toFixed(2) : null,
-      labour: pricingVisible ? item.laborPrice.toFixed(2) : null,
-      total: pricingVisible ? item.total.toFixed(2) : null,
+      price: partsFormatted,
+      partsPrice: partsFormatted,
+      labour: serviceFormatted,
+      servicePrice: serviceFormatted,
+      total: totalFormatted,
       requiresAcknowledgement: this.requiresFormalAcknowledgement(approvalWeight, item.importance),
     };
   }
+
 
   /**
    * APPROVAL_WEIGHT's actual behaviour. TWO_TIER (the default) only asks

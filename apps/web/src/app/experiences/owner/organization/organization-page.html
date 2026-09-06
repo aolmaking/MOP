@@ -51,6 +51,12 @@
 
     @case ('ready') {
       @if (tab() === 'staff') {
+        @if (activeInviteLink(); as link) {
+          <div class="state" role="status" style="margin-bottom: 1rem; border-left: 3px solid var(--mop-color-primary, #2563eb); background: var(--mop-color-surface-muted, #f8fafc); padding: 0.75rem 1rem; display: flex; justify-content: space-between; align-items: center;">
+            <span>Invite link ready: <a [href]="link" class="link">{{ link }}</a></span>
+            <button appButton variant="ghost" size="small" (click)="activeInviteLink.set(null)">Dismiss</button>
+          </div>
+        }
         @if (staff().length === 0) {
           <p class="state-body">No staff yet. Invite your first team member to get started.</p>
         } @else {
@@ -80,6 +86,11 @@
                     }
                   </td>
                   <td class="row-actions">
+                    @if (row.accountStatus === 'INVITED') {
+                      <button appButton variant="ghost" size="small" (click)="copyInviteLink(row)">
+                        Invite link
+                      </button>
+                    }
                     <button appButton variant="ghost" size="small" (click)="toggleActive(row)">
                       {{ row.isActive ? 'Deactivate' : 'Activate' }}
                     </button>

@@ -39,6 +39,7 @@ export class WorkOrderWorkspace {
   protected readonly journey = computed(() => this.feed?.journey() ?? null);
   protected readonly advancing = signal(false);
   protected readonly advanceError = signal<string | null>(null);
+  protected readonly technicians = signal<readonly { id: string; fullName: string; role: string }[]>([]);
 
   /**
    * Only at the two stages where somebody has to say yes or no. Read off
@@ -178,6 +179,21 @@ export class WorkOrderWorkspace {
     // Re-fetches when the route id changes, so navigating between two
     // jobs does not show the previous car's details under a new plate.
     queueMicrotask(() => this.load());
+    this.api.technicians().subscribe({
+      next: ({ technicians }) => this.technicians.set(technicians),
+      error: () => {},
+    });
+  }
+
+  protected assignTechnician(staffUserId: string): void {
+    if (!staffUserId) return;
+    this.api.assignTechnician(this.id(), staffUserId).subscribe({
+      next: () => {
+        this.load();
+        this.feed?.refresh();
+      },
+      error: () => {},
+    });
   }
 
   protected load(): void {

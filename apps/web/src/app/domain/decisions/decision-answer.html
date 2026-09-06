@@ -17,6 +17,16 @@
       </p>
     }
 
+    @if (d.vehicle) {
+      <div class="decision-vehicle-banner">
+        <span class="vehicle-badge-icon">🚗</span>
+        <div class="vehicle-info">
+          <span class="vehicle-subtext">Car Panel / Plate Number</span>
+          <strong class="vehicle-plate-text">{{ d.vehicle }}</strong>
+        </div>
+      </div>
+    }
+
     @if (!d.pricingVisible) {
       <!-- A rare configuration, and the page must not break on it. -->
       <p class="note">Prices will be confirmed on your invoice.</p>
@@ -38,17 +48,34 @@
             }
           </div>
 
-          <!-- The technician's own words, not a service code. -->
-          <p class="item-why">{{ item.explanation }}</p>
+          <!-- Problem found on inspection -->
+          <div class="inspection-finding-box">
+            <span class="finding-title">🔍 Problem Found on Inspection:</span>
+            <p class="finding-desc">{{ item.inspectionFinding || item.explanation }}</p>
+          </div>
 
-          @if (item.total) {
-            <p class="item-price">
-              <span class="item-total">{{ item.total }}</span>
-              @if (item.labour && item.labour !== '0.00') {
-                <span class="item-parts">includes {{ item.labour }} labour</span>
-              }
-            </p>
+          @if (item.explanation && item.inspectionFinding && item.explanation !== item.inspectionFinding) {
+            <p class="item-why">{{ item.explanation }}</p>
           }
+
+          <!-- Parts price, service price for fixing, and total -->
+          @if (item.total) {
+            <div class="repair-pricing-grid">
+              <div class="pricing-tile">
+                <span class="tile-label">🔩 Parts Needed & Price</span>
+                <span class="tile-val">{{ item.partsPrice || item.price || 'Included' }}</span>
+              </div>
+              <div class="pricing-tile">
+                <span class="tile-label">🔧 Service Price for Fixing</span>
+                <span class="tile-val">{{ item.servicePrice || item.labour || 'Included' }}</span>
+              </div>
+              <div class="pricing-tile pricing-tile--total">
+                <span class="tile-label">💰 Total for this item</span>
+                <strong class="tile-total">{{ item.total }}</strong>
+              </div>
+            </div>
+          }
+
 
           @if (d.state === 'ANSWERED') {
             <p class="verdict" [class.verdict--no]="item.decision === 'REJECTED'">

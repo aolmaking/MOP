@@ -50,3 +50,29 @@ export class WarehouseStatusDto {
   @MinLength(10)
   reason!: string;
 }
+
+export class ReceiveStockDto {
+  @IsString()
+  warehouseId!: string;
+
+  @IsInt()
+  @Min(1)
+  quantity!: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class AdjustStockDto {
+  @IsString()
+  warehouseId!: string;
+
+  @IsInt()
+  quantity!: number;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+

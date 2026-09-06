@@ -16,6 +16,7 @@ export interface IntakeDraft {
   newVehicle: { category: string; plateNumber: string; vinOrChassisNumber: string } | null;
   complaint: string;
   inspectionDeclined: boolean;
+  assignToStaffUserId?: string;
   branchId: string;
 }
 

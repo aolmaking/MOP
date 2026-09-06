@@ -75,6 +75,10 @@ export class OrganizationApi {
     return this.http.patch<{ ok: true }>(`/api/v1/organization/staff/${staffId}/locked`, { locked });
   }
 
+  getInviteLink(staffId: string): Observable<{ inviteLink: string }> {
+    return this.http.post<{ inviteLink: string }>(`/api/v1/organization/staff/${staffId}/invite-link`, {});
+  }
+
   infrastructure(): Observable<OrganizationInfrastructure> {
     return this.http.get<OrganizationInfrastructure>('/api/v1/organization/infrastructure');
   }

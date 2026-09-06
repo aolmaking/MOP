@@ -284,12 +284,29 @@
                 <dd><mop-identifier [value]="job.asset.vinOrChassisNumber" /></dd>
               </div>
             }
-            @if (job.assignments.length) {
-              <div class="fact">
-                <dt>Assigned</dt>
-                <dd>{{ job.assignments[0].staffUser.fullName }}</dd>
-              </div>
-            }
+            <div class="fact">
+              <dt>Assigned</dt>
+              <dd>
+                @if (job.assignments.length) {
+                  <span style="margin-inline-end: 8px;">{{ job.assignments[0].staffUser.fullName }}</span>
+                } @else {
+                  <span style="color: var(--color-text-muted, #71717a); margin-inline-end: 8px;">Unassigned</span>
+                }
+                @if (technicians().length > 0) {
+                  <select
+                    style="font-size: 13px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--color-border, #e4e4e7);"
+                    (change)="assignTechnician($any($event.target).value)"
+                  >
+                    <option value="">-- Reassign --</option>
+                    @for (tech of technicians(); track tech.id) {
+                      <option [value]="tech.id" [selected]="job.assignments[0]?.staffUser?.fullName === tech.fullName">
+                        {{ tech.fullName }}
+                      </option>
+                    }
+                  </select>
+                }
+              </dd>
+            </div>
           </dl>
         </section>
       }

@@ -278,9 +278,15 @@ export class TeamSetupService {
     return branchScope.length > 0 ? { branchId: { in: [...branchScope] } } : {};
   }
 
-  /** A staff member is in scope if any of their branches is in ours. */
+  /** A staff member is in scope if unscoped (workshop-wide) or if any of their branches is in ours. */
   private staffScopeFilter(branchScope: readonly string[]) {
-    return branchScope.length > 0 ? { branchScope: { hasSome: [...branchScope] } } : {};
+    if (branchScope.length === 0) return {};
+    return {
+      OR: [
+        { branchScope: { equals: [] } },
+        { branchScope: { hasSome: [...branchScope] } },
+      ],
+    };
   }
 
   private async requireTeamInScope(tenantId: string, branchScope: readonly string[], teamId: string) {

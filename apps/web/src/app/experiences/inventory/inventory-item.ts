@@ -2,6 +2,8 @@ import { Component, computed, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ErrorBanner } from '../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../ui/button/button.directive';
+import { FormField } from '../../ui/form-field/form-field';
+import { DismissOnEscapeDirective } from '../../ui/dismiss-on-escape/dismiss-on-escape.directive';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import { InventoryApi, type ItemDetail, type Movement } from './inventory.api';
 
@@ -17,7 +19,7 @@ type State = 'loading' | 'ready' | 'not-found' | 'forbidden' | 'error';
  */
 @Component({
   selector: 'app-inventory-item',
-  imports: [RouterLink, ErrorBanner, ButtonDirective],
+  imports: [RouterLink, ErrorBanner, ButtonDirective, FormField, DismissOnEscapeDirective],
   templateUrl: './inventory-item.html',
   styleUrl: './inventory-item.css',
 })
@@ -29,6 +31,13 @@ export class InventoryItem {
   protected readonly detail = signal<ItemDetail | null>(null);
   protected readonly state = signal<State>('loading');
   protected readonly error = signal<PresentedError | null>(null);
+
+  protected readonly movementModal = signal<'receive' | 'adjust' | null>(null);
+  protected readonly targetWarehouseId = signal<string>('');
+  protected readonly movementQty = signal<number>(1);
+  protected readonly movementNotes = signal<string>('');
+  protected readonly movementSaving = signal<boolean>(false);
+  protected readonly movementError = signal<string | null>(null);
 
   constructor() {
     queueMicrotask(() => this.load());
@@ -83,5 +92,66 @@ export class InventoryItem {
     if (hours < 24) return `${Math.floor(hours)}h ago`;
     const days = Math.floor(hours / 24);
     return days === 1 ? '1 day ago' : `${days} days ago`;
+  }
+
+  protected openReceive(): void {
+    const balances = this.detail()?.item.stockBalances ?? [];
+    const firstWh = balances[0]?.warehouseId ?? '';
+    this.targetWarehouseId.set(firstWh);
+    this.movementQty.set(10);
+    this.movementNotes.set('');
+    this.movementError.set(null);
+    this.movementModal.set('receive');
+  }
+
+  protected openAdjust(): void {
+    const balances = this.detail()?.item.stockBalances ?? [];
+    const firstWh = balances[0]?.warehouseId ?? '';
+    this.targetWarehouseId.set(firstWh);
+    this.movementQty.set(0);
+    this.movementNotes.set('');
+    this.movementError.set(null);
+    this.movementModal.set('adjust');
+  }
+
+  protected closeMovementModal(): void {
+    this.movementModal.set(null);
+  }
+
+  protected submitMovement(): void {
+    const modal = this.movementModal();
+    const whId = this.targetWarehouseId();
+    const qty = Number(this.movementQty());
+    if (!whId) {
+      this.movementError.set('Please select a warehouse');
+      return;
+    }
+    if (modal === 'receive' && (!qty || qty <= 0)) {
+      this.movementError.set('Quantity must be a positive whole number');
+      return;
+    }
+    if (modal === 'adjust' && qty === 0) {
+      this.movementError.set('Adjustment cannot be zero');
+      return;
+    }
+    this.movementSaving.set(true);
+    this.movementError.set(null);
+
+    const action$ =
+      modal === 'receive'
+        ? this.api.receive(this.id(), whId, qty, this.movementNotes())
+        : this.api.adjust(this.id(), whId, qty, this.movementNotes());
+
+    action$.subscribe({
+      next: () => {
+        this.movementSaving.set(false);
+        this.movementModal.set(null);
+        this.load();
+      },
+      error: (err: PresentedError) => {
+        this.movementSaving.set(false);
+        this.movementError.set(err.message || 'Failed to record movement');
+      },
+    });
   }
 }

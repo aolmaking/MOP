@@ -32,6 +32,7 @@ export class DelegationLayer implements PermissionLayer {
     context: PermissionContext,
   ): LayerDecision {
     if (!session.tenantId) return null;
+    if (session.role === "TENANT_OWNER" || session.role === "TENANT_ADMIN") return null;
 
     const delegation = delegationFor(permissionKey);
     if (!delegation) return null;

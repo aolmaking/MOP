@@ -355,6 +355,10 @@ export const routes: Routes = [
         loadComponent: () => import('./experiences/technician/tech-work-card').then((m) => m.TechWorkCard),
       },
       {
+        path: 'work-orders/:id',
+        redirectTo: 'card/:id',
+      },
+      {
         // Asking the store for parts: browse the workshop's own
         // catalogue, filter it by whatever the inventory manager
         // configured, build a basket, send it once. A page rather than a

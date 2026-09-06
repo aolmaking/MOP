@@ -6,10 +6,13 @@ export interface DecisionItem {
   readonly id: string;
   readonly name: string;
   readonly explanation: string;
+  readonly inspectionFinding?: string | null;
   readonly importance: 'Low' | 'Medium' | 'High' | 'Critical';
   readonly decision: Verdict;
   readonly price: string | null;
+  readonly partsPrice?: string | null;
   readonly labour: string | null;
+  readonly servicePrice?: string | null;
   readonly total: string | null;
   /**
    * APPROVAL_WEIGHT, resolved server-side: whether declining THIS item
@@ -20,6 +23,7 @@ export interface DecisionItem {
    */
   readonly requiresAcknowledgement: boolean;
 }
+
 
 export interface PublicDecision {
   readonly state: 'OPEN' | 'EXPIRED' | 'ANSWERED';

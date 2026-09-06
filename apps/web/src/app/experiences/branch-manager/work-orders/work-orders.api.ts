@@ -152,4 +152,12 @@ export class WorkOrdersApi {
   cancelDecision(requestId: string): Observable<unknown> {
     return this.http.post(`/api/v1/branch-manager/approvals/${requestId}/cancel`, {});
   }
+
+  technicians(): Observable<{ technicians: { id: string; fullName: string; role: string }[] }> {
+    return this.http.get<{ technicians: { id: string; fullName: string; role: string }[] }>('/api/v1/branch-manager/technicians');
+  }
+
+  assignTechnician(workOrderId: string, staffUserId: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>(`/api/v1/branch-manager/work-orders/${workOrderId}/assign`, { staffUserId });
+  }
 }

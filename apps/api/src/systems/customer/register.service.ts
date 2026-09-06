@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import type { Prisma } from "@mop/database";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { hashPassword } from "../../identity/auth/password.util";
 
@@ -11,8 +12,11 @@ export interface RegisterCustomerInput {
   readonly workshopCode: string;
   readonly fullName: string;
   readonly phone: string;
+  readonly plateNumber?: string;
+  readonly carPlateNumber?: string;
   readonly email?: string;
   readonly password: string;
+  readonly confirmNewCar?: boolean;
 }
 
 export interface RegisterCustomerResult {
@@ -90,20 +94,82 @@ export class RegisterCustomerService {
       });
     }
 
-    // A phone match against an existing walk-in Customer (created by
-    // Branch Manager's intake, no portal account yet) is the ordinary
-    // case, not an error -- this is that same person creating their
-    // portal login for the first time, and should CLAIM the existing
-    // record so their real service history is theirs from day one,
-    // rather than starting a second, empty Customer identity for the
-    // same person (P-80, docs/POLICY_DECISION_INVENTORY.md §8.B). A
-    // phone match against a Customer that already HAS an account is a
-    // genuine conflict -- that phone is already registered.
+    const rawPlate = (input.plateNumber || input.carPlateNumber || "").trim();
+    const normalizedPlate = rawPlate.toUpperCase();
+
+    // Check if phone matches an existing Customer in this workshop
     const phoneMatch = await this.prisma.customer.findFirst({
       where: { tenantId: workshop.tenantId, phone: input.phone },
-      select: { id: true, accountId: true },
+      select: { id: true, accountId: true, fullName: true },
     });
-    if (phoneMatch?.accountId) {
+
+    const existingAssets = phoneMatch
+      ? await this.prisma.asset.findMany({
+          where: {
+            tenantId: workshop.tenantId,
+            OR: [
+              { currentOwnerCustomerId: phoneMatch.id },
+              { ownershipHistory: { some: { customerId: phoneMatch.id, endedAt: null } } },
+            ],
+          },
+          select: { id: true, plateNumber: true },
+        })
+      : [];
+
+    const existingPlates = existingAssets.map((a) => a.plateNumber).filter((p): p is string => Boolean(p));
+    const plateAlreadyOwned = rawPlate.length > 0 && existingAssets.some(
+      (a) => (a.plateNumber || "").trim().toUpperCase() === normalizedPlate,
+    );
+
+    // If customer already exists and has cars registered, check if the plate is different
+    if (phoneMatch && existingAssets.length > 0 && !plateAlreadyOwned && rawPlate.length > 0) {
+      if (!input.confirmNewCar) {
+        throw new ConflictException({
+          code: "different_car_detected",
+          message:
+            "This number is already signed in before and the car panel number is different. Is this a new car under your name?",
+          details: {
+            existingPlates,
+            newPlate: rawPlate,
+          },
+        });
+      }
+
+      // User confirmed YES (confirmNewCar === true) -- connect customer with BOTH cars!
+      const customerId = phoneMatch.id;
+      await this.prisma.$transaction(async (tx) => {
+        // If account not created yet, create it and link
+        if (!phoneMatch.accountId) {
+          const account = await tx.account.create({
+            data: {
+              accountType: "CUSTOMER",
+              tenantId: workshop.tenantId,
+              email: input.email,
+              phone: input.phone,
+              passwordHash: hashPassword(input.password),
+              status: "ACTIVE",
+            },
+          });
+          await tx.customer.update({
+            where: { id: customerId },
+            data: {
+              accountId: account.id,
+              fullName: input.fullName || phoneMatch.fullName,
+              email: input.email ?? undefined,
+              portalStatus: "ENABLED",
+            },
+          });
+        }
+
+        // Link the new vehicle to this customer as well
+        await this.linkVehicle(tx, workshop.tenantId, customerId, rawPlate);
+      });
+
+      return { customerId, tenantName: workshop.tenantName };
+    }
+
+    // Phone match where same car or no new car conflict
+    if (phoneMatch?.accountId && (!rawPlate || plateAlreadyOwned)) {
       throw new ConflictException({
         code: "phone_already_registered",
         message: "This phone number is already registered at this workshop. Try signing in instead.",
@@ -111,6 +177,39 @@ export class RegisterCustomerService {
     }
 
     const created = await this.prisma.$transaction(async (tx) => {
+      if (phoneMatch) {
+        // Walk-in claiming their account for the first time
+        const account = await tx.account.create({
+          data: {
+            accountType: "CUSTOMER",
+            tenantId: workshop.tenantId,
+            email: input.email,
+            phone: input.phone,
+            passwordHash: hashPassword(input.password),
+            status: "ACTIVE",
+          },
+        });
+
+        const claimed = await tx.customer.updateMany({
+          where: { id: phoneMatch.id, accountId: null },
+          data: { accountId: account.id, fullName: input.fullName, email: input.email ?? undefined, portalStatus: "ENABLED" },
+        });
+
+        if (claimed.count === 0) {
+          throw new ConflictException({
+            code: "phone_already_registered",
+            message: "This phone number is already registered at this workshop. Try signing in instead.",
+          });
+        }
+
+        if (rawPlate) {
+          await this.linkVehicle(tx, workshop.tenantId, phoneMatch.id, rawPlate);
+        }
+
+        return { id: phoneMatch.id };
+      }
+
+      // Brand new Customer + Account
       const account = await tx.account.create({
         data: {
           accountType: "CUSTOMER",
@@ -122,25 +221,6 @@ export class RegisterCustomerService {
         },
       });
 
-      if (phoneMatch) {
-        // Guarded, not a plain update: two concurrent registrations
-        // racing to claim the same walk-in record must not both
-        // succeed (the second account would silently orphan itself with
-        // no linked Customer). Only the transaction that observes
-        // `accountId` still null wins.
-        const claimed = await tx.customer.updateMany({
-          where: { id: phoneMatch.id, accountId: null },
-          data: { accountId: account.id, fullName: input.fullName, email: input.email ?? undefined, portalStatus: "ENABLED" },
-        });
-        if (claimed.count === 0) {
-          throw new ConflictException({
-            code: "phone_already_registered",
-            message: "This phone number is already registered at this workshop. Try signing in instead.",
-          });
-        }
-        return { id: phoneMatch.id };
-      }
-
       const customer = await tx.customer.create({
         data: {
           tenantId: workshop.tenantId,
@@ -148,18 +228,63 @@ export class RegisterCustomerService {
           fullName: input.fullName,
           phone: input.phone,
           email: input.email,
-          // The account created just now IS the portal invite -- there is
-          // no separate step to send, unlike a staff-created customer who
-          // has to be invited afterward.
           portalStatus: "ENABLED",
         },
         select: { id: true },
       });
 
+      if (rawPlate) {
+        await this.linkVehicle(tx, workshop.tenantId, customer.id, rawPlate);
+      }
+
       return customer;
     });
 
     return { customerId: created.id, tenantName: workshop.tenantName };
+  }
+
+  private async linkVehicle(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    customerId: string,
+    plateNumber: string,
+  ) {
+    let asset = await tx.asset.findFirst({
+      where: { tenantId, plateNumber: { equals: plateNumber, mode: "insensitive" } },
+    });
+
+    if (!asset) {
+      asset = await tx.asset.create({
+        data: {
+          tenantId,
+          category: "CARS",
+          plateNumber,
+          currentOwnerCustomerId: customerId,
+        },
+      });
+    } else if (!asset.currentOwnerCustomerId) {
+      await tx.asset.update({
+        where: { id: asset.id },
+        data: { currentOwnerCustomerId: customerId },
+      });
+    }
+
+    const existingOwnership = await tx.assetOwnershipHistory.findFirst({
+      where: { assetId: asset.id, customerId, endedAt: null },
+    });
+
+    if (!existingOwnership) {
+      await tx.assetOwnershipHistory.create({
+        data: {
+          tenantId,
+          assetId: asset.id,
+          customerId,
+          startedAt: new Date(),
+        },
+      });
+    }
+
+    return asset;
   }
 
   private notFound(): NotFoundException {
@@ -169,3 +294,4 @@ export class RegisterCustomerService {
     });
   }
 }
+

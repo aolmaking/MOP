@@ -44,11 +44,17 @@
 
         <label class="field">
           <span class="field-label">Full name</span>
-          <input type="text" autocomplete="name" [value]="fullName()" (input)="fullName.set($any($event.target).value)" />
+          <input
+            type="text"
+            autocomplete="name"
+            placeholder="e.g. Ahmed Mostafa"
+            [value]="fullName()"
+            (input)="fullName.set($any($event.target).value)"
+          />
         </label>
 
         <label class="field">
-          <span class="field-label">Phone</span>
+          <span class="field-label">Mobile number (WhatsApp)</span>
           <input
             type="tel"
             autocomplete="tel"
@@ -56,6 +62,19 @@
             [value]="phone()"
             (input)="phone.set($any($event.target).value)"
           />
+          <span class="hint hint--whatsapp">📱 Must have WhatsApp active (service updates, inspection findings, and approval requests are sent here)</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Car panel / plate number</span>
+          <input
+            type="text"
+            autocomplete="off"
+            placeholder="e.g. ABC-1234 or 123-XYZ"
+            [value]="plateNumber()"
+            (input)="plateNumber.set($any($event.target).value)"
+          />
+          <span class="hint">Your car's primary identifier for all service history, work orders, and inspections</span>
         </label>
 
         <label class="field">
@@ -82,8 +101,49 @@
 
     @case ('done') {
       <h1 class="title">Your account is ready</h1>
-      <p class="body">Sign in with your phone number and the password you just chose.</p>
+      <p class="body">Your profile and vehicle details are registered. Sign in with your phone number and the password you just chose.</p>
       <button class="primary" type="button" (click)="goToLogin()">Sign in</button>
     }
   }
+
+  <!-- ── Different Car Confirmation Modal ────────────────────────────────────── -->
+  @if (differentCarModal()) {
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="diff-car-title">
+      <div class="modal-card">
+        <div class="modal-badge-car">🚗 Vehicle Verification</div>
+        <h2 class="modal-title" id="diff-car-title">New Car Under Your Name?</h2>
+        <p class="modal-prompt">
+          This number is already signed in before and the car panel number is different.
+          Is this a new car under your name?
+        </p>
+
+        <div class="modal-plates-summary">
+          @if (existingPlates().length > 0) {
+            <div class="plate-box plate-box--prev">
+              <span class="plate-box-label">Previously registered vehicle</span>
+              <strong class="plate-box-num">{{ existingPlates().join(', ') }}</strong>
+            </div>
+          }
+          <div class="plate-box plate-box--new">
+            <span class="plate-box-label">New vehicle to connect</span>
+            <strong class="plate-box-num">{{ plateNumber() }}</strong>
+          </div>
+        </div>
+
+        <p class="modal-note">
+          Selecting <strong>Yes</strong> will link both cars to your profile and repair history.
+        </p>
+
+        <div class="modal-actions">
+          <button class="primary" type="button" (click)="confirmAddCar()">
+            Yes, this is my new car
+          </button>
+          <button class="secondary" type="button" (click)="cancelDifferentCar()">
+            No, change car panel number
+          </button>
+        </div>
+      </div>
+    </div>
+  }
 </section>
+

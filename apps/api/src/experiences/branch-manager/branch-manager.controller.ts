@@ -144,6 +144,7 @@ export class BranchManagerController {
         asset: dto.asset,
         complaint: dto.complaint,
         inspectionDeclined: dto.inspectionDeclined ?? false,
+        assignToStaffUserId: dto.assignToStaffUserId,
         confirmOwnershipTransfer: dto.confirmOwnershipTransfer ?? false,
         confirmNewCustomerDespitePhoneMatch: dto.confirmNewCustomerDespitePhoneMatch ?? false,
       },
@@ -512,6 +513,75 @@ export class BranchManagerController {
       dto.serviceKey,
       dto.decisionItemId,
     );
+  }
+
+  @Get("technicians")
+  async technicians(@CurrentSession() session: SessionContext) {
+    await this.requireBranchView(session);
+    const staff = await this.prisma.staffUser.findMany({
+      where: {
+        tenantId: session.tenantId as string,
+        isActive: true,
+        role: { in: ["TECHNICIAN", "TEAM_LEADER"] },
+      },
+      select: {
+        id: true,
+        fullName: true,
+        role: true,
+        account: { select: { email: true } },
+      },
+      orderBy: { fullName: "asc" },
+    });
+    return {
+      technicians: staff.map((s) => ({
+        id: s.id,
+        fullName: s.fullName,
+        email: s.account.email,
+        role: s.role,
+      })),
+    };
+  }
+
+  @Post("work-orders/:id/assign")
+  async assignTechnician(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: { staffUserId: string },
+  ) {
+    const allowed =
+      (await this.access.can(session, "workorders.branch.reassign_technician")) ||
+      (await this.access.can(session, "workorders.branch.view"));
+    if (!allowed || !session.tenantId) {
+      throw new ForbiddenException({ code: "forbidden", message: "You cannot assign technicians to this job." });
+    }
+    await this.boardService.detail(
+      { tenantId: session.tenantId, branchScope: session.branchScope },
+      id,
+    );
+
+    const staff = await this.prisma.staffUser.findFirst({
+      where: { id: dto.staffUserId, tenantId: session.tenantId, isActive: true },
+    });
+    if (!staff) {
+      throw new BadRequestException({ code: "staff_not_found", message: "Technician not found or inactive." });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.workOrderAssignment.updateMany({
+        where: { workOrderId: id, unassignedAt: null },
+        data: { unassignedAt: new Date() },
+      });
+      await tx.workOrderAssignment.create({
+        data: {
+          tenantId: session.tenantId as string,
+          workOrderId: id,
+          staffUserId: dto.staffUserId,
+          assignedAt: new Date(),
+        },
+      });
+    });
+
+    return { ok: true, workOrderId: id, staffUserId: dto.staffUserId };
   }
 
   private async requireBranchView(session: SessionContext): Promise<void> {

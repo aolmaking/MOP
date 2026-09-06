@@ -14,7 +14,7 @@ import { AssignLeaderDto, CreateTeamDto, MoveTechnicianDto } from "./team-setup.
  * management over gets a 403 here and no navigation entry at all: this
  * page is absent, not shown-and-locked.
  */
-@Controller("branch/teams")
+@Controller(["branch/teams", "organization/teams"])
 @UseGuards(SessionGuard)
 export class TeamSetupController {
   constructor(
@@ -67,7 +67,10 @@ export class TeamSetupController {
   }
 
   private async require(session: SessionContext): Promise<string> {
-    const decision = await this.access.check(session, "team_setup.branch.manage");
+    const isOwnerOrAdmin = session.role === "TENANT_OWNER" || session.role === "TENANT_ADMIN";
+    const decision = isOwnerOrAdmin
+      ? { allowed: true, reason: undefined }
+      : await this.access.check(session, "team_setup.branch.manage");
     if (!decision.allowed || !session.tenantId) {
       throw new ForbiddenException({
         code: "forbidden",

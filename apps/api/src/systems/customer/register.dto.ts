@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsString, Length, Matches } from "class-validator";
+import { IsBoolean, IsEmail, IsOptional, IsString, Length, Matches } from "class-validator";
 
 /**
  * Register as Customer, per docs/detailed-specs/shared-system-pages.md.
@@ -20,6 +20,18 @@ export class RegisterCustomerDto {
   @Matches(/^\+[1-9]\d{1,14}$/)
   phone!: string;
 
+  /** Car panel / plate number -- primary vehicle identity. */
+  @IsOptional()
+  @IsString()
+  @Length(1, 40)
+  plateNumber?: string;
+
+  /** Optional alias for plateNumber. */
+  @IsOptional()
+  @IsString()
+  @Length(1, 40)
+  carPlateNumber?: string;
+
   @IsOptional()
   @IsEmail()
   email?: string;
@@ -27,4 +39,10 @@ export class RegisterCustomerDto {
   @IsString()
   @Length(12, 200)
   password!: string;
+
+  /** Affirmative response when prompted about linking an additional car to this phone number. */
+  @IsOptional()
+  @IsBoolean()
+  confirmNewCar?: boolean;
 }
+

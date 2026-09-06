@@ -34,6 +34,7 @@ export interface IntakeRequest {
   readonly asset: { existingAssetId?: string; category?: string; plateNumber?: string; vinOrChassisNumber?: string };
   readonly complaint?: string;
   readonly inspectionDeclined?: boolean;
+  readonly assignToStaffUserId?: string;
   readonly confirmOwnershipTransfer?: boolean;
 }
 
@@ -55,6 +56,10 @@ export class IntakeApi {
 
   branches(): Observable<{ branches: BranchOption[] }> {
     return this.http.get<{ branches: BranchOption[] }>('/api/v1/branch-manager/intake/branches');
+  }
+
+  technicians(): Observable<{ technicians: { id: string; fullName: string; role: string }[] }> {
+    return this.http.get<{ technicians: { id: string; fullName: string; role: string }[] }>('/api/v1/branch-manager/technicians');
   }
 
   create(request: IntakeRequest): Observable<IntakeResult> {

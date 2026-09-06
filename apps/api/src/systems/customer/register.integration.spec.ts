@@ -77,6 +77,8 @@ beforeAll(async () => {
 afterAll(async () => {
   for (const id of [tenantId, frozenTenantId]) {
     const where = { tenantId: id };
+    await prisma.assetOwnershipHistory.deleteMany({ where }).catch(() => undefined);
+    await prisma.asset.deleteMany({ where }).catch(() => undefined);
     await prisma.customer.deleteMany({ where });
     await prisma.account.deleteMany({ where });
     await prisma.tenant.deleteMany({ where: { id } });
@@ -84,6 +86,7 @@ afterAll(async () => {
   await prisma.plan.deleteMany({ where: { id: planId } });
   await prisma.$disconnect();
 }, 120_000);
+
 
 describe("resolveWorkshop", () => {
   it("resolves by slug", async () => {
@@ -256,3 +259,93 @@ describe("register -- claiming an existing walk-in customer by phone (P-80)", ()
     expect(accounts).toBe(1);
   });
 });
+
+describe("register -- car plate and multi-vehicle linking", () => {
+  it("creates a linked Asset and Ownership History when registering with a car plate number", async () => {
+    const phone = "+201000000020";
+    const plate = `CAR-${SUFFIX}-1`;
+    const result = await register.register({
+      workshopCode: `register-ws-${SUFFIX}`,
+      fullName: "Vehicle Owner A",
+      phone,
+      plateNumber: plate,
+      password: "a-real-password-123",
+    });
+
+    const ownership = await prisma.assetOwnershipHistory.findFirst({
+      where: { tenantId, customerId: result.customerId, endedAt: null },
+      include: { asset: true },
+    });
+    expect(ownership).not.toBeNull();
+    expect(ownership?.asset.plateNumber).toBe(plate);
+    expect(ownership?.asset.currentOwnerCustomerId).toBe(result.customerId);
+  });
+
+  it("detects when the same phone registers with a DIFFERENT car panel number and prompts for confirmation", async () => {
+    const phone = "+201000000021";
+    const plate1 = `FIRST-${SUFFIX}`;
+    const plate2 = `SECOND-${SUFFIX}`;
+
+    await register.register({
+      workshopCode: `register-ws-${SUFFIX}`,
+      fullName: "Multi Car Owner",
+      phone,
+      plateNumber: plate1,
+      password: "a-real-password-123",
+    });
+
+    // Submitting with same phone and different car without confirmation throws different_car_detected
+    await expect(
+      register.register({
+        workshopCode: `register-ws-${SUFFIX}`,
+        fullName: "Multi Car Owner",
+        phone,
+        plateNumber: plate2,
+        password: "a-real-password-123",
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        code: "different_car_detected",
+      },
+    });
+  });
+
+  it("links BOTH cars to the customer when confirmNewCar is true", async () => {
+    const phone = "+201000000022";
+    const plate1 = `CAR-A-${SUFFIX}`;
+    const plate2 = `CAR-B-${SUFFIX}`;
+
+    const first = await register.register({
+      workshopCode: `register-ws-${SUFFIX}`,
+      fullName: "Two Car Owner",
+      phone,
+      plateNumber: plate1,
+      password: "a-real-password-123",
+    });
+
+    // Now submit with different car and confirmNewCar: true
+    const second = await register.register({
+      workshopCode: `register-ws-${SUFFIX}`,
+      fullName: "Two Car Owner",
+      phone,
+      plateNumber: plate2,
+      password: "a-real-password-123",
+      confirmNewCar: true,
+    });
+
+    expect(second.customerId).toBe(first.customerId);
+
+    // Verify both cars are actively linked under AssetOwnershipHistory
+    const owned = await prisma.assetOwnershipHistory.findMany({
+      where: { tenantId, customerId: first.customerId, endedAt: null },
+      include: { asset: true },
+    });
+
+    const ownedPlates = owned.map((o) => o.asset.plateNumber);
+    expect(ownedPlates).toContain(plate1);
+    expect(ownedPlates).toContain(plate2);
+    expect(owned).toHaveLength(2);
+  });
+});
+

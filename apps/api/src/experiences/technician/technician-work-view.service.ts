@@ -536,9 +536,22 @@ export class TechnicianWorkViewService {
       this.prisma.fault.count({ where: { workOrderId } }),
     ]);
 
+    const isPastInspection = [
+      "APPROVED_FOR_WORK",
+      "IN_PROGRESS",
+      "WAITING_PARTS",
+      "WAITING_CUSTOMER",
+      "BLOCKED",
+      "READY_FOR_TEAM_REVIEW",
+      "READY_FOR_QC",
+      "PAYMENT_PENDING",
+      "READY_FOR_DELIVERY",
+      "CLOSED",
+    ].includes(status);
+
     const state: WorkCardInspection["state"] = declined
       ? "DECLINED"
-      : latest?.completedAt
+      : latest?.completedAt || isPastInspection
         ? "COMPLETED"
         : latest || status === "UNDER_INSPECTION"
           ? "IN_PROGRESS"

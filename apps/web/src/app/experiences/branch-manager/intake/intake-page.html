@@ -64,7 +64,7 @@
               <input
                 type="text"
                 [value]="nc.fullName"
-                (input)="patch({ newCustomer: { fullName: $any($event.target).value, phone: nc.phone, email: nc.email } })"
+                (input)="setCustomerName($any($event.target).value)"
               />
             </label>
             <label class="field">
@@ -73,7 +73,7 @@
                 type="tel"
                 inputmode="tel"
                 [value]="nc.phone"
-                (input)="patch({ newCustomer: { fullName: nc.fullName, phone: $any($event.target).value, email: nc.email } })"
+                (input)="setCustomerPhone($any($event.target).value)"
               />
             </label>
             <label class="field">
@@ -81,7 +81,7 @@
               <input
                 type="email"
                 [value]="nc.email"
-                (input)="patch({ newCustomer: { fullName: nc.fullName, phone: nc.phone, email: $any($event.target).value } })"
+                (input)="setCustomerEmail($any($event.target).value)"
               />
             </label>
           </div>
@@ -177,14 +177,14 @@
                 <input
                   type="text"
                   [value]="nv.plateNumber"
-                  (input)="patch({ newVehicle: { category: nv.category, plateNumber: $any($event.target).value, vinOrChassisNumber: nv.vinOrChassisNumber } })"
+                  (input)="setVehiclePlate($any($event.target).value)"
                 />
               </label>
               <label class="field">
                 <span class="field-label">Category</span>
                 <select
                   [value]="nv.category"
-                  (change)="patch({ newVehicle: { category: $any($event.target).value, plateNumber: nv.plateNumber, vinOrChassisNumber: nv.vinOrChassisNumber } })"
+                  (change)="setVehicleCategory($any($event.target).value)"
                 >
                   <option value="CARS">Cars</option>
                   <option value="MOTORCYCLES">Motorcycles</option>
@@ -196,7 +196,7 @@
                 <input
                   type="text"
                   [value]="nv.vinOrChassisNumber"
-                  (input)="patch({ newVehicle: { category: nv.category, plateNumber: nv.plateNumber, vinOrChassisNumber: $any($event.target).value } })"
+                  (input)="setVehicleVin($any($event.target).value)"
                 />
               </label>
             </div>
@@ -258,6 +258,18 @@
             <select [value]="draft().branchId" (change)="patch({ branchId: $any($event.target).value })">
               @for (branch of branches(); track branch.id) {
                 <option [value]="branch.id">{{ branch.name }}</option>
+              }
+            </select>
+          </label>
+        }
+
+        @if (technicians().length > 0) {
+          <label class="field field--narrow">
+            <span class="field-label">Assign Technician <span class="field-optional">optional</span></span>
+            <select [value]="draft().assignToStaffUserId ?? ''" (change)="patch({ assignToStaffUserId: $any($event.target).value || undefined })">
+              <option value="">Unassigned</option>
+              @for (tech of technicians(); track tech.id) {
+                <option [value]="tech.id">{{ tech.fullName }}</option>
               }
             </select>
           </label>

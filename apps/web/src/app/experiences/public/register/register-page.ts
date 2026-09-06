@@ -41,16 +41,21 @@ export class RegisterPage {
 
   protected readonly fullName = signal('');
   protected readonly phone = signal('');
+  protected readonly plateNumber = signal('');
   protected readonly email = signal('');
   protected readonly password = signal('');
   protected readonly submitting = signal(false);
   protected readonly formError = signal<string | null>(null);
+
+  protected readonly differentCarModal = signal(false);
+  protected readonly existingPlates = signal<string[]>([]);
 
   protected readonly longEnough = computed(() => this.password().length >= 12);
   protected readonly canSubmit = computed(
     () =>
       this.fullName().trim().length >= 2 &&
       /^\+[1-9]\d{1,14}$/.test(this.phone().trim()) &&
+      this.plateNumber().trim().length >= 2 &&
       this.longEnough() &&
       !this.submitting(),
   );
@@ -91,7 +96,7 @@ export class RegisterPage {
     this.workshop.set(null);
   }
 
-  protected submit(): void {
+  protected submit(confirmNewCar = false): void {
     if (!this.canSubmit()) return;
     const workshop = this.workshop();
     if (!workshop) return;
@@ -104,23 +109,42 @@ export class RegisterPage {
         workshopCode: this.workshopCode().trim(),
         fullName: this.fullName().trim(),
         phone: this.phone().trim(),
+        plateNumber: this.plateNumber().trim(),
         email: this.email().trim() || undefined,
         password: this.password(),
+        confirmNewCar,
       })
       .subscribe({
         next: () => {
           this.submitting.set(false);
+          this.differentCarModal.set(false);
           this.password.set('');
           this.step.set('done');
         },
         error: (err: PresentedError) => {
           this.submitting.set(false);
-          this.formError.set(err.message ?? 'That did not work.');
+          if (err.code === 'different_car_detected') {
+            const plates = (err.details?.['existingPlates'] as string[]) || [];
+            this.existingPlates.set(plates);
+            this.differentCarModal.set(true);
+          } else {
+            this.formError.set(err.message ?? 'That did not work.');
+          }
         },
       });
+  }
+
+  protected confirmAddCar(): void {
+    this.differentCarModal.set(false);
+    this.submit(true);
+  }
+
+  protected cancelDifferentCar(): void {
+    this.differentCarModal.set(false);
   }
 
   protected goToLogin(): void {
     void this.router.navigate(['/login']);
   }
 }
+

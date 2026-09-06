@@ -5,7 +5,16 @@ import { CurrentSession } from "../../identity/auth/current-session.decorator";
 import { EffectiveAccessService } from "../../identity/access/effective-access.service";
 import { InventoryViewService } from "./inventory-view.service";
 import { PartRequestService } from "./part-request.service";
-import { IssueDto, RejectReturnDto, RequestClarificationDto, ReturnDto, WarehouseStatusDto } from "./inventory.dto";
+import {
+  AdjustStockDto,
+  IssueDto,
+  ReceiveStockDto,
+  RejectReturnDto,
+  RequestClarificationDto,
+  ReturnDto,
+  WarehouseStatusDto,
+} from "./inventory.dto";
+import { StockService } from "./stock.service";
 import { CatalogItemDto } from "./catalog.dto";
 import {
   CatalogAttributeDto,
@@ -41,6 +50,7 @@ export class InventoryController {
     private readonly warehouses: WarehouseService,
     private readonly catalogConfig: CatalogConfigService,
     private readonly browse: CatalogBrowseService,
+    private readonly stockService: StockService,
   ) {}
 
   /** Daily triage. Counts are per warehouse, never blended. */
@@ -265,6 +275,44 @@ export class InventoryController {
   async item(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     const tenantId = await this.require(session, "inventory.home.view");
     return this.view.item(tenantId, id);
+  }
+
+  @Post("items/:id/receive")
+  async receiveStock(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: ReceiveStockDto,
+  ) {
+    const tenantId = await this.require(session, "inventory.stock.adjust");
+    return this.stockService.record({
+      tenantId,
+      inventoryItemId: id,
+      warehouseId: dto.warehouseId,
+      type: "SUPPLIER_RECEIPT",
+      quantity: dto.quantity,
+      actorId: session.accountId,
+      referenceType: "SUPPLIER_RECEIPT",
+      referenceId: dto.notes || undefined,
+    });
+  }
+
+  @Post("items/:id/adjust")
+  async adjustStock(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: AdjustStockDto,
+  ) {
+    const tenantId = await this.require(session, "inventory.stock.adjust");
+    return this.stockService.record({
+      tenantId,
+      inventoryItemId: id,
+      warehouseId: dto.warehouseId,
+      type: "ADJUSTMENT",
+      quantity: dto.quantity,
+      actorId: session.accountId,
+      referenceType: "STOCK_ADJUSTMENT",
+      referenceId: dto.reason || undefined,
+    });
   }
 
   @Post("requests/:id/approve")

@@ -81,6 +81,10 @@ export class IntakeDto {
   @IsBoolean()
   inspectionDeclined?: boolean;
 
+  @IsOptional()
+  @IsString()
+  assignToStaffUserId?: string;
+
   /**
    * Set only after the advisor has been shown both names and confirmed
    * the vehicle really did change hands. Never defaulted true.

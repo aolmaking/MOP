@@ -45,6 +45,7 @@ export class IntakePage {
   protected readonly restored = signal(false);
 
   protected readonly branches = signal<readonly BranchOption[]>([]);
+  protected readonly technicians = signal<readonly { id: string; fullName: string; role: string }[]>([]);
   protected readonly submitting = signal(false);
   protected readonly error = signal<PresentedError | null>(null);
   protected readonly forbidden = signal(false);
@@ -79,6 +80,11 @@ export class IntakePage {
       error: (err: PresentedError) => {
         if (err.httpStatus === 403) this.forbidden.set(true);
       },
+    });
+
+    this.api.technicians().subscribe({
+      next: ({ technicians }) => this.technicians.set(technicians),
+      error: () => {},
     });
 
     this.queries
@@ -140,6 +146,36 @@ export class IntakePage {
 
   protected startNewVehicle(): void {
     this.patch({ vehicle: null, newVehicle: { category: 'CARS', plateNumber: '', vinOrChassisNumber: '' } });
+  }
+
+  protected setCustomerName(fullName: string): void {
+    const cur = this.draft().newCustomer || { fullName: '', phone: '', email: '' };
+    this.patch({ newCustomer: { ...cur, fullName } });
+  }
+
+  protected setCustomerPhone(phone: string): void {
+    const cur = this.draft().newCustomer || { fullName: '', phone: '', email: '' };
+    this.patch({ newCustomer: { ...cur, phone } });
+  }
+
+  protected setCustomerEmail(email: string): void {
+    const cur = this.draft().newCustomer || { fullName: '', phone: '', email: '' };
+    this.patch({ newCustomer: { ...cur, email } });
+  }
+
+  protected setVehiclePlate(plateNumber: string): void {
+    const cur = this.draft().newVehicle || { category: 'CARS', plateNumber: '', vinOrChassisNumber: '' };
+    this.patch({ newVehicle: { ...cur, plateNumber } });
+  }
+
+  protected setVehicleCategory(category: string): void {
+    const cur = this.draft().newVehicle || { category: 'CARS', plateNumber: '', vinOrChassisNumber: '' };
+    this.patch({ newVehicle: { ...cur, category } });
+  }
+
+  protected setVehicleVin(vinOrChassisNumber: string): void {
+    const cur = this.draft().newVehicle || { category: 'CARS', plateNumber: '', vinOrChassisNumber: '' };
+    this.patch({ newVehicle: { ...cur, vinOrChassisNumber } });
   }
 
   protected clearCustomer(): void {
@@ -232,6 +268,7 @@ export class IntakePage {
             },
         complaint: d.complaint.trim() || undefined,
         inspectionDeclined: d.inspectionDeclined,
+        assignToStaffUserId: d.assignToStaffUserId || undefined,
         confirmOwnershipTransfer,
       })
       .subscribe({

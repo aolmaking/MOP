@@ -60,6 +60,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     // technician is working. They get history through their own scoped
     // surfaces instead.
     "history.workshop.view": true,
+    "team_setup.branch.manage": true,
   },
   TENANT_ADMIN: {
     "dashboard.owner.view": true,
@@ -72,6 +73,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "reports.company.view": true,
     "audit.own_tenant.view": true,
     "history.workshop.view": true,
+    "team_setup.branch.manage": true,
   },
   BRANCH_MANAGER: {
     "workorders.branch.view": true,

@@ -27,9 +27,15 @@
     @if (detail(); as d) {
       <section class="item">
         <header class="item-head">
-          <a class="item-back" routerLink="/inventory/stock">Stock</a>
-          <h1 class="item-name">{{ d.item.name }}</h1>
-          <p class="item-sku">{{ d.item.sku }} · {{ label(d.item.itemType) }}</p>
+          <div class="item-head-main">
+            <a class="item-back" routerLink="/inventory/stock">Stock</a>
+            <h1 class="item-name">{{ d.item.name }}</h1>
+            <p class="item-sku">{{ d.item.sku }} · {{ label(d.item.itemType) }}</p>
+          </div>
+          <div class="item-head-actions">
+            <button appButton variant="primary" size="small" (click)="openReceive()">+ Receive Stock</button>
+            <button appButton variant="secondary" size="small" (click)="openAdjust()">Adjust Count</button>
+          </div>
         </header>
 
         <!--
@@ -120,6 +126,55 @@
             </div>
           }
         </section>
+
+        @if (movementModal(); as mode) {
+          <div class="editor-scrim" (click)="closeMovementModal()"></div>
+          <aside class="editor" role="dialog" aria-modal="true" [attr.aria-label]="mode === 'receive' ? 'Receive Stock' : 'Adjust Count'" appDismissOnEscape (dismissed)="closeMovementModal()">
+            <header class="editor-head">
+              <h2 class="editor-title">{{ mode === 'receive' ? 'Receive Stock from Supplier' : 'Adjust Inventory Count' }}</h2>
+              <button type="button" class="editor-close" (click)="closeMovementModal()" aria-label="Close">×</button>
+            </header>
+
+            <div class="editor-body">
+              @if (movementError(); as err) {
+                <p class="editor-error" role="alert">{{ err }}</p>
+              }
+
+              <app-form-field label="Warehouse" [required]="true">
+                <select [value]="targetWarehouseId()" (change)="targetWarehouseId.set($any($event.target).value)">
+                  @for (balance of d.item.stockBalances; track balance.warehouseId) {
+                    <option [value]="balance.warehouseId" [selected]="balance.warehouseId === targetWarehouseId()">
+                      {{ balance.warehouse.name }} ({{ balance.warehouse.code }}) — Currently: {{ balance.availableQty }}
+                    </option>
+                  }
+                </select>
+              </app-form-field>
+
+              <app-form-field [label]="mode === 'receive' ? 'Quantity Received' : 'Count Adjustment Delta'" [required]="true" [hint]="mode === 'receive' ? 'Positive whole number to add to available stock.' : 'Positive to increase, negative to reduce.'">
+                <input
+                  type="number"
+                  [value]="movementQty()"
+                  (input)="movementQty.set($any($event.target).value)"
+                />
+              </app-form-field>
+
+              <app-form-field [label]="mode === 'receive' ? 'Supplier / PO / Delivery Notes' : 'Reason for Adjustment'" hint="Optional reference notes.">
+                <input
+                  type="text"
+                  [value]="movementNotes()"
+                  (input)="movementNotes.set($any($event.target).value)"
+                />
+              </app-form-field>
+            </div>
+
+            <footer class="editor-foot">
+              <button appButton variant="secondary" (click)="closeMovementModal()">Cancel</button>
+              <button appButton variant="primary" [disabled]="movementSaving()" (click)="submitMovement()">
+                {{ movementSaving() ? 'Saving…' : mode === 'receive' ? 'Record Receipt' : 'Save Adjustment' }}
+              </button>
+            </footer>
+          </aside>
+        }
       </section>
     }
   }

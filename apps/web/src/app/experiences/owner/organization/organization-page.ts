@@ -196,6 +196,20 @@ export class OrganizationPage {
       .subscribe({ next: () => this.load() });
   }
 
+  protected readonly activeInviteLink = signal<string | null>(null);
+
+  protected copyInviteLink(row: StaffListItem): void {
+    this.api
+      .getInviteLink(row.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => {
+          this.activeInviteLink.set(window.location.origin + res.inviteLink);
+          void navigator.clipboard?.writeText(window.location.origin + res.inviteLink);
+        },
+      });
+  }
+
   // -- Branches -----------------------------------------------------------
 
   protected openCreateBranch(): void {

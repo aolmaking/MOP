@@ -39,7 +39,122 @@
   font-size: var(--text-sm);
 }
 
+/* ── Vehicle Banner ─────────────────────────────────────────────────── */
+.decision-vehicle-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--brand, #38bdf8);
+  border-radius: var(--radius-sm);
+  margin-block-end: var(--space-3);
+}
+
+.vehicle-badge-icon {
+  font-size: 1.5rem;
+}
+
+.vehicle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vehicle-subtext {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.vehicle-plate-text {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-lg);
+  color: var(--white);
+  letter-spacing: 0.08em;
+}
+
+/* ── Inspection Finding Box ─────────────────────────────────────────── */
+.inspection-finding-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--surface-raised, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  border-inline-start: 3px solid #f59e0b;
+}
+
+.finding-title {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #fbbf24;
+}
+
+.finding-desc {
+  font-size: var(--text-sm);
+  color: var(--text);
+  line-height: var(--leading-normal);
+  margin: 0;
+}
+
+/* ── Repair Pricing Grid ────────────────────────────────────────────── */
+.repair-pricing-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+  padding: var(--space-3);
+  background: var(--surface-raised, rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 600px) {
+  .repair-pricing-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pricing-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pricing-tile--total {
+  border-inline-start: 2px solid var(--accent, #38bdf8);
+  padding-inline-start: var(--space-2);
+}
+
+.tile-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.tile-val {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tile-total {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  color: var(--white);
+  font-weight: 700;
+}
+
 /* --- items --------------------------------------------------------- */
+
 
 .items {
   display: flex;
