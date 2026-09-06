@@ -2556,7 +2556,6 @@ corepack pnpm db:deploy        # apply
 corepack pnpm db:test:prepare  # ← the trap: run after EVERY new migration
 corepack pnpm db:seed          # two differently-shaped tenants
 corepack pnpm db:seed:demo     # rich operational data on top
->>>>>>> main
 ```
 
 ⚠️ **The seed is currently the only writer of `Task`** — demo data therefore contains something the running application cannot produce.
