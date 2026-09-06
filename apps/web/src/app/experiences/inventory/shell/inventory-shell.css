@@ -226,3 +226,7 @@
 :where(.rail-shell) {
   background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
 }
+
+/* Inventory control shell UX upgrade */
+.inventory-shell { background: radial-gradient(circle at 92% 0%, rgb(97 184 255 / .08), transparent 24rem), var(--bg); }
+.rail-shell { background: radial-gradient(circle at 92% 0%, rgb(97 184 255 / .08), transparent 24rem), var(--bg); }

@@ -158,3 +158,12 @@
 :where(.tech) {
   background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
 }
+
+/* Technician POS UX upgrade */
+.tech { background: radial-gradient(circle at 92% 0%, rgb(73 197 138 / .08), transparent 24rem), var(--bg); }
+.tech-head { position: sticky; top: 0; z-index: 5; min-block-size: 4.5rem; padding-inline: var(--space-5); box-shadow: 0 8px 24px rgb(0 0 0 / .22); }
+.tech-brand { font-size: var(--tech-text-lg); letter-spacing: .16em; }
+.tech-nav { box-shadow: 0 -8px 24px rgb(0 0 0 / .24); }
+.tech-nav-link { transition: background-color var(--duration-fast) var(--easing), color var(--duration-fast) var(--easing); }
+.tech-nav-link:hover { background: rgb(255 255 255 / .08); color: var(--white); }
+@media (min-width: 1024px) { .tech-content { padding-block-start: var(--space-8); } }

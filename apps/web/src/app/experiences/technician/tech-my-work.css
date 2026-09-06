@@ -160,3 +160,10 @@
 :where(.page-title) {
   background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
 }
+
+/* Technician work queue UX upgrade */
+.work { gap: var(--space-6); }
+.work-title { font-size: clamp(var(--tech-text-lg), 5vw, var(--tech-text-xl)); }
+.work-list, .work-card { gap: var(--space-4); }
+.work-card { border-radius: var(--radius-lg); box-shadow: var(--shadow-1); transition: transform var(--duration-fast) var(--ease-spring), box-shadow var(--duration-fast) var(--easing); }
+.work-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-2); }

@@ -540,8 +540,3 @@
   font-size: var(--tech-text-sm);
   font-variant-numeric: tabular-nums;
 }
-
-/* MOP page-scoped visual polish — card-head */
-:where(.card-head) {
-  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
-}

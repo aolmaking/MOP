@@ -353,3 +353,31 @@
 :where(.catalog) {
   background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
 }
+
+/* Inventory item-card creation UX upgrade */
+.catalog { gap: var(--space-6); }
+.catalog-head { align-items: center; padding: var(--space-5); border: 1px solid var(--border); border-block-end: 3px solid var(--accent-cool); border-radius: var(--radius-lg); background: linear-gradient(135deg, rgb(97 184 255 / .1), transparent 68%), var(--surface); box-shadow: var(--shadow-2); }
+.catalog-title { font-size: clamp(var(--text-lg), 3vw, var(--text-xl)); letter-spacing: -.02em; text-transform: none; }
+.catalog-count { margin-inline-start: auto; }
+.filters { padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.filter-input { min-block-size: 2.75rem; border-radius: var(--radius-md); }
+.table-scroll { border-radius: var(--radius-md); box-shadow: var(--shadow-1); }
+.table th { padding-block: var(--space-3); background: var(--surface-raised); }
+.table td { padding-block: var(--space-3); }
+.table tbody tr:hover td { background: rgb(97 184 255 / .07); }
+.cell-name { font-weight: 700; }
+.flag { border-radius: var(--radius-pill); }
+.editor-scrim { backdrop-filter: blur(4px); }
+.editor { inline-size: min(44rem, 100vw); box-shadow: -16px 0 36px rgb(0 0 0 / .28); }
+.editor-head { min-block-size: 5rem; padding: var(--space-5); background: linear-gradient(135deg, rgb(97 184 255 / .12), transparent 72%), var(--surface-raised); }
+.editor-title { font-size: var(--text-lg); }
+.editor-subtitle { margin-block-start: var(--space-1); color: var(--text-muted); font-size: var(--text-sm); }
+.editor-body { gap: var(--space-5); padding: var(--space-5); }
+.editor-row { gap: var(--space-4); }
+.chips, .toggles { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg); }
+.chip { min-block-size: 2.5rem; border-radius: var(--radius-pill); }
+.chip[aria-pressed='true'] { background: var(--accent-cool); border-color: var(--accent-cool); color: var(--white); }
+.toggle { padding: var(--space-4); border-radius: var(--radius-md); transition: border-color var(--duration-fast) var(--easing), background-color var(--duration-fast) var(--easing); }
+.toggle:hover { border-color: var(--accent-cool); background: rgb(97 184 255 / .07); }
+.editor-foot { padding: var(--space-5); background: var(--surface-raised); }
+@media (max-width: 640px) { .catalog-count { margin-inline-start: 0; } .catalog-new { inline-size: 100%; } .editor-row { grid-template-columns: 1fr; } }

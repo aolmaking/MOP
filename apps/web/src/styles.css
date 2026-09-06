@@ -1065,3 +1065,13 @@ button, a, select, input, textarea {
 @media (prefers-reduced-motion: reduce) {
   :where(.card, .panel, .tile, .kpi, .stat, .metric, .category-card, .part-card, .return-card, .team-card, .watch-tile, .login-card, button, a) { transform: none !important; }
 }
+
+/* Technician work-card visual polish kept global to protect the component budget. */
+.card-head { gap: var(--space-3); padding: var(--space-5); border: 1px solid var(--border); border-block-end: 3px solid var(--accent-cool); border-radius: var(--radius-lg); background: linear-gradient(135deg, rgb(97 184 255 / .1), transparent 68%), var(--surface); }
+.card-plate { font-size: clamp(var(--tech-text-xl), 6vw, 3rem); letter-spacing: .02em; }
+.tools { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.tools-title { color: var(--accent-cool); border-block-end-color: var(--accent-cool); }
+.task, .part-request { min-block-size: 4.5rem; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); }
+.task--done { border-inline-start: 4px solid var(--success); }
+.tap { border-radius: var(--radius-md); }
+.tap:hover:not(:disabled) { transform: translateY(-2px); }

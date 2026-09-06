@@ -153,7 +153,10 @@
     <div class="editor-scrim" (click)="cancelEdit()"></div>
     <aside class="editor" role="dialog" aria-modal="true" aria-label="Item details" appDismissOnEscape (dismissed)="cancelEdit()">
       <header class="editor-head">
-        <h2 class="editor-title">{{ mode === 'new' ? 'New item' : 'Edit item' }}</h2>
+        <div>
+          <h2 class="editor-title">{{ mode === 'new' ? 'New item' : 'Edit item' }}</h2>
+          <p class="editor-subtitle">Set up the item card technicians and stock staff will use.</p>
+        </div>
         <button type="button" class="editor-close" (click)="cancelEdit()" aria-label="Close">×</button>
       </header>
 
