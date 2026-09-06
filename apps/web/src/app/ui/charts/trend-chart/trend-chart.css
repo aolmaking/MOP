@@ -14,3 +14,6 @@
 :where(.trend-chart) {
   background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
 }
+
+/* Report chart readability upgrade */
+.trend-chart { min-block-size: 18rem; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: linear-gradient(180deg, rgb(255 255 255 / .025), transparent), var(--bg); }

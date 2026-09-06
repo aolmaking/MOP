@@ -102,3 +102,14 @@
 :where(.reports) {
   background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
 }
+
+/* Reports readability upgrade */
+.reports { gap: var(--space-6); }
+.head { padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(135deg, rgb(226 45 54 / .1), transparent 62%), var(--surface); box-shadow: var(--shadow-2); }
+.title { font-size: clamp(var(--text-lg), 2.5vw, var(--text-xl)); letter-spacing: -.02em; text-transform: none; }
+.sub { margin-top: var(--space-2); max-inline-size: 34rem; line-height: 1.5; }
+.filters { padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: rgb(0 0 0 / .14); }
+.filter-field input, .filter-field select { min-block-size: 2.5rem; padding-inline: var(--space-3); }
+.tabs { gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.tab { border-radius: var(--radius-sm); }
+.tab:hover { background: var(--surface-raised); color: var(--white); }

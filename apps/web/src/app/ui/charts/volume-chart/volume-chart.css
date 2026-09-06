@@ -187,3 +187,11 @@
 :where(.chart) {
   background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
 }
+
+/* Report chart readability upgrade */
+.chart { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: linear-gradient(180deg, rgb(255 255 255 / .025), transparent), var(--bg); }
+.legend { padding-block-end: var(--space-2); border-block-end: 1px solid var(--border); }
+.key::before { box-shadow: 0 0 10px currentColor; }
+.plot { min-block-size: 13rem; background: repeating-linear-gradient(to bottom, transparent 0, transparent calc(25% - 1px), rgb(168 182 196 / .1) calc(25% - 1px), rgb(168 182 196 / .1) 25%); border-radius: var(--radius-sm); }
+.bar--created { background: linear-gradient(180deg, var(--brand-text), var(--brand)); }
+.bar--closed { background: linear-gradient(180deg, var(--success), rgb(73 197 138 / .55)); }
