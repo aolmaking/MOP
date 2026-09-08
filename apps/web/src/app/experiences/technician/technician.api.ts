@@ -6,7 +6,11 @@ import type { PresentedJourney } from '../../domain/journey/workflow-strip';
 export interface TechnicianJob {
   readonly workOrderId: string;
   readonly identifier: string | null;
+  readonly vehicleModel?: string | null;
+  readonly category?: string | null;
+  readonly vin?: string | null;
   readonly customerName: string;
+  readonly customerPhone?: string | null;
   readonly status: string;
   readonly complaint: string | null;
   readonly inspectionDeclined: boolean;
@@ -87,10 +91,37 @@ export interface WorkCardFinding {
   readonly decisionStatus: FindingDecisionStatus;
 }
 
+export interface InspectionBoxCustomerDetails {
+  readonly customerName: string;
+  readonly phone: string | null;
+  readonly vehicleIdentifier: string;
+  readonly vehicleCategory?: string | null;
+  readonly complaint: string;
+}
+
+export interface InspectionBoxItem {
+  readonly id: string;
+  readonly partKey: string;
+  readonly nameEn: string;
+  readonly nameAr: string;
+  readonly systemCategoryEn: string;
+  readonly systemCategoryAr: string;
+  readonly icon: string;
+  readonly color: string;
+  readonly customerDetails: InspectionBoxCustomerDetails;
+  readonly isDone: boolean;
+  readonly completedAt: string | null;
+  readonly symptoms: readonly string[];
+}
+
 export interface WorkCard {
   readonly workOrderId: string;
   readonly identifier: string | null;
+  readonly vehicleModel?: string | null;
+  readonly vin?: string | null;
+  readonly mileage?: string | null;
   readonly customerName: string;
+  readonly customerPhone?: string | null;
   readonly status: string;
   readonly complaint: string | null;
   readonly inspectionDeclined: boolean;
@@ -111,6 +142,8 @@ export interface WorkCard {
   readonly parts: readonly WorkCardPart[];
   readonly finish: FinishCheck;
   readonly primaryAction: WorkCardPrimaryAction | null;
+  readonly inspectionBoxes?: readonly InspectionBoxItem[];
+  readonly inspectionReport?: string | null;
 }
 
 /**
@@ -503,4 +536,298 @@ export class TechnicianApi {
       item,
     );
   }
+
+  /** Mark a simplified inspection box as Done (or toggle state). */
+  markInspectionBoxDone(
+    workOrderId: string,
+    partKey: string,
+    isDone = true,
+    findingSeverity?: string,
+    note?: string,
+  ): Observable<{ success: boolean; partKey: string; isDone: boolean; completedAt: string }> {
+    return this.http.post<{ success: boolean; partKey: string; isDone: boolean; completedAt: string }>(
+      `/api/v1/technician/work-orders/${encodeURIComponent(workOrderId)}/inspection-box-done`,
+      { partKey, isDone, findingSeverity, note },
+    );
+  }
+
+  /** Submit full inspection report to operator with findings, parts, services and note */
+  submitInspectionReport(
+    workOrderId: string,
+    payload: {
+      findings?: Array<{
+        description: string;
+        severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+        recommendedService?: string;
+        code?: string;
+      }>;
+      parts?: Array<{
+        sku: string;
+        name: string;
+        quantity: number;
+        unitPrice?: number;
+      }>;
+      services?: Array<{
+        serviceName: string;
+        laborPrice?: number;
+      }>;
+      note?: string;
+    },
+  ): Observable<{ success: boolean; workOrderId: string; submittedAt: string }> {
+    return this.http.post<{ success: boolean; workOrderId: string; submittedAt: string }>(
+      `/api/v1/technician/work-orders/${encodeURIComponent(workOrderId)}/submit-inspection-report`,
+      payload,
+    );
+  }
+
+  getSmartSuggestions(query: {
+    workOrderId?: string;
+    context?: {
+      canonicalPartSlug?: string;
+      position?: string;
+      finding?: {
+        key?: string;
+        symptom?: string;
+        severity?: 'CRITICAL' | 'MEDIUM' | 'LOW' | 'HIGH';
+        description?: string;
+      };
+      vehicle?: {
+        category?: 'CARS' | 'MOTORCYCLES' | 'HEAVY_EQUIPMENT';
+        make?: string;
+        model?: string;
+        year?: number;
+      };
+    };
+    vehicleCategory?: 'CARS' | 'MOTORCYCLES' | 'HEAVY_EQUIPMENT';
+    partSkus?: string[];
+    partNames?: string[];
+    categorySlugs?: string[];
+    findingKeys?: string[];
+  }): Observable<GroupedSuggestionsView> {
+    return this.http.post<GroupedSuggestionsView>('/api/v1/technician/smart-suggestions', query);
+  }
+
+  getInspectionCheckpoints(category?: 'CARS' | 'MOTORCYCLES' | 'HEAVY_EQUIPMENT'): Observable<{ checkpoints: MasterInspectionCheckpointView[] }> {
+    const params = category ? `?category=${category}` : '';
+    return this.http.get<{ checkpoints: MasterInspectionCheckpointView[] }>(`/api/v1/technician/inspection-checkpoints${params}`);
+  }
+
+  getWorkshopInventory(): Observable<{
+    items: Array<{
+      id: string;
+      sku: string;
+      name: string;
+      sellingPrice: string | number;
+      catalogCategoryId?: string;
+      availableStock?: number;
+    }>;
+  }> {
+    return this.http.get<{
+      items: Array<{
+        id: string;
+        sku: string;
+        name: string;
+        sellingPrice: string | number;
+        catalogCategoryId?: string;
+        availableStock?: number;
+      }>;
+    }>('/api/v1/inventory/items');
+  }
+
+  // Phase C: Inspection Aggregate Lifecycle (OCC, Real-Time Delta Auto-Save, Decisions, Submission)
+  getInspectionAggregate(workOrderId: string): Observable<{
+    id: string;
+    tenantId: string;
+    workOrderId: string;
+    state: string;
+    aggregateVersion: number;
+    catalogVersion: number;
+    templateCode: string;
+    targets: Record<string, TargetInspectionResultView>;
+    recommendations: GeneratedRecommendationView[];
+    decisions: RecommendationDecisionView[];
+    snapshot?: any;
+  }> {
+    return this.http.get<any>(`/api/v1/technician/work-orders/${workOrderId}/inspection`);
+  }
+
+  patchInspectionTarget(
+    workOrderId: string,
+    targetKey: string,
+    dto: PatchInspectionTargetPayload,
+  ): Observable<{
+    success: boolean;
+    aggregateVersion: number;
+    target: TargetInspectionResultView;
+    newlyGeneratedRecommendations: GeneratedRecommendationView[];
+  }> {
+    return this.http.patch<any>(`/api/v1/technician/work-orders/${workOrderId}/inspection/targets/${targetKey}`, dto);
+  }
+
+  recordRecommendationDecision(
+    workOrderId: string,
+    dto: RecordRecommendationDecisionPayload,
+  ): Observable<{
+    success: boolean;
+    aggregateVersion: number;
+    decision: RecommendationDecisionView;
+  }> {
+    return this.http.post<any>(`/api/v1/technician/work-orders/${workOrderId}/inspection/decisions`, dto);
+  }
+
+  submitInspectionAggregate(
+    workOrderId: string,
+    dto: { expectedVersion?: number; technicianNotes?: string },
+  ): Observable<{
+    success: boolean;
+    aggregateId: string;
+    state: string;
+    snapshot: any;
+  }> {
+    return this.http.post<any>(`/api/v1/technician/work-orders/${workOrderId}/inspection/submit`, dto);
+  }
+
+  // Phase D & E: Vehicle Fitment and POS Live Stock & Price Selection
+  getFitmentParts(
+    workOrderId: string,
+    canonicalPartSlug: string,
+    position?: string,
+  ): Observable<GroupedFitmentResponseView> {
+    const posParam = position ? `&position=${encodeURIComponent(position)}` : '';
+    return this.http.get<GroupedFitmentResponseView>(
+      `/api/v1/technician/work-orders/${workOrderId}/fitment-parts?canonicalPartSlug=${encodeURIComponent(canonicalPartSlug)}${posParam}`,
+    );
+  }
+
+  selectPartForWorkOrder(
+    workOrderId: string,
+    body: { sku: string; quantity?: number; taskId?: string },
+  ): Observable<{ success: boolean; partLine: any }> {
+    return this.http.post<any>(`/api/v1/technician/work-orders/${workOrderId}/select-part`, body);
+  }
 }
+
+export interface PatchInspectionTargetPayload {
+  canonicalPartSlug: string;
+  position: string;
+  status: 'INSPECTED' | 'NOT_ACCESSIBLE' | 'NOT_APPLICABLE';
+  condition?: 'GOOD' | 'ATTENTION' | 'CRITICAL';
+  findings?: Array<{
+    findingKey: string;
+    technicianObservation?: string;
+  }>;
+  nonInspectionReason?: string;
+  technicianNote?: string;
+  measurementValue?: number | string;
+  measurementUnit?: string;
+  expectedVersion?: number;
+}
+
+export interface RecordRecommendationDecisionPayload {
+  recommendationId: string;
+  decision: 'ACCEPTED' | 'DISMISSED' | 'MODIFIED_SCOPE';
+  dismissalReason?: string;
+  scopeModificationNote?: string;
+  expectedVersion?: number;
+}
+
+export interface TargetInspectionResultView {
+  readonly id: string;
+  readonly targetKey: string;
+  readonly canonicalPartSlug: string;
+  readonly position: string;
+  readonly status: 'NOT_INSPECTED' | 'INSPECTED' | 'NOT_ACCESSIBLE' | 'NOT_APPLICABLE';
+  readonly condition?: 'GOOD' | 'ATTENTION' | 'CRITICAL';
+  readonly findings: Array<{
+    findingKey: string;
+    severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    technicianObservation?: string;
+  }>;
+  readonly measurementValue?: number;
+  readonly measurementUnit?: string;
+  readonly technicianNote?: string;
+  readonly nonInspectionReason?: string;
+}
+
+export interface GeneratedRecommendationView {
+  readonly id: string;
+  readonly ruleId: string;
+  readonly ruleVersion: number;
+  readonly engineVersion: string;
+  readonly targetResultId: string;
+  readonly serviceKey: string;
+  readonly serviceDisplayName: string;
+  readonly recommendationLevel: 'RECOMMENDED' | 'RELATED' | 'DIAGNOSTIC';
+  readonly score: number;
+  readonly generatedAt: string;
+  readonly evaluationContext: {
+    readonly findingKeys: readonly string[];
+    readonly severities: readonly string[];
+    readonly position: string;
+  };
+}
+
+export interface RecommendationDecisionView {
+  readonly recommendationId: string;
+  decision: 'PENDING' | 'ACCEPTED' | 'DISMISSED' | 'MODIFIED_SCOPE';
+  decidedAt?: string;
+  dismissalReason?: string;
+  scopeModificationNote?: string;
+}
+
+export interface ResolvedFitmentItemView {
+  readonly sku: string;
+  readonly partName: string;
+  readonly brand: string;
+  readonly canonicalPartSlug: string;
+  readonly position?: string;
+  readonly fitmentQuality: 'EXACT_MATCH' | 'CROSS_COMPATIBLE' | 'UNIVERSAL';
+  readonly grade: 'OEM' | 'PREMIUM_AFTERMARKET' | 'STANDARD_AFTERMARKET' | 'ECONOMY';
+  readonly fitmentNotes?: string;
+  readonly sellingPrice: number;
+  readonly inStock: boolean;
+  readonly availableStock: number;
+}
+
+export interface GroupedFitmentResponseView {
+  readonly canonicalPartSlug: string;
+  readonly position?: string;
+  readonly vehicleProfile?: { category?: string; make?: string; model?: string; year?: number };
+  readonly exactMatches: readonly ResolvedFitmentItemView[];
+  readonly compatibleMatches: readonly ResolvedFitmentItemView[];
+  readonly universalMatches: readonly ResolvedFitmentItemView[];
+  readonly allItems: readonly ResolvedFitmentItemView[];
+}
+
+export interface RankedServiceItemView {
+  readonly serviceKey: string;
+  readonly serviceName: string;
+  readonly category: string;
+  readonly laborPrice: number;
+  readonly standardHours: number;
+  readonly rankGroup: 'RECOMMENDED' | 'RELATED' | 'DIAGNOSTIC';
+  readonly score: number;
+  readonly rationale: string;
+  readonly isPrimary: boolean;
+}
+
+export interface GroupedSuggestionsView {
+  readonly recommended: RankedServiceItemView[];
+  readonly related: RankedServiceItemView[];
+  readonly diagnostic: RankedServiceItemView[];
+  readonly suggestions: RankedServiceItemView[];
+}
+
+export interface MasterInspectionCheckpointView {
+  readonly checkpointKey: string;
+  readonly title: string;
+  readonly systemSlug: string;
+  readonly targets: Array<{
+    readonly targetKey: string;
+    readonly label: string;
+    readonly canonicalPartSlug: string;
+    readonly defaultPosition: string;
+  }>;
+}
+
+

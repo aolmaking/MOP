@@ -19,6 +19,7 @@ export interface StaffListItem {
   readonly branchScope: string[];
   readonly warehouseScope: string[];
   readonly categoryScope: string[];
+  readonly specializations: string[];
   readonly isActive: boolean;
   readonly lockedAt: string | null;
   readonly email: string | null;
@@ -38,6 +39,7 @@ export interface InviteStaffInput {
   readonly branchScope?: string[];
   readonly warehouseScope?: string[];
   readonly categoryScope?: string[];
+  readonly specializations?: string[];
   readonly password?: string;
 }
 
@@ -86,6 +88,7 @@ export class StaffService {
         branchScope: row.branchScope,
         warehouseScope: row.warehouseScope,
         categoryScope: row.categoryScope,
+        specializations: row.specializations ?? [],
         isActive: row.isActive,
         lockedAt: row.lockedAt ? row.lockedAt.toISOString() : null,
         email: row.account.email,
@@ -295,6 +298,33 @@ export class StaffService {
         },
         tx,
       );
+    });
+  }
+
+  async updateSpecializations(
+    tenantId: string,
+    staffId: string,
+    specializations: string[],
+    actor: StaffActor,
+  ): Promise<void> {
+    const staff = await this.findOwned(tenantId, staffId);
+
+    await this.prisma.staffUser.update({
+      where: { id: staffId },
+      data: { specializations },
+    });
+
+    await this.audit.record({
+      tenantId,
+      actorId: actor.accountId,
+      actorType: "TENANT_STAFF",
+      actorName: actor.displayName,
+      targetType: "StaffUser",
+      targetId: staffId,
+      action: "staff.specializations_updated",
+      before: { specializations: staff.specializations },
+      after: { specializations },
+      riskLevel: "LOW",
     });
   }
 

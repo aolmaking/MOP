@@ -19,6 +19,7 @@ import { TeamModule } from "./systems/people/team/team.module";
 import { FinanceModule } from "./systems/finance/finance.module";
 import { CustomerModule } from "./systems/customer/customer.module";
 import { OwnerModule } from "./experiences/owner/owner.module";
+import { OperatorModule } from "./experiences/operator/operator.module";
 import { TeamLeaderModule } from "./experiences/team-leader/team-leader.module";
 import { ReportingModule } from "./insights/analyst-reporting/reporting.module";
 import { SpecializationModule } from "./systems/people/specialization/specialization.module";
@@ -63,6 +64,7 @@ import { HealthController } from "./runtime/health/health.controller";
     FinanceModule,
     CustomerModule,
     OwnerModule,
+    OperatorModule,
     TeamLeaderModule,
     ReportingModule,
     SpecializationModule,

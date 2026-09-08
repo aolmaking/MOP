@@ -35,6 +35,7 @@
           <div class="item-head-actions">
             <button appButton variant="primary" size="small" (click)="openReceive()">+ Receive Stock</button>
             <button appButton variant="secondary" size="small" (click)="openAdjust()">Adjust Count</button>
+            <button appButton variant="secondary" size="small" (click)="openTransfer()">⇄ Transfer Stock</button>
           </div>
         </header>
 
@@ -129,9 +130,11 @@
 
         @if (movementModal(); as mode) {
           <div class="editor-scrim" (click)="closeMovementModal()"></div>
-          <aside class="editor" role="dialog" aria-modal="true" [attr.aria-label]="mode === 'receive' ? 'Receive Stock' : 'Adjust Count'" appDismissOnEscape (dismissed)="closeMovementModal()">
+          <aside class="editor" role="dialog" aria-modal="true" [attr.aria-label]="mode === 'receive' ? 'Receive Stock' : mode === 'adjust' ? 'Adjust Count' : 'Transfer Stock'" appDismissOnEscape (dismissed)="closeMovementModal()">
             <header class="editor-head">
-              <h2 class="editor-title">{{ mode === 'receive' ? 'Receive Stock from Supplier' : 'Adjust Inventory Count' }}</h2>
+              <h2 class="editor-title">
+                {{ mode === 'receive' ? 'Receive Stock from Supplier' : mode === 'adjust' ? 'Adjust Inventory Count' : 'Inter-Warehouse Stock Transfer' }}
+              </h2>
               <button type="button" class="editor-close" (click)="closeMovementModal()" aria-label="Close">×</button>
             </header>
 
@@ -140,37 +143,77 @@
                 <p class="editor-error" role="alert">{{ err }}</p>
               }
 
-              <app-form-field label="Warehouse" [required]="true">
-                <select [value]="targetWarehouseId()" (change)="targetWarehouseId.set($any($event.target).value)">
-                  @for (balance of d.item.stockBalances; track balance.warehouseId) {
-                    <option [value]="balance.warehouseId" [selected]="balance.warehouseId === targetWarehouseId()">
-                      {{ balance.warehouse.name }} ({{ balance.warehouse.code }}) — Currently: {{ balance.availableQty }}
-                    </option>
-                  }
-                </select>
-              </app-form-field>
+              @if (mode === 'transfer') {
+                <app-form-field label="Source Warehouse (Transfer From)" [required]="true" hint="Warehouse where stock will be deducted (TRANSFER_OUT).">
+                  <select [value]="sourceWarehouseId()" (change)="sourceWarehouseId.set($any($event.target).value)">
+                    @for (balance of d.item.stockBalances; track balance.warehouseId) {
+                      <option [value]="balance.warehouseId" [selected]="balance.warehouseId === sourceWarehouseId()">
+                        {{ balance.warehouse.name }} ({{ balance.warehouse.code }}) — Available: {{ balance.availableQty }}
+                      </option>
+                    }
+                  </select>
+                </app-form-field>
 
-              <app-form-field [label]="mode === 'receive' ? 'Quantity Received' : 'Count Adjustment Delta'" [required]="true" [hint]="mode === 'receive' ? 'Positive whole number to add to available stock.' : 'Positive to increase, negative to reduce.'">
-                <input
-                  type="number"
-                  [value]="movementQty()"
-                  (input)="movementQty.set($any($event.target).value)"
-                />
-              </app-form-field>
+                <app-form-field label="Destination Warehouse (Transfer To)" [required]="true" hint="Warehouse where stock will be credited (TRANSFER_IN).">
+                  <select [value]="targetWarehouseId()" (change)="targetWarehouseId.set($any($event.target).value)">
+                    @for (balance of d.item.stockBalances; track balance.warehouseId) {
+                      <option [value]="balance.warehouseId" [selected]="balance.warehouseId === targetWarehouseId()">
+                        {{ balance.warehouse.name }} ({{ balance.warehouse.code }}) — Current: {{ balance.availableQty }}
+                      </option>
+                    }
+                  </select>
+                </app-form-field>
 
-              <app-form-field [label]="mode === 'receive' ? 'Supplier / PO / Delivery Notes' : 'Reason for Adjustment'" hint="Optional reference notes.">
-                <input
-                  type="text"
-                  [value]="movementNotes()"
-                  (input)="movementNotes.set($any($event.target).value)"
-                />
-              </app-form-field>
+                <app-form-field label="Transfer Quantity" [required]="true" hint="Number of units to physically relocate.">
+                  <input
+                    type="number"
+                    min="1"
+                    [value]="movementQty()"
+                    (input)="movementQty.set($any($event.target).value)"
+                  />
+                </app-form-field>
+
+                <app-form-field label="Transfer Reason / Dispatch Note" hint="e.g. Replenish Branch Store for job queue.">
+                  <input
+                    type="text"
+                    placeholder="e.g. Branch store restocking transfer"
+                    [value]="movementNotes()"
+                    (input)="movementNotes.set($any($event.target).value)"
+                  />
+                </app-form-field>
+              } @else {
+                <app-form-field label="Warehouse" [required]="true">
+                  <select [value]="targetWarehouseId()" (change)="targetWarehouseId.set($any($event.target).value)">
+                    @for (balance of d.item.stockBalances; track balance.warehouseId) {
+                      <option [value]="balance.warehouseId" [selected]="balance.warehouseId === targetWarehouseId()">
+                        {{ balance.warehouse.name }} ({{ balance.warehouse.code }}) — Currently: {{ balance.availableQty }}
+                      </option>
+                    }
+                  </select>
+                </app-form-field>
+
+                <app-form-field [label]="mode === 'receive' ? 'Quantity Received' : 'Count Adjustment Delta'" [required]="true" [hint]="mode === 'receive' ? 'Positive whole number to add to available stock.' : 'Positive to increase, negative to reduce.'">
+                  <input
+                    type="number"
+                    [value]="movementQty()"
+                    (input)="movementQty.set($any($event.target).value)"
+                  />
+                </app-form-field>
+
+                <app-form-field [label]="mode === 'receive' ? 'Supplier / PO / Delivery Notes' : 'Reason for Adjustment'" hint="Optional reference notes.">
+                  <input
+                    type="text"
+                    [value]="movementNotes()"
+                    (input)="movementNotes.set($any($event.target).value)"
+                  />
+                </app-form-field>
+              }
             </div>
 
             <footer class="editor-foot">
               <button appButton variant="secondary" (click)="closeMovementModal()">Cancel</button>
               <button appButton variant="primary" [disabled]="movementSaving()" (click)="submitMovement()">
-                {{ movementSaving() ? 'Saving…' : mode === 'receive' ? 'Record Receipt' : 'Save Adjustment' }}
+                {{ movementSaving() ? 'Saving…' : mode === 'receive' ? 'Record Receipt' : mode === 'adjust' ? 'Save Adjustment' : 'Execute Transfer' }}
               </button>
             </footer>
           </aside>

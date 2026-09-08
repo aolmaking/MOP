@@ -6,17 +6,36 @@
     }
   </header>
 
-  <label class="search">
-    <span class="visually-hidden">Search by name, SKU or barcode</span>
-    <input
-      type="search"
-      class="search-input"
-      placeholder="Name, SKU, barcode"
-      autocomplete="off"
-      [value]="query()"
-      (input)="onQuery($any($event.target).value)"
-    />
-  </label>
+  <div class="stock-controls" style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap;">
+    <label class="search" style="flex: 1; min-width: 240px; margin: 0;">
+      <span class="visually-hidden">Search by name, SKU or barcode</span>
+      <input
+        type="search"
+        class="search-input"
+        placeholder="Search items, SKU, or barcode…"
+        autocomplete="off"
+        [value]="query()"
+        (input)="onQuery($any($event.target).value)"
+      />
+    </label>
+
+    @if (table(); as t) {
+      <div class="warehouse-filter" style="display: flex; align-items: center; gap: 0.5rem;">
+        <label for="wh-filter" style="font-size: 0.875rem; font-weight: 500; color: var(--text-muted, #94a3b8); white-space: nowrap;">Warehouse Scope:</label>
+        <select
+          id="wh-filter"
+          style="padding: 0.45rem 0.85rem; border-radius: 6px; border: 1px solid var(--border, #334155); background: var(--surface, #1e293b); color: var(--text, #f8fafc); font-size: 0.875rem;"
+          [value]="selectedWarehouseId()"
+          (change)="selectedWarehouseId.set($any($event.target).value)"
+        >
+          <option value="all">All Warehouses ({{ t.warehouses.length }})</option>
+          @for (w of t.warehouses; track w.id) {
+            <option [value]="w.id">{{ w.name }} ({{ w.code }})</option>
+          }
+        </select>
+      </div>
+    }
+  </div>
 
   @switch (state()) {
     @case ('loading') {
@@ -54,10 +73,14 @@
             <thead>
               <tr>
                 <th scope="col" class="col-item">Item</th>
-                @for (warehouse of t.warehouses; track warehouse.id) {
-                  <th scope="col" class="col-num">{{ warehouse.code }}</th>
+                @for (warehouse of visibleWarehouses(); track warehouse.id) {
+                  <th scope="col" class="col-num">
+                    <div>{{ warehouse.code }}</div>
+                    <span style="font-size: 0.65rem; font-weight: normal; opacity: 0.7;">{{ warehouse.name }}</span>
+                  </th>
                 }
                 <th scope="col" class="col-num col-total">Total</th>
+                <th scope="col" style="text-align: right; width: 90px;">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -67,29 +90,28 @@
                     <a [routerLink]="['/inventory/items', row.itemId]">{{ row.name }}</a>
                     <span class="cell-sku">{{ row.sku }}</span>
                   </th>
-                  @for (cell of row.byWarehouse; track cell.warehouseId) {
+                  @for (warehouse of visibleWarehouses(); track warehouse.id) {
+                    @let cell = findWarehouseCell(row, warehouse.id);
                     <td class="col-num">
                       {{ cell.available }}
                       @if (cell.damaged > 0) {
-                        <!-- Damaged is shown separately and never added in.
-                             Flattening it into one figure would claim
-                             stock the workshop cannot sell. -->
                         <span class="cell-damaged">+{{ cell.damaged }} dmg</span>
                       }
                     </td>
                   }
                   <td class="col-num col-total">
                     {{ row.totalAvailable }}
-                    <!-- The stripe and the red total are both colour. A
-                         screen reader gets nothing from either, and "low"
-                         carried no colour on the number at all -- so the
-                         state is also said in words. -->
                     @if (level(row) !== 'ok') {
                       <span class="visually-hidden">
                         {{ level(row) === 'critical' ? 'critically low stock' : 'low stock' }}
                       </span>
                       <span class="total-flag" aria-hidden="true">{{ level(row) === 'critical' ? 'critical' : 'low' }}</span>
                     }
+                  </td>
+                  <td style="text-align: right; white-space: nowrap;">
+                    <a [routerLink]="['/inventory/items', row.itemId]" appButton variant="ghost" size="small" style="font-size: 0.75rem;">
+                      ⇄ Transfer
+                    </a>
                   </td>
                 </tr>
               }

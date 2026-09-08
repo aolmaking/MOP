@@ -112,6 +112,7 @@ export interface WorkshopRow {
   readonly id: string;
   readonly name: string;
   readonly slug: string;
+  readonly customerRegistrationCode?: string;
   readonly status: string;
   readonly currency: string;
   /** The workshop's own timezone. Its timestamps are read in it. */

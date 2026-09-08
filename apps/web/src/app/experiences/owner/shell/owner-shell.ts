@@ -6,6 +6,8 @@ import { ButtonDirective } from '../../../ui/button/button.directive';
 import { ShellTopbar } from '../../../ui/shell-topbar/shell-topbar';
 import { visibleNavigation } from '../../../runtime/launch-surface';
 
+import { WorkshopBrandingService } from '../../../ui/workshop-branding.service';
+
 /**
  * The Tenant Owner shell -- the first Owner surface, and the frame the
  * rest of Phase 10 hangs off.
@@ -25,6 +27,7 @@ import { visibleNavigation } from '../../../runtime/launch-surface';
 export class OwnerShell {
   private readonly authStore = inject(AuthStore);
   private readonly router = inject(Router);
+  protected readonly branding = inject(WorkshopBrandingService);
 
   protected readonly session = this.authStore.session;
 

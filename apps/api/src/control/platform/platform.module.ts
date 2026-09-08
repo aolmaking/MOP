@@ -18,8 +18,10 @@ import { OnboardingController } from "./onboarding/onboarding.controller";
 import { OnboardingService } from "./onboarding/onboarding.service";
 import { WorkshopBrandingPublicController } from "./workshop-branding.controller";
 
+import { InventoryModule } from "../../systems/inventory/inventory.module";
+
 @Module({
-  imports: [AuditModule, AuthModule, CapabilitiesModule, SpecializationModule],
+  imports: [AuditModule, AuthModule, CapabilitiesModule, SpecializationModule, InventoryModule],
   // PlatformController owns Add Workshop Owner + the availability-check
   // endpoints (Phase 2 step 2); WorkshopsController owns the Workshops
   // list/details/freeze/reactivate endpoints (step 3); PlatformReportsController

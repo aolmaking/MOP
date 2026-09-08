@@ -8,6 +8,7 @@ import { POLICY_DEFINITIONS } from "../policies/registry";
 import { isPolicyRelevant, policyCapabilityKey, type PolicyDefinition } from "../policies/types";
 import type { StaffRole } from "../session/session-context";
 import type { OperatingCategory } from "../operations/categories";
+import type { NavigationLayoutType } from "../contracts/cross-system";
 import { definitionsSeededBy, specializationPack } from "./specialization-packs";
 import { applicableResponsibilities, grantsForResponsibilities, type ResponsibilityAnswer } from "./responsibility";
 
@@ -38,6 +39,17 @@ import { applicableResponsibilities, grantsForResponsibilities, type Responsibil
 // The draft
 // ---------------------------------------------------------------------------
 
+export type OnboardingStageKey =
+  | "IDENTITY"
+  | "PLAN"
+  | "CAPABILITIES"
+  | "SPECIALIZATION"
+  | "POLICIES"
+  | "RESPONSIBILITY"
+  | "STRUCTURE"
+  | "SERVICES"
+  | "REVIEW";
+
 export interface DraftBranch {
   readonly name: string;
   readonly code: string;
@@ -45,11 +57,16 @@ export interface DraftBranch {
   readonly address?: string;
 }
 
+export type WarehouseTopologyType = "CENTRAL_HUB" | "BRANCH_STORE" | "CUSTOM";
+
 export interface DraftWarehouse {
+  readonly id?: string;
   readonly name: string;
   readonly code: string;
   /** Branch codes this store serves. Empty means every branch. */
   readonly branchCodes: readonly string[];
+  readonly branchIds?: readonly string[];
+  readonly topologyType?: WarehouseTopologyType;
 }
 
 export interface WorkshopIdentityDraft {
@@ -64,6 +81,7 @@ export interface WorkshopIdentityDraft {
   readonly primaryCategory: OperatingCategory | "";
   readonly themePalette?: string;
   readonly logoUrl?: string;
+  readonly navigationLayout?: NavigationLayoutType;
 }
 
 export interface WorkshopOwnerDraft {

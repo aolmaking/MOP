@@ -1,8 +1,25 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { map, type Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import type { PublicDecision, SubmittedAnswer } from '../../domain/decisions/decision-answer';
 import type { PresentedJourney } from '../../domain/journey/workflow-strip';
+import { browseParams, type CatalogBrowseQuery, type PartsCatalogPage } from '../technician/technician.api';
+
+export interface CustomerPosOrderPayload {
+  readonly lines: readonly {
+    readonly inventoryItemId: string;
+    readonly quantity: number;
+  }[];
+  readonly notes?: string;
+}
+
+export interface CustomerPosOrderResult {
+  readonly workOrderId: string;
+  readonly invoiceId: string;
+  readonly invoiceNumber: string;
+  readonly total: string;
+  readonly itemsCount: number;
+}
 
 export interface PortalHome {
   readonly assetCount: number;
@@ -52,6 +69,23 @@ export interface SafeHistoryEntry {
   readonly serviceDate: string;
 }
 
+export interface ReportIssuePayload {
+  readonly assetId?: string;
+  readonly plateNumber?: string;
+  readonly vinOrChassisNumber?: string;
+  readonly category?: 'CARS' | 'MOTORCYCLES' | 'HEAVY_EQUIPMENT';
+  readonly complaint: string;
+  readonly preferredBranchId?: string;
+  readonly inspectionDeclined?: boolean;
+  readonly inspectionParts?: readonly string[];
+}
+
+export interface ReportIssueResult {
+  readonly workOrderId: string;
+  readonly status: string;
+  readonly assetId: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class CustomerPortalApi {
   private readonly http = inject(HttpClient);
@@ -88,5 +122,19 @@ export class CustomerPortalApi {
 
   safeHistory(): Observable<readonly SafeHistoryEntry[]> {
     return this.http.get<readonly SafeHistoryEntry[]>('/api/v1/customer-portal/safe-history');
+  }
+
+  reportIssue(payload: ReportIssuePayload): Observable<ReportIssueResult> {
+    return this.http.post<ReportIssueResult>('/api/v1/customer-portal/service-requests', payload);
+  }
+
+  partsCatalog(query: CatalogBrowseQuery = {}): Observable<PartsCatalogPage> {
+    return this.http.get<PartsCatalogPage>('/api/v1/customer-portal/parts-catalog', {
+      params: browseParams(query),
+    });
+  }
+
+  submitPosOrder(payload: CustomerPosOrderPayload): Observable<CustomerPosOrderResult> {
+    return this.http.post<CustomerPosOrderResult>('/api/v1/customer-portal/pos/order', payload);
   }
 }

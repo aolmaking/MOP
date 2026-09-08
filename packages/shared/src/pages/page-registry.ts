@@ -65,4 +65,9 @@ export const ROLE_PAGES: Readonly<Record<StaffRole, readonly string[]>> = {
     "data_analyst.feature-adoption-analytics",
     "data_analyst.saved-views-exports",
   ],
+  OPERATOR: [
+    "operator.home",
+    "operator.reception",
+    "operator.pos",
+  ],
 };

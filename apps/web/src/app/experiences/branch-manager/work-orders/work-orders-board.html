@@ -1,111 +1,215 @@
 <!--
-  A rack, not a kanban. Lanes are holders ("whose move is it?"), not
-  stages, and nothing here is draggable because status is gated. See
-  docs/phases/PHASE_5.md (5.D).
+  Consolidated Branch Operations Workbench.
+  Unifies active lanes, urgent attention items, delivery release, and book-in launcher.
 -->
 <section class="board">
   <header class="board-head">
-    <h1 class="board-title">Work orders</h1>
-    @if (board(); as b) {
-      <p class="board-count">{{ b.total }} open</p>
-    }
+    <div class="board-head-left">
+      <h1 class="board-title">Operations Workbench</h1>
+      @if (board(); as b) {
+        <p class="board-count">{{ b.total }} active work orders</p>
+      }
+    </div>
+
+    <div class="board-head-actions">
+      <a routerLink="/branch/intake" appButton variant="primary" size="small">+ Book In Vehicle</a>
+    </div>
   </header>
 
-  <label class="search">
-    <span class="visually-hidden">Search by plate, customer or phone</span>
-    <input
-      type="search"
-      class="search-input"
-      placeholder="Plate, customer, phone"
-      autocomplete="off"
-      [value]="query()"
-      (input)="onQuery($any($event.target).value)"
-    />
-  </label>
+  <!-- Consolidated View Mode Tabs -->
+  <nav class="operations-tabs" aria-label="Operations views">
+    <button
+      type="button"
+      class="tab-btn"
+      [class.tab-btn--active]="activeTab() === 'lanes'"
+      (click)="activeTab.set('lanes')"
+    >
+      <span>📋 Active Lanes</span>
+      @if (board(); as b) {
+        <span class="tab-badge">{{ b.total }}</span>
+      }
+    </button>
 
-  @switch (state()) {
-    @case ('loading') {
-      <ul class="lane-rows" aria-busy="true" aria-label="Loading work orders">
-        @for (row of [1, 2, 3, 4]; track row) {
-          <li class="row row--skeleton"><span class="skeleton-bar"></span></li>
+    <button
+      type="button"
+      class="tab-btn"
+      [class.tab-btn--active]="activeTab() === 'attention'"
+      (click)="activeTab.set('attention')"
+    >
+      <span>🚨 Attention & Blockers</span>
+      @if (attentionItems().length > 0) {
+        <span class="tab-badge tab-badge--danger">{{ attentionItems().length }}</span>
+      }
+    </button>
+
+    <button
+      type="button"
+      class="tab-btn"
+      [class.tab-btn--active]="activeTab() === 'delivery'"
+      (click)="activeTab.set('delivery')"
+    >
+      <span>🏁 Ready for Delivery</span>
+      @if (readyForDeliveryRows().length > 0) {
+        <span class="tab-badge tab-badge--success">{{ readyForDeliveryRows().length }}</span>
+      }
+    </button>
+  </nav>
+
+  @if (activeTab() === 'lanes') {
+    <label class="search">
+      <span class="visually-hidden">Search by plate, customer or phone</span>
+      <input
+        type="search"
+        class="search-input"
+        placeholder="Plate, customer, phone"
+        autocomplete="off"
+        [value]="query()"
+        (input)="onQuery($any($event.target).value)"
+      />
+    </label>
+
+    @switch (state()) {
+      @case ('loading') {
+        <ul class="lane-rows" aria-busy="true" aria-label="Loading work orders">
+          @for (row of [1, 2, 3, 4]; track row) {
+            <li class="row row--skeleton"><span class="skeleton-bar"></span></li>
+          }
+        </ul>
+      }
+
+      @case ('forbidden') {
+        <div class="state">
+          <p class="state-title">You don't have access to branch operations</p>
+          <p class="state-body">Ask your workshop owner to give you branch access.</p>
+        </div>
+      }
+
+      @case ('error') {
+        <div class="state-error">
+          <app-error-banner [error]="error()" />
+          <button appButton variant="secondary" size="small" (click)="reload()">Try again</button>
+        </div>
+      }
+
+      @case ('empty') {
+        <div class="state">
+          <p class="state-title">Nothing open</p>
+          <p class="state-body">Every job is finished. New arrivals appear here once they're booked in.</p>
+        </div>
+      }
+
+      @case ('no-results') {
+        <div class="state">
+          <p class="state-title">No jobs match “{{ query() }}”</p>
+          <p class="state-body">Try a plate, a customer name, or a phone number.</p>
+        </div>
+      }
+
+      @case ('ready') {
+        @if (board()?.unlaned?.length) {
+          <p class="unlaned">
+            {{ board()?.unlaned?.length }} status(es) have no lane and are not shown:
+            {{ board()?.unlaned?.join(', ') }}. This is a bug — tell someone.
+          </p>
         }
-      </ul>
-    }
 
-    @case ('forbidden') {
-      <div class="state">
-        <p class="state-title">You don't have access to branch operations</p>
-        <p class="state-body">Ask your workshop owner to give you branch access.</p>
-      </div>
-    }
+        @for (lane of lanes(); track lane.key) {
+          <section class="lane">
+            <header class="lane-head">
+              <h2 class="lane-title">{{ lane.label }}</h2>
+              <span class="lane-holder">{{ lane.holder }}</span>
+              <span class="lane-count">{{ lane.rows.length }}</span>
+            </header>
 
-    @case ('error') {
-      <div class="state-error">
-        <app-error-banner [error]="error()" />
-        <button appButton variant="secondary" size="small" (click)="reload()">Try again</button>
-      </div>
-    }
+            <ul class="lane-rows">
+              @for (row of lane.rows; track row.id) {
+                <li class="row">
+                  <a class="row-link" [routerLink]="['/branch/work-orders', row.id]">
+                    <span class="row-identity">
+                      <mop-identifier [value]="row.identifier ?? '—'" />
+                      <span class="row-customer">{{ row.customerName }}</span>
+                    </span>
 
-    @case ('empty') {
-      <div class="state">
-        <p class="state-title">Nothing open</p>
-        <p class="state-body">Every job is finished. New arrivals appear here once they're booked in.</p>
-      </div>
-    }
-
-    @case ('no-results') {
-      <!-- Distinct from empty: the yard is not clear, the search is narrow. -->
-      <div class="state">
-        <p class="state-title">No jobs match “{{ query() }}”</p>
-        <p class="state-body">Try a plate, a customer name, or a phone number.</p>
-      </div>
-    }
-
-    @case ('ready') {
-      @if (board()?.unlaned?.length) {
-        <!-- A status no lane claims. Surfaced loudly rather than dropped:
-             a job filed under no holder is invisible work. -->
-        <p class="unlaned">
-          {{ board()?.unlaned?.length }} status(es) have no lane and are not shown:
-          {{ board()?.unlaned?.join(', ') }}. This is a bug — tell someone.
-        </p>
+                    <span class="row-meta">
+                      <span class="row-status">{{ statusLabel(row.status) }}</span>
+                      @if (row.inspectionDeclined) {
+                        <span class="row-flag">no inspection</span>
+                      }
+                      @if (row.assignedTo) {
+                        <span class="row-assignee">{{ row.assignedTo }}</span>
+                      }
+                      @if (row.specialistRecommendation; as spec) {
+                        <span class="row-specialist-badge" title="Recommended specialist matching car aspect">
+                          ⭐ {{ spec.teamName ? spec.teamName : spec.technicianName }} ({{ spec.subsystem }})
+                        </span>
+                      }
+                      <span class="row-waited">{{ waited(row) }}</span>
+                    </span>
+                  </a>
+                </li>
+              }
+            </ul>
+          </section>
+        }
       }
+    }
+  }
 
-      @for (lane of lanes(); track lane.key) {
-        <section class="lane">
-          <header class="lane-head">
-            <h2 class="lane-title">{{ lane.label }}</h2>
-            <span class="lane-holder">{{ lane.holder }}</span>
-            <span class="lane-count">{{ lane.rows.length }}</span>
-          </header>
-
-          <ul class="lane-rows">
-            @for (row of lane.rows; track row.id) {
-              <li class="row">
-                <a class="row-link" [routerLink]="['/branch/work-orders', row.id]">
-                  <span class="row-identity">
-                    <mop-identifier [value]="row.identifier ?? '—'" />
-                    <span class="row-customer">{{ row.customerName }}</span>
-                  </span>
-
-                  <span class="row-meta">
-                    <span class="row-status">{{ statusLabel(row.status) }}</span>
-                    @if (row.inspectionDeclined) {
-                      <!-- Changes what the Finish Gate will accept, so it
-                           travels with the job rather than hiding inside it. -->
-                      <span class="row-flag">no inspection</span>
-                    }
-                    @if (row.assignedTo) {
-                      <span class="row-assignee">{{ row.assignedTo }}</span>
-                    }
-                    <span class="row-waited">{{ waited(row) }}</span>
-                  </span>
+  @if (activeTab() === 'attention') {
+    <section class="attention-embedded">
+      @if (attentionItems().length === 0) {
+        <div class="state">
+          <p class="state-title">No Attention Items Pending</p>
+          <p class="state-body">All work orders are moving smoothly with no technicians blocked or past due SLAs.</p>
+        </div>
+      } @else {
+        <ul class="attention-list">
+          @for (item of attentionItems(); track item.id) {
+            <li class="attention-card" [attr.data-tier]="item.rank.tier">
+              <div class="att-head">
+                <span class="att-plate"><mop-identifier [value]="item.identifier ?? '—'" /></span>
+                <span class="att-tier">Tier {{ item.rank.tier }} Priority</span>
+              </div>
+              <p class="att-reason">{{ item.reason }}</p>
+              <div class="att-foot">
+                <span class="att-customer">{{ item.customerName }}</span>
+                <a [routerLink]="['/branch/work-orders', item.workOrderId]" appButton variant="secondary" size="small">
+                  Resolve &rarr;
                 </a>
-              </li>
-            }
-          </ul>
-        </section>
+              </div>
+            </li>
+          }
+        </ul>
       }
-    }
+    </section>
+  }
+
+  @if (activeTab() === 'delivery') {
+    <section class="delivery-embedded">
+      @if (readyForDeliveryRows().length === 0) {
+        <div class="state">
+          <p class="state-title">No Vehicles Awaiting Delivery</p>
+          <p class="state-body">Completed vehicles ready for customer release or payment will appear here.</p>
+        </div>
+      } @else {
+        <ul class="delivery-list">
+          @for (row of readyForDeliveryRows(); track row.id) {
+            <li class="delivery-card">
+              <div class="del-head">
+                <span class="del-plate"><mop-identifier [value]="row.identifier ?? '—'" /></span>
+                <span class="del-status">{{ statusLabel(row.status) }}</span>
+              </div>
+              <div class="del-customer">{{ row.customerName }}</div>
+              <div class="del-foot">
+                <span class="del-waited">Ready since {{ waited(row) }}</span>
+                <a [routerLink]="['/branch/delivery']" appButton variant="primary" size="small">
+                  Release Vehicle &rarr;
+                </a>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+    </section>
   }
 </section>

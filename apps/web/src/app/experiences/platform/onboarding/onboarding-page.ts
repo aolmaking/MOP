@@ -82,7 +82,7 @@ export class OnboardingPage implements OnInit {
   /** Steps the server reports it really performed, revealed one at a time. */
   protected readonly publishedSteps = signal<readonly ProvisioningStep[]>([]);
   protected readonly revealedStepCount = signal(0);
-  protected readonly created = signal<{ id: string; name: string; slug: string; inviteLink: string } | null>(null);
+  protected readonly created = signal<{ id: string; name: string; slug: string; customerRegistrationCode?: string; inviteLink: string } | null>(null);
 
   protected readonly stages = ONBOARDING_STAGES;
   protected readonly stage = computed(() => onboardingStage(this.store.stage()));

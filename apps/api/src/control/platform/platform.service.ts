@@ -48,6 +48,7 @@ const TENANT_STAFF_ROLES: readonly StaffRole[] = [
   "INVENTORY_MANAGER",
   "TEAM_LEADER",
   "DATA_ANALYST",
+  "OPERATOR",
 ];
 
 /*
@@ -80,7 +81,8 @@ export interface ProvisioningStep {
     | "SERVICES"
     | "SPECIALIZATION"
     | "VERSION"
-    | "AUDIT";
+    | "AUDIT"
+    | "CATALOG";
   readonly label: string;
   /** How many rows this step really wrote. Zero is reported, not hidden. */
   readonly count: number;
@@ -117,12 +119,15 @@ export interface CreateWorkshopResult {
   ownerInvitation: OwnerInvitationState;
 }
 
+import { WorkshopCatalogProvisioningService } from "../../systems/inventory/master-catalog/workshop-catalog-provisioning.service";
+
 @Injectable()
 export class PlatformService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly specialization: SpecializationService,
+    private readonly catalogProvisioning?: WorkshopCatalogProvisioningService,
   ) {}
 
   /**
@@ -254,7 +259,11 @@ export class PlatformService {
         await tx.tenantConfiguration.create({
           data: {
             tenantId: tenant.id,
-            theme: {},
+            theme: {
+              ...(dto.themePalette ? { palette: dto.themePalette } : {}),
+              ...(dto.logoUrl ? { logoUrl: dto.logoUrl } : {}),
+              ...(dto.navigationLayout ? { navigationLayout: dto.navigationLayout } : {}),
+            },
             pageLayouts: {},
             roleExperience: {},
             workflowPolicy: {},
@@ -420,6 +429,22 @@ export class PlatformService {
           count: structure.branches + structure.warehouses,
           detail: `${structure.branches} branch(es), ${structure.warehouses} store(s), ${structure.grants} branch-to-store grant(s).`,
         });
+
+        if (this.catalogProvisioning) {
+          const catalogResult = await this.catalogProvisioning.provisionCatalog(
+            tx,
+            tenant.id,
+            dto.primaryCategory,
+            structure.firstWarehouseId ?? undefined,
+            creator.accountId,
+          );
+          steps.push({
+            key: "CATALOG",
+            label: "Provisioning master catalog & POS",
+            count: catalogResult.itemsCreated,
+            detail: `${catalogResult.categoriesCreated} categories, ${catalogResult.itemsCreated} master items, ${catalogResult.stockBalancesCreated} stock balances, ${catalogResult.servicesCreated} standard services.`,
+          });
+        }
 
         const specializationNames = await this.seedStarterSpecializations(tx, tenant.id, dto);
         steps.push({
@@ -597,7 +622,7 @@ export class PlatformService {
     tx: Prisma.TransactionClient,
     tenantId: string,
     dto: CreateWorkshopDto,
-  ): Promise<{ branches: number; warehouses: number; grants: number }> {
+  ): Promise<{ branches: number; warehouses: number; grants: number; firstWarehouseId?: string | null }> {
     // A workshop with no branch cannot take in a single job --
     // `WorkOrder.branchId` is required -- so one is always created. The
     // fallback is derived from the workshop's own name rather than
@@ -622,12 +647,14 @@ export class PlatformService {
       branchIdByCode.set(branch.code, created.id);
     }
 
+    let firstWarehouseId: string | null = null;
     const warehouses = dto.warehouses ?? [];
     let grants = 0;
     for (const warehouse of warehouses) {
       const created = await tx.warehouse.create({
         data: { tenantId, name: warehouse.name, code: warehouse.code },
       });
+      if (!firstWarehouseId) firstWarehouseId = created.id;
 
       // An empty branch list means "every branch", which is the right
       // reading for a single-store workshop: the alternative -- granting
@@ -642,7 +669,19 @@ export class PlatformService {
       }
     }
 
-    return { branches: branches.length, warehouses: warehouses.length, grants };
+    // Ensure a default warehouse exists if none was specified so inventory & POS have a store
+    if (!firstWarehouseId && warehouses.length === 0) {
+      const defaultStore = await tx.warehouse.create({
+        data: { tenantId, name: "Main Store", code: "MAIN-WH" },
+      });
+      firstWarehouseId = defaultStore.id;
+      for (const branchId of branchIdByCode.values()) {
+        await tx.branchWarehouseAccess.create({ data: { tenantId, branchId, warehouseId: defaultStore.id } });
+        grants += 1;
+      }
+    }
+
+    return { branches: branches.length, warehouses: warehouses.length || 1, grants, firstWarehouseId };
   }
 
   /**

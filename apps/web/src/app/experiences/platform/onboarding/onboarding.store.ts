@@ -18,6 +18,7 @@ import {
   type DraftBranch,
   type DraftService,
   type DraftWarehouse,
+  type WarehouseTopologyType,
   type OnboardingStageId,
   type ResponsibilityAnswer,
   type WorkshopDraft,
@@ -85,6 +86,23 @@ export class OnboardingStore {
   readonly currentStageFindings = computed(() =>
     this.validation().findings.filter((finding) => finding.stage === this._stage()),
   );
+
+  /** Coverage of branches by configured warehouses. */
+  readonly branchCoverage = computed(() => {
+    const draft = this._draft();
+    const branches = draft.branches;
+    const warehouses = draft.warehouses;
+    return branches.map((b) => {
+      const supplying = warehouses.filter(
+        (wh) => wh.branchCodes.length === 0 || wh.branchCodes.includes(b.code),
+      );
+      return {
+        branch: b,
+        warehouses: supplying,
+        isCovered: supplying.length > 0,
+      };
+    });
+  });
 
   // --- navigation --------------------------------------------------------
 
@@ -307,17 +325,108 @@ export class OnboardingStore {
     this._draft.update((draft) => ({ ...draft, warehouses: draft.warehouses.filter((_, i) => i !== index) }));
   }
 
-  toggleWarehouseBranch(index: number, code: string): void {
+  setWarehouseTopology(index: number, topologyType: WarehouseTopologyType): void {
     this._draft.update((draft) => ({
       ...draft,
-      warehouses: draft.warehouses.map((warehouse, i) => {
-        if (i !== index) return warehouse;
-        const branchCodes = warehouse.branchCodes.includes(code)
-          ? warehouse.branchCodes.filter((existing) => existing !== code)
-          : [...warehouse.branchCodes, code];
-        return { ...warehouse, branchCodes };
-      }),
+      warehouses: draft.warehouses.map((wh, i) => (i === index ? { ...wh, topologyType } : wh)),
     }));
+  }
+
+  setWarehouseBranches(index: number, branchCodes: string[]): void {
+    this._draft.update((draft) => ({
+      ...draft,
+      warehouses: draft.warehouses.map((wh, i) => (i === index ? { ...wh, branchCodes } : wh)),
+    }));
+  }
+
+  toggleWarehouseBranch(index: number, code: string): void {
+    this._draft.update((draft) => {
+      const allBranchCodes = draft.branches.map((b) => b.code);
+      return {
+        ...draft,
+        warehouses: draft.warehouses.map((warehouse, i) => {
+          if (i !== index) return warehouse;
+          // If empty (serves all), unchecking `code` means it now serves all *except* `code`.
+          let branchCodes: string[];
+          if (warehouse.branchCodes.length === 0) {
+            branchCodes = allBranchCodes.filter((c) => c !== code);
+          } else if (warehouse.branchCodes.includes(code)) {
+            branchCodes = warehouse.branchCodes.filter((existing) => existing !== code);
+          } else {
+            branchCodes = [...warehouse.branchCodes, code];
+          }
+          return { ...warehouse, branchCodes };
+        }),
+      };
+    });
+  }
+
+  warehouseServesBranch(warehouse: DraftWarehouse, branchCode: string): boolean {
+    return warehouse.branchCodes.length === 0 || warehouse.branchCodes.includes(branchCode);
+  }
+
+  applyTopologyPreset(preset: 'CENTRAL_HUB' | 'DEDICATED' | 'CUSTOM'): void {
+    this._draft.update((draft) => {
+      const branches =
+        draft.branches.length > 0
+          ? draft.branches
+          : [
+              {
+                name: draft.identity.name ? `${draft.identity.name} Main` : 'Main Branch',
+                code: 'MAIN',
+                city: draft.identity.city || 'Cairo',
+              },
+            ];
+
+      if (preset === 'CENTRAL_HUB') {
+        const primaryWh: DraftWarehouse = {
+          name: draft.warehouses[0]?.name || 'Central Distribution Store',
+          code: draft.warehouses[0]?.code || 'WH-CENTRAL',
+          branchCodes: [], // empty = serves all branches
+          topologyType: 'CENTRAL_HUB',
+        };
+        return {
+          ...draft,
+          branches,
+          warehouses: [primaryWh],
+        };
+      }
+
+      if (preset === 'DEDICATED') {
+        const warehouses: DraftWarehouse[] = branches.map((branch, idx) => ({
+          name: `${branch.name || branch.code} Store`,
+          code: `WH-${branch.code || idx + 1}`,
+          branchCodes: [branch.code],
+          topologyType: 'BRANCH_STORE',
+        }));
+        return {
+          ...draft,
+          branches,
+          warehouses,
+        };
+      }
+
+      // CUSTOM
+      const updatedWarehouses = draft.warehouses.map((wh) => ({
+        ...wh,
+        topologyType: 'CUSTOM' as const,
+      }));
+      return {
+        ...draft,
+        branches,
+        warehouses:
+          updatedWarehouses.length > 0
+            ? updatedWarehouses
+            : [
+                {
+                  name: 'Primary Store',
+                  code: 'WH-01',
+                  branchCodes: branches.map((b) => b.code),
+                  topologyType: 'CUSTOM' as const,
+                },
+              ],
+      };
+    });
   }
 
   // --- services ----------------------------------------------------------
@@ -372,6 +481,8 @@ export class OnboardingStore {
       // stated outright one stage earlier.
       starterBuilderTemplate: this.starterTemplate(),
       initialStatus: draft.plan.initialStatus,
+      themePalette: draft.identity.themePalette,
+      logoUrl: draft.identity.logoUrl,
       capabilities: draft.capabilities,
       policies: draft.policies,
       responsibilities: draft.responsibilities,
@@ -395,6 +506,8 @@ export class OnboardingStore {
       businessType: draft.identity.businessType || undefined,
       businessTypeOther: draft.identity.businessTypeOther || undefined,
       primaryCategory: draft.identity.primaryCategory || undefined,
+      themePalette: draft.identity.themePalette || undefined,
+      logoUrl: draft.identity.logoUrl || undefined,
       ownerFullName: draft.owner.ownerFullName || undefined,
       ownerEmail: draft.owner.ownerEmail || undefined,
       ownerPhone: draft.owner.ownerPhone || undefined,

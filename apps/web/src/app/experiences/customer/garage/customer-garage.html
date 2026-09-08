@@ -1,0 +1,150 @@
+<section class="garage-hub">
+  <header class="garage-head">
+    <div class="garage-title-group">
+      <h1 class="garage-title">My Garage & Records</h1>
+      <p class="garage-subtitle">Your registered vehicles, verified service records, and invoice receipts.</p>
+    </div>
+  </header>
+
+
+  @if (error(); as err) {
+    <app-error-banner [error]="err" />
+  }
+
+  <!-- Tab Navigation -->
+  <nav class="tabs-nav" aria-label="Garage sections">
+    <button
+      type="button"
+      class="tab-btn"
+      [class.tab-btn--active]="activeTab() === 'vehicles'"
+      (click)="setTab('vehicles')"
+    >
+      🚗 Vehicles ({{ assets().length }})
+    </button>
+    <button
+      type="button"
+      class="tab-btn"
+      [class.tab-btn--active]="activeTab() === 'history'"
+      (click)="setTab('history')"
+    >
+      📜 Service History ({{ historyEntries().length }})
+    </button>
+    <button
+      type="button"
+      class="tab-btn"
+      [class.tab-btn--active]="activeTab() === 'invoices'"
+      (click)="setTab('invoices')"
+    >
+      💳 Invoices & Billing ({{ invoices().length }})
+    </button>
+  </nav>
+
+  @if (loading()) {
+    <p class="loading-text">Loading records…</p>
+  } @else {
+    <!-- TAB 1: VEHICLES -->
+    @if (activeTab() === 'vehicles') {
+      <div class="tab-pane">
+        @if (assets().length === 0) {
+          <div class="empty-state">
+            <div class="empty-icon">🚗</div>
+            <h3>No registered vehicles yet</h3>
+            <p>Your workshop operator will register and link your vehicle upon your visit.</p>
+          </div>
+        } @else {
+          <div class="vehicles-grid">
+            @for (asset of assets(); track asset.id) {
+              <article class="vehicle-card">
+                <div class="vehicle-card-head">
+                  <div class="vehicle-plate-box">
+                    <span class="plate-number">{{ asset.plateNumber || 'No Plate' }}</span>
+                  </div>
+                  <span class="category-pill">{{ asset.category }}</span>
+                </div>
+                <div class="vehicle-details">
+                  <div class="detail-row">
+                    <span class="detail-label">VIN / Chassis:</span>
+                    <span class="detail-value font-mono">{{ asset.vinOrChassisNumber || 'Not recorded' }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Registered Since:</span>
+                    <span class="detail-value">{{ when(asset.ownedSince) }}</span>
+                  </div>
+                </div>
+              </article>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <!-- TAB 2: SERVICE HISTORY -->
+    @if (activeTab() === 'history') {
+      <div class="tab-pane">
+        @if (historyEntries().length === 0) {
+          <div class="empty-state">
+            <div class="empty-icon">📜</div>
+            <h3>No past service records yet</h3>
+            <p>Verified technical service entries and repair summaries will be preserved here upon job completion.</p>
+          </div>
+        } @else {
+          <div class="history-list">
+            @for (entry of historyEntries(); track entry.id) {
+              <article class="history-card">
+                <div class="history-card-head">
+                  <span class="history-date">{{ when(entry.serviceDate) }}</span>
+                  <span class="history-tag">Verified Completed Work</span>
+                </div>
+                <p class="history-summary">{{ entry.summary }}</p>
+              </article>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <!-- TAB 3: INVOICES & BILLING -->
+    @if (activeTab() === 'invoices') {
+      <div class="tab-pane">
+        @if (invoices().length === 0) {
+          <div class="empty-state">
+            <div class="empty-icon">💳</div>
+            <h3>No invoices issued</h3>
+            <p>When the workshop completes work and issues billing statements, your invoices will appear here.</p>
+          </div>
+        } @else {
+          <div class="invoices-list">
+            @for (inv of invoices(); track inv.invoiceId) {
+              <article class="invoice-card">
+                <div class="invoice-head">
+                  <div>
+                    <span class="inv-number">{{ inv.invoiceNumber }}</span>
+                    <span class="inv-date">{{ when(inv.issuedAt) }}</span>
+                  </div>
+                  <span class="inv-status-pill" [attr.data-status]="inv.status">
+                    {{ inv.status }}
+                  </span>
+                </div>
+                <div class="invoice-numbers">
+                  <div class="inv-col">
+                    <span class="inv-label">Total Billed</span>
+                    <span class="inv-val font-mono">{{ inv.total }}</span>
+                  </div>
+                  <div class="inv-col">
+                    <span class="inv-label">Paid</span>
+                    <span class="inv-val font-mono">{{ inv.paid }}</span>
+                  </div>
+                  <div class="inv-col">
+                    <span class="inv-label">Balance</span>
+                    <span class="inv-val font-mono inv-val--balance">{{ inv.balance }}</span>
+                  </div>
+                </div>
+              </article>
+            }
+          </div>
+        }
+      </div>
+    }
+  }
+
+</section>

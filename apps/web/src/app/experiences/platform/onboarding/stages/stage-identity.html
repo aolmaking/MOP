@@ -189,25 +189,128 @@
 
   <!-- Workshop Branding: 6 Curated UI Theme Palettes -->
   <fieldset class="onb-field onb-field--cards">
-    <legend>UI Theme Color Palette (6 Options)</legend>
-    <p class="onb-hint">Every workshop can feature its own signature brand theme, dynamically skinning rails, buttons, and badges.</p>
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 10px; margin-top: 8px;">
+    <legend>UI Theme Color Palette (Signature Brand Experience)</legend>
+    <p class="onb-hint">Every workshop features its own signature theme, dynamically skinning navigation rails, action buttons, glowing borders, and badges with ambient illumination.</p>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr)); gap: 12px; margin-top: 8px;">
       @for (pal of palettes; track pal.key) {
+        @let isSelected = (store.draft().identity.themePalette || 'crimson') === pal.key;
         <button
           type="button"
           class="onb-choice"
-          style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px; text-align: left;"
-          [class.onb-choice--selected]="(store.draft().identity.themePalette || 'crimson') === pal.key"
-          [attr.aria-pressed]="(store.draft().identity.themePalette || 'crimson') === pal.key"
+          style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px; text-align: left; border-radius: 8px; transition: all 0.2s ease;"
+          [style.box-shadow]="isSelected ? '0 0 16px ' + pal.primary + '40' : 'none'"
+          [style.border-color]="isSelected ? pal.primary : ''"
+          [class.onb-choice--selected]="isSelected"
+          [attr.aria-pressed]="isSelected"
           (click)="onPalette(pal.key)"
         >
-          <div style="display: flex; align-items: center; gap: 6px; width: 100%;">
-            <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 4px rgba(0,0,0,0.5);" [style.background]="pal.previewColor"></span>
-            <strong style="font-size: 13px;">{{ pal.name }}</strong>
+          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+            <span style="display: inline-block; width: 16px; height: 16px; border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.5);" [style.background]="pal.previewColor"></span>
+            <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.08);">
+              {{ pal.key }}
+            </span>
           </div>
-          <span style="font-size: 11px; opacity: 0.7;">{{ pal.category }}</span>
+          <strong style="font-size: 13px; color: #f8fafc;">{{ pal.name }}</strong>
+          <span style="font-size: 11px; opacity: 0.75; line-height: 1.3;">{{ pal.description }}</span>
         </button>
       }
     </div>
   </fieldset>
+
+  <!-- Navigation Shell Layout Selector -->
+  <fieldset class="onb-field onb-field--cards">
+    <legend>Navigation Shell Layout (Workshop Structure)</legend>
+    <p class="onb-hint">Choose how staff and managers navigate this workshop. All pages across this workshop will inherit the exact same navigation architecture.</p>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 12px; margin-top: 8px;">
+      <!-- Option 1: Left Sidebar -->
+      @let layoutVal = store.draft().identity.navigationLayout || 'SIDEBAR';
+      <button
+        type="button"
+        class="onb-choice"
+        style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; text-align: left; border-radius: 8px;"
+        [class.onb-choice--selected]="layoutVal === 'SIDEBAR'"
+        [attr.aria-pressed]="layoutVal === 'SIDEBAR'"
+        (click)="onLayout('SIDEBAR')"
+      >
+        <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+          <span style="font-size: 18px;">📑</span>
+          <strong style="font-size: 14px;">Left Sidebar</strong>
+        </div>
+        <p style="font-size: 11px; margin: 0; opacity: 0.75; line-height: 1.4;">
+          Traditional desktop rail on the left. High capacity for deep workshops with 8+ operations modules.
+        </p>
+      </button>
+
+      <!-- Option 2: Top Navbar -->
+      <button
+        type="button"
+        class="onb-choice"
+        style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; text-align: left; border-radius: 8px;"
+        [class.onb-choice--selected]="layoutVal === 'NAVBAR'"
+        [attr.aria-pressed]="layoutVal === 'NAVBAR'"
+        (click)="onLayout('NAVBAR')"
+      >
+        <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+          <span style="font-size: 18px;">🧭</span>
+          <strong style="font-size: 14px;">Top Navbar</strong>
+        </div>
+        <p style="font-size: 11px; margin: 0; opacity: 0.75; line-height: 1.4;">
+          Horizontal top header bar across all pages. Maximizes full-width table and diagnostic board space.
+        </p>
+      </button>
+
+      <!-- Option 3: Bottom Bar -->
+      <button
+        type="button"
+        class="onb-choice"
+        style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; text-align: left; border-radius: 8px;"
+        [class.onb-choice--selected]="layoutVal === 'BOTTOM_BAR'"
+        [attr.aria-pressed]="layoutVal === 'BOTTOM_BAR'"
+        (click)="onLayout('BOTTOM_BAR')"
+      >
+        <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+          <span style="font-size: 18px;">📱</span>
+          <strong style="font-size: 14px;">Bottom Bar ("Par Down")</strong>
+        </div>
+        <p style="font-size: 11px; margin: 0; opacity: 0.75; line-height: 1.4;">
+          Fixed bottom dock navigation bar. Optimized for tablets, technicians on bay floors, and handheld diagnostics.
+        </p>
+      </button>
+    </div>
+  </fieldset>
+
+  <!-- Live Brand & UI Theme Interactive Preview -->
+  <div style="margin-top: 1rem; padding: 1rem 1.25rem; background: #0f172a; border: 1px solid #1e293b; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+      <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">
+        Live Workshop Navigation Bar Preview
+      </span>
+      <span style="font-size: 11px; padding: 2px 8px; border-radius: 9999px; background: rgba(37,99,235,0.15); color: #60a5fa; border: 1px solid rgba(37,99,235,0.3);">
+        Layout: {{ layoutVal }}
+      </span>
+    </div>
+
+    <!-- Mock Navigation Chrome -->
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; background: #1e293b; border-radius: 8px; border: 1px solid #334155;">
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <div style="width: 32px; height: 32px; border-radius: 8px; background: #0f172a; border: 1px solid #475569; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #f8fafc;">
+          {{ (store.draft().identity.name || 'W').charAt(0).toUpperCase() }}
+        </div>
+        <div>
+          <div style="font-weight: 700; font-size: 14px; color: #f8fafc;">
+            {{ store.draft().identity.name || 'Your Workshop Name' }}
+          </div>
+          <div style="font-size: 11px; color: #94a3b8;">
+            mop.app/w/{{ store.draft().identity.slug || 'slug' }}
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #0f172a; border: 1px solid #334155; color: #cbd5e1;">Home</span>
+        <span style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #0f172a; border: 1px solid #334155; color: #cbd5e1;">Board</span>
+        <span style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #0f172a; border: 1px solid #334155; color: #cbd5e1;">Stock</span>
+      </div>
+    </div>
+  </div>
 </div>

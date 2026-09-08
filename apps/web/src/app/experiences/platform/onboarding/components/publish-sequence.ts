@@ -28,6 +28,7 @@ export class PublishSequence {
   readonly revealed = input.required<number>();
   readonly ready = input.required<boolean>();
   readonly inviteLink = input<string | null>(null);
+  readonly registrationCode = input<string | null>(null);
   readonly nextSteps = input.required<readonly { title: string; detail: string }[]>();
   readonly summaryLine = input.required<string>();
 

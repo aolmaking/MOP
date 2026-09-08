@@ -97,6 +97,10 @@ export class InventoryApi {
     return this.http.post(`/api/v1/inventory/items/${id}/adjust`, { warehouseId, quantity, reason });
   }
 
+  transfer(id: string, fromWarehouseId: string, toWarehouseId: string, quantity: number, notes?: string): Observable<unknown> {
+    return this.http.post(`/api/v1/inventory/items/${id}/transfer`, { fromWarehouseId, toWarehouseId, quantity, notes });
+  }
+
   approve(id: string): Observable<unknown> {
     return this.http.post(`/api/v1/inventory/requests/${id}/approve`, {});
   }

@@ -45,6 +45,7 @@ enum StaffRole {
   INVENTORY_MANAGER
   TEAM_LEADER
   DATA_ANALYST
+  OPERATOR
 }
 
 enum AnalystSavedViewSourcePage {
@@ -605,6 +606,7 @@ model StaffUser {
   taskAssignments     TaskAssignment[]
   permissionOverrides UserPermissionOverride[]
   credentials         StaffCredential[]
+  specializations     String[]                 @default([])
 
   @@index([tenantId, role])
   @@map("staff_users")
@@ -613,13 +615,14 @@ model StaffUser {
 // New model -- the old build had no Team/TeamMembership table at all, so
 // "Team Setup" and Team Leader scoping had nothing real to attach to.
 model Team {
-  id           String   @id @default(cuid())
-  tenantId     String
-  branchId     String?
-  name         String
-  teamLeaderId String
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  id              String   @id @default(cuid())
+  tenantId        String
+  branchId        String?
+  name            String
+  teamLeaderId    String
+  specializations String[] @default([])
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
 
   tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   branch     Branch?          @relation(fields: [branchId], references: [id], onDelete: SetNull)

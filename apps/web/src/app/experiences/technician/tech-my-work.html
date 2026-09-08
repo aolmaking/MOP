@@ -61,6 +61,13 @@
               }
             </span>
 
+            @if (job.vehicleModel || job.vin) {
+              <div class="job-vehicle-meta">
+                @if (job.vehicleModel) { <span class="job-meta-pill">🚗 {{ job.vehicleModel }}</span> }
+                @if (job.vin) { <span class="job-meta-pill">VIN: {{ job.vin }}</span> }
+              </div>
+            }
+
             @if (job.complaint) {
               <p class="job-complaint">{{ job.complaint }}</p>
             }

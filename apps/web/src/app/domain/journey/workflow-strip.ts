@@ -72,6 +72,8 @@ export class WorkflowStrip {
   readonly journey = input.required<PresentedJourney>();
   /** Compact drops the panel, narrative and history — for a row in a list. */
   readonly compact = input(false);
+  /** When false, removes time settings (Since, In this stage, duration counters) */
+  readonly showTimes = input<boolean>(true);
 
   /**
    * A real, server-authorized action was pressed.

@@ -1,21 +1,14 @@
-import { Component, inject, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Component, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { Identifier } from '../../ui/identifier/identifier';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import { TechnicianApi, type TechnicianJob } from './technician.api';
 
-type State = 'loading' | 'active' | 'idle' | 'forbidden' | 'error';
+type State = 'loading' | 'idle' | 'forbidden' | 'error';
 
 /**
- * "What am I doing right now?"
- *
- * The put-down-pick-up page. It must answer in one glance with no tap,
- * which is why it opens ON the active job rather than on a list
- * containing it -- the technician has one car in front of them, and
- * making this a list would cost a tap on the page that must not cost one.
- *
- * If nothing is started, it says so and points at My Work. That is the
- * only branch this page has.
+ * Technician Station -- Simplified Vehicle Queue.
+ * Displays all assigned and workshop vehicles with clear, color-coded state badges.
  */
 @Component({
   selector: 'app-tech-now',
@@ -25,10 +18,25 @@ type State = 'loading' | 'active' | 'idle' | 'forbidden' | 'error';
 })
 export class TechNow {
   private readonly api = inject(TechnicianApi);
-  private readonly router = inject(Router);
 
-  protected readonly job = signal<TechnicianJob | null>(null);
+  protected readonly queue = signal<readonly TechnicianJob[]>([]);
+  protected readonly filter = signal<string>('ALL');
   protected readonly state = signal<State>('loading');
+
+  protected readonly activeCount = computed(() => this.queue().filter((j) => j.active || j.status === 'IN_PROGRESS').length);
+  protected readonly blockedCount = computed(() => this.queue().filter((j) => j.blocked || j.status === 'BLOCKED').length);
+  protected readonly inspectionCount = computed(() => this.queue().filter((j) => j.status === 'UNDER_INSPECTION').length);
+
+  protected readonly filteredQueue = computed(() => {
+    const q = this.queue();
+    const f = this.filter();
+    if (f === 'ALL') return q;
+    if (f === 'BLOCKED') return q.filter((j) => j.blocked || j.status === 'BLOCKED');
+    if (f === 'READY') return q.filter((j) => ['REGISTERED', 'READY_TO_START', 'APPROVED_FOR_WORK'].includes(j.status));
+    if (f === 'INSPECTION') return q.filter((j) => j.status === 'UNDER_INSPECTION');
+    if (f === 'IN_PROGRESS') return q.filter((j) => j.status === 'IN_PROGRESS' || j.active);
+    return q;
+  });
 
   constructor() {
     this.load();
@@ -36,43 +44,59 @@ export class TechNow {
 
   protected load(): void {
     this.state.set('loading');
-    this.api.active().subscribe({
-      next: ({ job }) => {
-        this.job.set(job);
-        this.state.set(job ? 'active' : 'idle');
+    this.api.myWork().subscribe({
+      next: ({ jobs }) => {
+        this.queue.set(jobs);
+        this.state.set('idle');
       },
       error: (err: PresentedError) => this.state.set(err.httpStatus === 403 ? 'forbidden' : 'error'),
     });
   }
 
-  /** The whole card is the target, so there is nothing to aim at. */
-  protected openCard(): void {
-    const job = this.job();
-    if (job) void this.router.navigate(['/tech/card', job.workOrderId]);
+  protected statusLabel(status: string, blocked?: boolean): string {
+    if (blocked || status === 'BLOCKED') return 'Blocked';
+    switch (status) {
+      case 'REGISTERED':
+        return 'Ready to Start';
+      case 'UNDER_INSPECTION':
+        return 'Under Inspection';
+      case 'APPROVED_FOR_WORK':
+        return 'Approved for Work';
+      case 'IN_PROGRESS':
+        return 'In Progress';
+      case 'WAITING_PARTS':
+      case 'WAITING_ON_PARTS':
+        return 'Waiting on Parts';
+      case 'AWAITING_CUSTOMER_APPROVAL':
+        return 'Waiting on Approval';
+      case 'READY_FOR_TEAM_REVIEW':
+        return 'Ready for Review';
+      default:
+        return status.toLowerCase().replace(/_/g, ' ');
+    }
   }
 
-  protected postureLabel(job: TechnicianJob): string {
-    if (job.blocked) return 'Attention required · Blocker reported';
-    if (job.active) return 'In progress · Current hands-on job';
-    if (job.status === 'UNDER_INSPECTION') return 'Action required · Vehicle inspection';
-    if (job.status === 'REGISTERED') return 'Next up · Ready to begin';
-    return 'Assigned · Ready for action';
-  }
-
-  protected statusExplanation(job: TechnicianJob): string | null {
-    if (job.blocked) {
-      return 'Blocked — a problem was reported on this job. Your branch manager has been notified.';
+  protected statusColorClass(status: string, blocked?: boolean): string {
+    if (blocked || status === 'BLOCKED') return 'state-badge--blocked';
+    switch (status) {
+      case 'UNDER_INSPECTION':
+        return 'state-badge--inspection';
+      case 'REGISTERED':
+      case 'READY_TO_START':
+      case 'APPROVED_FOR_WORK':
+        return 'state-badge--ready';
+      case 'IN_PROGRESS':
+        return 'state-badge--progress';
+      case 'WAITING_PARTS':
+      case 'WAITING_ON_PARTS':
+        return 'state-badge--waiting';
+      case 'READY_FOR_TEAM_REVIEW':
+        return 'state-badge--review';
+      case 'AWAITING_CUSTOMER_APPROVAL':
+        return 'state-badge--approval';
+      default:
+        return 'state-badge--default';
     }
-    if (job.status === 'UNDER_INSPECTION') {
-      return 'Vehicle is under inspection. Open the work card to record findings or complete inspection.';
-    }
-    if (job.status === 'AWAITING_CUSTOMER_APPROVAL') {
-      return 'Inspection complete. Waiting for customer approval before repairs can begin.';
-    }
-    if (job.status === 'WAITING_PARTS') {
-      return 'Waiting for parts to be issued by the store.';
-    }
-    return null;
   }
 
   protected since(hours: number): string {

@@ -1,6 +1,6 @@
 <div class="rail-shell">
   <nav class="rail" aria-label="Inventory navigation">
-    <div class="rail-brand">MOP</div>
+    <div class="rail-brand" [title]="branding.activeWorkshop().name">{{ branding.activeWorkshop().name }}</div>
 
     @for (item of navigation; track item.route) {
       <a [routerLink]="item.route" routerLinkActive="rail-link--active" class="rail-link">{{ item.label }}</a>
@@ -17,9 +17,12 @@
     </div>
   </nav>
 
-  <main class="rail-content">
-    <router-outlet />
-  </main>
+  <div class="rail-main-container">
+    <app-shell-topbar [session]="session()" roleTitle="Inventory" (logout)="logout()" />
+    <main class="rail-content">
+      <router-outlet />
+    </main>
+  </div>
 </div>
 
 <app-toast-container />

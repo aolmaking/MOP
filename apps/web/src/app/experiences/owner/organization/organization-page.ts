@@ -7,6 +7,7 @@ import { ButtonDirective } from '../../../ui/button/button.directive';
 import type { PresentedError } from '../../../runtime/http/error.interceptor';
 import { DismissOnEscapeDirective } from '../../../ui/dismiss-on-escape/dismiss-on-escape.directive';
 import { isHeldBack } from '../../../runtime/launch-surface';
+import { VEHICLE_SUBSYSTEMS, getVehicleSubsystem, type VehicleSubsystem } from '@mop/shared';
 import {
   OrganizationApi,
   type BranchListItem,
@@ -14,9 +15,11 @@ import {
   type OrganizationInfrastructure,
   type StaffListItem,
   type StaffRole,
+  type TeamSetupPage,
+  type TeamView,
 } from './organization.api';
 
-type Tab = 'staff' | 'branches' | 'warehouses';
+type Tab = 'staff' | 'teams' | 'branches' | 'warehouses';
 type State = 'loading' | 'ready' | 'forbidden' | 'error';
 
 const INVITABLE_ROLES: readonly StaffRole[] = [
@@ -26,6 +29,7 @@ const INVITABLE_ROLES: readonly StaffRole[] = [
   'INVENTORY_MANAGER',
   'TEAM_LEADER',
   'DATA_ANALYST',
+  'OPERATOR',
 ];
 
 /**
@@ -33,10 +37,7 @@ const INVITABLE_ROLES: readonly StaffRole[] = [
  * "This is the first page that has to work -- nothing else in the product
  * is usable for a given workshop until staff exist."
  *
- * Three of the spec's four tabs live here (Staff, Branches, Warehouses);
- * Teams is a separate route (`/owner/organization/teams`) that reuses
- * Branch Manager's TeamSetupPage verbatim rather than a fourth
- * implementation of the same CRUD -- see app.routes.ts's comment there.
+ * Four unified tabs: Staff, Teams & Leaders, Branches, Warehouses.
  */
 @Component({
   selector: 'app-organization-page',
@@ -56,6 +57,7 @@ export class OrganizationPage {
   private readonly api = inject(OrganizationApi);
   private readonly destroyRef = inject(DestroyRef);
 
+  protected readonly vehicleSubsystems = VEHICLE_SUBSYSTEMS;
   protected readonly roles = INVITABLE_ROLES;
   protected readonly tab = signal<Tab>('staff');
   protected readonly state = signal<State>('loading');
@@ -64,6 +66,23 @@ export class OrganizationPage {
   protected readonly staff = signal<readonly StaffListItem[]>([]);
   protected readonly infra = signal<OrganizationInfrastructure | null>(null);
 
+  // Teams & Team Leaders capability state
+  protected readonly teamsEnabled = signal<boolean>(this.loadTeamsCapability());
+  protected readonly teamsData = signal<TeamSetupPage | null>(null);
+  protected readonly showCreateTeam = signal(false);
+  protected readonly newTeamName = signal('');
+  protected readonly newTeamBranchId = signal('');
+  protected readonly newTeamLeaderId = signal('');
+  protected readonly newTeamSpecializations = signal<string[]>([]);
+  protected readonly editingTeam = signal<TeamView | null>(null);
+  protected readonly editingTeamSpecializations = signal<string[]>([]);
+  protected readonly teamModalError = signal<string | null>(null);
+  protected readonly teamSubmitting = signal(false);
+
+  // Individual staff specializations state
+  protected readonly editingStaff = signal<StaffListItem | null>(null);
+  protected readonly staffSpecializations = signal<string[]>([]);
+  protected readonly staffSpecializationsSaving = signal(false);
   // Independent of the tab-scoped `infra` load below: the Staff tab needs
   // branch names to resolve a row's branchScope ids, but only fetches
   // staff itself, so this is loaded once, separately, on init.
@@ -92,7 +111,24 @@ export class OrganizationPage {
     this.api
       .infrastructure()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((infra) => this.branchNameById.set(new Map(infra.branches.map((b) => [b.id, b.name]))));
+      .subscribe((infra) => {
+        this.infra.set(infra);
+        this.branchNameById.set(new Map(infra.branches.map((b) => [b.id, b.name])));
+      });
+  }
+
+  private loadTeamsCapability(): boolean {
+    if (typeof localStorage === 'undefined') return true;
+    const stored = localStorage.getItem('mop_teams_and_leaders_enabled');
+    return stored === null ? true : stored === 'true';
+  }
+
+  protected toggleTeamsCapability(): void {
+    const nextVal = !this.teamsEnabled();
+    this.teamsEnabled.set(nextVal);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('mop_teams_and_leaders_enabled', String(nextVal));
+    }
   }
 
   protected branchNames(ids: readonly string[]): string {
@@ -113,6 +149,22 @@ export class OrganizationPage {
       this.error.set(err);
     };
 
+    // Always keep infrastructure fresh for branch and warehouse scopes
+    this.api
+      .infrastructure()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (inf) => {
+          this.infra.set(inf);
+          if (this.tab() !== 'staff' && this.tab() !== 'teams') {
+            this.state.set('ready');
+          }
+        },
+        error: (err) => {
+          if (this.tab() !== 'staff' && this.tab() !== 'teams') onError(err);
+        },
+      });
+
     if (this.tab() === 'staff') {
       this.api
         .listStaff()
@@ -124,28 +176,188 @@ export class OrganizationPage {
           },
           error: onError,
         });
-    } else {
-      this.api
-        .infrastructure()
-        .pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe({
-          next: (page) => {
-            this.infra.set(page);
-            this.state.set('ready');
-          },
-          error: onError,
-        });
+    } else if (this.tab() === 'teams') {
+      this.loadTeams();
     }
+  }
+
+  protected loadTeams(): void {
+    this.api
+      .teamsPage()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (page) => {
+          this.teamsData.set(page);
+          this.state.set('ready');
+        },
+        error: (err: PresentedError) => {
+          this.state.set(err.httpStatus === 403 ? 'forbidden' : 'error');
+          this.error.set(err);
+        },
+      });
+  }
+
+  // --- Teams CRUD & Specializations ---
+
+  protected openCreateTeam(): void {
+    const branches = this.infra()?.branches ?? [];
+    const eligibleLeaders = this.teamsData()?.eligibleLeaders ?? [];
+    this.newTeamName.set('');
+    this.newTeamBranchId.set(branches[0]?.id ?? '');
+    this.newTeamLeaderId.set(eligibleLeaders[0]?.id ?? '');
+    this.newTeamSpecializations.set([]);
+    this.teamModalError.set(null);
+    this.showCreateTeam.set(true);
+  }
+
+  protected closeCreateTeam(): void {
+    this.showCreateTeam.set(false);
+  }
+
+  protected toggleNewTeamSubsystem(id: string): void {
+    const current = this.newTeamSpecializations();
+    if (current.includes(id)) {
+      this.newTeamSpecializations.set(current.filter((item) => item !== id));
+    } else {
+      this.newTeamSpecializations.set([...current, id]);
+    }
+  }
+
+  protected submitCreateTeam(): void {
+    const name = this.newTeamName().trim();
+    const branchId = this.newTeamBranchId();
+    const leaderId = this.newTeamLeaderId();
+    if (!name) {
+      this.teamModalError.set('Team name is required.');
+      return;
+    }
+    if (!branchId) {
+      this.teamModalError.set('Please select a branch.');
+      return;
+    }
+    this.teamSubmitting.set(true);
+    this.teamModalError.set(null);
+    this.api
+      .createTeam({
+        name,
+        branchId,
+        teamLeaderId: leaderId,
+        specializations: this.newTeamSpecializations(),
+      })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.teamSubmitting.set(false);
+          this.showCreateTeam.set(false);
+          this.loadTeams();
+        },
+        error: (err: PresentedError) => {
+          this.teamSubmitting.set(false);
+          this.teamModalError.set(err.message || 'Failed to create team.');
+        },
+      });
+  }
+
+  protected openEditTeamSpecializations(team: TeamView): void {
+    this.editingTeam.set(team);
+    this.editingTeamSpecializations.set([...(team.specializations ?? [])]);
+    this.teamModalError.set(null);
+  }
+
+  protected closeEditTeamSpecializations(): void {
+    this.editingTeam.set(null);
+  }
+
+  protected toggleEditingTeamSubsystem(id: string): void {
+    const current = this.editingTeamSpecializations();
+    if (current.includes(id)) {
+      this.editingTeamSpecializations.set(current.filter((item) => item !== id));
+    } else {
+      this.editingTeamSpecializations.set([...current, id]);
+    }
+  }
+
+  protected saveTeamSpecializations(): void {
+    const team = this.editingTeam();
+    if (!team) return;
+    this.teamSubmitting.set(true);
+    this.teamModalError.set(null);
+    this.api
+      .updateTeamSpecializations(team.id, this.editingTeamSpecializations())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.teamSubmitting.set(false);
+          this.editingTeam.set(null);
+          this.loadTeams();
+        },
+        error: (err: PresentedError) => {
+          this.teamSubmitting.set(false);
+          this.teamModalError.set(err.message || 'Failed to update team specializations.');
+        },
+      });
+  }
+
+  // --- Individual Staff Specializations ---
+
+  protected openStaffSpecializations(staff: StaffListItem): void {
+    this.editingStaff.set(staff);
+    this.staffSpecializations.set([...(staff.specializations ?? [])]);
+  }
+
+  protected closeStaffSpecializations(): void {
+    this.editingStaff.set(null);
+  }
+
+  protected toggleStaffSubsystem(id: string): void {
+    const current = this.staffSpecializations();
+    if (current.includes(id)) {
+      this.staffSpecializations.set(current.filter((item) => item !== id));
+    } else {
+      this.staffSpecializations.set([...current, id]);
+    }
+  }
+
+  protected saveStaffSpecializations(): void {
+    const staff = this.editingStaff();
+    if (!staff) return;
+    this.staffSpecializationsSaving.set(true);
+    const specs = this.staffSpecializations();
+    this.api
+      .updateStaffSpecializations(staff.id, specs)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.staffSpecializationsSaving.set(false);
+          this.staff.update((items) =>
+            items.map((i) => (i.id === staff.id ? { ...i, specializations: specs } : i)),
+          );
+          this.editingStaff.set(null);
+        },
+        error: () => {
+          this.staffSpecializationsSaving.set(false);
+        },
+      });
+  }
+
+  protected subsystemName(id: string): string {
+    return getVehicleSubsystem(id)?.nameEn ?? id;
+  }
+
+  protected subsystemIcon(id: string): string {
+    return getVehicleSubsystem(id)?.icon ?? '🔧';
   }
 
   // -- Staff ------------------------------------------------------------
 
   protected openInvite(): void {
+    const defaultBranchId = this.infra()?.branches?.[0]?.id ?? '';
+    const defaultWarehouseId = this.infra()?.warehouses?.[0]?.id ?? '';
     this.inviteForm.set({ fullName: '', email: '', phone: '', role: 'TECHNICIAN' });
     this.creationMode.set('password');
     this.workerPassword.set('');
-    this.branchScopeText.set('');
-    this.warehouseScopeText.set('');
+    this.branchScopeText.set(defaultBranchId);
+    this.warehouseScopeText.set(defaultWarehouseId);
     this.inviteError.set(null);
     this.showInvite.set(true);
   }
@@ -156,6 +368,14 @@ export class OrganizationPage {
 
   protected updateField<K extends keyof InviteStaffInput>(key: K, value: InviteStaffInput[K]): void {
     this.inviteForm.set({ ...this.inviteForm(), [key]: value });
+    if (key === 'role') {
+      if (!this.branchScopeText() && this.infra()?.branches?.length) {
+        this.branchScopeText.set(this.infra()!.branches[0]!.id);
+      }
+      if (!this.warehouseScopeText() && this.infra()?.warehouses?.length) {
+        this.warehouseScopeText.set(this.infra()!.warehouses[0]!.id);
+      }
+    }
   }
 
   protected submitInvite(): void {

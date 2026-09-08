@@ -14,6 +14,12 @@ export interface BoardRow {
   readonly assignedTo: string | null;
   /** Set when the customer refused inspection -- changes what may finish. */
   readonly inspectionDeclined: boolean;
+  /** Recommended team or technician specializing in vehicle subsystems involved. */
+  readonly specialistRecommendation?: {
+    readonly teamName?: string;
+    readonly technicianName?: string;
+    readonly subsystem?: string;
+  } | null;
 }
 
 export interface BoardLane {
@@ -45,39 +51,114 @@ export class WorkOrderBoardService {
   ): Promise<BoardResult> {
     const query = options.query?.trim();
 
-    const rows = await this.prisma.workOrder.findMany({
-      where: {
-        tenantId: scope.tenantId,
-        ...(scope.branchScope.length > 0 ? { branchId: { in: [...scope.branchScope] } } : {}),
-        ...(options.includeFinished ? {} : { status: { in: openStatuses() as never[] } }),
-        ...(query
-          ? {
-              OR: [
-                { asset: { plateNumber: { contains: query, mode: "insensitive" as const } } },
-                { asset: { serialNumber: { contains: query, mode: "insensitive" as const } } },
-                { customer: { fullName: { contains: query, mode: "insensitive" as const } } },
-                { customer: { phone: { contains: query, mode: "insensitive" as const } } },
-              ],
-            }
-          : {}),
-      },
-      select: {
-        id: true,
-        status: true,
-        branchId: true,
-        updatedAt: true,
-        inspectionDeclined: true,
-        asset: { select: { plateNumber: true, serialNumber: true } },
-        customer: { select: { fullName: true } },
-        assignments: {
-          take: 1,
-          orderBy: { assignedAt: "desc" },
-          select: { staffUser: { select: { fullName: true } } },
+    const [rows, teams, staffMembers] = await Promise.all([
+      this.prisma.workOrder.findMany({
+        where: {
+          tenantId: scope.tenantId,
+          ...(scope.branchScope.length > 0 ? { branchId: { in: [...scope.branchScope] } } : {}),
+          ...(options.includeFinished ? {} : { status: { in: openStatuses() as never[] } }),
+          ...(query
+            ? {
+                OR: [
+                  { asset: { plateNumber: { contains: query, mode: "insensitive" as const } } },
+                  { asset: { serialNumber: { contains: query, mode: "insensitive" as const } } },
+                  { customer: { fullName: { contains: query, mode: "insensitive" as const } } },
+                  { customer: { phone: { contains: query, mode: "insensitive" as const } } },
+                ],
+              }
+            : {}),
         },
-      },
-      orderBy: { updatedAt: "asc" },
-      take: MAX_ROWS,
-    });
+        select: {
+          id: true,
+          status: true,
+          branchId: true,
+          updatedAt: true,
+          inspectionDeclined: true,
+          asset: { select: { plateNumber: true, serialNumber: true } },
+          customer: { select: { fullName: true } },
+          tasks: { select: { title: true } },
+          inspections: {
+            take: 1,
+            orderBy: { createdAt: "desc" },
+            select: { fields: true, note: true },
+          },
+          assignments: {
+            take: 1,
+            orderBy: { assignedAt: "desc" },
+            select: { staffUser: { select: { fullName: true } } },
+          },
+        },
+        orderBy: { updatedAt: "asc" },
+        take: MAX_ROWS,
+      }),
+      this.prisma.team.findMany({
+        where: { tenantId: scope.tenantId },
+        select: { id: true, name: true, specializations: true },
+      }),
+      this.prisma.staffUser.findMany({
+        where: { tenantId: scope.tenantId },
+        select: { id: true, fullName: true, specializations: true },
+      }),
+    ]);
+
+    const activeStaffWithSpecs = staffMembers.filter((s) => s.specializations && s.specializations.length > 0);
+
+    const matchSpecialist = (tasks: { title: string }[], insp?: { fields: unknown; note: string | null }) => {
+      let combined = tasks.map((t) => t.title).join(" ").toLowerCase();
+      if (insp?.note) {
+        combined += " " + insp.note.toLowerCase();
+      }
+      if (insp?.fields && typeof insp.fields === "object") {
+        const fieldsObj = insp.fields as Record<string, unknown>;
+        if (Array.isArray(fieldsObj.requestedParts)) {
+          combined += " " + fieldsObj.requestedParts.join(" ").toLowerCase();
+        }
+      }
+      const keywordsForSpec: Record<string, string[]> = {
+        engine: ["engine", "oil", "spark", "cylinder", "filter"],
+        brake: ["brake", "pad", "rotor", "caliper", "abs"],
+        transmission: ["transmission", "gearbox", "clutch", "shift"],
+        cooling: ["cooling", "coolant", "radiator", "thermostat"],
+        ac: ["ac", "air conditioning", "hvac", "compressor", "freon"],
+        electrical: ["electrical", "battery", "alternator", "starter", "wiring"],
+        suspension: ["suspension", "shock", "strut", "spring", "damper"],
+        steering: ["steering", "rack", "tie rod"],
+        exhaust: ["exhaust", "muffler", "emissions"],
+        tire: ["tire", "wheel", "alignment", "balancing"],
+      };
+
+      const matchesSpec = (spec: string, text: string) => {
+        const specLower = spec.toLowerCase();
+        if (text.includes(specLower)) return true;
+        for (const [group, kws] of Object.entries(keywordsForSpec)) {
+          if (specLower.includes(group)) {
+            if (kws.some((kw) => text.includes(kw))) return true;
+          }
+        }
+        return false;
+      };
+
+      // 1. Check specialized teams
+      for (const team of teams) {
+        if (!team.specializations || team.specializations.length === 0) continue;
+        for (const spec of team.specializations) {
+          if (matchesSpec(spec, combined)) {
+            return { teamName: team.name, subsystem: spec };
+          }
+        }
+      }
+
+      // 2. Check specialized individual technicians
+      for (const tech of activeStaffWithSpecs) {
+        for (const spec of tech.specializations) {
+          if (matchesSpec(spec, combined)) {
+            return { technicianName: tech.fullName, subsystem: spec };
+          }
+        }
+      }
+
+      return null;
+    };
 
     const now = Date.now();
     const mapped: BoardRow[] = rows.map((row) => ({
@@ -90,6 +171,7 @@ export class WorkOrderBoardService {
       sinceHours: (now - row.updatedAt.getTime()) / 3_600_000,
       assignedTo: row.assignments[0]?.staffUser.fullName ?? null,
       inspectionDeclined: row.inspectionDeclined,
+      specialistRecommendation: matchSpecialist(row.tasks, row.inspections[0]),
     }));
 
     const byLane = new Map<WorkOrderLane, BoardRow[]>();

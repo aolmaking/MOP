@@ -9,6 +9,11 @@ import {
   type PartCategoryNode,
   type PartsCatalogPage,
 } from './technician.api';
+import {
+  CustomerPortalApi,
+  type CustomerPosOrderResult,
+} from '../customer/customer-portal.api';
+import { OperatorApi } from '../operator/operator.api';
 
 export interface CartLine {
   readonly item: PartCard;
@@ -22,26 +27,7 @@ const MAX_LINE = 999;
 
 /**
  * Asking the store for parts, as shopping rather than as a form.
- *
- * The interaction model is the product decision: browse a category, cut
- * it down with the filters that category actually offers, add what you
- * need to a basket, check it, send it once. A technician standing at a
- * car knows the part by sight and by the shape of the job, not by SKU,
- * and every step of a one-part-at-a-time form is a step they take four
- * times for a brake job.
- *
- * Two rules this component holds and must keep holding:
- *
- * **It invents no taxonomy.** Categories, filters and filter values all
- * arrive from the server, configured by the inventory manager. There is
- * no `VEHICLE_TYPES` constant here and there must never be one -- the
- * moment this page hardcodes a filter, it stops showing the workshop
- * its own catalogue.
- *
- * **The cart is an intention, not a transaction.** Nothing is reserved,
- * nothing is priced against the customer, and no stock moves. It becomes
- * real `PartRequest` rows on submit, and the store decides everything
- * after that.
+ * Supports technician work-order requisition, customer over-the-counter POS, and operator front-desk POS.
  */
 @Component({
   selector: 'app-parts-catalog',
@@ -51,10 +37,18 @@ const MAX_LINE = 999;
 })
 export class PartsCatalog {
   private readonly api = inject(TechnicianApi);
+  private readonly customerApi = inject(CustomerPortalApi);
+  private readonly operatorApi = inject(OperatorApi);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
-  readonly id = input.required<string>();
+  /** Optional because customer POS (/customer/pos) and operator POS (/operator/pos) do not have a route id */
+  readonly id = input<string>('');
+
+  /** Technician mode vs Operator reception POS vs Customer over-the-counter POS mode */
+  readonly isTechMode = computed(() => this.router.url.includes('/tech'));
+  readonly isOperatorMode = computed(() => this.router.url.includes('/operator'));
+  readonly isCustomerMode = computed(() => !this.isTechMode() && !this.isOperatorMode());
 
   protected readonly page = signal<PartsCatalogPage | null>(null);
   protected readonly state = signal<State>('loading');
@@ -71,19 +65,77 @@ export class PartsCatalog {
   protected readonly cartOpen = signal(false);
   protected readonly submitting = signal(false);
   protected readonly submitted = signal<number | null>(null);
+  protected readonly customerOrderResult = signal<CustomerPosOrderResult | null>(null);
+
+  /* ------------------------------------------------------------------ *
+   * Part from outside (Strictly enabled ONLY when opened from tech page)
+   * ------------------------------------------------------------------ */
+  protected readonly externalModalOpen = signal(false);
+  protected readonly externalPartName = signal('');
+  protected readonly externalProvenance = signal<'CUSTOMER_SUPPLIED' | 'EXTERNAL_PURCHASE'>('CUSTOMER_SUPPLIED');
+  protected readonly externalQuantity = signal('1');
+  protected readonly externalSubmitting = signal(false);
+  protected readonly externalError = signal<string | null>(null);
+  protected readonly externalSuccess = signal<string | null>(null);
+  protected readonly externalNameValid = computed(() => this.externalPartName().trim().length >= 1);
+
+  protected openExternalModal(): void {
+    if (!this.isTechMode()) return;
+    this.externalError.set(null);
+    this.externalModalOpen.set(true);
+  }
+
+  protected closeExternalModal(): void {
+    this.externalModalOpen.set(false);
+    this.externalPartName.set('');
+    this.externalQuantity.set('1');
+    this.externalError.set(null);
+  }
+
+  protected recordExternalPart(): void {
+    if (!this.isTechMode() || !this.externalNameValid() || this.externalSubmitting()) return;
+    const quantity = Number(this.externalQuantity().trim());
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      this.externalError.set('Say how many — a whole number, at least one.');
+      return;
+    }
+
+    const name = this.externalPartName().trim();
+    const provenance = this.externalProvenance();
+    this.externalSubmitting.set(true);
+    this.externalError.set(null);
+
+    this.api
+      .addExternalPart(this.id(), name, provenance, quantity)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.externalSubmitting.set(false);
+          this.externalSuccess.set(`Recorded external part: ${name} (${quantity}x) on job card.`);
+          this.closeExternalModal();
+        },
+        error: (err: PresentedError) => {
+          this.externalSubmitting.set(false);
+          this.externalError.set(err.message ?? 'Failed to record external part.');
+        },
+      });
+  }
 
   /**
-   * Minted once per work order and kept in session storage.
-   *
-   * It has to survive a reload, because the failure this defends against
-   * is exactly a submit whose answer never arrived: the technician
-   * refreshes and tries again, and without a stable key the store gets
-   * the basket twice.
+   * Minted once per cart target and kept in session storage.
    */
   private readonly cartKey = signal<string>('');
 
   protected readonly cartCount = computed(() => this.cart().reduce((sum, line) => sum + line.quantity, 0));
   protected readonly cartLines = computed(() => this.cart().length);
+  protected readonly cartTotalAmount = computed(() => {
+    let sum = 0;
+    for (const line of this.cart()) {
+      const price = parseFloat(line.item.sellingPrice.replace(/[^0-9.]/g, '')) || 0;
+      sum += price * line.quantity;
+    }
+    return sum > 0 ? `$${sum.toFixed(2)}` : null;
+  });
 
   /** Categories flattened for the chip rail: parents, then their children. */
   protected readonly categoryChips = computed(() => {
@@ -112,25 +164,20 @@ export class PartsCatalog {
   private readonly refresh = new Subject<void>();
 
   constructor() {
-    // Restores the basket and its key for this work order. Wrapped
-    // because session storage throws outright in some privacy modes, and
-    // a technician losing the parts page over a storage setting is a
-    // worse outcome than losing an unsent basket.
     effect(() => {
-      const workOrderId = this.id();
+      const targetId = this.isTechMode() ? this.id() : 'customer-pos';
       if (this.cartKey()) return;
-      this.cartKey.set(this.restoreKey(workOrderId));
+      this.cartKey.set(this.restoreKey(targetId));
     });
 
     this.refresh
       .pipe(
-        // Debounce only. NOT distinctUntilChanged: this subject carries
-        // `void`, so every emission compares equal to the last one and
-        // the operator drops all of them after the first. The symptom
-        // was a search box that worked once and then froze on "Loading
-        // parts…" -- including when it was cleared.
         debounceTime(220),
-        switchMap(() => this.api.partsCatalog(this.currentQuery())),
+        switchMap(() =>
+          this.isTechMode()
+            ? this.api.partsCatalog(this.currentQuery())
+            : this.customerApi.partsCatalog(this.currentQuery()),
+        ),
         takeUntilDestroyed(),
       )
       .subscribe({ next: (result) => this.receive(result), error: (err: PresentedError) => this.fail(err) });
@@ -257,33 +304,81 @@ export class PartsCatalog {
     this.submitting.set(true);
     this.error.set(null);
 
-    this.api
-      .submitCart(
-        this.id(),
-        this.cartKey(),
-        lines.map((line) => ({ inventoryItemId: line.item.id, quantity: line.quantity })),
-      )
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (result) => {
-          this.submitting.set(false);
-          this.submitted.set(result.requests.length);
-          this.cart.set([]);
-          this.cartOpen.set(false);
-          // A new key for the next basket, or the next submit would be
-          // answered with this one's requests.
-          this.cartKey.set(this.mintKey());
-          this.persistCart();
-        },
-        error: (err: PresentedError) => {
-          this.submitting.set(false);
-          this.error.set(err.message ?? 'The store could not be reached. Try again.');
-        },
-      });
+    if (this.isTechMode()) {
+      this.api
+        .submitCart(
+          this.id(),
+          this.cartKey(),
+          lines.map((line) => ({ inventoryItemId: line.item.id, quantity: line.quantity })),
+        )
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (result) => {
+            this.submitting.set(false);
+            this.submitted.set(result.requests.length);
+            this.cart.set([]);
+            this.cartOpen.set(false);
+            this.cartKey.set(this.mintKey());
+            this.persistCart();
+          },
+          error: (err: PresentedError) => {
+            this.submitting.set(false);
+            this.error.set(err.message ?? 'The store could not be reached. Try again.');
+          },
+        });
+    } else if (this.isOperatorMode()) {
+      // Operator Reception Point of Sale direct order
+      this.operatorApi
+        .submitPosOrder({
+          lines: lines.map((line) => ({ inventoryItemId: line.item.id, quantity: line.quantity })),
+        })
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (result) => {
+            this.submitting.set(false);
+            this.customerOrderResult.set(result);
+            this.cart.set([]);
+            this.cartOpen.set(false);
+            this.cartKey.set(this.mintKey());
+            this.persistCart();
+          },
+          error: (err: PresentedError) => {
+            this.submitting.set(false);
+            this.error.set(err.message ?? 'Could not place POS order. Try again.');
+          },
+        });
+    } else {
+      // Customer Point of Sale direct order
+      this.customerApi
+        .submitPosOrder({
+          lines: lines.map((line) => ({ inventoryItemId: line.item.id, quantity: line.quantity })),
+        })
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (result) => {
+            this.submitting.set(false);
+            this.customerOrderResult.set(result);
+            this.cart.set([]);
+            this.cartOpen.set(false);
+            this.cartKey.set(this.mintKey());
+            this.persistCart();
+          },
+          error: (err: PresentedError) => {
+            this.submitting.set(false);
+            this.error.set(err.message ?? 'Could not place POS order. Try again.');
+          },
+        });
+    }
   }
 
   protected backToCard(): void {
-    void this.router.navigate(['/tech', 'card', this.id()]);
+    if (this.isTechMode()) {
+      void this.router.navigate(['/tech', 'card', this.id()]);
+    } else if (this.isOperatorMode()) {
+      void this.router.navigate(['/operator']);
+    } else {
+      void this.router.navigate(['/customer']);
+    }
   }
 
   /* ------------------------------------------------------------------ *
@@ -302,8 +397,13 @@ export class PartsCatalog {
 
   private fetchNow(): void {
     this.state.set('loading');
-    this.api
-      .partsCatalog(this.currentQuery())
+    const query = this.currentQuery();
+    const req$ = this.isTechMode()
+      ? this.api.partsCatalog(query)
+      : this.isOperatorMode()
+        ? this.operatorApi.posCatalog(query)
+        : this.customerApi.partsCatalog(query);
+    req$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({ next: (result) => this.receive(result), error: (err: PresentedError) => this.fail(err) });
   }
@@ -332,8 +432,9 @@ export class PartsCatalog {
     this.state.set(err.httpStatus === 403 ? 'forbidden' : 'error');
   }
 
-  private storageKey(workOrderId: string): string {
-    return `mop.parts-cart.${workOrderId}`;
+  private storageKey(targetId: string): string {
+    const key = targetId || (this.isTechMode() ? this.id() : 'customer-pos');
+    return `mop.parts-cart.${key}`;
   }
 
   private mintKey(): string {

@@ -372,6 +372,7 @@ export class PartRequestService {
 
     const request = await this.load(input.partRequestId);
     await this.requireInventory(request.tenantId);
+    await this.requireAuthorizedWarehouseForWorkOrder(request.tenantId, request.workOrderId, input.warehouseId);
 
     if (!["APPROVED", "ISSUED"].includes(request.status)) {
       throw new ConflictException({
@@ -1030,6 +1031,35 @@ export class PartRequestService {
         code: "inventory_disabled",
         message: "This workshop does not hold stock, so parts are not requested through it.",
       });
+    }
+  }
+
+  /**
+   * Enforces that the warehouse issuing the part is authorized to supply
+   * the work order's branch, as defined by BranchWarehouseAccess.
+   */
+  private async requireAuthorizedWarehouseForWorkOrder(
+    tenantId: string,
+    workOrderId: string,
+    warehouseId: string,
+  ): Promise<void> {
+    const workOrder = await this.prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      select: { branchId: true },
+    });
+    if (!workOrder?.branchId) return;
+
+    const totalTenantLinks = await this.prisma.branchWarehouseAccess.count({ where: { tenantId } });
+    if (totalTenantLinks > 0) {
+      const access = await this.prisma.branchWarehouseAccess.findUnique({
+        where: { branchId_warehouseId: { branchId: workOrder.branchId, warehouseId } },
+      });
+      if (!access) {
+        throw new BadRequestException({
+          code: "warehouse_not_authorized_for_branch",
+          message: "This store does not serve the branch where this work order is being serviced. An inventory transfer is required first.",
+        });
+      }
     }
   }
 

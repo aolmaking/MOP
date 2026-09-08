@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { type WorkshopPaletteKey, getWorkshopPalette } from '@mop/shared';
+import { type WorkshopPaletteKey, type NavigationLayoutType, getWorkshopPalette } from '@mop/shared';
 import { ThemeService } from './theme.service';
 
 const BRANDING_STORAGE_KEY = 'mop_active_workshop_branding';
@@ -12,6 +12,7 @@ export interface WorkshopBranding {
   code: string;
   logoUrl: string | null;
   palette: WorkshopPaletteKey;
+  navigationLayout?: NavigationLayoutType;
   city?: string | null;
   address?: string | null;
 }
@@ -22,6 +23,7 @@ const DEFAULT_BRANDING: WorkshopBranding = {
   code: 'DFED5C5C92',
   logoUrl: null,
   palette: 'crimson',
+  navigationLayout: 'SIDEBAR',
   city: 'Cairo',
   address: 'Main Operations Hub',
 };
@@ -38,6 +40,9 @@ export class WorkshopBrandingService {
   constructor() {
     // Synchronize initial palette with theme
     this.theme.setPalette(this.activeWorkshop().palette);
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-layout', this.activeWorkshop().navigationLayout || 'SIDEBAR');
+    }
   }
 
   setBranding(branding: Partial<WorkshopBranding> & { name: string; code: string }): void {
@@ -45,12 +50,20 @@ export class WorkshopBrandingService {
       ...this.activeWorkshop(),
       ...branding,
       palette: branding.palette || this.activeWorkshop().palette || 'crimson',
+      navigationLayout: branding.navigationLayout || this.activeWorkshop().navigationLayout || 'SIDEBAR',
     };
     this.activeWorkshop.set(updated);
     this.theme.setPalette(updated.palette);
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-layout', updated.navigationLayout || 'SIDEBAR');
+    }
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(BRANDING_STORAGE_KEY, JSON.stringify(updated));
     }
+  }
+
+  setLayout(layout: NavigationLayoutType): void {
+    this.setBranding({ ...this.activeWorkshop(), navigationLayout: layout });
   }
 
   async resolveWorkshop(codeOrSlug: string): Promise<WorkshopBranding> {

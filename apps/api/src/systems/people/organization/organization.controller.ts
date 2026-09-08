@@ -1,4 +1,4 @@
-﻿import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
 import { SessionGuard } from "../../../identity/auth/session.guard";
 import { CurrentSession } from "../../../identity/auth/current-session.decorator";
@@ -91,6 +91,26 @@ export class OrganizationController {
     return { ok: true };
   }
 
+  @Patch("staff/:id/specializations")
+  async updateSpecializations(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() body: { specializations: string[] },
+  ): Promise<{ ok: true; specializations: string[] }> {
+    await this.requireAccess(session);
+    await this.staff.updateSpecializations(session.tenantId!, id, body.specializations, this.actorOf(session));
+    return { ok: true, specializations: body.specializations };
+  }
+
+  @Post("staff/:id/specializations")
+  async updateSpecializationsPost(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() body: { specializations: string[] },
+  ): Promise<{ ok: true; specializations: string[] }> {
+    return this.updateSpecializations(session, id, body);
+  }
+
   // -- Branches / Warehouses / matrix --------------------------------
 
   @Get("infrastructure")
@@ -163,6 +183,16 @@ export class OrganizationController {
   async moveTechnician(@CurrentSession() session: SessionContext, @Body() dto: MoveTechnicianDto) {
     await this.requireAccess(session);
     return this.teams.moveTechnician(session.tenantId!, [], dto.technicianId, dto.teamId ?? null, this.teamActorOf(session));
+  }
+
+  @Post("teams/:id/specializations")
+  async updateTeamSpecializations(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: { specializations: string[] },
+  ) {
+    await this.requireAccess(session);
+    return this.teams.updateSpecializations(session.tenantId!, [], id, dto.specializations, this.teamActorOf(session));
   }
 
   private async requireAccess(session: SessionContext): Promise<void> {

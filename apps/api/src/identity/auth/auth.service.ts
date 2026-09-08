@@ -19,6 +19,7 @@ const LANDING_PAGES: Record<EffectiveRole, string> = {
   INVENTORY_MANAGER: "inventory-home",
   TEAM_LEADER: "team-leader-home",
   DATA_ANALYST: "analytics-home",
+  OPERATOR: "operator-home",
   CUSTOMER: "customer-portal-home",
 };
 

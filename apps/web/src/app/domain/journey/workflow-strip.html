@@ -108,32 +108,34 @@
           <span class="now-title-stage">{{ j.current.label }}</span>
         </h3>
 
-        <dl class="now-grid">
-          @if (j.current.since) {
-            <div class="now-cell">
-              <dt class="now-key">Since</dt>
-              <dd class="now-value">{{ fullWhen(j.current.since) }}</dd>
-            </div>
-          }
-          @if (forElapsed(); as elapsed) {
-            <div class="now-cell">
-              <dt class="now-key">In this stage</dt>
-              <dd class="now-value">{{ elapsed }}</dd>
-            </div>
-          }
-          @if (j.current.waitingOn) {
-            <div class="now-cell">
-              <dt class="now-key">Waiting on</dt>
-              <dd class="now-value">{{ j.current.waitingOn }}</dd>
-            </div>
-          }
-          @if (waitingElapsed(); as elapsed) {
-            <div class="now-cell">
-              <dt class="now-key">Waiting</dt>
-              <dd class="now-value">{{ elapsed }}</dd>
-            </div>
-          }
-        </dl>
+        @if (showTimes()) {
+          <dl class="now-grid">
+            @if (j.current.since) {
+              <div class="now-cell">
+                <dt class="now-key">Since</dt>
+                <dd class="now-value">{{ fullWhen(j.current.since) }}</dd>
+              </div>
+            }
+            @if (forElapsed(); as elapsed) {
+              <div class="now-cell">
+                <dt class="now-key">In this stage</dt>
+                <dd class="now-value">{{ elapsed }}</dd>
+              </div>
+            }
+            @if (j.current.waitingOn) {
+              <div class="now-cell">
+                <dt class="now-key">Waiting on</dt>
+                <dd class="now-value">{{ j.current.waitingOn }}</dd>
+              </div>
+            }
+            @if (waitingElapsed(); as elapsed) {
+              <div class="now-cell">
+                <dt class="now-key">Waiting</dt>
+                <dd class="now-value">{{ elapsed }}</dd>
+              </div>
+            }
+          </dl>
+        }
 
         @if (j.current.reason) {
           <p class="now-reason">{{ j.current.reason }}</p>
@@ -180,7 +182,9 @@
                 <li class="history-day">{{ dayOf(event.at) }}</li>
               }
               <li class="history-entry" [attr.data-kind]="event.kind">
-                <span class="history-when">{{ fullWhen(event.at) }}</span>
+                @if (showTimes()) {
+                  <span class="history-when">{{ fullWhen(event.at) }}</span>
+                }
                 <span class="history-body">
                   <span class="history-what">{{ event.message }}</span>
                   @if (event.detail) {

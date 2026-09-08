@@ -1,6 +1,6 @@
 <div class="rail-shell">
   <nav class="rail" aria-label="Owner navigation">
-    <div class="rail-brand">MOP</div>
+    <div class="rail-brand" [title]="branding.activeWorkshop().name">{{ branding.activeWorkshop().name }}</div>
 
     @for (item of navigation; track item.route) {
       <a [routerLink]="item.route" routerLinkActive="rail-link--active" class="rail-link">{{ item.label }}</a>

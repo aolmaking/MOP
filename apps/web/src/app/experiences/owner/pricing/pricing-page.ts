@@ -38,6 +38,7 @@ export class PricingPage {
   protected readonly saving = signal(false);
 
   protected readonly showAddPrice = signal(false);
+  protected readonly isEditing = signal(false);
   protected readonly priceDraft = signal({ itemKey: '', itemType: 'SERVICE', unitPrice: 0, laborPrice: 0 });
   protected readonly priceError = signal<PresentedError | null>(null);
 
@@ -105,6 +106,20 @@ export class PricingPage {
 
   protected openAddPrice(): void {
     this.priceDraft.set({ itemKey: '', itemType: 'SERVICE', unitPrice: 0, laborPrice: 0 });
+    this.isEditing.set(false);
+    this.priceError.set(null);
+    this.showAddPrice.set(true);
+  }
+
+  protected openEditPrice(item: PriceCatalogItemView): void {
+    const rate = Number(item.laborPrice ?? item.unitPrice ?? 0);
+    this.priceDraft.set({
+      itemKey: item.itemKey,
+      itemType: item.itemType || 'SERVICE',
+      unitPrice: rate,
+      laborPrice: rate,
+    });
+    this.isEditing.set(true);
     this.priceError.set(null);
     this.showAddPrice.set(true);
   }
@@ -112,12 +127,13 @@ export class PricingPage {
   protected submitPrice(): void {
     const draft = this.priceDraft();
     this.priceError.set(null);
+    const labor = Number(draft.laborPrice ?? draft.unitPrice ?? 0);
     this.api
       .setPrice({
         itemKey: draft.itemKey,
-        itemType: draft.itemType,
-        unitPrice: draft.unitPrice,
-        laborPrice: draft.laborPrice || undefined,
+        itemType: draft.itemType || 'SERVICE',
+        unitPrice: labor,
+        laborPrice: labor,
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -127,5 +143,23 @@ export class PricingPage {
         },
         error: (err: PresentedError) => this.priceError.set(err),
       });
+  }
+
+  protected resolveStandardHours(itemKey: string): number {
+    const k = (itemKey || '').toLowerCase();
+    if (k.includes('battery') && k.includes('bms')) return 0.7;
+    if (k.includes('battery')) return 0.5;
+    if (k.includes('brake pad') && k.includes('front')) return 0.8;
+    if (k.includes('brake pad') && k.includes('rear')) return 1.0;
+    if (k.includes('brake') && k.includes('fluid')) return 0.8;
+    if (k.includes('caliper')) return 1.2;
+    if (k.includes('oil') && k.includes('filter')) return 0.6;
+    if (k.includes('spark') || k.includes('coil')) return 0.8;
+    if (k.includes('tire') || k.includes('alignment')) return 1.2;
+    if (k.includes('strut') || k.includes('shock')) return 1.8;
+    if (k.includes('compressor')) return 2.5;
+    if (k.includes('cylinder') || k.includes('overhaul')) return 4.0;
+    if (k.includes('chain')) return 1.3;
+    return 1.0;
   }
 }

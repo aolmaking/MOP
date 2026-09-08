@@ -44,6 +44,16 @@ export class TeamSetupController {
     return this.teams.assignLeader(tenantId, session.branchScope, id, dto.teamLeaderId, this.actor(session));
   }
 
+  @Post(":id/specializations")
+  async updateSpecializationsPost(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: { specializations: string[] },
+  ) {
+    const tenantId = await this.require(session);
+    return this.teams.updateSpecializations(tenantId, session.branchScope, id, dto.specializations, this.actor(session));
+  }
+
   @Post("members")
   async move(@CurrentSession() session: SessionContext, @Body() dto: MoveTechnicianDto) {
     const tenantId = await this.require(session);

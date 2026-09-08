@@ -76,3 +76,19 @@ export class AdjustStockDto {
   reason?: string;
 }
 
+export class TransferStockDto {
+  @IsString()
+  sourceWarehouseId!: string;
+
+  @IsString()
+  destinationWarehouseId!: string;
+
+  @IsInt()
+  @Min(1)
+  quantity!: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+

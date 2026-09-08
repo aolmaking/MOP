@@ -94,6 +94,127 @@
   min-inline-size: 0;
 }
 
+/* --- Top Stepper Header (Reference UI Inspired) --- */
+.onb-top-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.85rem 1.25rem;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  margin-block-end: 1.5rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.onb-stepper-track-group {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex: 1;
+}
+
+.onb-step-counter-text {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #f8fafc;
+  white-space: nowrap;
+}
+
+.onb-stepper-dots-line {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 420px;
+}
+
+.onb-step-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #1e293b;
+  border: 2px solid #475569;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.2s ease;
+}
+
+.onb-step-dot:hover {
+  border-color: #3b82f6;
+  transform: scale(1.1);
+}
+
+.onb-step-dot .dot-disc {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background 0.2s ease;
+}
+
+.onb-step-dot--active {
+  border-color: #3b82f6;
+  background: rgba(37, 99, 235, 0.2);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.6);
+}
+
+.onb-step-dot--active .dot-disc {
+  background: #3b82f6;
+}
+
+.onb-step-dot--done {
+  border-color: #10b981;
+  background: #10b981;
+}
+
+.onb-step-dot--done .dot-disc {
+  background: #ffffff;
+}
+
+.onb-step-connector {
+  flex: 1;
+  height: 2px;
+  background: #334155;
+  transition: background 0.2s ease;
+}
+
+.onb-step-connector--done {
+  background: #10b981;
+}
+
+.onb-top-profile-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.onb-bell-icon {
+  font-size: 1.1rem;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.onb-admin-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #1e293b;
+  border: 1px solid #334155;
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  color: #f1f5f9;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.onb-admin-avatar {
+  font-size: 0.85rem;
+}
+
 .onb-stage-intro {
   margin-block-end: var(--space-6);
 }

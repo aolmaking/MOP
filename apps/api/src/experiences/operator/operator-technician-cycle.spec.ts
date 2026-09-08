@@ -1,0 +1,300 @@
+import { OperatorService } from './operator.service';
+import { TechnicianWorkViewService } from '../technician/technician-work-view.service';
+
+describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
+  let operatorService: OperatorService;
+  let technicianService: TechnicianWorkViewService;
+  let mockPrisma: any;
+  let mockIntake: any;
+  let mockCatalog: any;
+
+  const tenantId = 'test-tenant';
+  const workOrderId = 'wo-123';
+  const staffUserId = 'tech-user-1';
+
+  beforeEach(() => {
+    mockPrisma = {
+      workOrder: {
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
+        update: jest.fn(),
+      },
+      inspection: {
+        findFirst: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+      fault: {
+        create: jest.fn(),
+        findMany: jest.fn(),
+      },
+      task: {
+        create: jest.fn(),
+        findMany: jest.fn(),
+      },
+      staffUser: {
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+      },
+      customerAsset: {
+        findMany: jest.fn(),
+      },
+      branch: {
+        findMany: jest.fn(),
+      },
+    };
+
+    mockIntake = {
+      book: jest.fn(),
+    };
+    mockCatalog = {};
+
+    operatorService = new OperatorService(mockPrisma, mockIntake, mockCatalog);
+    technicianService = new TechnicianWorkViewService(
+      mockPrisma,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+  });
+
+  describe('Technician: Inspection Report Submission', () => {
+    it('submits inspection report with findings, parts, services, and calculates itemized totals', async () => {
+      // Mock workCard internal check
+      jest.spyOn(technicianService, 'workCard').mockResolvedValue({
+        workOrderId,
+        status: 'UNDER_INSPECTION',
+      } as any);
+
+      mockPrisma.inspection.findFirst.mockResolvedValue(null);
+      mockPrisma.inspection.create.mockResolvedValue({ id: 'insp-1' });
+      mockPrisma.fault.create.mockResolvedValue({ id: 'fault-1' });
+
+      const result = await technicianService.submitInspectionReport(
+        staffUserId,
+        tenantId,
+        workOrderId,
+        {
+          findings: [
+            {
+              description: 'Front Brake Pads 80% Worn',
+              severity: 'CRITICAL',
+              recommendedService: 'Front Brake Pads Replacement',
+              code: 'brakes',
+            },
+          ],
+          parts: [
+            {
+              sku: 'BP-001',
+              name: 'Ceramic Brake Pad Set',
+              quantity: 1,
+              unitPrice: 95.0,
+            },
+          ],
+          services: [
+            {
+              name: 'Front Brake Pads Replacement',
+              laborPrice: 80.0,
+            },
+          ],
+          note: 'Technician verified wear on driver side',
+        },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.workOrderId).toBe(workOrderId);
+      expect(mockPrisma.inspection.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            workOrderId,
+            fields: expect.objectContaining({
+              inspectionReportSubmitted: true,
+              pricing: {
+                partsTotal: 95.0,
+                laborTotal: 80.0,
+                grandTotal: 175.0,
+              },
+            }),
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('Operator: Inspection Reports Hub & Review', () => {
+    it('returns submitted inspection reports list with itemized counts and estimates', async () => {
+      mockPrisma.workOrder.findMany.mockResolvedValue([
+        {
+          id: workOrderId,
+          status: 'UNDER_INSPECTION',
+          asset: {
+            id: 'asset-1',
+            plateNumber: 'ABC 1234',
+            make: 'Toyota',
+            model: 'Corolla 2021',
+            vinOrChassisNumber: '1NXBR32E7MZ123456',
+            owner: {
+              id: 'cust-1',
+              fullName: 'Ahmed Hassan',
+              phone: '01012345678',
+            },
+          },
+          customer: {
+            id: 'cust-1',
+            fullName: 'Ahmed Hassan',
+            phone: '01012345678',
+          },
+          inspections: [
+            {
+              id: 'insp-1',
+              fields: {
+                inspectionReportSubmitted: true,
+                submittedAt: '2026-09-07T14:00:00.000Z',
+                findings: [{ description: 'Brake pads worn' }],
+                parts: [{ sku: 'BP-1', name: 'Brake Pads', quantity: 1, unitPrice: 95 }],
+                services: [{ name: 'Brake service', laborPrice: 80 }],
+                pricing: { grandTotal: 175.0 },
+              },
+            },
+          ],
+        },
+      ]);
+
+      const reports = await operatorService.getInspectionReports(tenantId);
+      expect(reports.length).toBe(1);
+      expect(reports[0].workOrderId).toBe(workOrderId);
+      expect(reports[0].identifier).toBe('ABC 1234');
+      expect(reports[0].customerName).toBe('Ahmed Hassan');
+      expect(reports[0].findingsCount).toBe(1);
+      expect(reports[0].partsCount).toBe(1);
+      expect(reports[0].servicesCount).toBe(1);
+      expect(reports[0].pricing.grandTotal).toBe(175.0);
+    });
+
+    it('returns inspection report detail for the quote builder', async () => {
+      mockPrisma.workOrder.findFirst.mockResolvedValue({
+        id: workOrderId,
+        status: 'UNDER_INSPECTION',
+        updatedAt: new Date(),
+        asset: {
+          id: 'asset-1',
+          plateNumber: 'ABC 1234',
+          make: 'Toyota',
+          model: 'Corolla 2021',
+          vinOrChassisNumber: '1NXBR32E7MZ123456',
+          owner: {
+            id: 'cust-1',
+            fullName: 'Ahmed Hassan',
+            phone: '01012345678',
+          },
+        },
+        customer: {
+          id: 'cust-1',
+          fullName: 'Ahmed Hassan',
+          phone: '01012345678',
+        },
+        inspections: [
+          {
+            id: 'insp-1',
+            fields: {
+              inspectionReportSubmitted: true,
+              findings: [{ description: 'Brake pads worn', severity: 'HIGH' }],
+              parts: [{ sku: 'BP-1', name: 'Brake Pads', quantity: 1, unitPrice: 95 }],
+              services: [{ name: 'Brake Service', laborPrice: 80 }],
+              pricing: { partsTotal: 95, laborTotal: 80, grandTotal: 175 },
+            },
+          },
+        ],
+        faults: [],
+      });
+
+      const detail = await operatorService.getInspectionReportDetail(tenantId, workOrderId);
+      expect(detail.workOrderId).toBe(workOrderId);
+      expect(detail.pricing.grandTotal).toBe(175);
+      expect(detail.findings[0].severity).toBe('HIGH');
+    });
+
+    it('updates quote and recalculates pricing breakdown', async () => {
+      mockPrisma.inspection.findFirst.mockResolvedValue({
+        id: 'insp-1',
+        fields: {},
+      });
+      mockPrisma.inspection.update.mockResolvedValue({ id: 'insp-1' });
+
+      const updated = await operatorService.updateQuote(tenantId, workOrderId, {
+        findings: [
+          { description: 'Brake pads worn', severity: 'CRITICAL', recommendedService: 'Brake Replacement' },
+          { description: 'Engine Oil due', severity: 'MEDIUM', recommendedService: 'Oil Change' },
+        ],
+        parts: [
+          { sku: 'BP-1', name: 'Brake Pads', quantity: 2, unitPrice: 50 }, // 100
+          { sku: 'OIL-5W30', name: 'Synthetic Oil', quantity: 1, unitPrice: 40 }, // 40
+        ],
+        services: [
+          { name: 'Brake Pad Replacement', laborPrice: 80 },
+          { name: 'Oil Change Service', laborPrice: 30 },
+        ],
+        notes: 'Customer confirmed via phone call',
+      });
+
+      expect(updated.success).toBe(true);
+      expect(updated.pricing.partsTotal).toBe(140);
+      expect(updated.pricing.laborTotal).toBe(110);
+      expect(updated.pricing.grandTotal).toBe(250);
+    });
+
+    it('approves and dispatches repair, advancing state and creating tasks for technician stage 2', async () => {
+      mockPrisma.workOrder.findFirst.mockResolvedValue({
+        id: workOrderId,
+        status: 'UNDER_INSPECTION',
+        inspections: [
+          {
+            id: 'insp-1',
+            fields: {
+              services: [
+                { name: 'Front Brake Pads Replacement', laborPrice: 80 },
+                { name: 'Engine Oil & Filter Service', laborPrice: 45 },
+              ],
+            },
+          },
+        ],
+      });
+      mockPrisma.inspection.update.mockResolvedValue({ id: 'insp-1' });
+      mockPrisma.workOrder.update.mockResolvedValue({
+        id: workOrderId,
+        status: 'APPROVED_FOR_WORK',
+      });
+      mockPrisma.task.create.mockResolvedValue({ id: 'task-1' });
+
+      const session: any = {
+        accountId: 'operator-account-1',
+        actorId: 'operator-1',
+        tenantId,
+        roles: ['OPERATOR'],
+      };
+
+      const result = await operatorService.dispatchRepair(
+        tenantId,
+        workOrderId,
+        {
+          note: 'Quote approved by customer. Ready for repair.',
+        },
+        session,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.newStatus).toBe('APPROVED_FOR_WORK');
+      expect(mockPrisma.workOrder.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: workOrderId },
+          data: expect.objectContaining({
+            status: 'APPROVED_FOR_WORK',
+          }),
+        }),
+      );
+      expect(mockPrisma.task.create).toHaveBeenCalledTimes(2);
+    });
+  });
+});

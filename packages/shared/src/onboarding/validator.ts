@@ -67,6 +67,7 @@ export type DraftFindingCode =
   | "DUPLICATE_WAREHOUSE_CODE"
   | "WAREHOUSE_INCOMPLETE"
   | "WAREHOUSE_UNKNOWN_BRANCH"
+  | "BRANCH_WITHOUT_WAREHOUSE"
   // specialization
   | "UNKNOWN_SPECIALIZATION_PACK"
   | "PACK_WRONG_CATEGORY"
@@ -643,6 +644,28 @@ function validateStructure(
           stage: "STRUCTURE",
           message: `Store "${warehouse.name || warehouse.code}" is granted to branch "${code}", which is not configured.`,
           subject: warehouse.code,
+        });
+      }
+    }
+  }
+
+  if (inventoryOn && draft.branches.length > 0 && draft.warehouses.length > 0) {
+    const suppliedBranchCodes = new Set<string>();
+    for (const warehouse of draft.warehouses) {
+      if (warehouse.branchCodes.length === 0) {
+        for (const b of draft.branches) suppliedBranchCodes.add(b.code);
+      } else {
+        for (const c of warehouse.branchCodes) suppliedBranchCodes.add(c);
+      }
+    }
+    for (const branch of draft.branches) {
+      if (!suppliedBranchCodes.has(branch.code)) {
+        add({
+          code: "BRANCH_WITHOUT_WAREHOUSE",
+          severity: "WARNING",
+          stage: "STRUCTURE",
+          message: `Branch "${branch.name || branch.code}" has no store supplying it. Work orders at this branch will have no direct parts inventory.`,
+          subject: branch.code,
         });
       }
     }

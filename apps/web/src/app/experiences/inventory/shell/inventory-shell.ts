@@ -3,6 +3,8 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { AuthStore } from '../../../identity/auth.store';
 import { ToastContainer } from '../../../ui/toast/toast-container';
 import { ButtonDirective } from '../../../ui/button/button.directive';
+import { ShellTopbar } from '../../../ui/shell-topbar/shell-topbar';
+import { WorkshopBrandingService } from '../../../ui/workshop-branding.service';
 
 /**
  * The inventory manager's shell -- a rail, like the platform and branch
@@ -12,13 +14,14 @@ import { ButtonDirective } from '../../../ui/button/button.directive';
  */
 @Component({
   selector: 'app-inventory-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, ToastContainer, ButtonDirective],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, ToastContainer, ButtonDirective, ShellTopbar],
   templateUrl: './inventory-shell.html',
   styleUrl: './inventory-shell.css',
 })
 export class InventoryShell {
   private readonly authStore = inject(AuthStore);
   private readonly router = inject(Router);
+  protected readonly branding = inject(WorkshopBrandingService);
 
   protected readonly session = this.authStore.session;
 

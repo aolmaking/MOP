@@ -913,3 +913,101 @@ describe("the technician's own view of a part in the returns loop", () => {
     expect(part.statusText).toContain("Waiting on the store");
   });
 });
+
+describe("branch-warehouse topology enforcement during part issuing", () => {
+  it("allows issuing from an authorized store and refuses issuing from an unauthorized store", async () => {
+    // Create a dedicated multi-branch tenant with 2 branches and 2 stores
+    const topoTenant = await prisma.tenant.create({
+      data: {
+        name: `Topology Workshop ${SUFFIX}`,
+        nameNormalized: `topology workshop ${SUFFIX}`,
+        slug: `topo-${SUFFIX}`,
+        customerRegistrationCode: `TOPO-${SUFFIX}`,
+        status: "ACTIVE",
+        planId,
+        country: "EG",
+        city: "Cairo",
+        businessType: "Garage",
+        primaryCategory: "CARS",
+        currency: "EGP",
+        timezone: "Africa/Cairo",
+      },
+    });
+
+    const branchA = await prisma.branch.create({ data: { tenantId: topoTenant.id, name: "Branch A", code: "BRA" } });
+    const branchB = await prisma.branch.create({ data: { tenantId: topoTenant.id, name: "Branch B", code: "BRB" } });
+
+    const whA = await prisma.warehouse.create({ data: { tenantId: topoTenant.id, name: "Store A", code: "WHA" } });
+    const whB = await prisma.warehouse.create({ data: { tenantId: topoTenant.id, name: "Store B", code: "WHB" } });
+
+    // Link: Store A serves Branch A ONLY. Store B serves Branch B ONLY.
+    await prisma.branchWarehouseAccess.create({ data: { tenantId: topoTenant.id, branchId: branchA.id, warehouseId: whA.id } });
+    await prisma.branchWarehouseAccess.create({ data: { tenantId: topoTenant.id, branchId: branchB.id, warehouseId: whB.id } });
+
+    const item = await prisma.inventoryItem.create({
+      data: { tenantId: topoTenant.id, sku: `SKU-TOPO-${SUFFIX}`, name: "Spark Plug", itemType: "PART", sellingPrice: "100.00" },
+    });
+
+    // Stock both stores
+    await stock.record({
+      tenantId: topoTenant.id,
+      inventoryItemId: item.id,
+      warehouseId: whA.id,
+      type: "SUPPLIER_RECEIPT",
+      quantity: 10,
+      actorId: ACTOR.accountId,
+    });
+    await stock.record({
+      tenantId: topoTenant.id,
+      inventoryItemId: item.id,
+      warehouseId: whB.id,
+      type: "SUPPLIER_RECEIPT",
+      quantity: 10,
+      actorId: ACTOR.accountId,
+    });
+
+    const cust = await prisma.customer.create({
+      data: { tenantId: topoTenant.id, fullName: `Topo Customer`, phone: `0199999999` },
+    });
+    const asset = await prisma.asset.create({
+      data: { tenantId: topoTenant.id, category: "CARS", plateNumber: `TOP-1111`, currentOwnerCustomerId: cust.id },
+    });
+
+    // Work order at Branch A
+    const woA = await prisma.workOrder.create({
+      data: { tenantId: topoTenant.id, branchId: branchA.id, assetId: asset.id, customerId: cust.id, status: "IN_PROGRESS" },
+    });
+
+    const req = await parts.request(
+      { tenantId: topoTenant.id, workOrderId: woA.id, inventoryItemId: item.id, quantity: 2 },
+      ACTOR,
+    );
+    await parts.approve(req.id, ACTOR);
+
+    // Attempt to issue from Store B (which only serves Branch B) -> MUST FAIL with warehouse_not_authorized_for_branch
+    await expect(
+      parts.issue({ partRequestId: req.id, warehouseId: whB.id, quantity: 2 }, ACTOR),
+    ).rejects.toThrow("This store does not serve the branch where this work order is being serviced");
+
+    // Issue from Store A (which serves Branch A) -> MUST SUCCEED
+    const fulfilled = await parts.issue({ partRequestId: req.id, warehouseId: whA.id, quantity: 2 }, ACTOR);
+    expect(fulfilled.issued).toBe(2);
+    expect(fulfilled.outstanding).toBe(0);
+
+    // Clean up topoTenant
+    await prisma.workOrderPartLine.deleteMany({ where: { tenantId: topoTenant.id } });
+    await prisma.issuedItem.deleteMany({ where: { tenantId: topoTenant.id } });
+    await prisma.warehouseStockBalance.deleteMany({ where: { tenantId: topoTenant.id } });
+    await prisma.stockMovement.deleteMany({ where: { tenantId: topoTenant.id } });
+    await prisma.partRequest.deleteMany({ where: { tenantId: topoTenant.id } });
+    await prisma.workOrder.deleteMany({ where: { tenantId: topoTenant.id } });
+    await prisma.asset.deleteMany({ where: { tenantId: topoTenant.id } });
+    await prisma.customer.deleteMany({ where: { tenantId: topoTenant.id } });
+    await prisma.inventoryItem.deleteMany({ where: { tenantId: topoTenant.id } });
+    await prisma.branchWarehouseAccess.deleteMany({ where: { tenantId: topoTenant.id } });
+    await prisma.warehouse.deleteMany({ where: { tenantId: topoTenant.id } });
+    await prisma.branch.deleteMany({ where: { tenantId: topoTenant.id } });
+    await prisma.tenant.deleteMany({ where: { id: topoTenant.id } });
+  });
+});
+

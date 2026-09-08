@@ -5,6 +5,7 @@ import { ToastContainer } from '../../../ui/toast/toast-container';
 import { ButtonDirective } from '../../../ui/button/button.directive';
 import { ShellTopbar } from '../../../ui/shell-topbar/shell-topbar';
 import { AccessApi } from '../../../identity/access.api';
+import { WorkshopBrandingService } from '../../../ui/workshop-branding.service';
 
 interface BranchNavItem {
   label: string;
@@ -21,6 +22,7 @@ export class BranchShell {
   private readonly authStore = inject(AuthStore);
   private readonly router = inject(Router);
   private readonly access = inject(AccessApi);
+  protected readonly branding = inject(WorkshopBrandingService);
 
   protected readonly session = this.authStore.session;
 

@@ -202,6 +202,94 @@ export class StockService {
   }
 
   /**
+   * Transfers stock atomically between two warehouses within the same tenant.
+   */
+  async transferStock(input: {
+    tenantId: string;
+    inventoryItemId: string;
+    sourceWarehouseId: string;
+    destinationWarehouseId: string;
+    quantity: number;
+    actorId: string;
+    notes?: string;
+  }): Promise<{ sourceBalance: StockBalance; destinationBalance: StockBalance }> {
+    if (input.sourceWarehouseId === input.destinationWarehouseId) {
+      throw new BadRequestException({
+        code: "same_warehouse_transfer",
+        message: "Source and destination warehouse cannot be the same.",
+      });
+    }
+    if (!Number.isInteger(input.quantity) || input.quantity <= 0) {
+      throw new BadRequestException({
+        code: "invalid_transfer_quantity",
+        message: "Transfer quantity must be a positive integer.",
+      });
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const warehouses = await tx.warehouse.findMany({
+        where: {
+          tenantId: input.tenantId,
+          id: { in: [input.sourceWarehouseId, input.destinationWarehouseId] },
+        },
+        select: { id: true, name: true },
+      });
+      if (warehouses.length < 2) {
+        throw new BadRequestException({
+          code: "warehouse_not_found",
+          message: "Both source and destination warehouses must exist in this workshop.",
+        });
+      }
+
+      const sourceBalance = await tx.warehouseStockBalance.findUnique({
+        where: {
+          inventoryItemId_warehouseId: {
+            inventoryItemId: input.inventoryItemId,
+            warehouseId: input.sourceWarehouseId,
+          },
+        },
+      });
+
+      if (!sourceBalance || sourceBalance.availableQty < input.quantity) {
+        throw new BadRequestException({
+          code: "insufficient_transfer_stock",
+          message: `Source warehouse only has ${sourceBalance?.availableQty ?? 0} available units (requested: ${input.quantity}).`,
+        });
+      }
+
+      const srcBal = await this.record(
+        {
+          tenantId: input.tenantId,
+          inventoryItemId: input.inventoryItemId,
+          warehouseId: input.sourceWarehouseId,
+          type: "TRANSFER_OUT",
+          quantity: input.quantity,
+          actorId: input.actorId,
+          referenceType: "InventoryTransfer",
+          referenceId: input.destinationWarehouseId,
+        },
+        tx,
+      );
+
+      const dstBal = await this.record(
+        {
+          tenantId: input.tenantId,
+          inventoryItemId: input.inventoryItemId,
+          warehouseId: input.destinationWarehouseId,
+          type: "TRANSFER_IN",
+          quantity: input.quantity,
+          actorId: input.actorId,
+          referenceType: "InventoryTransfer",
+          referenceId: input.sourceWarehouseId,
+        },
+        tx,
+      );
+
+      return { sourceBalance: srcBal, destinationBalance: dstBal };
+    });
+  }
+
+  /**
    * Recomputes a bucket purely from the ledger.
    *
    * Exists so a test -- and later a reconciliation screen -- can ask the

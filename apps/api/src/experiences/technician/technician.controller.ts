@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, HttpCode, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, ForbiddenException, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
 import { SessionGuard } from "../../identity/auth/session.guard";
 import { CurrentSession } from "../../identity/auth/current-session.decorator";
@@ -9,6 +9,10 @@ import { TechnicianWorkViewService } from "./technician-work-view.service";
 import { CustomerDecisionService } from "../../systems/customer/decision.service";
 import { PartRequestService } from "../../systems/inventory/part-request.service";
 import { CatalogBrowseService } from "../../systems/inventory/catalog-browse.service";
+import { SmartSuggestionEngine } from "../../systems/inventory/master-catalog/smart-suggestion.engine";
+import { CARS_INSPECTION_CHECKPOINTS } from "../../systems/inventory/master-catalog/cars-catalog.dataset";
+import { MOTORCYCLES_INSPECTION_CHECKPOINTS } from "../../systems/inventory/master-catalog/motorcycles-catalog.dataset";
+import { HEAVY_EQUIPMENT_INSPECTION_CHECKPOINTS } from "../../systems/inventory/master-catalog/heavy-equipment-catalog.dataset";
 import { parseAttributeQuery } from "../../systems/inventory/inventory.controller";
 import {
   ReportBlockerDto,
@@ -23,9 +27,16 @@ import {
   ExternalPartDto,
   SubmitCartDto,
   SubmitSpecializationEntryDto,
+  ToggleInspectionBoxDoneDto,
+  SubmitInspectionReportDto,
+  PatchInspectionTargetDto,
+  RecordRecommendationDecisionDto,
+  SubmitInspectionAggregateDto,
 } from "./technician.dto";
 import { SpecializationService } from "../../systems/people/specialization/specialization.service";
 import { RaiseDecisionDto } from "../../systems/customer/decision.dto";
+import { TechnicianInspectionService } from "./technician-inspection.service";
+import { VehicleFitmentService } from "../../systems/inventory/fitment/vehicle-fitment.service";
 
 /**
  * The technician's three pages, plus the writes they make from them.
@@ -46,6 +57,9 @@ export class TechnicianController {
     private readonly browse: CatalogBrowseService,
     private readonly journey: WorkflowJourneyService,
     private readonly specialization: SpecializationService,
+    private readonly inspectionService: TechnicianInspectionService,
+    private readonly fitmentService?: VehicleFitmentService,
+    private readonly smartSuggestions?: SmartSuggestionEngine,
   ) {}
 
   /** Home: the car in front of them, if there is one. */
@@ -226,6 +240,170 @@ export class TechnicianController {
       },
       this.actor(session),
     );
+  }
+
+  /**
+   * Mark a simplified inspection box as Done (or update finding).
+   */
+  @Post("work-orders/:id/inspection-box-done")
+  async toggleInspectionBoxDone(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: ToggleInspectionBoxDoneDto,
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    return this.view.toggleInspectionBox(staffUserId, tenantId, id, dto);
+  }
+
+  @Post("work-orders/:id/submit-inspection-report")
+  async submitInspectionReport(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: SubmitInspectionReportDto,
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    return this.view.submitInspectionReport(staffUserId, tenantId, id, dto);
+  }
+
+  /**
+   * Phase C: Fetch complete inspection aggregate state (targets, decisions, recommendations, OCC version, snapshot).
+   */
+  @Get("work-orders/:id/inspection")
+  async getInspection(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+  ) {
+    const { tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    return this.inspectionService.getInspection(tenantId, id);
+  }
+
+  /**
+   * Phase C: Real-time delta auto-save of individual target inspection result.
+   * Runs OCC verification, evaluates recommendation rules, and updates aggregate.
+   */
+  @Patch("work-orders/:id/inspection/targets/:targetKey")
+  async patchInspectionTarget(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Param("targetKey") targetKey: string,
+    @Body() dto: PatchInspectionTargetDto,
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    return this.inspectionService.saveTargetDelta(tenantId, id, staffUserId, targetKey, dto);
+  }
+
+  /**
+   * Phase C: Record technician decision on generated recommendation (ACCEPTED, DISMISSED, MODIFIED_SCOPE).
+   */
+  @Post("work-orders/:id/inspection/decisions")
+  async recordRecommendationDecision(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: RecordRecommendationDecisionDto,
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    return this.inspectionService.recordDecision(tenantId, id, staffUserId, dto);
+  }
+
+  /**
+   * Phase C: Final inspection submission with deep frozen immutable snapshot and idempotent fault projection.
+   */
+  @Post("work-orders/:id/inspection/submit")
+  async submitInspectionAggregate(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: SubmitInspectionAggregateDto,
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    return this.inspectionService.submitInspection(tenantId, id, staffUserId, dto);
+  }
+
+  /**
+   * Phase D & E: Query compatible physical inventory SKUs for a canonical part/target with live branch stock and prices.
+   */
+  @Get("work-orders/:id/fitment-parts")
+  async getFitmentParts(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Query("canonicalPartSlug") canonicalPartSlug: string,
+    @Query("position") position?: string,
+  ) {
+    const { tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    if (!canonicalPartSlug) {
+      throw new BadRequestException("Query parameter 'canonicalPartSlug' is required.");
+    }
+    return this.fitmentService?.resolveForWorkOrder(tenantId, id, canonicalPartSlug, position);
+  }
+
+  /**
+   * Phase E: Select a compatible physical part and add it directly to the work order.
+   */
+  @Post("work-orders/:id/select-part")
+  async selectPartForWorkOrder(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: { sku: string; quantity?: number; taskId?: string },
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    if (!dto.sku) {
+      throw new BadRequestException("Property 'sku' is required.");
+    }
+    return this.fitmentService?.addPartLineToWorkOrder(tenantId, id, staffUserId, dto);
+  }
+
+  @Post("smart-suggestions")
+  async getSmartSuggestions(
+    @CurrentSession() session: SessionContext,
+    @Body() dto: {
+      workOrderId?: string;
+      context?: {
+        canonicalPartSlug?: string;
+        position?: any;
+        finding?: {
+          key?: string;
+          symptom?: string;
+          severity?: "CRITICAL" | "MEDIUM" | "LOW" | "HIGH";
+          description?: string;
+        };
+        vehicle?: {
+          category?: "CARS" | "MOTORCYCLES" | "HEAVY_EQUIPMENT";
+          make?: string;
+          model?: string;
+          year?: number;
+        };
+      };
+      vehicleCategory?: "CARS" | "MOTORCYCLES" | "HEAVY_EQUIPMENT";
+      partSkus?: string[];
+      partNames?: string[];
+      categorySlugs?: string[];
+      findingKeys?: string[];
+    },
+  ) {
+    await this.requireTechnician(session, "task.view_assigned");
+    const query = dto.context ? { ...dto.context, workOrderId: dto.workOrderId } : dto;
+    const grouped = this.smartSuggestions?.suggestForContext(query as any);
+    return {
+      recommended: grouped?.recommended ?? [],
+      related: grouped?.related ?? [],
+      diagnostic: grouped?.diagnostic ?? [],
+      suggestions: grouped?.all ?? (this.smartSuggestions?.suggestFor(dto) ?? []),
+    };
+  }
+
+  @Get("inspection-checkpoints")
+  async getInspectionCheckpoints(
+    @CurrentSession() session: SessionContext,
+    @Query("category") category?: "CARS" | "MOTORCYCLES" | "HEAVY_EQUIPMENT",
+  ) {
+    await this.requireTechnician(session, "task.view_assigned");
+    const cat = category ?? "CARS";
+    if (cat === "MOTORCYCLES") {
+      return { checkpoints: MOTORCYCLES_INSPECTION_CHECKPOINTS };
+    }
+    if (cat === "HEAVY_EQUIPMENT") {
+      return { checkpoints: HEAVY_EQUIPMENT_INSPECTION_CHECKPOINTS };
+    }
+    return { checkpoints: CARS_INSPECTION_CHECKPOINTS };
   }
 
   @Post("work-orders/:id/faults")

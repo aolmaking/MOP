@@ -1,0 +1,978 @@
+<section class="operator-cockpit">
+  <!-- Top Navigation Bar -->
+  <header class="operator-nav">
+    <div class="nav-brand-group">
+      <div class="brand-badge">
+        <span class="brand-logo" [title]="branding.activeWorkshop().name">{{ branding.activeWorkshop().name }}</span>
+        <span class="role-pill">OPERATOR DESK</span>
+      </div>
+      <div>
+        <h1 class="nav-title">Front-Desk Reception &amp; Service Intake</h1>
+        <p class="nav-subtitle">Vehicle intake, symptom diagnostics, walk-in customer registration, and counter POS.</p>
+      </div>
+    </div>
+
+    <div class="nav-actions">
+      <a class="btn-pos-trigger" routerLink="/operator/pos" id="btn-operator-pos">
+        <span class="btn-icon">🛒</span> Over-The-Counter POS
+      </a>
+      <button type="button" class="btn-register-trigger" (click)="openRegisterModal()" id="btn-operator-register-customer">
+        <span class="btn-icon">+</span> Register Customer &amp; Vehicle
+      </button>
+      @if (session(); as s) {
+        <div class="user-profile">
+          <span class="user-name">{{ s.displayName || 'Operator' }}</span>
+          <button type="button" class="btn-logout" (click)="logout()">Sign out</button>
+        </div>
+      }
+    </div>
+  </header>
+
+  <!-- Success Notification Banner -->
+  @if (successNotification(); as msg) {
+    <div class="success-banner" role="status">
+      <span class="success-icon">✓</span>
+      <span>{{ msg }}</span>
+    </div>
+  }
+
+  <!-- Error Banner -->
+  @if (errorMessage(); as err) {
+    <div class="error-banner" role="alert">
+      <span>{{ err }}</span>
+    </div>
+  }
+
+  @switch (state()) {
+    @case ('loading') {
+      <div class="state-loading">
+        <span class="loading-spin"></span>
+        <p>Connecting to reception floor &amp; intake queue…</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-card error-card">
+        <h3>Could not load reception overview</h3>
+        <p>{{ errorMessage() }}</p>
+        <button appButton variant="secondary" size="small" (click)="loadOverview()">Retry</button>
+      </div>
+    }
+
+    @case ('ready') {
+      <!-- Key Operational Metrics -->
+      @if (overviewData(); as overview) {
+        <section class="metrics-strip" aria-label="Reception Metrics">
+          <div class="metric-card">
+            <span class="metric-value">{{ overview.metrics.totalVehicles }}</span>
+            <span class="metric-label">Total Registered Vehicles</span>
+          </div>
+          <div class="metric-card metric-card--active">
+            <span class="metric-value">{{ overview.metrics.inServiceCount }}</span>
+            <span class="metric-label">Currently in Service</span>
+          </div>
+          <div class="metric-card metric-card--queue">
+            <span class="metric-value">{{ overview.metrics.intakeQueueCount }}</span>
+            <span class="metric-label">Intake Queue Waiting</span>
+          </div>
+        </section>
+      }
+
+      <!-- Cockpit View Switcher Tabs -->
+      <nav class="cockpit-tabs-nav" role="tablist" aria-label="Cockpit Sections">
+        <button
+          type="button"
+          class="cockpit-tab-btn"
+          [class.cockpit-tab-btn--active]="activeTab() === 'reception'"
+          (click)="switchTab('reception')"
+          id="tab-btn-reception"
+          role="tab"
+          [attr.aria-selected]="activeTab() === 'reception'"
+        >
+          <span class="tab-icon">🚗</span>
+          <span class="tab-label">Reception Floor &amp; Intake</span>
+        </button>
+
+        <button
+          type="button"
+          class="cockpit-tab-btn"
+          [class.cockpit-tab-btn--active]="activeTab() === 'inspection-reports'"
+          (click)="switchTab('inspection-reports')"
+          id="tab-btn-inspection-reports"
+          role="tab"
+          [attr.aria-selected]="activeTab() === 'inspection-reports'"
+        >
+          <span class="tab-icon">📑</span>
+          <span class="tab-label">Inspection Reports &amp; Quotes</span>
+          @if (inspectionReports().length > 0) {
+            <span class="tab-counter-badge">{{ inspectionReports().length }}</span>
+          }
+        </button>
+      </nav>
+
+      @if (activeTab() === 'reception') {
+        <!-- Omnibar Search & Filter Section -->
+        <section class="search-section" aria-label="Vehicle Search">
+          <form class="search-form" (ngSubmit)="onSearch()">
+            <div class="search-input-wrap">
+              <span class="search-icon">🔍</span>
+              <input
+                type="search"
+                class="search-input"
+                placeholder="Search by License Plate, Customer Name, Phone Number, or VIN / Chassis…"
+                [ngModel]="searchQuery()"
+                (ngModelChange)="searchQuery.set($event)"
+                name="receptionSearch"
+                id="reception-search-input"
+              />
+              @if (searchQuery()) {
+                <button type="button" class="btn-clear-search" (click)="clearSearch()">✕</button>
+              }
+            </div>
+            <button type="submit" class="btn-search-action" id="btn-reception-search">
+              {{ isSearching() ? 'Searching…' : 'Search' }}
+            </button>
+          </form>
+        </section>
+
+        <!-- Reception Floor Vehicle Cards Grid -->
+        <section class="vehicles-section" aria-label="Reception Floor Vehicles">
+          <div class="section-head">
+            <h2 class="section-title">
+              Workshop Vehicles ({{ vehicles().length }})
+            </h2>
+            <span class="section-hint">Select a vehicle to open one-click issue diagnostic &amp; service intake</span>
+          </div>
+
+          @if (vehicles().length === 0) {
+            <div class="empty-reception">
+              <div class="empty-icon">🚗</div>
+              <h3>No Vehicles Found</h3>
+              <p>No vehicle matches your search query. Register a walk-in customer and vehicle to check them into the workshop.</p>
+              <button type="button" class="btn-register-trigger" (click)="openRegisterModal()">
+                + Register Customer &amp; Vehicle
+              </button>
+            </div>
+          } @else {
+            <div class="vehicles-grid">
+              @for (v of vehicles(); track v.id) {
+                <article class="vehicle-card" [class.vehicle-card--in-service]="v.activeWorkOrder">
+                  <div class="vehicle-card-head">
+                    <div class="plate-box">
+                      <span class="plate-text">{{ v.plateNumber || 'NO PLATE' }}</span>
+                    </div>
+                    <span class="category-tag">{{ v.category }}</span>
+                  </div>
+
+                  <div class="vehicle-body">
+                    <div class="customer-detail">
+                      <span class="detail-label">Owner:</span>
+                      <span class="detail-value font-semibold">{{ v.ownerName || 'Walk-in Customer' }}</span>
+                    </div>
+                    <div class="customer-detail">
+                      <span class="detail-label">Phone:</span>
+                      <span class="detail-value font-mono">{{ v.ownerPhone || 'Not recorded' }}</span>
+                    </div>
+                    <div class="customer-detail">
+                      <span class="detail-label">VIN / Chassis:</span>
+                      <span class="detail-value font-mono">{{ v.vinOrChassisNumber || 'Not recorded' }}</span>
+                    </div>
+
+                    <!-- Active Job Status if in workshop -->
+                    @if (v.activeWorkOrder; as order) {
+                      <div class="status-indicator-box status-active">
+                        <span class="pulse-dot"></span>
+                        <div>
+                          <span class="status-label">In Workshop — {{ order.status }}</span>
+                          <span class="job-id">Job #{{ order.id.slice(-6).toUpperCase() }}</span>
+                        </div>
+                      </div>
+                    } @else {
+                      <div class="status-indicator-box status-ready">
+                        <span class="check-dot">✓</span>
+                        <span class="status-label">Ready for Intake</span>
+                      </div>
+                    }
+                  </div>
+
+                  <div class="vehicle-actions">
+                    <button
+                      type="button"
+                      class="btn-intake-card"
+                      (click)="openIntakeForVehicle(v)"
+                      [id]="'btn-intake-' + v.id"
+                    >
+                      <span class="btn-icon">🔧</span> Report Issue / Book Service
+                    </button>
+                  </div>
+                </article>
+              }
+            </div>
+          }
+        </section>
+      } @else {
+        <!-- ═════════════════════════════════════════════════════════════════ -->
+        <!-- ── INSPECTION REPORTS & QUOTES WORKSPACE ───────────────────────── -->
+        <!-- ═════════════════════════════════════════════════════════════════ -->
+        <section class="reports-workspace-section" aria-label="Inspection Reports Hub">
+          <div class="section-head">
+            <div>
+              <h2 class="section-title">Technician Inspection Reports &amp; Quotes</h2>
+              <p class="section-hint">Review inspection findings from technicians, add parts from POS, set labor services, and approve repair quotes.</p>
+            </div>
+            <button type="button" class="btn-refresh-reports" (click)="loadInspectionReports()" [disabled]="isLoadingReports()">
+              ↻ Refresh Reports
+            </button>
+          </div>
+
+          @if (isLoadingReports()) {
+            <div class="state-loading">
+              <span class="loading-spin"></span>
+              <p>Loading incoming inspection reports…</p>
+            </div>
+          } @else if (inspectionReports().length === 0) {
+            <div class="empty-reception">
+              <div class="empty-icon">📋</div>
+              <h3>No Pending Inspection Reports</h3>
+              <p>When a technician completes vehicle inspection at their bay and sends the report, it will arrive here for part selection, pricing, and repair dispatch.</p>
+            </div>
+          } @else {
+            <div class="reports-grid">
+              @for (rep of inspectionReports(); track rep.workOrderId) {
+                <article class="report-card">
+                  <div class="report-card-header">
+                    <div class="report-vehicle-title">
+                      <span class="report-plate">{{ rep.vehicle.plateNumber || 'NO PLATE' }}</span>
+                      <span class="report-model">{{ rep.vehicle.model || 'Vehicle' }}</span>
+                    </div>
+                    <span class="report-status-badge">{{ rep.status }}</span>
+                  </div>
+
+                  <div class="report-card-body">
+                    <div class="report-meta-row">
+                      <span class="report-meta-label">Customer:</span>
+                      <strong class="report-meta-value">{{ rep.customer.name }} ({{ rep.customer.phone || 'No phone' }})</strong>
+                    </div>
+                    <div class="report-meta-row">
+                      <span class="report-meta-label">VIN:</span>
+                      <span class="report-meta-value font-mono">{{ rep.vehicle.vin || 'Not provided' }}</span>
+                    </div>
+                    <div class="report-meta-row">
+                      <span class="report-meta-label">Submitted:</span>
+                      <span class="report-meta-value">{{ rep.submittedAt ? rep.submittedAt.slice(0, 16).replace('T', ' ') : 'Just now' }}</span>
+                    </div>
+
+                    <div class="report-counts-bar">
+                      <span class="count-chip chip-findings">
+                        <strong>{{ rep.findingsCount }}</strong> Findings
+                      </span>
+                      <span class="count-chip chip-parts">
+                        <strong>{{ rep.partsCount }}</strong> Parts
+                      </span>
+                      <span class="count-chip chip-services">
+                        <strong>{{ rep.servicesCount }}</strong> Services
+                      </span>
+                    </div>
+
+                    <div class="report-price-summary">
+                      <span class="price-label">Estimated Total:</span>
+                      <strong class="price-value">${{ rep.totalEstimate.toFixed(2) }}</strong>
+                    </div>
+                  </div>
+
+                  <div class="report-card-footer">
+                    <button
+                      type="button"
+                      class="btn-review-quote"
+                      (click)="openReportDetail(rep)"
+                      [id]="'btn-review-report-' + rep.workOrderId"
+                    >
+                      Review &amp; Build Quote →
+                    </button>
+                  </div>
+                </article>
+              }
+            </div>
+          }
+        </section>
+      }
+    }
+  }
+
+  <!-- ================================================================= -->
+  <!-- PRE-SELECTED VEHICLE INTAKE MODAL (Locked Vehicle - No Selector)    -->
+  <!-- ================================================================= -->
+  @if (isIntakeModalOpen() && selectedVehicle(); as v) {
+    <div class="modal-backdrop" (click)="closeIntakeModal()">
+      <div
+        class="modal-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="intake-modal-title"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="modal-header">
+          <div>
+            <h2 class="modal-title" id="intake-modal-title">Service Intake &amp; Vehicle Diagnostics</h2>
+            <p class="modal-sub">Log symptoms across vehicle subsystems and register the job into the workshop queue.</p>
+          </div>
+          <button type="button" class="btn-close-modal" (click)="closeIntakeModal()" aria-label="Close modal">✕</button>
+        </header>
+
+        <!-- CRUCIAL USER REQUIREMENT: LOCKED VEHICLE SUMMARY CARD -->
+        <div class="locked-vehicle-banner">
+          <div class="locked-vehicle-info">
+            <span class="locked-plate">{{ v.plateNumber || 'No Plate' }}</span>
+            <span class="locked-category">{{ v.category }}</span>
+          </div>
+          <div class="locked-owner-info">
+            <span><strong>Customer:</strong> {{ v.ownerName || 'Walk-in' }}</span>
+            <span><strong>Phone:</strong> {{ v.ownerPhone || '—' }}</span>
+            @if (v.vinOrChassisNumber) {
+              <span><strong>VIN:</strong> {{ v.vinOrChassisNumber }}</span>
+            }
+          </div>
+        </div>
+
+        @if (intakeError(); as err) {
+          <div class="modal-error-alert" role="alert">
+            <span>{{ err }}</span>
+          </div>
+        }
+
+        <div class="modal-scroll-body">
+          <!-- 24 SUBSYSTEMS VISUAL GRID -->
+          <section class="subsystems-section">
+            <div class="section-instructions">
+              <h3 class="instructions-title">Select Problematic Subsystems (24 Systems)</h3>
+              <p class="instructions-sub">Click a subsystem to toggle inspection, then choose common symptoms below.</p>
+            </div>
+
+            <div class="subsystems-grid">
+              @for (part of allSubsystems(); track part.id) {
+                <button
+                  type="button"
+                  class="subsystem-box"
+                  [class.subsystem-box--active]="selectedSubsystemKeys().includes(part.id)"
+                  (click)="toggleSubsystem(part.id)"
+                  [id]="'subsystem-' + part.id"
+                >
+                  <div class="box-icon-wrap">
+                    <app-animated-part-icon [part]="part.id" />
+                  </div>
+                  <span class="box-name-en">{{ part.nameEn }}</span>
+                  <span class="box-check" [class.box-check--selected]="selectedSubsystemKeys().includes(part.id)">
+                    {{ selectedSubsystemKeys().includes(part.id) ? '✓' : '+' }}
+                  </span>
+                </button>
+              }
+            </div>
+          </section>
+
+          <!-- 5 SYMPTOMS PER SELECTED SUBSYSTEM WITH BARRIER DIVIDERS -->
+          @if (selectedSubsystemKeys().length > 0) {
+            <section class="symptoms-section">
+              <h3 class="symptoms-title">Reported Symptoms &amp; Diagnostic Indications</h3>
+              <p class="symptoms-sub">Click any symptom to automatically append it to the technical complaint.</p>
+
+              @for (key of selectedSubsystemKeys(); track key) {
+                @if (getSubsystem(key); as sub) {
+                  <div class="symptom-subsystem-group">
+                    <div class="group-header">
+                      <span class="group-bullet">•</span>
+                      <h4 class="group-name">{{ sub.nameEn }}</h4>
+                      <span class="group-count">5 standard checkpoints</span>
+                    </div>
+
+                    <div class="symptoms-chips-row">
+                      @for (symptom of sub.symptoms; track symptom.en) {
+                        <button
+                          type="button"
+                          class="symptom-chip"
+                          [class.symptom-chip--active]="isSymptomAdded(symptom)"
+                          (click)="toggleSymptomInComplaint(symptom)"
+                        >
+                          <span class="chip-state-icon">{{ isSymptomAdded(symptom) ? '✓' : '+' }}</span>
+                          <span class="chip-text">{{ symptom.en }}</span>
+                        </button>
+                      }
+                    </div>
+
+                    <!-- Visual barrier divider between parts -->
+                    <div class="subsystem-barrier-divider" aria-hidden="true"></div>
+                  </div>
+                }
+              }
+            </section>
+          }
+
+          <!-- INTAKE COMPLAINT & NOTES -->
+          <section class="notes-section">
+            <label class="form-label" for="intake-complaint-input">
+              Technical Complaint &amp; Intake Notes
+            </label>
+            <textarea
+              id="intake-complaint-input"
+              class="form-textarea"
+              rows="3"
+              placeholder="Detailed description of the customer complaint or symptoms observed…"
+              [ngModel]="complaint()"
+              (ngModelChange)="complaint.set($event)"
+            ></textarea>
+
+            <label class="checkbox-row">
+              <input
+                type="checkbox"
+                class="form-checkbox"
+                [ngModel]="inspectionDeclined()"
+                (ngModelChange)="inspectionDeclined.set($event)"
+              />
+              <span class="checkbox-label">
+                Customer declined full comprehensive inspection (diagnostic intake on selected parts only)
+              </span>
+            </label>
+          </section>
+        </div>
+
+        <footer class="modal-footer">
+          <button type="button" class="btn-modal-cancel" (click)="closeIntakeModal()" [disabled]="isSubmittingIntake()">
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="btn-modal-submit"
+            (click)="submitIntake()"
+            [disabled]="isSubmittingIntake()"
+            id="btn-submit-intake"
+          >
+            {{ isSubmittingIntake() ? 'Registering Intake…' : '✓ Register Intake & Book Service' }}
+          </button>
+        </footer>
+      </div>
+    </div>
+  }
+
+  <!-- ================================================================= -->
+  <!-- REGISTER WALK-IN CUSTOMER & VEHICLE MODAL                          -->
+  <!-- ================================================================= -->
+  @if (isRegisterModalOpen()) {
+    <div class="modal-backdrop" (click)="closeRegisterModal()">
+      <div
+        class="modal-dialog modal-dialog--sm"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reg-modal-title"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="modal-header">
+          <div>
+            <h2 class="modal-title" id="reg-modal-title">Register Walk-in Customer &amp; Vehicle</h2>
+            <p class="modal-sub">Onboard a new customer and vehicle record in a single step.</p>
+          </div>
+          <button type="button" class="btn-close-modal" (click)="closeRegisterModal()" aria-label="Close modal">✕</button>
+        </header>
+
+        @if (registerError(); as err) {
+          <div class="modal-error-alert" role="alert">
+            <span>{{ err }}</span>
+          </div>
+        }
+
+        <form class="register-form" (ngSubmit)="submitRegister()">
+          <div class="form-group">
+            <label class="form-label" for="reg-name">Customer Full Name *</label>
+            <input
+              id="reg-name"
+              type="text"
+              class="form-input"
+              placeholder="e.g. Mohamed Hassan"
+              [ngModel]="regFullName()"
+              (ngModelChange)="regFullName.set($event)"
+              name="regFullName"
+              required
+            />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="form-label" for="reg-phone">Phone Number *</label>
+              <input
+                id="reg-phone"
+                type="tel"
+                class="form-input"
+                placeholder="e.g. 01012345678"
+                [ngModel]="regPhone()"
+                (ngModelChange)="regPhone.set($event)"
+                name="regPhone"
+                required
+              />
+            </div>
+
+            <div class="form-group flex-1">
+              <label class="form-label" for="reg-email">Email (Optional)</label>
+              <input
+                id="reg-email"
+                type="email"
+                class="form-input"
+                placeholder="customer@example.com"
+                [ngModel]="regEmail()"
+                (ngModelChange)="regEmail.set($event)"
+                name="regEmail"
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="form-label" for="reg-plate">License Plate Number *</label>
+              <input
+                id="reg-plate"
+                type="text"
+                class="form-input font-mono uppercase"
+                placeholder="e.g. ABC 1234"
+                [ngModel]="regPlate()"
+                (ngModelChange)="regPlate.set($event)"
+                name="regPlate"
+                required
+              />
+            </div>
+
+            <div class="form-group flex-1">
+              <label class="form-label" for="reg-category">Vehicle Category</label>
+              <select
+                id="reg-category"
+                class="form-select"
+                [ngModel]="regCategory()"
+                (ngModelChange)="regCategory.set($event)"
+                name="regCategory"
+              >
+                <option value="CARS">Cars / Passenger Vehicles</option>
+                <option value="MOTORCYCLES">Motorcycles</option>
+                <option value="HEAVY_EQUIPMENT">Heavy Equipment / Trucks</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="reg-vin">VIN / Chassis Number (Optional)</label>
+            <input
+              id="reg-vin"
+              type="text"
+              class="form-input font-mono"
+              placeholder="17-character VIN number"
+              [ngModel]="regVin()"
+              (ngModelChange)="regVin.set($event)"
+              name="regVin"
+            />
+          </div>
+
+          <footer class="modal-footer">
+            <button type="button" class="btn-modal-cancel" (click)="closeRegisterModal()" [disabled]="isRegistering()">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="btn-modal-submit"
+              [disabled]="isRegistering()"
+              id="btn-submit-register-vehicle"
+            >
+              {{ isRegistering() ? 'Registering…' : '+ Register & Ready for Intake' }}
+            </button>
+          </footer>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- ================================================================= -->
+  <!-- INSPECTION REPORT & QUOTE BUILDER MODAL (With POS & Services)     -->
+  <!-- ================================================================= -->
+  @if (isReportModalOpen()) {
+    <div class="modal-backdrop" (click)="closeReportModal()">
+      <div
+        class="quote-modal-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="quote-modal-title"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="modal-header quote-modal-header">
+          <div>
+            <div class="quote-header-tags">
+              <span class="quote-role-pill">QUOTE BUILDER &amp; REPAIR DISPATCH</span>
+              @if (selectedReportDetail(); as d) {
+                <span class="quote-plate-pill">{{ d.vehicle.plateNumber }}</span>
+                <span class="quote-model-pill">{{ d.vehicle.model }}</span>
+              }
+            </div>
+            <h2 class="modal-title" id="quote-modal-title">Inspection Report &amp; Work Order Quote</h2>
+          </div>
+          <button type="button" class="btn-close-modal" (click)="closeReportModal()" aria-label="Close modal">✕</button>
+        </header>
+
+        @if (isLoadingReportDetail()) {
+          <div class="state-loading modal-spinner">
+            <span class="loading-spin"></span>
+            <p>Loading inspection findings and pricing data…</p>
+          </div>
+        } @else if (selectedReportDetail(); as detail) {
+          <div class="quote-modal-body">
+            @if (quoteError(); as qErr) {
+              <div class="quote-error-banner">{{ qErr }}</div>
+            }
+
+            <!-- Vehicle & Customer Banner -->
+            <div class="quote-info-banner">
+              <div class="info-cell">
+                <span class="cell-label">Customer</span>
+                <strong class="cell-val">{{ detail.customer.name }}</strong>
+                <span class="cell-sub font-mono">{{ detail.customer.phone }}</span>
+              </div>
+              <div class="info-cell">
+                <span class="cell-label">Vehicle</span>
+                <strong class="cell-val">{{ detail.vehicle.plateNumber }} ({{ detail.vehicle.model }})</strong>
+                <span class="cell-sub font-mono">VIN: {{ detail.vehicle.vin || '—' }}</span>
+              </div>
+              <div class="info-cell">
+                <span class="cell-label">Work Order Status</span>
+                <span class="quote-status-badge">{{ detail.status }}</span>
+              </div>
+            </div>
+
+            <!-- Section 1: Inspection Findings & Severity Assignment -->
+            <section class="quote-section">
+              <div class="quote-section-head">
+                <div class="section-title-wrap">
+                  <span class="sec-icon">🔍</span>
+                  <h3 class="sec-title">Recorded Inspection Findings</h3>
+                </div>
+                <button type="button" class="btn-sec-action" (click)="addFinding()">+ Add Finding</button>
+              </div>
+
+              @if (editableFindings().length === 0) {
+                <p class="sec-empty">No inspection findings recorded yet. Click "+ Add Finding" to add one.</p>
+              } @else {
+                <div class="findings-edit-list">
+                  @for (f of editableFindings(); track $index; let i = $index) {
+                    <div class="finding-edit-row">
+                      <div class="finding-main-inputs">
+                        <input
+                          type="text"
+                          class="input-finding-desc"
+                          placeholder="Finding description (e.g. Front Brake Pads 80% Worn)"
+                          [(ngModel)]="f.description"
+                        />
+                        <input
+                          type="text"
+                          class="input-finding-service"
+                          placeholder="Recommended Service (e.g. Brake Replacement)"
+                          [(ngModel)]="f.recommendedService"
+                        />
+                      </div>
+
+                      <!-- Severity Selector: Critical, Medium, Low -->
+                      <div class="severity-picker-group">
+                        <span class="sev-label">Severity:</span>
+                        <div class="sev-options">
+                          <button
+                            type="button"
+                            class="sev-btn sev-btn--critical"
+                            [class.sev-btn--active]="f.severity === 'CRITICAL' || f.severity === 'HIGH'"
+                            (click)="updateFindingSeverity(i, 'CRITICAL')"
+                          >
+                            Critical
+                          </button>
+                          <button
+                            type="button"
+                            class="sev-btn sev-btn--medium"
+                            [class.sev-btn--active]="f.severity === 'MEDIUM'"
+                            (click)="updateFindingSeverity(i, 'MEDIUM')"
+                          >
+                            Medium
+                          </button>
+                          <button
+                            type="button"
+                            class="sev-btn sev-btn--low"
+                            [class.sev-btn--active]="f.severity === 'LOW'"
+                            (click)="updateFindingSeverity(i, 'LOW')"
+                          >
+                            Low
+                          </button>
+                        </div>
+                      </div>
+
+                      <button type="button" class="btn-remove-item" (click)="removeFinding(i)" title="Remove finding">✕</button>
+                    </div>
+                  }
+                </div>
+              }
+            </section>
+
+            <!-- Section 2: Parts from POS & Inventory -->
+            <section class="quote-section">
+              <div class="quote-section-head">
+                <div class="section-title-wrap">
+                  <span class="sec-icon">📦</span>
+                  <h3 class="sec-title">Required Parts (POS / Inventory)</h3>
+                </div>
+                <button type="button" class="btn-sec-action btn-pos-action" (click)="openPosPicker()">
+                  🛒 + Get Part from POS
+                </button>
+              </div>
+
+              @if (editableParts().length === 0) {
+                <div class="parts-empty-state">
+                  <p>No parts added yet. Click <strong>"+ Get Part from POS"</strong> to browse inventory or counter stock.</p>
+                </div>
+              } @else {
+                <div class="quote-table-wrap">
+                  <table class="quote-table">
+                    <thead>
+                      <tr>
+                        <th>SKU</th>
+                        <th>Part Name</th>
+                        <th class="col-center">Qty</th>
+                        <th class="col-right">Unit Price</th>
+                        <th class="col-right">Subtotal</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (p of editableParts(); track p.sku + $index; let i = $index) {
+                        <tr>
+                          <td class="font-mono">{{ p.sku }}</td>
+                          <td><strong>{{ p.name }}</strong></td>
+                          <td class="col-center">
+                            <div class="qty-control">
+                              <button type="button" class="qty-btn" (click)="updatePartQty(i, p.quantity - 1)">-</button>
+                              <span class="qty-val">{{ p.quantity }}</span>
+                              <button type="button" class="qty-btn" (click)="updatePartQty(i, p.quantity + 1)">+</button>
+                            </div>
+                          </td>
+                          <td class="col-right">${{ (p.unitPrice || 0).toFixed(2) }}</td>
+                          <td class="col-right font-semibold">${{ ((p.unitPrice || 0) * (p.quantity || 1)).toFixed(2) }}</td>
+                          <td class="col-right">
+                            <button type="button" class="btn-remove-item" (click)="removePart(i)">✕</button>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colspan="4" class="font-semibold text-right">Parts Subtotal:</td>
+                        <td class="col-right font-bold">${{ quotePartsTotal().toFixed(2) }}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              }
+            </section>
+
+            <!-- Section 3: Services & Labor -->
+            <section class="quote-section">
+              <div class="quote-section-head">
+                <div class="section-title-wrap">
+                  <span class="sec-icon">🔧</span>
+                  <h3 class="sec-title">Services &amp; Labor</h3>
+                </div>
+                <button type="button" class="btn-sec-action" (click)="openServicePicker()">
+                  🔧 + Choose Service
+                </button>
+              </div>
+
+              @if (editableServices().length === 0) {
+                <div class="parts-empty-state">
+                  <p>No services added yet. Click <strong>"+ Choose Service"</strong> to select repair or maintenance procedures.</p>
+                </div>
+              } @else {
+                <div class="quote-table-wrap">
+                  <table class="quote-table">
+                    <thead>
+                      <tr>
+                        <th>Service / Labor Description</th>
+                        <th class="col-right">Labor Rate ($)</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (s of editableServices(); track s.serviceName + $index; let i = $index) {
+                        <tr>
+                          <td><strong>{{ s.serviceName }}</strong></td>
+                          <td class="col-right">
+                            <input
+                              type="number"
+                              class="input-labor-rate"
+                              min="0"
+                              [(ngModel)]="s.laborPrice"
+                            />
+                          </td>
+                          <td class="col-right">
+                            <button type="button" class="btn-remove-item" (click)="removeService(i)">✕</button>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td class="font-semibold text-right">Labor Subtotal:</td>
+                        <td class="col-right font-bold">${{ quoteLaborTotal().toFixed(2) }}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              }
+            </section>
+
+            <!-- Section 4: Itemized Pricing Total Card ("written on a very good way with the price and everything") -->
+            <section class="quote-summary-card">
+              <h3 class="summary-card-title">Itemized Work Order Quote Breakdown</h3>
+              <div class="summary-rows">
+                <div class="summary-row">
+                  <span class="s-label">Parts &amp; Materials ({{ editableParts().length }} item{{ editableParts().length === 1 ? '' : 's' }}):</span>
+                  <strong class="s-val">${{ quotePartsTotal().toFixed(2) }}</strong>
+                </div>
+                <div class="summary-row">
+                  <span class="s-label">Labor &amp; Service Charges ({{ editableServices().length }} service{{ editableServices().length === 1 ? '' : 's' }}):</span>
+                  <strong class="s-val">${{ quoteLaborTotal().toFixed(2) }}</strong>
+                </div>
+                <div class="summary-row summary-grand-total">
+                  <span class="s-grand-label">Grand Total (Parts + Labor):</span>
+                  <strong class="s-grand-val">${{ quoteGrandTotal().toFixed(2) }}</strong>
+                </div>
+              </div>
+
+              <div class="quote-notes-box">
+                <label class="notes-label" for="quote-customer-notes">Operator &amp; Customer Notes:</label>
+                <textarea
+                  id="quote-customer-notes"
+                  class="quote-textarea"
+                  rows="2"
+                  placeholder="Additional customer comments, warranty terms, or repair instructions…"
+                  [(ngModel)]="quoteNote"
+                ></textarea>
+              </div>
+            </section>
+          </div>
+
+          <footer class="modal-footer quote-modal-footer">
+            <button type="button" class="btn-modal-cancel" (click)="closeReportModal()">Cancel</button>
+            <button
+              type="button"
+              class="btn-save-quote"
+              (click)="saveQuote()"
+              [disabled]="isSavingQuote() || isDispatchingRepair()"
+            >
+              {{ isSavingQuote() ? 'Saving…' : '💾 Save Quote' }}
+            </button>
+            <button
+              type="button"
+              class="btn-dispatch-repair"
+              (click)="dispatchToRepair()"
+              [disabled]="isSavingQuote() || isDispatchingRepair()"
+              id="btn-approve-dispatch-repair"
+            >
+              {{ isDispatchingRepair() ? 'Dispatching…' : '🚀 Approve & Dispatch to Repair' }}
+            </button>
+          </footer>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- ================================================================= -->
+  <!-- POS INVENTORY CATALOG PICKER MODAL                                -->
+  <!-- ================================================================= -->
+  @if (isPosPickerOpen()) {
+    <div class="sub-modal-backdrop" (click)="closePosPicker()">
+      <div class="sub-modal-card" (click)="$event.stopPropagation()">
+        <div class="sub-modal-head">
+          <h3 class="sub-modal-title">Select Part from POS Inventory</h3>
+          <button type="button" class="btn-close-modal" (click)="closePosPicker()">✕</button>
+        </div>
+        <div class="sub-modal-body">
+          <div class="pos-search-bar">
+            <input
+              type="text"
+              class="search-input"
+              placeholder="Search parts by name, SKU, or category…"
+              [(ngModel)]="posSearch"
+              (keyup.enter)="searchPosCatalog()"
+            />
+            <button type="button" class="btn-search-action" (click)="searchPosCatalog()">
+              {{ isSearchingPos() ? 'Searching…' : 'Search' }}
+            </button>
+          </div>
+
+          @if (isSearchingPos()) {
+            <div class="state-loading"><span class="loading-spin"></span></div>
+          } @else if (posCatalogItems().length === 0) {
+            <p class="sec-empty">No items found. Try another search or use general inventory.</p>
+          } @else {
+            <div class="pos-items-grid">
+              @for (item of posCatalogItems(); track item.id || item.sku) {
+                <div class="pos-item-tile" (click)="addPartFromPos(item)">
+                  <div class="tile-header">
+                    <strong class="tile-name">{{ item.name || item.nameEn }}</strong>
+                    <span class="tile-sku font-mono">{{ item.sku || item.partNumber }}</span>
+                  </div>
+                  <div class="tile-footer">
+                    <span class="tile-price font-bold">${{ (item.price || item.unitPrice || 45).toFixed ? (item.price || item.unitPrice || 45).toFixed(2) : item.price }}</span>
+                    <button type="button" class="btn-select-part">+ Add</button>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ================================================================= -->
+  <!-- SERVICE SELECTOR MODAL                                            -->
+  <!-- ================================================================= -->
+  @if (isServicePickerOpen()) {
+    <div class="sub-modal-backdrop" (click)="closeServicePicker()">
+      <div class="sub-modal-card" (click)="$event.stopPropagation()">
+        <div class="sub-modal-head">
+          <h3 class="sub-modal-title">Choose Service / Labor Procedure</h3>
+          <button type="button" class="btn-close-modal" (click)="closeServicePicker()">✕</button>
+        </div>
+        <div class="sub-modal-body">
+          <h4 class="preset-title">Standard Workshop Procedures</h4>
+          <div class="services-preset-list">
+            @for (srv of presetServices; track srv.name) {
+              <div class="service-preset-tile" (click)="addPresetService(srv)">
+                <span class="srv-name">🔧 {{ srv.name }}</span>
+                <span class="srv-labor font-bold">${{ srv.labor.toFixed(2) }}</span>
+              </div>
+            }
+          </div>
+
+          <div class="custom-service-divider">
+            <span>or add custom service</span>
+          </div>
+
+          <div class="custom-service-row">
+            <input
+              type="text"
+              class="form-input flex-2"
+              placeholder="Custom service name"
+              [(ngModel)]="customServiceName"
+            />
+            <input
+              type="number"
+              class="form-input flex-1"
+              placeholder="Labor $"
+              min="0"
+              [(ngModel)]="customServiceLabor"
+            />
+            <button type="button" class="btn-search-action" (click)="addCustomService()">Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+</section>

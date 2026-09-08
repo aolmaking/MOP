@@ -92,6 +92,67 @@
         </button>
       </div>
 
+      <!-- Navigation Shell Layout Selector -->
+      <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border, #334155);">
+        <h3 style="font-size: 1.1rem; font-weight: 700; color: #f8fafc; margin: 0 0 0.4rem;">Navigation Shell Architecture</h3>
+        <p style="font-size: 0.875rem; color: var(--text-muted, #94a3b8); margin: 0 0 1rem; line-height: 1.4;">
+          Select how menus and pages are framed across your workshop. <strong>Strict rule:</strong> Every screen in this workshop (diagnostic board, inventory, history, inspections) adopts this exact chosen layout.
+        </p>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); gap: 10px;">
+          <!-- Left Sidebar -->
+          <button
+            type="button"
+            class="palette-card"
+            [class.palette-card--active]="selectedLayout() === 'SIDEBAR'"
+            (click)="selectLayout('SIDEBAR')"
+            style="cursor: pointer; text-align: left; padding: 12px;"
+          >
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+              <span style="font-size: 16px;">📑</span>
+              <strong style="font-size: 13px; color: #f8fafc;">Left Sidebar</strong>
+            </div>
+            <p style="font-size: 11px; color: #94a3b8; margin: 0; line-height: 1.3;">
+              Full-height vertical navigation rail on the left.
+            </p>
+          </button>
+
+          <!-- Top Navbar -->
+          <button
+            type="button"
+            class="palette-card"
+            [class.palette-card--active]="selectedLayout() === 'NAVBAR'"
+            (click)="selectLayout('NAVBAR')"
+            style="cursor: pointer; text-align: left; padding: 12px;"
+          >
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+              <span style="font-size: 16px;">🧭</span>
+              <strong style="font-size: 13px; color: #f8fafc;">Top Navbar</strong>
+            </div>
+            <p style="font-size: 11px; color: #94a3b8; margin: 0; line-height: 1.3;">
+              Horizontal sticky glass bar across top of all pages.
+            </p>
+          </button>
+
+          <!-- Bottom Bar -->
+          <button
+            type="button"
+            class="palette-card"
+            [class.palette-card--active]="selectedLayout() === 'BOTTOM_BAR'"
+            (click)="selectLayout('BOTTOM_BAR')"
+            style="cursor: pointer; text-align: left; padding: 12px;"
+          >
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+              <span style="font-size: 16px;">📱</span>
+              <strong style="font-size: 13px; color: #f8fafc;">Bottom Bar ("Par Down")</strong>
+            </div>
+            <p style="font-size: 11px; color: #94a3b8; margin: 0; line-height: 1.3;">
+              Fixed bottom dock bar for tablets & mobile tech bay use.
+            </p>
+          </button>
+        </div>
+      </div>
+
       <div class="save-actions">
         <button
           type="button"
@@ -100,7 +161,7 @@
           [disabled]="saving()"
           (click)="save()"
         >
-          {{ saving() ? 'Saving Changes…' : 'Save Workshop Branding & Theme' }}
+          {{ saving() ? 'Saving Changes…' : 'Save Workshop Branding, Theme & Layout' }}
         </button>
       </div>
     </div>

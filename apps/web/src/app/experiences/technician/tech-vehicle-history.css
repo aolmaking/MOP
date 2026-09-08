@@ -1,254 +1,278 @@
 /*
  * The vehicle history panel on the Work Card.
- *
- * Its own stylesheet because it is its own component -- the two
- * together passed the per-component CSS budget, which is the budget
- * telling the truth: this panel answers a different question from the
- * card around it.
+ * Redesigned to match the modern inspection page card theme.
  */
 
-.history {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin-block-end: var(--space-3);
-}
-
-.history-toggle {
-  min-block-size: var(--tap);
-  padding-inline: var(--space-3);
+.history-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font-size: var(--tech-text-sm);
-  font-weight: 600;
-  text-align: start;
-  cursor: pointer;
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  margin-block-end: var(--space-4);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.history-loading,
-.history-empty {
-  color: var(--text-muted);
-  font-size: var(--tech-text-sm);
+.history-card:hover {
+  border-color: var(--focus-ring, #3b82f6);
 }
 
-.history-summary {
-  color: var(--text);
-  font-size: var(--tech-text-sm);
-  font-weight: 600;
-}
-
-.history-owner-note {
-  color: var(--text-faint);
-  font-weight: 400;
-}
-
-/*
- * Vehicle history, as decision support.
- *
- * Grouped by question rather than by visit: a technician asks "has this
- * been complained about before", "what did we find", "what did we
- * recommend and did it happen" -- three questions, three groups. A
- * visit-by-visit list makes all three of them a reading exercise.
- *
- * Everything is sized off the technician scale (`--tech-text-*`, `--tap`)
- * rather than the desktop one: this is read at arm's length on a tablet
- * with dirty hands, and every control clears the 44px target the
- * touch-target linter enforces.
- */
-
-.history-alert {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-3);
-  background: var(--warning-bg);
-  border-inline-start: 3px solid var(--warning);
-  border-radius: var(--radius-sm);
-}
-
-.history-alert-title {
-  color: var(--warning);
-  font-size: var(--tech-text-sm);
-  font-weight: 700;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-}
-
-.history-alert-line {
-  color: var(--text);
-  font-size: var(--tech-text-sm);
-}
-
-.history-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-3);
-  background: var(--surface);
-  border-radius: var(--radius-sm);
-}
-
-.history-group-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--text-muted);
-  font-size: var(--tech-text-sm);
-  font-weight: 700;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-}
-
-.history-count {
-  padding-inline: var(--space-2);
-  background: var(--surface-raised);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-
-.history-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-block: var(--space-2);
-  border-block-end: 1px solid var(--border);
-}
-
-.history-item:last-of-type {
-  border-block-end: none;
-}
-
-.history-item-main {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-2);
-  color: var(--text);
-  font-size: var(--tech-text-sm);
-  font-weight: 600;
-  text-align: start;
-}
-
-.history-item-line {
-  color: var(--text-muted);
-  font-size: var(--tech-text-sm);
-}
-
-.history-item-meta {
-  color: var(--text-faint);
-  font-size: var(--tech-text-sm);
-}
-
-.history-severity {
-  padding-inline: var(--space-2);
-  background: var(--neutral-badge-bg);
-  border-radius: var(--radius-sm);
-  color: var(--neutral-badge);
-  font-size: var(--tech-text-sm);
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.history-severity--high,
-.history-severity--critical {
-  background: var(--danger-bg);
-  color: var(--danger-strong);
-}
-
-.history-severity--medium {
-  background: var(--warning-bg);
-  color: var(--warning);
-}
-
-/*
- * "Performed" is the only green, and every flavour of agreed-and-not-done
- * shares one warning colour. A technician glancing at this list should
- * learn ONE signal, not four -- the point of the whole module is that
- * "we said we would and did not" cannot be missed.
- */
-.history-rec {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
+.history-header {
   inline-size: 100%;
-  min-block-size: var(--tap);
-  padding: 0;
-  background: none;
-  border: none;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  text-align: start;
-}
-
-.history-outcome {
-  padding-inline: var(--space-2);
-  border-radius: var(--radius-sm);
-  font-size: var(--tech-text-sm);
-  font-weight: 700;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.history-outcome--good {
-  background: var(--success-bg);
-  color: var(--success);
-}
-
-.history-outcome--warn {
-  background: var(--warning-bg);
-  color: var(--warning);
-}
-
-.history-outcome--plain {
-  background: var(--neutral-badge-bg);
-  color: var(--neutral-badge);
-}
-
-.history-detail {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-2);
-  background: var(--surface-raised);
-  border-radius: var(--radius-sm);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-subtle, rgba(0, 0, 0, 0.02));
+  border: none;
+  cursor: pointer;
+  min-height: 56px;
+  text-align: start;
+  gap: var(--space-3);
+  transition: background 0.15s ease;
 }
 
-.history-evidence {
+.history-header:hover {
+  background: var(--surface-raised, rgba(0, 0, 0, 0.04));
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.header-icon {
+  font-size: 1.25rem;
+  opacity: 0.85;
+}
+
+.header-meta {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  list-style: none;
 }
 
-.history-evidence li {
+.header-title {
+  margin: 0;
+  font-size: var(--tech-text);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.header-subtitle {
+  font-size: var(--tech-text-sm);
+  color: var(--text-muted);
+}
+
+.header-chevron {
+  font-size: 1.25rem;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.header-chevron--open {
+  transform: rotate(180deg);
+}
+
+.history-content {
+  padding: var(--space-4);
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  flex-direction: column;
+  gap: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.history-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   color: var(--text-muted);
   font-size: var(--tech-text-sm);
+  padding: var(--space-3);
 }
 
-.history-evidence-when {
-  color: var(--text-faint);
-  font-family: var(--font-mono);
+.loading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary, #3b82f6);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
-.history-more {
-  align-self: flex-start;
-  min-block-size: var(--tap);
-  padding-inline: var(--space-2);
-  background: none;
-  border: none;
-  color: var(--brand-text);
-  cursor: pointer;
-  font-family: inherit;
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.history-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+  background: var(--surface-subtle, rgba(0, 0, 0, 0.02));
+  border-radius: var(--radius-sm);
+}
+
+.empty-icon {
+  color: #10b981;
+  font-weight: 700;
+}
+
+.history-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: rgba(245, 158, 11, 0.1);
+  border-left: 3px solid #f59e0b;
+  border-radius: var(--radius-sm);
+  font-size: var(--tech-text-sm);
+}
+
+.notice-badge {
+  font-weight: 700;
+  color: #f59e0b;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.notice-text {
+  color: var(--text);
+}
+
+.history-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.heading-label {
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.heading-count {
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--surface-subtle, rgba(0, 0, 0, 0.1));
+  padding: 1px 6px;
+  border-radius: 9999px;
+  color: var(--text-muted);
+}
+
+.section-empty {
+  margin: 0;
+  font-size: var(--tech-text-sm);
+  color: var(--text-muted);
+}
+
+.findings-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.finding-card {
+  padding: var(--space-3);
+  background: var(--surface-subtle, rgba(0, 0, 0, 0.03));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.finding-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.finding-severity {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.finding-severity--low {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.finding-severity--medium {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.finding-severity--high,
+.finding-severity--critical {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.finding-date {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.finding-desc {
+  margin: 0;
   font-size: var(--tech-text-sm);
   font-weight: 600;
-  text-decoration: underline;
+  color: var(--text);
+}
+
+.finding-recom {
+  margin: 0;
+  font-size: 12px;
+  color: var(--primary, #3b82f6);
+}
+
+.complaints-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.complaint-card {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-subtle, rgba(0, 0, 0, 0.03));
+  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--border-strong, #64748b);
+}
+
+.complaint-body {
+  margin: 0 0 2px 0;
+  font-size: var(--tech-text-sm);
+  color: var(--text);
+}
+
+.complaint-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.btn-more {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--primary, #3b82f6);
+  font-size: var(--tech-text-sm);
+  font-weight: 600;
+  cursor: pointer;
 }

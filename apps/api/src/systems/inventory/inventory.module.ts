@@ -17,6 +17,10 @@ import { InventoryReportsService } from "./inventory-reports.service";
 import { WarehouseService } from "./warehouse.service";
 import { CatalogConfigService } from "./catalog-config.service";
 import { CatalogBrowseService } from "./catalog-browse.service";
+import { WorkshopCatalogProvisioningService } from "./master-catalog/workshop-catalog-provisioning.service";
+import { SmartSuggestionEngine } from "./master-catalog/smart-suggestion.engine";
+import { MasterCatalogMigrationService } from "./master-catalog/master-catalog-migration.service";
+import { VehicleFitmentService } from "./fitment/vehicle-fitment.service";
 
 /**
  * Inventory.
@@ -27,13 +31,6 @@ import { CatalogBrowseService } from "./catalog-browse.service";
  * the sole writer of work-order status.
  */
 @Module({
-  // PoliciesModule: PartRequestService.approve reads P-07's
-  // separation-of-duties rule, which is the policy Phase 19.A was
-  // reverted for want of.
-  //
-  // OperationsModule: issuing a part moves the WORK ORDER too, and
-  // WorkOrderLifecycleService is the only thing allowed to write a
-  // work-order status.
   imports: [
     DatabaseModule,
     AuthModule,
@@ -52,13 +49,24 @@ import { CatalogBrowseService } from "./catalog-browse.service";
     InventoryHomeService,
     CatalogService,
     CatalogConfigService,
-    // Exported: the technician's catalog and the manager's preview are
-    // the same query engine, and `experiences/technician` calls it
-    // rather than owning a second one.
     CatalogBrowseService,
     InventoryReportsService,
     WarehouseService,
+    WorkshopCatalogProvisioningService,
+    SmartSuggestionEngine,
+    MasterCatalogMigrationService,
+    VehicleFitmentService,
   ],
-  exports: [StockService, PartRequestService, InventoryReportsService, CatalogService, CatalogBrowseService],
+  exports: [
+    StockService,
+    PartRequestService,
+    InventoryReportsService,
+    CatalogService,
+    CatalogBrowseService,
+    WorkshopCatalogProvisioningService,
+    SmartSuggestionEngine,
+    MasterCatalogMigrationService,
+    VehicleFitmentService,
+  ],
 })
 export class InventoryModule {}

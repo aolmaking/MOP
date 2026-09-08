@@ -212,3 +212,366 @@
 :where(.organization) {
   background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
 }
+
+/* --- People Capability Switch Card (Photo 1 Replica) --- */
+.people-capability-card {
+  background: var(--surface, #1e293b);
+  border: 1px solid var(--border, #334155);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.people-capability-card:hover {
+  border-color: var(--border-strong, #475569);
+}
+
+.capability-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+
+.capability-info {
+  flex: 1;
+}
+
+.capability-category {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint, #64748b);
+  margin-bottom: 0.35rem;
+}
+
+.capability-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--white, #f8fafc);
+  margin: 0 0 0.5rem;
+}
+
+.capability-desc {
+  font-size: 0.9375rem;
+  color: var(--text, #e2e8f0);
+  line-height: 1.4;
+  margin: 0 0 0.4rem;
+}
+
+.capability-instead {
+  font-size: 0.875rem;
+  color: var(--text-muted, #94a3b8);
+  margin: 0 0 0.5rem;
+  line-height: 1.4;
+}
+
+.capability-instead strong {
+  color: var(--text, #cbd5e1);
+}
+
+.capability-needed {
+  font-size: 0.8125rem;
+  color: var(--text-faint, #64748b);
+  margin: 0;
+}
+
+.capability-needed strong {
+  color: var(--text-muted, #94a3b8);
+}
+
+.capability-badge {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  background: #334155;
+  color: #94a3b8;
+  border: 1px solid #475569;
+}
+
+.capability-badge--on {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.capability-toggle-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border, #334155);
+}
+
+.capability-toggle-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted, #94a3b8);
+}
+
+.capability-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 9999px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.capability-toggle-btn:hover {
+  border-color: #64748b;
+}
+
+.capability-toggle-btn--on {
+  background: var(--mop-color-primary, #2563eb);
+  color: #ffffff;
+  border-color: var(--mop-color-primary, #2563eb);
+  box-shadow: 0 0 12px var(--palette-shadow-glow, rgba(37, 99, 235, 0.4));
+}
+
+.toggle-switch-track {
+  display: inline-block;
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: #334155;
+  position: relative;
+  transition: background 0.2s ease;
+}
+
+.capability-toggle-btn--on .toggle-switch-track {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.toggle-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: transform 0.2s ease;
+}
+
+.capability-toggle-btn--on .toggle-switch-thumb {
+  transform: translateX(14px);
+}
+
+/* --- Team Roster Cards Grid --- */
+.teams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.team-card {
+  background: var(--surface, #1e293b);
+  border: 1px solid var(--border, #334155);
+  border-radius: 10px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.team-card:hover {
+  border-color: var(--mop-color-primary, #3b82f6);
+  transform: translateY(-2px);
+}
+
+.team-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.team-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--white, #f8fafc);
+  margin: 0;
+}
+
+.team-branch-tag {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #94a3b8;
+}
+
+.team-leader-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text, #cbd5e1);
+}
+
+.leader-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  background: rgba(234, 179, 8, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(234, 179, 8, 0.4);
+}
+
+.team-members-row {
+  font-size: 0.8125rem;
+  color: var(--text-muted, #94a3b8);
+}
+
+.team-specs-section {
+  border-top: 1px solid var(--border, #334155);
+  padding-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.team-specs-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint, #64748b);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* --- 24-Subsystems Cards Grid (Photo 3 Replica) --- */
+.subsystems-grid-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.subsystems-24-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.subsystem-box {
+  background: #0f172a;
+  border: 1.5px solid #1e293b;
+  border-radius: 8px;
+  padding: 0.75rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  cursor: pointer;
+  text-align: left;
+  position: relative;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.subsystem-box:hover {
+  border-color: #475569;
+  background: #172033;
+}
+
+.subsystem-box--selected {
+  border-color: var(--mop-color-primary, #3b82f6);
+  background: rgba(37, 99, 235, 0.12);
+  box-shadow: 0 0 12px var(--palette-shadow-glow, rgba(37, 99, 235, 0.3));
+}
+
+.subsystem-icon {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.subsystem-name {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #f8fafc;
+  line-height: 1.25;
+}
+
+.subsystem-category {
+  font-size: 0.6875rem;
+  color: #64748b;
+  margin-top: auto;
+}
+
+.subsystem-check-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--mop-color-primary, #3b82f6);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+/* --- Specialization Chips & Pills --- */
+.specs-badge-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.spec-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  white-space: nowrap;
+}
+
+.spec-none {
+  font-size: 0.8125rem;
+  color: var(--text-faint, #64748b);
+  font-style: italic;
+}
+
+.modal--large {
+  max-width: 54rem;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal--large .modal-body {
+  overflow-y: auto;
+  flex: 1;
+}

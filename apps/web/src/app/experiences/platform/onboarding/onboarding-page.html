@@ -32,8 +32,40 @@
 
         <!-- The stage ------------------------------------------------- -->
         <main class="onb-stage">
+          <!-- Reference Photo Inspired Top Stepper Header -->
+          <div class="onb-top-header-bar">
+            <div class="onb-stepper-track-group">
+              <span class="onb-step-counter-text">Step {{ store.stageIndex() + 1 }} of {{ stages.length }}</span>
+              <div class="onb-stepper-dots-line">
+                @for (st of stages; track st.id; let idx = $index) {
+                  <button
+                    type="button"
+                    class="onb-step-dot"
+                    [class.onb-step-dot--active]="store.stage() === st.id"
+                    [class.onb-step-dot--done]="store.stageIndex() > idx"
+                    [title]="(idx + 1) + '. ' + st.title"
+                    (click)="goTo(st.id)"
+                  >
+                    <span class="dot-disc"></span>
+                  </button>
+                  @if (idx < stages.length - 1) {
+                    <div class="onb-step-connector" [class.onb-step-connector--done]="store.stageIndex() > idx"></div>
+                  }
+                }
+              </div>
+            </div>
+
+            <div class="onb-top-profile-badge">
+              <span class="onb-bell-icon" title="Notifications">🔔</span>
+              <div class="onb-admin-pill">
+                <span class="onb-admin-avatar">👤</span>
+                <span class="onb-admin-name">Admin</span>
+              </div>
+            </div>
+          </div>
+
           <div class="onb-stage-intro">
-            <h2 #stageHeading tabindex="-1" class="onb-stage-title">{{ stage().title }}</h2>
+            <h2 #stageHeading tabindex="-1" class="onb-stage-title">{{ store.stageIndex() + 1 }}. {{ stage().title }}</h2>
             <p class="onb-stage-what">{{ stage().what }}</p>
             <dl class="onb-stage-reasons">
               <div>
@@ -46,21 +78,6 @@
               </div>
             </dl>
           </div>
-
-          @if (store.currentStageFindings().length > 0) {
-            <ul class="onb-findings" role="status">
-              @for (finding of store.currentStageFindings(); track finding.code + (finding.subject ?? '')) {
-                <li
-                  class="onb-finding"
-                  [class.onb-finding--blocker]="finding.severity === 'BLOCKER'"
-                  [class.onb-finding--warning]="finding.severity === 'WARNING'"
-                >
-                  <span class="onb-finding-badge">{{ finding.severity === 'BLOCKER' ? 'Must fix' : 'Note' }}</span>
-                  <span>{{ finding.message }}</span>
-                </li>
-              }
-            </ul>
-          }
 
           <div class="onb-stage-content">
             @switch (store.stage()) {
@@ -94,6 +111,21 @@
             }
           </div>
 
+          @if (store.currentStageFindings().length > 0) {
+            <ul class="onb-findings" role="status">
+              @for (finding of store.currentStageFindings(); track finding.code + (finding.subject ?? '')) {
+                <li
+                  class="onb-finding"
+                  [class.onb-finding--blocker]="finding.severity === 'BLOCKER'"
+                  [class.onb-finding--warning]="finding.severity === 'WARNING'"
+                >
+                  <span class="onb-finding-badge">{{ finding.severity === 'BLOCKER' ? 'Must fix' : 'Note' }}</span>
+                  <span>{{ finding.message }}</span>
+                </li>
+              }
+            </ul>
+          }
+
           <app-error-banner [error]="publishError()" (dismissed)="publishError.set(null)" />
 
           <footer class="onb-stage-footer">
@@ -103,10 +135,10 @@
 
             @if (isLastStage()) {
               <button type="button" appButton variant="primary" [disabled]="!store.publishable()" (click)="publish()">
-                Create this workshop
+                Create Workshop
               </button>
             } @else {
-              <button type="button" appButton variant="primary" (click)="next()">Continue</button>
+              <button type="button" appButton variant="primary" (click)="next()">Next</button>
             }
           </footer>
         </main>
@@ -124,6 +156,7 @@
         [revealed]="revealedStepCount()"
         [ready]="phase() === 'READY'"
         [inviteLink]="created()?.inviteLink ?? null"
+        [registrationCode]="created()?.customerRegistrationCode ?? null"
         [nextSteps]="nextSteps()"
         [summaryLine]="summaryLine()"
         (done)="enterWorkshops()"

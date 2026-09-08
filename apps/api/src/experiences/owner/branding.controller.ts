@@ -9,6 +9,7 @@ export interface UpdateBrandingDto {
   name?: string;
   logoUrl?: string | null;
   palette?: string;
+  navigationLayout?: string;
 }
 
 @Controller("owner/branding")
@@ -46,6 +47,7 @@ export class OwnerBrandingController {
       city: tenant.city,
       logoUrl: themeConfig.logoUrl ?? null,
       palette: themeConfig.palette ?? "crimson",
+      navigationLayout: themeConfig.navigationLayout ?? "SIDEBAR",
     };
   }
 
@@ -65,6 +67,7 @@ export class OwnerBrandingController {
       ...(dto.palette ? { palette: dto.palette } : {}),
       ...(dto.logoUrl !== undefined ? { logoUrl: dto.logoUrl } : {}),
       ...(dto.name ? { name: dto.name.trim() } : {}),
+      ...(dto.navigationLayout ? { navigationLayout: dto.navigationLayout } : {}),
     };
 
     await this.prisma.$transaction(async (tx) => {

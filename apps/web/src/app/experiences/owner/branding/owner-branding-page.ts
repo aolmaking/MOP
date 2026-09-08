@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { UpperCasePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { type WorkshopPaletteKey } from '@mop/shared';
+import { type WorkshopPaletteKey, type NavigationLayoutType } from '@mop/shared';
 import { ThemeService } from '../../../ui/theme.service';
 import { APP_PALETTES } from '../../../ui/palettes';
 import { WorkshopBrandingService } from '../../../ui/workshop-branding.service';
@@ -123,12 +123,20 @@ export class OwnerBrandingPage {
   readonly workshopName = signal(this.branding.activeWorkshop().name);
   readonly logoUrl = signal(this.branding.activeWorkshop().logoUrl || '');
   readonly selectedPalette = signal<WorkshopPaletteKey>(this.branding.activeWorkshop().palette || 'crimson');
+  readonly selectedLayout = signal<NavigationLayoutType>(this.branding.activeWorkshop().navigationLayout || 'SIDEBAR');
   readonly saving = signal(false);
 
   selectPalette(key: WorkshopPaletteKey): void {
     this.selectedPalette.set(key);
     // Instant preview
     this.theme.setPalette(key);
+  }
+
+  selectLayout(layout: NavigationLayoutType): void {
+    this.selectedLayout.set(layout);
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-layout', layout);
+    }
   }
 
   get activePaletteDef() {
@@ -143,6 +151,7 @@ export class OwnerBrandingPage {
       code: this.branding.activeWorkshop().code,
       logoUrl: this.logoUrl().trim() || null,
       palette: this.selectedPalette(),
+      navigationLayout: this.selectedLayout(),
     };
 
     try {
@@ -156,6 +165,6 @@ export class OwnerBrandingPage {
     this.branding.setBranding(updated);
     this.theme.setPalette(updated.palette);
     this.saving.set(false);
-    this.toast.show('Workshop branding and color palette updated successfully!', 'success');
+    this.toast.show('Workshop branding and navigation layout updated successfully across all pages!', 'success');
   }
 }

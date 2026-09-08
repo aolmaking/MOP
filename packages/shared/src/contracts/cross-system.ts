@@ -338,6 +338,56 @@ export function isValidPhoneNumber(raw: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Workshop Navigation Layouts
+// ---------------------------------------------------------------------------
+
+export type NavigationLayoutType = "SIDEBAR" | "NAVBAR" | "BOTTOM_BAR";
+
+// ---------------------------------------------------------------------------
+// 24 Canonical Vehicle Subsystems Taxonomy
+// ---------------------------------------------------------------------------
+
+export interface VehicleSubsystem {
+  readonly id: string;
+  readonly nameEn: string;
+  readonly nameAr: string;
+  readonly categoryEn: string;
+  readonly icon: string;
+  readonly descriptionEn: string;
+}
+
+export const VEHICLE_SUBSYSTEMS: readonly VehicleSubsystem[] = [
+  { id: 'engine', nameEn: 'Engine Powertrain', nameAr: 'المحرك وتوليد القدرة', categoryEn: 'Powertrain', icon: '⚙️', descriptionEn: 'Engine block, cylinders, ignition, timing & internal combustion.' },
+  { id: 'transmission', nameEn: 'Transmission & Gearbox', nameAr: 'ناقل الحركة والجير', categoryEn: 'Powertrain', icon: '⚙️', descriptionEn: 'Automatic/manual gearbox, torque converter, clutches and solenoids.' },
+  { id: 'brakes', nameEn: 'Brake System & ABS', nameAr: 'منظومة الفرامل والـ ABS', categoryEn: 'Safety & Control', icon: '🔘', descriptionEn: 'Pads, discs/rotors, calipers, master cylinder, and ABS module.' },
+  { id: 'cooling', nameEn: 'Cooling System & Radiator', nameAr: 'نظام التبريد والرادياتير', categoryEn: 'Thermal', icon: '🌡️', descriptionEn: 'Radiator, coolant pump, thermostat, hoses, and cooling fans.' },
+  { id: 'ac_climate', nameEn: 'A/C & Climate Control', nameAr: 'التكييف والتحكم بالمناخ', categoryEn: 'Comfort', icon: '❄️', descriptionEn: 'Compressor, condenser, evaporator, cabin filter, and refrigerant lines.' },
+  { id: 'battery_electrical', nameEn: 'Battery & Electrical System', nameAr: 'البطارية والكهرباء', categoryEn: 'Electrical', icon: '⚡', descriptionEn: '12V battery, alternator, starter motor, fuse boxes, and wiring harness.' },
+  { id: 'suspension', nameEn: 'Suspension & Struts', nameAr: 'نظام التعليق والمساعدين', categoryEn: 'Chassis & Ride', icon: '🔩', descriptionEn: 'Shocks, struts, control arms, springs, ball joints, and bushings.' },
+  { id: 'steering', nameEn: 'Steering System & Alignment', nameAr: 'نظام التوجيه والدركسيون', categoryEn: 'Chassis & Ride', icon: '🎯', descriptionEn: 'Steering rack, tie rods, power steering pump, and alignment.' },
+  { id: 'exhaust', nameEn: 'Exhaust & Emissions', nameAr: 'العادم والانبعاثات', categoryEn: 'Emissions', icon: '💨', descriptionEn: 'Exhaust manifold, catalytic converter, muffler, and O2 sensors.' },
+  { id: 'tires_wheels', nameEn: 'Tires & Wheels', nameAr: 'الإطارات والجنوط', categoryEn: 'Tires & Wheels', icon: '🛞', descriptionEn: 'Tread depth, balance, rims, TPMS sensors, and puncture repair.' },
+  { id: 'fuel_system', nameEn: 'Fuel System & Injectors', nameAr: 'نظام الوقود والرشاشات', categoryEn: 'Powertrain', icon: '⛽', descriptionEn: 'Fuel pump, fuel filter, injectors, rail, and tank lines.' },
+  { id: 'fluids', nameEn: 'Fluids & Maintenance', nameAr: 'الزيوت والسوائل الدورية', categoryEn: 'Maintenance', icon: '💧', descriptionEn: 'Engine oil, transmission fluid, brake fluid, filters, and lubes.' },
+  { id: 'ignition', nameEn: 'Ignition & Starter System', nameAr: 'نظام الإشعال والمارش', categoryEn: 'Electrical', icon: '🔌', descriptionEn: 'Spark plugs, ignition coils, glow plugs, and starter relay.' },
+  { id: 'lighting', nameEn: 'Headlights & Exterior Lighting', nameAr: 'الإضاءة والكشافات الخارجية', categoryEn: 'Body & Electrical', icon: '💡', descriptionEn: 'LED/Xenon headlights, tail lights, indicators, and DRLs.' },
+  { id: 'wipers_mirrors', nameEn: 'Windshield, Wipers & Mirrors', nameAr: 'الزجاج والمساحات والمرايات', categoryEn: 'Visibility', icon: '🪞', descriptionEn: 'Windshield glass, wiper motors, washer jets, and side mirrors.' },
+  { id: 'interior', nameEn: 'Cabin Interior & Seats', nameAr: 'المقصورة والفرش الداخلي', categoryEn: 'Cabin', icon: '🪑', descriptionEn: 'Seats, dashboard trim, upholstery, belts, and center console.' },
+  { id: 'body_paint', nameEn: 'Body Panels & Exterior Paint', nameAr: 'السمكرة والدهان الخارجي', categoryEn: 'Body', icon: '🚗', descriptionEn: 'Bumpers, fenders, hood, doors, paint correction, and dent repair.' },
+  { id: 'audio_nav', nameEn: 'Audio, Display & Navigation', nameAr: 'الشاشات والصوتيات والملاحة', categoryEn: 'Infotainment', icon: '📻', descriptionEn: 'Touchscreen head unit, speakers, amplifier, GPS, and Apple CarPlay.' },
+  { id: 'adas', nameEn: 'ADAS & Parking Sensors', nameAr: 'حساسات الركن وأنظمة ADAS', categoryEn: 'Electronics & Safety', icon: '📡', descriptionEn: 'Radar, parking sensors, 360 cameras, and lane departure sensors.' },
+  { id: 'drivetrain', nameEn: 'Drivetrain, Axles & Differential', nameAr: 'الكورونا والعكوس وعمود الكردان', categoryEn: 'Drivetrain', icon: '🔗', descriptionEn: 'Drive shafts, CV axles, differential, 4WD transfer case, and U-joints.' },
+  { id: 'chassis', nameEn: 'Chassis, Frame & Underbody', nameAr: 'الشاسيه والبدن السفلي', categoryEn: 'Chassis', icon: '🛡️', descriptionEn: 'Subframe, frame rails, underbody protection, and crossmembers.' },
+  { id: 'hybrid_ev', nameEn: 'Hybrid & EV High-Voltage System', nameAr: 'المنظومة الكهربائية والهايبرد', categoryEn: 'EV & High Voltage', icon: '🔋', descriptionEn: 'High voltage traction battery, inverter, DC-DC converter, and charging port.' },
+  { id: 'airbags', nameEn: 'Airbags & SRS Safety Systems', nameAr: 'الوسائد الهوائية وأنظمة الأمان', categoryEn: 'Safety', icon: '🎯', descriptionEn: 'Steering airbag, curtain airbags, impact sensors, and seatbelt pretensioners.' },
+  { id: 'doors_locks', nameEn: 'Doors, Locks & Windows', nameAr: 'الأبواب والسنتر لوك والزجاج', categoryEn: 'Body & Hardware', icon: '🔒', descriptionEn: 'Power window regulators, door latches, central lock actuators, and hinges.' },
+];
+
+export function getVehicleSubsystem(id: string): VehicleSubsystem | undefined {
+  return VEHICLE_SUBSYSTEMS.find((s) => s.id === id);
+}
+
+// ---------------------------------------------------------------------------
 // Workshop UI Themes & Color Palettes
 // ---------------------------------------------------------------------------
 
@@ -357,6 +407,7 @@ export interface WorkshopPaletteDefinition {
   readonly focusRing: string;
   readonly previewColor: string;
   readonly description: string;
+  readonly shadowGlow: string;
 }
 
 export const WORKSHOP_PALETTES: readonly WorkshopPaletteDefinition[] = [
@@ -374,6 +425,7 @@ export const WORKSHOP_PALETTES: readonly WorkshopPaletteDefinition[] = [
     focusRing: "#ff4b3e",
     previewColor: "#d41717",
     description: "Classic high-energy performance red with charcoal accents.",
+    shadowGlow: "rgba(212, 23, 23, 0.25)",
   },
   {
     key: "cobalt",
@@ -389,6 +441,7 @@ export const WORKSHOP_PALETTES: readonly WorkshopPaletteDefinition[] = [
     focusRing: "#60a5fa",
     previewColor: "#2563eb",
     description: "Vibrant diagnostic blue engineered for modern tech-forward shops.",
+    shadowGlow: "rgba(37, 99, 235, 0.25)",
   },
   {
     key: "emerald",
@@ -404,6 +457,7 @@ export const WORKSHOP_PALETTES: readonly WorkshopPaletteDefinition[] = [
     focusRing: "#34d399",
     previewColor: "#059669",
     description: "Crisp racing green conveying precision craftsmanship and EV readiness.",
+    shadowGlow: "rgba(5, 150, 105, 0.25)",
   },
   {
     key: "amber",
@@ -419,6 +473,7 @@ export const WORKSHOP_PALETTES: readonly WorkshopPaletteDefinition[] = [
     focusRing: "#fbbf24",
     previewColor: "#d97706",
     description: "Bold gold-amber built for fleet logistics and speed mechanics.",
+    shadowGlow: "rgba(217, 119, 6, 0.25)",
   },
   {
     key: "violet",
@@ -434,6 +489,7 @@ export const WORKSHOP_PALETTES: readonly WorkshopPaletteDefinition[] = [
     focusRing: "#a78bfa",
     previewColor: "#7c3aed",
     description: "Deep luxury violet tailored for prestige, tuning, and bespoke vehicles.",
+    shadowGlow: "rgba(124, 58, 237, 0.25)",
   },
   {
     key: "titanium",
@@ -449,6 +505,7 @@ export const WORKSHOP_PALETTES: readonly WorkshopPaletteDefinition[] = [
     focusRing: "#cbd5e1",
     previewColor: "#475569",
     description: "Minimalist stealth carbon and slate steel for industrial clarity.",
+    shadowGlow: "rgba(100, 116, 139, 0.25)",
   },
 ];
 

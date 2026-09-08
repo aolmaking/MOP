@@ -181,4 +181,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "analytics.saved_views.manage": true,
     "analytics.export": true,
   },
+  OPERATOR: {
+    "customer.intake.create": true,
+    "workorders.branch.view": true,
+    "decisions.branch.view": true,
+    "customer_decision.record_on_behalf": true,
+    "finance.invoice.view": true,
+    "inventory.stock.view": true,
+  },
 };

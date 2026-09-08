@@ -32,7 +32,8 @@ export class InventoryItem {
   protected readonly state = signal<State>('loading');
   protected readonly error = signal<PresentedError | null>(null);
 
-  protected readonly movementModal = signal<'receive' | 'adjust' | null>(null);
+  protected readonly movementModal = signal<'receive' | 'adjust' | 'transfer' | null>(null);
+  protected readonly sourceWarehouseId = signal<string>('');
   protected readonly targetWarehouseId = signal<string>('');
   protected readonly movementQty = signal<number>(1);
   protected readonly movementNotes = signal<string>('');
@@ -114,14 +115,58 @@ export class InventoryItem {
     this.movementModal.set('adjust');
   }
 
+  protected openTransfer(): void {
+    const balances = this.detail()?.item.stockBalances ?? [];
+    const fromWh = balances[0]?.warehouseId ?? '';
+    const toWh = balances.length > 1 ? balances[1]?.warehouseId ?? '' : fromWh;
+    this.sourceWarehouseId.set(fromWh);
+    this.targetWarehouseId.set(toWh);
+    this.movementQty.set(1);
+    this.movementNotes.set('');
+    this.movementError.set(null);
+    this.movementModal.set('transfer');
+  }
+
   protected closeMovementModal(): void {
     this.movementModal.set(null);
   }
 
   protected submitMovement(): void {
     const modal = this.movementModal();
-    const whId = this.targetWarehouseId();
     const qty = Number(this.movementQty());
+
+    if (modal === 'transfer') {
+      const fromWh = this.sourceWarehouseId();
+      const toWh = this.targetWarehouseId();
+      if (!fromWh || !toWh) {
+        this.movementError.set('Please select both source and destination warehouses');
+        return;
+      }
+      if (fromWh === toWh) {
+        this.movementError.set('Source and destination warehouses cannot be the same');
+        return;
+      }
+      if (!qty || qty <= 0) {
+        this.movementError.set('Transfer quantity must be greater than zero');
+        return;
+      }
+      this.movementSaving.set(true);
+      this.movementError.set(null);
+      this.api.transfer(this.id(), fromWh, toWh, qty, this.movementNotes()).subscribe({
+        next: () => {
+          this.movementSaving.set(false);
+          this.movementModal.set(null);
+          this.load();
+        },
+        error: (err: PresentedError) => {
+          this.movementSaving.set(false);
+          this.movementError.set(err.message || 'Failed to execute transfer');
+        },
+      });
+      return;
+    }
+
+    const whId = this.targetWarehouseId();
     if (!whId) {
       this.movementError.set('Please select a warehouse');
       return;

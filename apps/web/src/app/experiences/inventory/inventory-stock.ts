@@ -1,4 +1,4 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -30,8 +30,17 @@ export class InventoryStock {
 
   protected readonly table = signal<StockTable | null>(null);
   protected readonly query = signal('');
+  protected readonly selectedWarehouseId = signal<string>('all');
   protected readonly state = signal<State>('loading');
   protected readonly error = signal<PresentedError | null>(null);
+
+  protected readonly visibleWarehouses = computed(() => {
+    const t = this.table();
+    if (!t) return [];
+    const sel = this.selectedWarehouseId();
+    if (sel === 'all') return t.warehouses;
+    return t.warehouses.filter((w) => w.id === sel);
+  });
 
   private readonly queries = new Subject<string>();
 
@@ -90,5 +99,9 @@ export class InventoryStock {
     if (row.totalAvailable <= row.criticalStockThreshold) return 'critical';
     if (row.totalAvailable <= row.lowStockThreshold) return 'low';
     return 'ok';
+  }
+
+  protected findWarehouseCell(row: StockRow, warehouseId: string) {
+    return row.byWarehouse.find((c) => c.warehouseId === warehouseId) ?? { warehouseId, available: 0, damaged: 0 };
   }
 }

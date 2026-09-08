@@ -1,7 +1,7 @@
 <section class="home">
   @switch (state()) {
     @case ('loading') {
-      <p class="state-body" aria-busy="true">Loading…</p>
+      <p class="state-body" aria-busy="true">Loading your service portal…</p>
     }
     @case ('forbidden') {
       <div class="state">
@@ -17,13 +17,24 @@
     }
     @case ('ready') {
       @if (data(); as d) {
+        <!-- Portal Quick Header -->
+        <header class="hub-header">
+          <div class="hub-title-group">
+            <h1 class="hub-title">Live Service Tracking</h1>
+            <p class="hub-subtitle">Real-time status, technical workflow progress, and authorizations.</p>
+          </div>
+        </header>
+
+        @if (decisionSuccess(); as msg) {
+          <div class="success-banner" role="status">
+            <span class="success-icon">✓</span>
+            <span>{{ msg }}</span>
+          </div>
+        }
+
         @if (d.pendingDecisions > 0) {
-          <!-- Leads the page, per the spec: this is usually why the
-               portal was opened at all. Points at the page that can
-               actually answer it -- it pointed at Current Service until
-               that page existed, which showed the customer the flag
-               again rather than the question. -->
-          <a class="decision-banner" routerLink="/customer/decisions">
+          <!-- Prominent urgent decision banner -->
+          <a class="decision-banner" href="#decisions-section">
             <span class="decision-count">{{ d.pendingDecisions }}</span>
             <span class="decision-text">
               {{ d.pendingDecisions === 1 ? 'decision is' : 'decisions are' }} waiting for your answer
@@ -31,21 +42,109 @@
           </a>
         }
 
+        <!-- LIVE TRACKING SYSTEM (Core Operational Engine) -->
+        <section class="live-tracker-section" aria-label="Live Vehicle Progress Tracker">
+          <div class="tracker-header">
+            <div class="tracker-badge-row">
+              <span class="pulse-indicator" aria-hidden="true"></span>
+              <h2 class="tracker-title">Live Service Tracking</h2>
+            </div>
+            @if (activeJobs().length > 1) {
+              <div class="vehicle-tabs" role="tablist" aria-label="Active Vehicles in Service">
+                @for (job of activeJobs(); track job.workOrderId) {
+                  <button
+                    type="button"
+                    role="tab"
+                    class="vehicle-tab-btn"
+                    [class.vehicle-tab-btn--active]="job.workOrderId === currentJob()?.workOrderId"
+                    [attr.aria-selected]="job.workOrderId === currentJob()?.workOrderId"
+                    (click)="selectJob(job.workOrderId)"
+                  >
+                    🚗 {{ job.asset }}
+                  </button>
+                }
+              </div>
+            }
+          </div>
+
+          @if (currentJob(); as job) {
+            <article class="tracker-card">
+              <div class="tracker-card-head">
+                <div class="vehicle-info">
+                  <span class="vehicle-plate">{{ job.asset }}</span>
+                  <span class="wo-ref">Job #{{ job.workOrderId.slice(-6).toUpperCase() }}</span>
+                </div>
+                <div class="status-badge" [attr.data-status]="job.status">
+                  {{ labelForStatus(job.status) }}
+                </div>
+              </div>
+
+              <!-- Interactive Workflow Strip Component with Live Polling -->
+              <div class="journey-container">
+                @if (currentJourney(); as journey) {
+                  <app-workflow-strip [journey]="journey" />
+                } @else {
+                  <div class="journey-placeholder">
+                    <span class="spin-dot" aria-hidden="true"></span>
+                    <span>Connecting live tracking stream to workshop floor…</span>
+                  </div>
+                }
+              </div>
+
+              <!-- Inline Technician Requisition & Decision Answer -->
+              @if (pendingDecisions().length > 0) {
+                <div class="requisitions-box" id="decisions-section">
+                  <div class="requisitions-head">
+                    <span class="warning-icon">⚠️</span>
+                    <div>
+                      <h3 class="requisitions-title">Workshop Approval Required</h3>
+                      <p class="requisitions-desc">
+                        Our technicians have inspected your vehicle and need your authorization to proceed with parts and labor.
+                      </p>
+                    </div>
+                  </div>
+
+                  @for (dec of pendingDecisions(); track dec.requestId) {
+                    <div class="decision-embed">
+                      <app-decision-answer
+                        [decision]="dec"
+                        [submitting]="submittingDecision() === dec.requestId"
+                        [error]="decisionError()[dec.requestId] ?? null"
+                        (answered)="sendDecisionAnswer(dec.requestId, $event)"
+                      />
+                    </div>
+                  }
+                </div>
+              }
+            </article>
+          } @else {
+            <div class="tracker-empty-card">
+              <div class="empty-icon-wrap">🚗</div>
+              <h3 class="empty-title">No Active Service Right Now</h3>
+              <p class="empty-desc">
+                Your registered vehicles are running smoothly. When you arrive at the workshop, your service operator will check in your vehicle and activate your live service tracker.
+              </p>
+            </div>
+          }
+        </section>
+
+        <!-- ORIENTATION TILES -->
         <div class="tiles">
-          <a class="tile" routerLink="/customer/assets">
+          <a class="tile" routerLink="/customer/garage" [queryParams]="{ tab: 'vehicles' }">
             <span class="tile-count">{{ d.assetCount }}</span>
             <span class="tile-label">{{ d.assetCount === 1 ? 'Vehicle' : 'Vehicles' }}</span>
           </a>
-          <a class="tile" routerLink="/customer/service">
+          <a class="tile" routerLink="/customer">
             <span class="tile-count">{{ d.currentServiceCount }}</span>
             <span class="tile-label">In service now</span>
           </a>
-          <a class="tile" routerLink="/customer/invoices">
+          <a class="tile" routerLink="/customer/garage" [queryParams]="{ tab: 'invoices' }">
             <span class="tile-count">{{ d.openInvoiceBalance }}</span>
             <span class="tile-label">Balance owed</span>
           </a>
         </div>
 
+        <!-- RECENT ACTIVITY LOG -->
         <h2 class="section-title">Recent activity</h2>
         @if (d.recentActivity.length === 0) {
           <p class="state-body">Nothing to show yet.</p>

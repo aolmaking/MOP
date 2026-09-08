@@ -1,11 +1,15 @@
-import { Body, Controller, ForbiddenException, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, ForbiddenException, Get, Optional, Param, Post, Query, UseGuards } from "@nestjs/common";
 import type { SessionContext } from "@mop/shared";
 import { SessionGuard } from "../../identity/auth/session.guard";
 import { CurrentSession } from "../../identity/auth/current-session.decorator";
 import { CustomerPortalService } from "./customer-portal.service";
 import { CustomerDecisionService } from "./decision.service";
 import { WorkflowJourneyService } from "../operations/workflow-journey.service";
+import { CatalogBrowseService } from "../inventory/catalog-browse.service";
+import { parseAttributeQuery } from "../inventory/inventory.controller";
 import { RespondDto } from "./decision.dto";
+import { ReportCustomerIssueDto } from "./report-issue.dto";
+import { CustomerPosOrderDto } from "./customer-pos-order.dto";
 
 /**
  * The Customer Portal's authenticated pages.
@@ -30,7 +34,56 @@ export class CustomerPortalController {
     private readonly portal: CustomerPortalService,
     private readonly decisions: CustomerDecisionService,
     private readonly journey: WorkflowJourneyService,
+    @Optional() private readonly browse?: CatalogBrowseService,
   ) {}
+
+  /**
+   * Directly submit a vehicle issue or book a service from the customer portal.
+   *
+   * Creates a work order registered to this customer, assigns it to the
+   * active workshop branch, and moves it to REGISTERED so it enters the
+   * workshop queue immediately.
+   */
+  @Post("service-requests")
+  async reportIssue(@CurrentSession() session: SessionContext, @Body() dto: ReportCustomerIssueDto) {
+    const { tenantId, customerId } = this.require(session);
+    return this.portal.reportIssue(tenantId, customerId, dto, session);
+  }
+
+  /**
+   * The workshop's parts catalogue for customer POS browsing.
+   * "If the customer only needs to buy a part and leave".
+   */
+  @Get("parts-catalog")
+  async partsCatalog(
+    @CurrentSession() session: SessionContext,
+    @Query("q") query?: string,
+    @Query("categoryId") categoryId?: string,
+    @Query("attributes") attributes?: string,
+    @Query("inStockOnly") inStockOnly?: string,
+    @Query("page") page?: string,
+  ) {
+    const { tenantId } = this.require(session);
+    if (!this.browse) {
+      return { items: [], total: 0, page: 1, pageSize: 24, categories: [], filters: [] };
+    }
+    return this.browse.browse(tenantId, {
+      query,
+      categoryId,
+      attributes: parseAttributeQuery(attributes),
+      inStockOnly: inStockOnly === "true",
+      page: page ? Number(page) : 1,
+    });
+  }
+
+  /**
+   * Over-the-counter POS parts checkout for customer direct purchase.
+   */
+  @Post("pos/order")
+  async createPosOrder(@CurrentSession() session: SessionContext, @Body() dto: CustomerPosOrderDto) {
+    const { tenantId, customerId } = this.require(session);
+    return this.portal.createPosOrder(tenantId, customerId, dto, session);
+  }
 
   @Get("home")
   async home(@CurrentSession() session: SessionContext) {

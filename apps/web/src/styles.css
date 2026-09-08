@@ -298,6 +298,8 @@
   --accent-hover: #ee2020;
   --accent-muted: #2b1414;
   --focus-ring: #ff4b3e;
+  --palette-shadow-glow: rgba(212, 23, 23, 0.35);
+  --palette-ambient-glow: rgba(212, 23, 23, 0.12);
 }
 :root[data-theme='light'][data-palette='crimson'] {
   --brand: #c11414;
@@ -308,6 +310,8 @@
   --accent-hover: #a01010;
   --accent-muted: #fbe9e8;
   --focus-ring: #d41717;
+  --palette-shadow-glow: rgba(193, 20, 20, 0.25);
+  --palette-ambient-glow: rgba(193, 20, 20, 0.08);
 }
 
 /* 2. Cyber Cobalt (Diagnostic Blue) */
@@ -320,6 +324,8 @@
   --accent-hover: #3b82f6;
   --accent-muted: #172554;
   --focus-ring: #60a5fa;
+  --palette-shadow-glow: rgba(37, 99, 235, 0.35);
+  --palette-ambient-glow: rgba(37, 99, 235, 0.12);
 }
 :root[data-theme='light'][data-palette='cobalt'] {
   --brand: #1d4ed8;
@@ -330,6 +336,8 @@
   --accent-hover: #1e40af;
   --accent-muted: #dbeafe;
   --focus-ring: #2563eb;
+  --palette-shadow-glow: rgba(29, 78, 216, 0.25);
+  --palette-ambient-glow: rgba(29, 78, 216, 0.08);
 }
 
 /* 3. Emerald Performance (Apex Precision Green) */
@@ -342,6 +350,8 @@
   --accent-hover: #10b981;
   --accent-muted: #022c22;
   --focus-ring: #34d399;
+  --palette-shadow-glow: rgba(5, 150, 105, 0.35);
+  --palette-ambient-glow: rgba(5, 150, 105, 0.12);
 }
 :root[data-theme='light'][data-palette='emerald'] {
   --brand: #047857;
@@ -352,6 +362,8 @@
   --accent-hover: #065f46;
   --accent-muted: #d1fae5;
   --focus-ring: #059669;
+  --palette-shadow-glow: rgba(4, 120, 87, 0.25);
+  --palette-ambient-glow: rgba(4, 120, 87, 0.08);
 }
 
 /* 4. Electric Amber (Turbo Speed Gold) */
@@ -364,6 +376,8 @@
   --accent-hover: #f59e0b;
   --accent-muted: #451a03;
   --focus-ring: #fbbf24;
+  --palette-shadow-glow: rgba(217, 119, 6, 0.35);
+  --palette-ambient-glow: rgba(217, 119, 6, 0.12);
 }
 :root[data-theme='light'][data-palette='amber'] {
   --brand: #b45309;
@@ -374,6 +388,8 @@
   --accent-hover: #92400e;
   --accent-muted: #fef3c7;
   --focus-ring: #d97706;
+  --palette-shadow-glow: rgba(180, 83, 9, 0.25);
+  --palette-ambient-glow: rgba(180, 83, 9, 0.08);
 }
 
 /* 5. Royal Violet (Luxury GT Purple) */
@@ -386,6 +402,8 @@
   --accent-hover: #8b5cf6;
   --accent-muted: #2e1065;
   --focus-ring: #a78bfa;
+  --palette-shadow-glow: rgba(124, 58, 237, 0.35);
+  --palette-ambient-glow: rgba(124, 58, 237, 0.12);
 }
 :root[data-theme='light'][data-palette='violet'] {
   --brand: #6d28d9;
@@ -396,6 +414,8 @@
   --accent-hover: #5b21b6;
   --accent-muted: #ede9fe;
   --focus-ring: #7c3aed;
+  --palette-shadow-glow: rgba(109, 40, 217, 0.25);
+  --palette-ambient-glow: rgba(109, 40, 217, 0.08);
 }
 
 /* 6. Midnight Titanium (Stealth Industrial Slate) */
@@ -408,6 +428,8 @@
   --accent-hover: #94a3b8;
   --accent-muted: #0f172a;
   --focus-ring: #cbd5e1;
+  --palette-shadow-glow: rgba(100, 116, 139, 0.35);
+  --palette-ambient-glow: rgba(100, 116, 139, 0.12);
 }
 :root[data-theme='light'][data-palette='titanium'] {
   --brand: #334155;
@@ -418,6 +440,156 @@
   --accent-hover: #334155;
   --accent-muted: #f1f5f9;
   --focus-ring: #64748b;
+  --palette-shadow-glow: rgba(71, 85, 105, 0.25);
+  --palette-ambient-glow: rgba(71, 85, 105, 0.08);
+}
+
+/* =============================================================================
+ * WORKSHOP NAVIGATION SHELL LAYOUT ENGINE (SIDEBAR | NAVBAR | BOTTOM_BAR)
+ * Enforces workshop layout structure across all pages and shells
+ * ============================================================================= */
+
+/* 1. LEFT SIDEBAR LAYOUT (Default Desktop Command Shell) */
+:root[data-layout='SIDEBAR'] .rail-shell {
+  display: flex !important;
+  flex-direction: row !important;
+  min-height: 100vh !important;
+  align-items: stretch !important;
+}
+
+:root[data-layout='SIDEBAR'] .rail {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  width: 240px !important;
+  min-width: 240px !important;
+  max-width: 240px !important;
+  height: 100vh !important;
+  position: sticky !important;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 100 !important;
+  padding: var(--space-4) var(--space-3) !important;
+  gap: var(--space-1) !important;
+  border-inline-end: 1px solid var(--border) !important;
+  border-block-end: none !important;
+  background: var(--brand-deep) !important;
+  box-shadow: 4px 0 24px var(--palette-ambient-glow, rgba(0, 0, 0, 0.35)) !important;
+  overflow-y: auto !important;
+}
+
+:root[data-layout='SIDEBAR'] .rail-brand {
+  padding: var(--space-2) var(--space-3) var(--space-4) !important;
+  margin-bottom: var(--space-2) !important;
+  border-bottom: 1px solid rgb(255 255 255 / 0.12) !important;
+  font-size: var(--text-lg) !important;
+}
+
+:root[data-layout='SIDEBAR'] .rail-link {
+  width: 100% !important;
+  padding: var(--space-2) var(--space-3) !important;
+  border-radius: var(--radius-md) !important;
+  justify-content: flex-start !important;
+}
+
+:root[data-layout='SIDEBAR'] .rail-link::after {
+  inset-inline: 0 !important;
+  inset-block: 0 !important;
+  inline-size: 3px !important;
+  block-size: 100% !important;
+  border-radius: 2px 0 0 2px !important;
+}
+
+:root[data-layout='SIDEBAR'] .rail-footer {
+  margin-top: auto !important;
+  padding-top: var(--space-4) !important;
+  border-top: 1px solid rgb(255 255 255 / 0.12) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: var(--space-2) !important;
+  width: 100% !important;
+}
+
+:root[data-layout='SIDEBAR'] .rail-main-container {
+  flex: 1 !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* 2. TOP NAVBAR LAYOUT (Horizontal Glass Header) */
+:root[data-layout='NAVBAR'] .rail-shell {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 100vh !important;
+}
+
+:root[data-layout='NAVBAR'] .rail {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: var(--space-1) var(--space-2) !important;
+  padding: var(--space-2) var(--space-5) !important;
+  background: var(--brand-deep) !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 100 !important;
+  border-block-end: 1px solid var(--brand) !important;
+  box-shadow: 0 4px 20px var(--palette-ambient-glow, rgba(0, 0, 0, 0.4)) !important;
+}
+
+:root[data-layout='NAVBAR'] .rail-footer {
+  margin-left: auto !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: var(--space-3) !important;
+}
+
+:root[data-layout='NAVBAR'] .rail-main-container {
+  flex: 1 !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* 3. BOTTOM BAR LAYOUT ("par down" tablet/mobile thumb-reachable dock) */
+:root[data-layout='BOTTOM_BAR'] .rail-shell {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 100vh !important;
+  padding-bottom: 64px !important;
+}
+
+:root[data-layout='BOTTOM_BAR'] .rail {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: auto !important;
+  z-index: 1000 !important;
+  height: 56px !important;
+  padding: var(--space-1) var(--space-4) !important;
+  background: var(--brand-deep) !important;
+  border-block-start: 1px solid var(--brand) !important;
+  border-block-end: none !important;
+  box-shadow: 0 -4px 24px var(--palette-ambient-glow, rgba(0, 0, 0, 0.5)) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+:root[data-layout='BOTTOM_BAR'] .rail-main-container {
+  flex: 1 !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+:root[data-layout='BOTTOM_BAR'] .rail-footer {
+  margin-left: var(--space-3) !important;
 }
 
 /* =============================================================================

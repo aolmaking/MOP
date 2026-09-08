@@ -27,6 +27,9 @@ export class ValidateDraftDto {
   @IsOptional() @IsString() @Length(0, 60) businessType?: string;
   @IsOptional() @IsString() @Length(0, 60) businessTypeOther?: string;
   @IsOptional() @IsString() @Length(0, 40) primaryCategory?: string;
+  @IsOptional() @IsString() @Length(0, 40) themePalette?: string;
+  @IsOptional() @IsString() @Length(0, 500) logoUrl?: string;
+  @IsOptional() @IsString() @Length(0, 40) navigationLayout?: string;
 
   @IsOptional() @IsString() @Length(0, 120) ownerFullName?: string;
   @IsOptional() @IsString() @Length(0, 200) ownerEmail?: string;

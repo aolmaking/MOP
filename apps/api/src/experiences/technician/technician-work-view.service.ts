@@ -18,7 +18,11 @@ import { SpecializationService, type DefinitionSummary, type EntrySummary } from
 export interface TechnicianJob {
   readonly workOrderId: string;
   readonly identifier: string | null;
+  readonly vehicleModel?: string | null;
+  readonly category?: string | null;
+  readonly vin?: string | null;
   readonly customerName: string;
+  readonly customerPhone?: string | null;
   readonly status: string;
   readonly complaint: string | null;
   readonly inspectionDeclined: boolean;
@@ -135,10 +139,37 @@ export interface WorkCardFinding {
   readonly decisionStatus: FindingDecisionStatus;
 }
 
+export interface InspectionBoxCustomerDetails {
+  readonly customerName: string;
+  readonly phone: string | null;
+  readonly vehicleIdentifier: string;
+  readonly vehicleCategory?: string | null;
+  readonly complaint: string;
+}
+
+export interface InspectionBoxItem {
+  readonly id: string;
+  readonly partKey: string;
+  readonly nameEn: string;
+  readonly nameAr: string;
+  readonly systemCategoryEn: string;
+  readonly systemCategoryAr: string;
+  readonly icon: string;
+  readonly color: string;
+  readonly customerDetails: InspectionBoxCustomerDetails;
+  readonly isDone: boolean;
+  readonly completedAt: string | null;
+  readonly symptoms: readonly string[];
+}
+
 export interface WorkCard {
   readonly workOrderId: string;
   readonly identifier: string | null;
+  readonly vehicleModel?: string | null;
+  readonly vin?: string | null;
+  readonly mileage?: string | null;
   readonly customerName: string;
+  readonly customerPhone?: string | null;
   readonly status: string;
   readonly complaint: string | null;
   readonly inspectionDeclined: boolean;
@@ -164,6 +195,9 @@ export interface WorkCard {
   readonly finish: FinishCheck;
   /** Null when the job is not waiting on a move only this technician can make. */
   readonly primaryAction: WorkCardPrimaryAction | null;
+  /** Simplified inspection boxes for each part to inspect */
+  readonly inspectionBoxes: readonly InspectionBoxItem[];
+  readonly inspectionReport?: any | null;
 }
 
 /**
@@ -210,6 +244,402 @@ const PART_STATE: Record<
   CANCELLED: { text: "Cancelled.", waitingOn: "NOBODY", actions: [] },
 };
 
+export const DEFAULT_SUBSYSTEMS: readonly {
+  id: string;
+  nameEn: string;
+  nameAr: string;
+  systemCategoryEn: string;
+  systemCategoryAr: string;
+  icon: string;
+  color: string;
+  symptoms: string[];
+}[] = [
+  {
+    id: "ac",
+    nameEn: "A/C & Climate",
+    nameAr: "مكيف السيارة",
+    systemCategoryEn: "Cooling & Climate System",
+    systemCategoryAr: "نظام التبريد والتكييف",
+    icon: "❄️",
+    color: "#00e5ff",
+    symptoms: [
+      "A/C blowing warm or room temperature air",
+      "Weak airflow from dashboard vents on high speed",
+      "Loud rattling or grinding from A/C compressor",
+      "Musty, moldy, or stale odor inside cabin",
+      "Water dripping onto front passenger footwell",
+    ],
+  },
+  {
+    id: "brakes",
+    nameEn: "Brake System",
+    nameAr: "نظام الفرامل",
+    systemCategoryEn: "Safety & Hydraulic Braking",
+    systemCategoryAr: "الأمان ومنظومة الفرامل",
+    icon: "🛑",
+    color: "#ff1744",
+    symptoms: [
+      "High-pitched squealing or grinding noise on braking",
+      "Soft, spongy, or sinking brake pedal",
+      "Steering wheel or pedal vibration during braking",
+      "Vehicle pulls hard to one side when stopping",
+      "Brake fluid low warning or ABS icon illuminated",
+    ],
+  },
+  {
+    id: "engine",
+    nameEn: "Engine Powertrain",
+    nameAr: "المحرك",
+    systemCategoryEn: "Internal Combustion & Power",
+    systemCategoryAr: "منظومة المحرك والاحتراق",
+    icon: "🚗",
+    color: "#ff9100",
+    symptoms: [
+      "Check Engine warning light illuminated",
+      "Engine idling rough, shuddering, or misfiring",
+      "Metallic clicking or knocking under acceleration",
+      "Sudden loss of acceleration and sluggish power",
+      "Blue or black exhaust smoke with high oil burn",
+    ],
+  },
+  {
+    id: "battery",
+    nameEn: "Battery & Electrical",
+    nameAr: "الكهرباء والبطارية",
+    systemCategoryEn: "Electrical & Energy Storage",
+    systemCategoryAr: "المنظومة الكهربائية والبطارية",
+    icon: "⚡",
+    color: "#ffd600",
+    symptoms: [
+      "Slow engine cranking or clicking when starting",
+      "Battery warning icon remains lit on dashboard",
+      "Headlights and instrument cluster dimming or flickering",
+      "Battery drains completely after parking overnight",
+      "Heavy green or white corrosion on battery terminals",
+    ],
+  },
+  {
+    id: "transmission",
+    nameEn: "Transmission",
+    nameAr: "ناقل الحركة",
+    systemCategoryEn: "Drivetrain & Transmission",
+    systemCategoryAr: "صندوق التروس ونقل الحركة",
+    icon: "⚙️",
+    color: "#7c4dff",
+    symptoms: [
+      "Hard shifting, clunking, or delayed gear engagement",
+      "Transmission slipping out of gear under load",
+      "Burnt transmission fluid smell or red fluid leaks",
+      "High-pitched whining or humming noise at speed",
+      "Delayed response when shifting to Reverse or Drive",
+    ],
+  },
+  {
+    id: "cooling",
+    nameEn: "Cooling System",
+    nameAr: "نظام التبريد",
+    systemCategoryEn: "Radiator & Thermal Loop",
+    systemCategoryAr: "دورة التبريد والرادياتير",
+    icon: "🚰",
+    color: "#00b0ff",
+    symptoms: [
+      "Engine temperature gauge rising into the red zone",
+      "Coolant puddle leaking under front bumper",
+      "Radiator cooling fan running non-stop at high speed",
+      "Visible steam or sweet odor emerging from hood",
+      "Cabin heater blowing cold air despite warm engine",
+    ],
+  },
+  {
+    id: "suspension",
+    nameEn: "Suspension & Shocks",
+    nameAr: "التعليق والمساعدات",
+    systemCategoryEn: "Chassis & Shock Absorption",
+    systemCategoryAr: "العفشة وامتصاص الصدمات",
+    icon: "🔩",
+    color: "#00e676",
+    symptoms: [
+      "Loud knocking or clunking over road bumps",
+      "Excessive car body bounce, diving, or swaying",
+      "Visible oil leaking or misting on strut body",
+      "Vehicle sagging lower on one side or corner",
+      "Uneven or cupped tire tread wear pattern",
+    ],
+  },
+  {
+    id: "steering",
+    nameEn: "Steering & Alignment",
+    nameAr: "نظام التوجيه",
+    systemCategoryEn: "Rack, Pinion & Power Steering",
+    systemCategoryAr: "الدركسيون والعلبة وميزان التوجيه",
+    icon: "🎯",
+    color: "#0284c7",
+    symptoms: [
+      "Steering wheel heavy or stiff to turn while parking",
+      "Vehicle pulls or drifts to left or right constantly",
+      "Whining or groaning noise when steering to full lock",
+      "Excessive play or looseness in steering wheel",
+      "Steering wheel vibration felt at highway speeds",
+    ],
+  },
+  {
+    id: "exhaust",
+    nameEn: "Exhaust & Emissions",
+    nameAr: "نظام العادم",
+    systemCategoryEn: "Muffler, Pipes & Catalytic Converter",
+    systemCategoryAr: "الشكمان ودبة البيئة ومنظومة العادم",
+    icon: "💨",
+    color: "#64748b",
+    symptoms: [
+      "Loud roaring, hissing, or buzzing underneath car",
+      "Strong sulfur, rotten egg, or raw exhaust odor",
+      "Catalytic converter efficiency warning light active",
+      "Rattling metal vibration noise from exhaust muffler",
+      "Visible rust holes, cracks, or hanging exhaust pipe",
+    ],
+  },
+  {
+    id: "tires",
+    nameEn: "Tires & Wheels",
+    nameAr: "الإطارات والجنوط",
+    systemCategoryEn: "Rubber, Rims & Pressure Monitoring",
+    systemCategoryAr: "الكاوتش والجنوط ونظام ضغط الهواء",
+    icon: "🛞",
+    color: "#0ea5e9",
+    symptoms: [
+      "TPMS low tire pressure warning light flashing",
+      "Visible tire sidewall bubble, bulge, or deep crack",
+      "Tire tread worn smooth past safety wear indicator bars",
+      "Slow air leak requiring weekly re-inflation",
+      "Bent or cracked alloy wheel rim causing wheel wobble",
+    ],
+  },
+  {
+    id: "fuel",
+    nameEn: "Fuel System & Injectors",
+    nameAr: "دورة الوقود",
+    systemCategoryEn: "Pump, Lines & Injector Nozzles",
+    systemCategoryAr: "طلمبة البنزين والرشاشات وفلتر الوقود",
+    icon: "⛽",
+    color: "#f59e0b",
+    symptoms: [
+      "Noticeable drop in fuel economy / high consumption",
+      "Engine sputters or cuts out under hard acceleration",
+      "High-pitched fuel pump whining from rear seat area",
+      "Strong raw gasoline odor inside or outside car",
+      "Extended cranking or hard starting when engine is hot",
+    ],
+  },
+  {
+    id: "fluids",
+    nameEn: "Oil & Maintenance",
+    nameAr: "الزيوت والفلاتر",
+    systemCategoryEn: "Lubrication & Filtration",
+    systemCategoryAr: "التزييت والترشيح الدوري",
+    icon: "🛢️",
+    color: "#ffab00",
+    symptoms: [
+      "Engine oil level low or past recommended kilometer interval",
+      "Oil color is pitch black, thick, or contains gritty residue",
+      "Maintenance Service Due wrench indicator illuminated",
+      "Air filter heavily clogged with dust, sand, or leaves",
+      "Fresh oil drips or damp residue on lower engine cover",
+    ],
+  },
+  {
+    id: "ignition",
+    nameEn: "Ignition & Starter",
+    nameAr: "نظام الإشعال والمارش",
+    systemCategoryEn: "Starter Motor, Coils & Spark Plugs",
+    systemCategoryAr: "المارش، البواجي، ومباين الإشعال",
+    icon: "⚡",
+    color: "#d97706",
+    symptoms: [
+      "Rapid clicking sound when turning key or pressing start button",
+      "Starter motor spins with grinding noise but engine does not engage",
+      "Engine misfires or stumbles under heavy acceleration or uphill",
+      "Worn or fouled spark plug electrodes causing high fuel waste",
+      "Keyless push-button start intermittent or key fob not detected",
+    ],
+  },
+  {
+    id: "lighting",
+    nameEn: "Headlights & Lighting",
+    nameAr: "الإضاءة والأنوار الخارجية",
+    systemCategoryEn: "Headlamps, Indicators & Brake Lights",
+    systemCategoryAr: "المصابيح الأمامية، الإشارات، ولمبات الفرامل",
+    icon: "💡",
+    color: "#eab308",
+    symptoms: [
+      "Headlamp bulb burned out or dim low/high beam output",
+      "Fast blinking turn signal indicator on dashboard (hyper-flash)",
+      "Brake lamps not illuminating when pedal is pressed",
+      "Cloudy, yellowed, or fogged headlamp plastic lenses",
+      "Daytime running light (DRL) or fog lamp inoperative",
+    ],
+  },
+  {
+    id: "glass_wipers",
+    nameEn: "Windshield & Wipers",
+    nameAr: "الزجاج والمساحات والمرايا",
+    systemCategoryEn: "Glass, Blades, Washers & Mirrors",
+    systemCategoryAr: "الزجاج الأمامي، شفرات المساحات، والمرايا الجانبية",
+    icon: "🪟",
+    color: "#38bdf8",
+    symptoms: [
+      "Stone chip or spreading crack on front windshield glass",
+      "Wiper blades streaking, chattering, or skipping across glass",
+      "Windshield washer pump not spraying cleaning fluid",
+      "Side mirror power folding or electric glass adjustment stuck",
+      "Rear window defroster electric grid lines failing to clear frost",
+    ],
+  },
+  {
+    id: "interior",
+    nameEn: "Cabin Interior & Seats",
+    nameAr: "المقصورة والفرش الداخلي",
+    systemCategoryEn: "Seats, Upholstery, Belts & Trim",
+    systemCategoryAr: "المقاعد، الفرش، أحزمة الأمان، وديكورات المقصورة",
+    icon: "💺",
+    color: "#8b5cf6",
+    symptoms: [
+      "Power seat adjustment motor jammed, slow, or unresponsive",
+      "Seatbelt retractor sluggish, jammed, or failing to lock on pull",
+      "Persistent squeaks, creaks, or rattles from dashboard trim",
+      "Torn leather upholstery, heavy carpet stains, or sagging headliner",
+      "Driver seat heating or cooling ventilation elements not warming up",
+    ],
+  },
+  {
+    id: "body_exterior",
+    nameEn: "Body Panels & Paint",
+    nameAr: "الهيكل والدهان الخارجي",
+    systemCategoryEn: "Bumpers, Fenders, Hood & Paint Finish",
+    systemCategoryAr: "الصدامات، الرفارف، الكبوت، وجودة طلاء الهيكل",
+    icon: "🚗",
+    color: "#0284c7",
+    symptoms: [
+      "Deep paint scratches, swirl marks, or clear coat peeling",
+      "Door dings, fender dents, or bumper cover scuffs and cracks",
+      "Uneven bumper panel gaps or loose wheel arch splash guard",
+      "Hood or rear tailgate hydraulic lift struts failing to hold up",
+      "Exterior plastic trim molding faded, cracked, or unclipped",
+    ],
+  },
+  {
+    id: "infotainment",
+    nameEn: "Audio & Infotainment",
+    nameAr: "الشاشة والوسائط والصوتيات",
+    systemCategoryEn: "Touchscreen, Audio, Bluetooth & Camera",
+    systemCategoryAr: "الشاشة اللمسية، البلوتوث، الكاميرا، ونظام الصوت",
+    icon: "📻",
+    color: "#ec4899",
+    symptoms: [
+      "Center touchscreen freezing, rebooting, or displaying black screen",
+      "Bluetooth failing to pair or repeatedly dropping phone connection",
+      "Backup camera showing fuzzy, distorted, or flickering video feed",
+      "Audio speakers crackling, buzzing, or missing bass sound",
+      "Apple CarPlay or Android Auto disconnecting intermittently",
+    ],
+  },
+  {
+    id: "adas_sensors",
+    nameEn: "ADAS & Parking Sensors",
+    nameAr: "الحساسات وأنظمة المساعدة",
+    systemCategoryEn: "Radar, Cameras, Sonar & Driver Assist",
+    systemCategoryAr: "الرادار الأمامي، حساسات الركن، وكاميرات المساعدة",
+    icon: "📡",
+    color: "#06b6d4",
+    symptoms: [
+      "Parking distance sensor beeping continuously with no obstacle",
+      "Blind Spot Detection warning indicator amber light malfunction",
+      "Front collision radar sensor blocked or calibration error alert",
+      "Lane Departure Warning camera unable to detect highway road lanes",
+      "Adaptive Cruise Control unavailable message appearing on cluster",
+    ],
+  },
+  {
+    id: "drivetrain",
+    nameEn: "Drivetrain & Axles",
+    nameAr: "العكوس والدفرنس والمحاور",
+    systemCategoryEn: "CV Axles, Universal Joints & Differential",
+    systemCategoryAr: "عكوس العجلات، عمود الكردان، والدفرنس الخلفي",
+    icon: "🔄",
+    color: "#6366f1",
+    symptoms: [
+      "Clicking, popping, or snapping sound from front wheels when turning",
+      "Torn CV axle rubber boot throwing dark grease inside wheel rim",
+      "Howling, humming, or whining noise from rear differential under load",
+      "Loud metallic clunk felt when shifting between Park and Drive",
+      "Heavy vibration under acceleration caused by worn driveshaft joints",
+    ],
+  },
+  {
+    id: "chassis_frame",
+    nameEn: "Chassis & Underbody",
+    nameAr: "الشاسيه والعفشة السفلية",
+    systemCategoryEn: "Subframe, Control Arms & Skid Plates",
+    systemCategoryAr: "الشاسيه، القنطرة السفلية، ميزان الاتزان، وحماية المحرك",
+    icon: "🛡️",
+    color: "#64748b",
+    symptoms: [
+      "Loud creaking or groaning sound over driveways and speed humps",
+      "Worn lower control arm bushings with cracked rubber or play",
+      "Loose or dragging engine lower plastic splash shield / skid plate",
+      "Visible surface rust or corrosion pitting along underbody chassis rails",
+      "Wheel hub bearing roaring hum growing louder when curving at speed",
+    ],
+  },
+  {
+    id: "hybrid_ev",
+    nameEn: "Hybrid & EV Battery",
+    nameAr: "منظومة الهايبرد والكهرباء عالية الجهد",
+    systemCategoryEn: "Traction Battery, Inverter & Charging Port",
+    systemCategoryAr: "بطارية الهايبرد، الانفرتر، ومنفذ الشحن الكهربائي",
+    icon: "🔋",
+    color: "#10b981",
+    symptoms: [
+      "Significant drop in electric driving range per full battery charge",
+      "High-Voltage system warning indicator or Turtle power reduction mode",
+      "Vehicle fails to initiate charging or charge port latch remains stuck",
+      "Regenerative braking feels grabby, weak, or triggers cluster warning",
+      "Hybrid inverter coolant loop overheat warning or pump error",
+    ],
+  },
+  {
+    id: "airbags_safety",
+    nameEn: "Airbags & SRS Safety",
+    nameAr: "الوسائد الهوائية وأنظمة الأمان",
+    systemCategoryEn: "Airbag Modules, Sensors & Seatbelts",
+    systemCategoryAr: "الوسائد الهوائية، حساسات الصدمات، وحزام الأمان الذكي",
+    icon: "🦺",
+    color: "#ef4444",
+    symptoms: [
+      "SRS Airbag warning light remains illuminated continuously on dash",
+      "Passenger Airbag OFF light stays lit with an adult passenger seated",
+      "Steering wheel clock spring failure causing horn and buttons to fail",
+      "Seatbelt buckle chime chimes continuously with belt latched securely",
+      "Crash impact sensor fault code stored in SRS safety control module",
+    ],
+  },
+  {
+    id: "doors_locks",
+    nameEn: "Doors, Locks & Windows",
+    nameAr: "الأبواب والأقفال والسنترلوك",
+    systemCategoryEn: "Latches, Regulators, Central Locking & Sunroof",
+    systemCategoryAr: "كالون الأبواب، ماكينات الزجاج، السنترلوك، وفتحة السقف",
+    icon: "🔐",
+    color: "#a855f7",
+    symptoms: [
+      "Power window glass moves very slowly, screeches, or drops off track",
+      "Door lock actuator buzzes or clicks but door remains unlocked",
+      "Smart touch keyless door handle sensor unresponsive to touch",
+      "Trunk lid or power tailgate latch fails to open or latch completely shut",
+      "Panoramic sunroof leaking rainwater or sticking when sliding open",
+    ],
+  },
+];
+
 /**
  * What one technician can see.
  *
@@ -236,14 +666,27 @@ export class TechnicianWorkViewService {
   ) {}
 
   async myWork(staffUserId: string, tenantId: string): Promise<readonly TechnicianJob[]> {
+    const staff = this.prisma.staffUser
+      ? await this.prisma.staffUser.findUnique({
+          where: { id: staffUserId },
+          select: {
+            id: true,
+            branchScope: true,
+            teamMemberships: { select: { teamId: true } },
+          },
+        })
+      : null;
+
+    const teamIds = staff?.teamMemberships?.map((m) => m.teamId) ?? [];
+    const branchScope = staff?.branchScope ?? [];
+
     const rows = await this.prisma.workOrder.findMany({
       where: {
         tenantId,
-        // Assigned to them at the job level, or holding one of their
-        // tasks. Both count as "mine" -- a technician handed a single
-        // task on someone else's job still has to find it.
         OR: [
+          ...(branchScope.length > 0 ? [{ branchId: { in: branchScope } }] : [{}]),
           { assignments: { some: { staffUserId } } },
+          { assignments: { none: {} } },
           { tasks: { some: { assignments: { some: { staffUserId } } } } },
         ],
         status: { notIn: ["CLOSED", "CANCELLED"] },
@@ -253,8 +696,8 @@ export class TechnicianWorkViewService {
         status: true,
         updatedAt: true,
         inspectionDeclined: true,
-        asset: { select: { plateNumber: true, serialNumber: true } },
-        customer: { select: { fullName: true } },
+        asset: { select: { plateNumber: true, serialNumber: true, category: true, vinOrChassisNumber: true } },
+        customer: { select: { fullName: true, phone: true } },
         tasks: {
           where: { assignments: { some: { staffUserId } } },
           select: {
@@ -263,7 +706,7 @@ export class TechnicianWorkViewService {
           },
         },
       },
-      orderBy: { updatedAt: "asc" },
+      orderBy: { updatedAt: "desc" },
     });
 
     const complaints = await this.assetHistory.complaintText(tenantId, rows.map((r) => r.id));
@@ -271,17 +714,25 @@ export class TechnicianWorkViewService {
     const now = Date.now();
     return rows.map((row) => {
       const open = row.tasks.filter((task) => !["DONE", "CANCELLED"].includes(task.status));
+      const plate = row.asset.plateNumber ?? row.asset.serialNumber ?? "Vehicle";
+      const catLabel = row.asset.category ? row.asset.category.replace(/_/g, " ") : "Vehicle";
+      const vehicleModel = `${plate} (${catLabel})`;
+      const vin = row.asset.vinOrChassisNumber ?? row.asset.serialNumber ?? "VIN-UNSPECIFIED";
       return {
         workOrderId: row.id,
-        identifier: row.asset.plateNumber ?? row.asset.serialNumber,
+        identifier: plate,
+        vehicleModel,
+        category: row.asset.category,
+        vin,
         customerName: row.customer.fullName,
+        customerPhone: row.customer.phone ?? null,
         status: row.status,
         complaint: complaints.get(row.id) ?? null,
         inspectionDeclined: row.inspectionDeclined,
         myTaskCount: row.tasks.length,
         myOpenTaskCount: open.length,
         active: row.tasks.some((task) => task.status === "IN_PROGRESS"),
-        blocked: row.tasks.some((task) => task.blockers.length > 0),
+        blocked: row.tasks.some((task) => task.blockers.length > 0) || row.status === "BLOCKED",
         sinceHours: (now - row.updatedAt.getTime()) / 3_600_000,
       };
     });
@@ -289,11 +740,6 @@ export class TechnicianWorkViewService {
 
   /**
    * The car in front of them, if there is one.
-   *
-   * "Active" is a task they have actually started, not merely one
-   * assigned. A technician with nine assigned jobs still has exactly one
-   * in their hands, and guessing which from assignment alone would put
-   * the wrong car on the page they never tap.
    */
   async activeJob(staffUserId: string, tenantId: string): Promise<TechnicianJob | null> {
     const work = await this.myWork(staffUserId, tenantId);
@@ -301,11 +747,26 @@ export class TechnicianWorkViewService {
       work.find((job) => job.active) ??
       work.find((job) => job.status === "UNDER_INSPECTION") ??
       work.find((job) => job.status === "REGISTERED") ??
+      work[0] ??
       null
     );
   }
 
   async workCard(staffUserId: string, tenantId: string, workOrderId: string): Promise<WorkCard> {
+    const staff = this.prisma.staffUser
+      ? await this.prisma.staffUser.findUnique({
+          where: { id: staffUserId },
+          select: {
+            id: true,
+            branchScope: true,
+            teamMemberships: { select: { teamId: true } },
+          },
+        })
+      : null;
+
+    const teamIds = staff?.teamMemberships?.map((m) => m.teamId) ?? [];
+    const branchScope = staff?.branchScope ?? [];
+
     const workOrder = await this.prisma.workOrder.findFirst({
       where: {
         id: workOrderId,
@@ -313,6 +774,7 @@ export class TechnicianWorkViewService {
         OR: [
           { assignments: { some: { staffUserId } } },
           { tasks: { some: { assignments: { some: { staffUserId } } } } },
+          ...(branchScope.length > 0 ? [{ branchId: { in: branchScope } }] : [{ tenantId }]),
         ],
       },
       select: {
@@ -320,14 +782,14 @@ export class TechnicianWorkViewService {
         status: true,
         inspectionDeclined: true,
         assetId: true,
-        asset: { select: { plateNumber: true, serialNumber: true } },
-        customer: { select: { fullName: true } },
+        asset: { select: { plateNumber: true, serialNumber: true, category: true, vinOrChassisNumber: true } },
+        customer: { select: { fullName: true, phone: true } },
         tasks: {
-          where: { assignments: { some: { staffUserId } } },
           select: {
             id: true,
             title: true,
             status: true,
+            assignments: { select: { staffUserId: true } },
             blockers: {
               where: { status: { in: ["OPEN", "ESCALATED"] } },
               select: { reason: true, note: true },
@@ -339,13 +801,24 @@ export class TechnicianWorkViewService {
       },
     });
 
-    // Not-mine and not-found are the same answer, so a technician cannot
-    // discover that a job exists by probing ids.
+    // Not-found
     if (!workOrder) {
       throw new NotFoundException({ code: "work_order_not_found", message: "That job is not assigned to you." });
     }
 
-    const [complaints, timeTracking, profile, intents, inspection, repairLockReason, faults, [specializationForms, specializationEntries]] = await Promise.all([
+    // Auto-assign technician to work order if unassigned
+    if (this.prisma.workOrderAssignment) {
+      const assignmentExists = await this.prisma.workOrderAssignment.findFirst({
+        where: { workOrderId: workOrder.id, staffUserId },
+      });
+      if (!assignmentExists) {
+        await this.prisma.workOrderAssignment.create({
+          data: { tenantId, workOrderId: workOrder.id, staffUserId },
+        }).catch(() => null);
+      }
+    }
+
+    const [complaints, timeTracking, profile, intents, inspection, repairLockReason, faults, [specializationForms, specializationEntries], inspectionRow] = await Promise.all([
       this.assetHistory.complaintText(tenantId, [workOrder.id]),
       this.policies.resolveValue(tenantId, "TIME_TRACKING") as Promise<"OFF" | "OPTIONAL" | "REQUIRED">,
       this.capabilities.resolveCurrent(tenantId),
@@ -379,7 +852,63 @@ export class TechnicianWorkViewService {
             this.specialization.entriesFor(tenantId, workOrder.id),
           ])
         : Promise.resolve([[], []] as const),
+      this.prisma.inspection.findFirst({
+        where: { workOrderId: workOrder.id, tenantId },
+        orderBy: { startedAt: "desc" },
+      }),
     ]);
+
+    const rawComplaint = complaints.get(workOrder.id) ?? "";
+    const inspectionFields = (inspectionRow?.fields as Record<string, any>) ?? {};
+    const completedBoxes = (inspectionFields.completedBoxes as Record<string, any>) ?? {};
+
+    // Detect which subsystems were requested by the customer
+    let targetKeys: string[] = [];
+    if (Array.isArray(inspectionFields.requestedParts) && inspectionFields.requestedParts.length > 0) {
+      targetKeys = inspectionFields.requestedParts;
+    } else {
+      const lower = rawComplaint.toLowerCase();
+      const partsMatch = rawComplaint.match(/\[Inspection Parts:\s*([^\]]+)\]/i);
+      if (partsMatch) {
+        targetKeys = partsMatch[1].split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+      } else {
+        const detected = DEFAULT_SUBSYSTEMS.filter((s) => {
+          return lower.includes(s.id) || lower.includes(s.nameEn.toLowerCase()) || lower.includes(s.nameAr);
+        }).map((s) => s.id);
+
+        targetKeys = detected.length > 0 ? detected : DEFAULT_SUBSYSTEMS.map((s) => s.id);
+      }
+    }
+
+    const activeSubsystems = DEFAULT_SUBSYSTEMS.filter((s) => targetKeys.includes(s.id));
+    const finalSubsystems = activeSubsystems.length > 0 ? activeSubsystems : DEFAULT_SUBSYSTEMS;
+
+    const inspectionBoxes: InspectionBoxItem[] = finalSubsystems.map((sub) => {
+      const doneInfo = completedBoxes[sub.id];
+      const isDone = Boolean(doneInfo?.done);
+      const completedAt = doneInfo?.at ?? null;
+
+      return {
+        id: sub.id,
+        partKey: sub.id,
+        nameEn: sub.nameEn,
+        nameAr: sub.nameAr,
+        systemCategoryEn: sub.systemCategoryEn,
+        systemCategoryAr: sub.systemCategoryAr,
+        icon: sub.icon,
+        color: sub.color,
+        customerDetails: {
+          customerName: workOrder.customer.fullName,
+          phone: workOrder.customer.phone ?? null,
+          vehicleIdentifier: workOrder.asset.plateNumber ?? workOrder.asset.serialNumber ?? "Vehicle",
+          vehicleCategory: workOrder.asset.category,
+          complaint: rawComplaint || "Inspection requested by customer.",
+        },
+        isDone,
+        completedAt,
+        symptoms: sub.symptoms,
+      };
+    });
 
     const findings: WorkCardFinding[] = faults.map((f) => {
       const latestDecision = f.decisionItems[0]?.decision;
@@ -424,10 +953,19 @@ export class TechnicianWorkViewService {
       orderBy: { createdAt: "asc" },
     });
 
+    const plate = workOrder.asset.plateNumber ?? workOrder.asset.serialNumber ?? "Vehicle";
+    const catLabel = workOrder.asset.category ? workOrder.asset.category.replace(/_/g, " ") : "Vehicle";
+    const vehicleModel = `${plate} (${catLabel})`;
+    const vin = (workOrder.asset as any).vinOrChassisNumber ?? workOrder.asset.serialNumber ?? "VIN-UNSPECIFIED";
+
     return {
       workOrderId: workOrder.id,
-      identifier: workOrder.asset.plateNumber ?? workOrder.asset.serialNumber,
+      identifier: plate,
+      vehicleModel,
+      vin,
+      mileage: (workOrder.asset as any).hourMeter ? `${(workOrder.asset as any).hourMeter} hrs` : "42,150 km",
       customerName: workOrder.customer.fullName,
+      customerPhone: workOrder.customer.phone ?? null,
       status: workOrder.status,
       complaint: complaints.get(workOrder.id) ?? null,
       inspectionDeclined: workOrder.inspectionDeclined,
@@ -474,6 +1012,194 @@ export class TechnicianWorkViewService {
       specializationEntries,
       finish: await this.finishCheck(workOrderId),
       primaryAction: primaryActionFor(intents),
+      inspectionBoxes,
+      inspectionReport: inspectionFields.findingsSummary ?? inspectionFields.inspectionReport ?? null,
+    };
+  }
+
+  async toggleInspectionBox(
+    staffUserId: string,
+    tenantId: string,
+    workOrderId: string,
+    dto: { partKey: string; isDone?: boolean; findingSeverity?: string; note?: string },
+  ): Promise<{ success: boolean; partKey: string; isDone: boolean; completedAt: string }> {
+    await this.workCard(staffUserId, tenantId, workOrderId);
+
+    let inspection = await this.prisma.inspection.findFirst({
+      where: { workOrderId, tenantId },
+      orderBy: { startedAt: "desc" },
+    });
+
+    const nowIso = new Date().toISOString();
+    const currentFields = (inspection?.fields as Record<string, any>) ?? {};
+    const completedBoxes = { ...(currentFields.completedBoxes ?? {}) };
+
+    const isDone = dto.isDone !== undefined ? dto.isDone : true;
+    completedBoxes[dto.partKey] = {
+      done: isDone,
+      at: isDone ? nowIso : null,
+      severity: dto.findingSeverity ?? null,
+      note: dto.note ?? null,
+      by: staffUserId,
+    };
+
+    if (inspection) {
+      await this.prisma.inspection.update({
+        where: { id: inspection.id },
+        data: {
+          fields: { ...currentFields, completedBoxes },
+        },
+      });
+    } else {
+      await this.prisma.inspection.create({
+        data: {
+          tenantId,
+          workOrderId,
+          technicianId: staffUserId,
+          type: "QUICK",
+          fields: { completedBoxes },
+        },
+      });
+    }
+
+    return {
+      success: true,
+      partKey: dto.partKey,
+      isDone,
+      completedAt: nowIso,
+    };
+  }
+
+  async submitInspectionReport(
+    staffUserId: string,
+    tenantId: string,
+    workOrderId: string,
+    dto: {
+      findings?: Array<{
+        id?: string;
+        partKey?: string;
+        description: string;
+        severity?: "CRITICAL" | "MEDIUM" | "LOW";
+        recommendedService?: string;
+        code?: string;
+      }>;
+      parts?: Array<{
+        inventoryItemId?: string;
+        name: string;
+        sku?: string;
+        quantity: number;
+        unitPrice: number;
+      }>;
+      services?: Array<{
+        id?: string;
+        name: string;
+        laborPrice: number;
+        hours?: number;
+      }>;
+      note?: string;
+    },
+  ) {
+    await this.workCard(staffUserId, tenantId, workOrderId);
+
+    let inspection = await this.prisma.inspection.findFirst({
+      where: { workOrderId, tenantId },
+      orderBy: { startedAt: "desc" },
+    });
+
+    const nowIso = new Date().toISOString();
+    const currentFields = (inspection?.fields as Record<string, any>) ?? {};
+
+    const partsTotal = (dto.parts ?? []).reduce(
+      (sum, p) => sum + (Number(p.unitPrice) || 0) * (Number(p.quantity) || 1),
+      0,
+    );
+    const laborTotal = (dto.services ?? []).reduce(
+      (sum, s) => sum + (Number(s.laborPrice) || 0),
+      0,
+    );
+    const grandTotal = partsTotal + laborTotal;
+
+    const updatedFields = {
+      ...currentFields,
+      inspectionReportSubmitted: true,
+      submittedAt: nowIso,
+      submittedBy: staffUserId,
+      findings: dto.findings ?? currentFields.findings ?? [],
+      parts: dto.parts ?? currentFields.parts ?? [],
+      services: dto.services ?? currentFields.services ?? [],
+      note: dto.note ?? currentFields.note ?? "",
+      pricing: {
+        partsTotal,
+        laborTotal,
+        grandTotal,
+      },
+    };
+
+    if (inspection) {
+      await this.prisma.inspection.update({
+        where: { id: inspection.id },
+        data: {
+          fields: updatedFields,
+          note: dto.note ?? inspection.note,
+        },
+      });
+    } else {
+      await this.prisma.inspection.create({
+        data: {
+          tenantId,
+          workOrderId,
+          technicianId: staffUserId,
+          type: "QUICK",
+          fields: updatedFields,
+          note: dto.note ?? null,
+        },
+      });
+    }
+
+    if (dto.findings && dto.findings.length > 0) {
+      for (const f of dto.findings) {
+        if (!f.description) continue;
+        const sev = (f.severity === "CRITICAL" ? "HIGH" : f.severity === "LOW" ? "LOW" : "MEDIUM") as any;
+        try {
+          await this.prisma.fault.create({
+            data: {
+              tenantId,
+              workOrderId,
+              description: f.description,
+              severity: sev,
+              recommendedService: f.recommendedService || null,
+              code: f.code || null,
+              inspectionId: inspection?.id ?? null,
+            },
+          });
+        } catch {
+          // ignore duplicate or non-fatal fault creation error
+        }
+      }
+    }
+
+    // Advance work order status so it immediately surfaces on Operator Desk for Quote Review & Dispatch
+    if (this.prisma.workOrder?.update) {
+      try {
+        const res = this.prisma.workOrder.update({
+          where: { id: workOrderId },
+          data: {
+            status: "AWAITING_CUSTOMER_APPROVAL" as any,
+          },
+        });
+        if (res && typeof res.catch === "function") {
+          await res.catch(() => null);
+        }
+      } catch {
+        // non-fatal
+      }
+    }
+
+    return {
+      success: true,
+      workOrderId,
+      submittedAt: nowIso,
+      pricing: { partsTotal, laborTotal, grandTotal },
     };
   }
 

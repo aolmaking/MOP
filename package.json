@@ -16,6 +16,7 @@
     "db:deploy": "node tools/pnpm.mjs --filter @mop/database run migrate:deploy",
     "db:seed": "node tools/pnpm.mjs --filter @mop/database run seed",
     "db:seed:demo": "node tools/pnpm.mjs --filter @mop/database run seed:demo",
+    "db:migrate:catalogs": "node tools/pnpm.mjs --filter @mop/database run migrate:catalogs",
     "db:reset": "node tools/pnpm.mjs --filter @mop/database run reset",
     "db:studio": "node tools/pnpm.mjs --filter @mop/database run studio",
     "db:test:prepare": "node tools/pnpm.mjs --filter @mop/database run test:prepare",

@@ -172,6 +172,30 @@ export class BrowserDriver {
     await new Promise(r => setTimeout(r, 300));
   }
 
+  async waitForSelector(selector, timeout = 12000) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      const exists = await this.eval(`Boolean(document.querySelector(${JSON.stringify(selector)}))`);
+      if (exists) return true;
+      await new Promise(r => setTimeout(r, 400));
+    }
+    throw new Error('Timeout waiting for selector: ' + selector);
+  }
+
+  async waitForText(text, tag = '*', timeout = 15000) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      const found = await this.eval(`(() => {
+        const els = Array.from(document.querySelectorAll(${JSON.stringify(tag)}));
+        const match = els.find(el => el.textContent.trim().toLowerCase().includes(${JSON.stringify(text.toLowerCase())}));
+        return Boolean(match && !match.disabled);
+      })()`);
+      if (found) return true;
+      await new Promise(r => setTimeout(r, 400));
+    }
+    throw new Error('Timeout waiting for text: ' + text);
+  }
+
   async getUrl() {
     return this.eval('window.location.href');
   }

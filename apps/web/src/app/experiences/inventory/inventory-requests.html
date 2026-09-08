@@ -67,6 +67,21 @@
               }
               <span class="row-onhand" [class.row-onhand--short]="shortOfStock(row)">{{ row.onHand }} on hand</span>
               <span class="row-status">{{ label(row.status) }}</span>
+              <!-- Multi-Inventory Direct Shelf vs Transfer-Required Indicators -->
+              @if (row.sources.length > 0) {
+                <span class="fulfillment-pill fulfillment-pill--shelf" title="Available immediately from warehouse shelf">
+                  <span class="pill-dot"></span> Direct Shelf ({{ row.sources[0].code }})
+                </span>
+                @if (row.sources.length > 1) {
+                  <span class="fulfillment-pill fulfillment-pill--multi" title="Multiple warehouse sources available">
+                    ⇄ {{ row.sources.length }} Warehouses
+                  </span>
+                }
+              } @else {
+                <span class="fulfillment-pill fulfillment-pill--transfer-req" title="Zero shelf stock — transfer from Central Hub or PO required">
+                  ⚠️ Transfer Required
+                </span>
+              }
               <span class="row-waited">{{ waited(row.waitingHours) }}</span>
             </div>
 

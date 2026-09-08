@@ -355,21 +355,10 @@ describe('TechWorkCard', () => {
     });
   });
 
-  it('records a part the workshop never held', async () => {
-    const { api, page, fixture, element } = await render(card());
-
-    page.panel.set('external');
-    fixture.detectChanges();
-
-    const name = element.querySelector('input.fault-text') as HTMLInputElement;
-    name.value = "Customer's own oil filter";
-    name.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-
-    const record = [...element.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Record it') as HTMLButtonElement;
-    record.click();
-
-    expect(api.addExternalPart).toHaveBeenCalledWith('wo1', "Customer's own oil filter", 'CUSTOMER_SUPPLIED', 1);
+  it('keeps external parts off the main work card (moved to POS page)', async () => {
+    const { element } = await render(card());
+    const buttons = Array.from(element.querySelectorAll('button.tap'));
+    expect(buttons.some((btn) => btn.textContent?.includes('Part from outside'))).toBe(false);
   });
 });
 
@@ -1413,7 +1402,7 @@ describe('the technician work card, inspection first', () => {
       // Genuine tools remain present
       expect(toolsSection!.querySelector('a[href*="/parts"]')?.textContent).toContain('Need parts');
       const buttons = Array.from(toolsSection!.querySelectorAll('button.tap'));
-      expect(buttons.some((btn) => btn.textContent?.includes('Part from outside'))).toBe(true);
+      expect(buttons.some((btn) => btn.textContent?.includes('Part from outside'))).toBe(false);
       expect(buttons.some((btn) => btn.textContent?.includes("I'm blocked"))).toBe(true);
       expect(buttons.some((btn) => btn.textContent?.includes('Found a fault'))).toBe(true);
 

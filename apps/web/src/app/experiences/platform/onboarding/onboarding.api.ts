@@ -129,7 +129,7 @@ export interface OwnerInvitationState {
 }
 
 export interface CreateWorkshopResponse {
-  readonly tenant: { id: string; name: string; slug: string };
+  readonly tenant: { id: string; name: string; slug: string; customerRegistrationCode?: string };
   readonly steps: readonly ProvisioningStep[];
   readonly ownerInvitation: OwnerInvitationState;
 }

@@ -55,4 +55,41 @@ describe('PortalHome', () => {
     const { element } = render({ error: { httpStatus: 500, code: 'server_error', message: 'Boom.' } });
     expect(element.textContent).toContain('Try again');
   });
+
+  it('renders the report issue trigger button', () => {
+    const { element } = render({ assetCount: 1 });
+    const btn = element.querySelector('#btn-report-issue');
+    expect(btn).not.toBeNull();
+    expect(btn?.textContent).toContain('Report an Issue');
+  });
+
+  it('shows live tracking section with active status when services exist', () => {
+    const api = {
+      home: () => of(data({ currentServiceCount: 1 })),
+      currentService: () => of([{ workOrderId: 'wo-1', status: 'UNDER_INSPECTION', asset: 'ABC 1234', createdAt: '2026-09-01T00:00:00Z' }]),
+      pendingDecisions: () => of([]),
+      assets: () => of([]),
+      journey: () => of({ headline: 'Diagnostic underway', stages: [], currentStageIndex: 1, durationLabel: '10m' }),
+    };
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [provideRouter([]), { provide: CustomerPortalApi, useValue: api }] });
+    const fixture = TestBed.createComponent(PortalHome);
+    fixture.detectChanges();
+    const element = fixture.nativeElement as HTMLElement;
+
+    expect(element.querySelector('.tracker-card')).not.toBeNull();
+    expect(element.textContent).toContain('ABC 1234');
+    expect(element.textContent).toContain('In-bay diagnostic & inspection');
+  });
+
+  it('renders the Buy Parts (POS) action button and over-the-counter quick card', () => {
+    const { element } = render({ assetCount: 1 });
+    const posBtn = element.querySelector('#btn-customer-pos');
+    expect(posBtn).not.toBeNull();
+    expect(posBtn?.textContent).toContain('Buy Parts (POS)');
+
+    const posCard = element.querySelector('#btn-customer-pos-card');
+    expect(posCard).not.toBeNull();
+    expect(posCard?.textContent).toContain('Open Parts POS');
+  });
 });

@@ -7,7 +7,8 @@ export type StaffRole =
   | "TECHNICIAN"
   | "INVENTORY_MANAGER"
   | "TEAM_LEADER"
-  | "DATA_ANALYST";
+  | "DATA_ANALYST"
+  | "OPERATOR";
 
 export type EffectiveRole = StaffRole | "PLATFORM_SUPER_ADMIN" | "CUSTOMER";
 

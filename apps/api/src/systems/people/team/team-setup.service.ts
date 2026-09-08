@@ -19,6 +19,7 @@ export interface TeamView {
   readonly branchName: string | null;
   readonly isActive: boolean;
   readonly leader: { id: string; fullName: string } | null;
+  readonly specializations: readonly string[];
   readonly members: readonly TeamMemberView[];
   /** Everyone who has ever been on it, newest departure first. */
   readonly past: readonly TeamMemberView[];
@@ -30,7 +31,12 @@ export interface TeamSetupPage {
   /** Team leaders this manager may pick from -- their branches only. */
   readonly eligibleLeaders: readonly { id: string; fullName: string }[];
   /** Technicians in scope, with the team they are on right now. */
-  readonly technicians: readonly { id: string; fullName: string; currentTeamId: string | null }[];
+  readonly technicians: readonly {
+    id: string;
+    fullName: string;
+    currentTeamId: string | null;
+    specializations: readonly string[];
+  }[];
 }
 
 export interface Actor {
@@ -99,6 +105,7 @@ export class TeamSetupService {
         select: {
           id: true,
           fullName: true,
+          specializations: true,
           teamMemberships: { where: { endedAt: null }, select: { teamId: true }, take: 1 },
         },
         orderBy: { fullName: "asc" },
@@ -113,6 +120,7 @@ export class TeamSetupService {
         branchName: team.branch?.name ?? null,
         isActive: team.isActive,
         leader: team.teamLeader ? { id: team.teamLeader.id, fullName: team.teamLeader.fullName } : null,
+        specializations: team.specializations ?? [],
         members: team.members.filter((m) => m.endedAt === null).map((m) => this.toMember(m)),
         past: team.members.filter((m) => m.endedAt !== null).map((m) => this.toMember(m)),
       })),
@@ -122,6 +130,7 @@ export class TeamSetupService {
         id: technician.id,
         fullName: technician.fullName,
         currentTeamId: technician.teamMemberships[0]?.teamId ?? null,
+        specializations: technician.specializations ?? [],
       })),
     };
   }
@@ -129,7 +138,7 @@ export class TeamSetupService {
   async createTeam(
     tenantId: string,
     branchScope: readonly string[],
-    input: { name: string; branchId: string; teamLeaderId: string },
+    input: { name: string; branchId: string; teamLeaderId: string; specializations?: string[] },
     actor: Actor,
   ): Promise<TeamView> {
     const name = input.name.trim();
@@ -150,16 +159,50 @@ export class TeamSetupService {
     }
 
     const team = await this.prisma.team.create({
-      data: { tenantId, name, branchId: input.branchId, teamLeaderId: input.teamLeaderId },
+      data: {
+        tenantId,
+        name,
+        branchId: input.branchId,
+        teamLeaderId: input.teamLeaderId,
+        specializations: input.specializations ?? [],
+      },
     });
 
     await this.record(tenantId, actor, {
       action: "team.created",
       targetId: team.id,
-      after: { name, branchId: input.branchId, teamLeaderId: input.teamLeaderId },
+      after: {
+        name,
+        branchId: input.branchId,
+        teamLeaderId: input.teamLeaderId,
+        specializations: input.specializations ?? [],
+      },
     });
 
     return this.oneTeam(tenantId, branchScope, team.id);
+  }
+
+  async updateSpecializations(
+    tenantId: string,
+    branchScope: readonly string[],
+    teamId: string,
+    specializations: string[],
+    actor: Actor,
+  ): Promise<TeamView> {
+    await this.requireTeamInScope(tenantId, branchScope, teamId);
+
+    await this.prisma.team.update({
+      where: { id: teamId },
+      data: { specializations },
+    });
+
+    await this.record(tenantId, actor, {
+      action: "team.specializations_updated",
+      targetId: teamId,
+      after: { specializations },
+    });
+
+    return this.oneTeam(tenantId, branchScope, teamId);
   }
 
   async assignLeader(

@@ -46,6 +46,7 @@ export class WorkshopBrandingPublicController {
       city: tenant.city,
       logoUrl: themeConfig.logoUrl ?? null,
       palette: themeConfig.palette ?? "crimson",
+      navigationLayout: themeConfig.navigationLayout ?? "SIDEBAR",
     };
   }
 }

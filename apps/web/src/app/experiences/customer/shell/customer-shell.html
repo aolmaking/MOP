@@ -1,6 +1,6 @@
 <div class="portal">
   <header class="portal-head">
-    <span class="portal-brand">MOP</span>
+    <span class="portal-brand" [title]="branding.activeWorkshop().name">{{ branding.activeWorkshop().name }}</span>
     @if (session(); as s) {
       <button type="button" class="portal-logout" (click)="logout()">Sign out</button>
     }

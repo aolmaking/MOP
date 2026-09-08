@@ -41,8 +41,7 @@
 .tech-content {
   flex: 1;
   padding: var(--space-4);
-  /* Clears the bottom bar plus the home indicator on a tablet. */
-  padding-block-end: calc(var(--tap) + var(--space-6));
+  padding-block-end: var(--space-6);
   overflow-y: auto;
 }
 
@@ -115,6 +114,10 @@
   font-family: var(--font-mono);
   font-weight: 700;
   letter-spacing: var(--tracking-label);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tech-who {

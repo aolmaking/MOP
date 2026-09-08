@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import type { Observable } from 'rxjs';
 
-export type StaffRole = 'TENANT_ADMIN' | 'BRANCH_MANAGER' | 'TECHNICIAN' | 'INVENTORY_MANAGER' | 'TEAM_LEADER' | 'DATA_ANALYST';
+export type StaffRole = 'TENANT_ADMIN' | 'BRANCH_MANAGER' | 'TECHNICIAN' | 'INVENTORY_MANAGER' | 'TEAM_LEADER' | 'DATA_ANALYST' | 'OPERATOR';
 
 export interface StaffListItem {
   readonly id: string;
@@ -11,6 +11,7 @@ export interface StaffListItem {
   readonly branchScope: string[];
   readonly warehouseScope: string[];
   readonly categoryScope: string[];
+  readonly specializations?: string[];
   readonly isActive: boolean;
   readonly lockedAt: string | null;
   readonly email: string | null;
@@ -22,6 +23,24 @@ export interface StaffPage {
   readonly nextCursor: string | null;
 }
 
+export interface TeamView {
+  readonly id: string;
+  readonly name: string;
+  readonly branchId: string | null;
+  readonly branchName: string | null;
+  readonly isActive: boolean;
+  readonly specializations: string[];
+  readonly leader: { id: string; fullName: string } | null;
+  readonly members: readonly { membershipId: string; technicianId: string; fullName: string }[];
+}
+
+export interface TeamSetupPage {
+  readonly teams: readonly TeamView[];
+  readonly branches: readonly { id: string; name: string }[];
+  readonly eligibleLeaders: readonly { id: string; fullName: string }[];
+  readonly technicians: readonly { id: string; fullName: string; currentTeamId: string | null; specializations?: string[] }[];
+}
+
 export interface InviteStaffInput {
   readonly fullName: string;
   readonly email: string;
@@ -29,6 +48,7 @@ export interface InviteStaffInput {
   readonly role: StaffRole;
   readonly branchScope?: string[];
   readonly warehouseScope?: string[];
+  readonly specializations?: string[];
   readonly password?: string;
 }
 
@@ -76,8 +96,32 @@ export class OrganizationApi {
     return this.http.patch<{ ok: true }>(`/api/v1/organization/staff/${staffId}/locked`, { locked });
   }
 
+  updateStaffSpecializations(staffId: string, specializations: string[]): Observable<{ ok: true; specializations: string[] }> {
+    return this.http.patch<{ ok: true; specializations: string[] }>(`/api/v1/organization/staff/${staffId}/specializations`, { specializations });
+  }
+
   getInviteLink(staffId: string): Observable<{ inviteLink: string }> {
     return this.http.post<{ inviteLink: string }>(`/api/v1/organization/staff/${staffId}/invite-link`, {});
+  }
+
+  teamsPage(): Observable<TeamSetupPage> {
+    return this.http.get<TeamSetupPage>('/api/v1/organization/teams');
+  }
+
+  createTeam(input: { name: string; branchId: string; teamLeaderId: string; specializations?: string[] }): Observable<TeamView> {
+    return this.http.post<TeamView>('/api/v1/organization/teams', input);
+  }
+
+  updateTeamSpecializations(teamId: string, specializations: string[]): Observable<unknown> {
+    return this.http.post(`/api/v1/organization/teams/${teamId}/specializations`, { specializations });
+  }
+
+  assignLeader(teamId: string, teamLeaderId: string): Observable<TeamView> {
+    return this.http.post<TeamView>(`/api/v1/organization/teams/${teamId}/leader`, { teamLeaderId });
+  }
+
+  moveTechnician(technicianId: string, teamId: string | null): Observable<TeamSetupPage> {
+    return this.http.post<TeamSetupPage>('/api/v1/organization/teams/members', { technicianId, teamId });
   }
 
   infrastructure(): Observable<OrganizationInfrastructure> {

@@ -133,6 +133,7 @@ async function main() {
   await ensureOwner(tenant.id);
   await ensureInventoryManager(tenant.id);
   await ensureDataAnalyst(tenant.id);
+  await ensureOperator(tenant.id);
   await ensureDelegatedTeams(tenant.id, branch.id);
   await ensureServiceCatalog(tenant.id);
   await clearDemoWork(tenant.id);
@@ -156,6 +157,8 @@ async function main() {
   console.log(`              lands on http://localhost:4200/inventory\n`);
   console.log(`  Data Analyst  ${ANALYST_EMAIL} / ${ANALYST_PASSWORD}`);
   console.log(`              lands on http://localhost:4200/analyst\n`);
+  console.log(`  Operator (Receptionist)  ${OPERATOR_EMAIL} / ${OPERATOR_PASSWORD}`);
+  console.log(`              lands on http://localhost:4200/operator\n`);
   console.log(`  Customer    sara.nabil@customer.local / ${CUSTOMER_PASSWORD}`);
   console.log(`              has a decision waiting -- http://localhost:4200/customer/decisions`);
   console.log(`              every demo customer follows first.last@customer.local
@@ -418,6 +421,52 @@ async function ensureDataAnalyst(tenantId: string): Promise<void> {
     await prisma.rolePermission.upsert({
       where: { tenantId_role_permissionKey: { tenantId, role: "DATA_ANALYST", permissionKey } },
       create: { tenantId, role: "DATA_ANALYST", permissionKey, allowed: allowed! },
+      update: { allowed: allowed! },
+    });
+  }
+}
+
+const OPERATOR_EMAIL = "operator@apex-motors.local";
+const OPERATOR_PASSWORD = "ChangeMe-Operator-123";
+
+/**
+ * Dedicated Operator / Receptionist account for front-desk intake & POS operations.
+ */
+async function ensureOperator(tenantId: string): Promise<void> {
+  const existing = await prisma.account.findFirst({ where: { tenantId, email: OPERATOR_EMAIL } });
+
+  const account =
+    existing ??
+    (await prisma.account.create({
+      data: {
+        accountType: "TENANT_STAFF",
+        tenantId,
+        email: OPERATOR_EMAIL,
+        passwordHash: hashPassword(OPERATOR_PASSWORD),
+        status: "ACTIVE",
+      },
+    }));
+
+  const staff = await prisma.staffUser.findUnique({ where: { accountId: account.id } });
+  if (!staff) {
+    await prisma.staffUser.create({
+      data: {
+        accountId: account.id,
+        tenantId,
+        fullName: "Salma Receptionist",
+        role: "OPERATOR",
+        branchScope: [],
+        warehouseScope: [],
+        categoryScope: ["CARS"],
+      },
+    });
+  }
+
+  const operatorPermissions = DEFAULT_ROLE_PERMISSIONS.OPERATOR ?? {};
+  for (const [permissionKey, allowed] of Object.entries(operatorPermissions)) {
+    await prisma.rolePermission.upsert({
+      where: { tenantId_role_permissionKey: { tenantId, role: "OPERATOR", permissionKey } },
+      create: { tenantId, role: "OPERATOR", permissionKey, allowed: allowed! },
       update: { allowed: allowed! },
     });
   }

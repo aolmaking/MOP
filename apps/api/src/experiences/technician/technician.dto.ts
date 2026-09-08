@@ -2,7 +2,9 @@ import {
   ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
+  IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -211,3 +213,138 @@ export class SubmitSpecializationEntryDto {
 
   values!: Record<string, unknown>;
 }
+
+export class ToggleInspectionBoxDoneDto {
+  @IsString()
+  @Length(1, 64)
+  partKey!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isDone?: boolean;
+
+  @IsOptional()
+  @IsString()
+  findingSeverity?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+export class SubmitInspectionReportDto {
+  @IsOptional()
+  @IsArray()
+  findings?: Array<{
+    id?: string;
+    partKey?: string;
+    description: string;
+    severity?: "CRITICAL" | "MEDIUM" | "LOW";
+    recommendedService?: string;
+    code?: string;
+  }>;
+
+  @IsOptional()
+  @IsArray()
+  parts?: Array<{
+    inventoryItemId?: string;
+    name: string;
+    sku?: string;
+    quantity: number;
+    unitPrice: number;
+  }>;
+
+  @IsOptional()
+  @IsArray()
+  services?: Array<{
+    id?: string;
+    name: string;
+    laborPrice: number;
+    hours?: number;
+  }>;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+export class InspectionTargetFindingItemDto {
+  @IsString()
+  findingKey!: string;
+
+  @IsIn(["CRITICAL", "ATTENTION", "INFO"])
+  severity!: "CRITICAL" | "ATTENTION" | "INFO";
+
+  @IsOptional()
+  @IsString()
+  technicianObservation?: string;
+}
+
+export class PatchInspectionTargetDto {
+  @IsString()
+  canonicalPartSlug!: string;
+
+  @IsString()
+  position!: string;
+
+  @IsIn(["INSPECTED", "NOT_ACCESSIBLE", "NOT_APPLICABLE"])
+  status!: "INSPECTED" | "NOT_ACCESSIBLE" | "NOT_APPLICABLE";
+
+  @IsOptional()
+  @IsIn(["GOOD", "ATTENTION", "CRITICAL"])
+  condition?: "GOOD" | "ATTENTION" | "CRITICAL";
+
+  @IsOptional()
+  @IsArray()
+  findings?: InspectionTargetFindingItemDto[];
+
+  @IsOptional()
+  @IsString()
+  nonInspectionReason?: string;
+
+  @IsOptional()
+  @IsString()
+  technicianNote?: string;
+
+  @IsOptional()
+  measurementValue?: number | string;
+
+  @IsOptional()
+  @IsString()
+  measurementUnit?: string;
+
+  @IsOptional()
+  @IsInt()
+  expectedVersion?: number;
+}
+
+export class RecordRecommendationDecisionDto {
+  @IsString()
+  recommendationId!: string;
+
+  @IsIn(["ACCEPTED", "DISMISSED", "MODIFIED_SCOPE"])
+  decision!: "ACCEPTED" | "DISMISSED" | "MODIFIED_SCOPE";
+
+  @IsOptional()
+  @IsString()
+  dismissalReason?: string;
+
+  @IsOptional()
+  @IsString()
+  scopeModificationNote?: string;
+
+  @IsOptional()
+  @IsInt()
+  expectedVersion?: number;
+}
+
+export class SubmitInspectionAggregateDto {
+  @IsOptional()
+  @IsInt()
+  expectedVersion?: number;
+
+  @IsOptional()
+  @IsString()
+  submissionNote?: string;
+}
+

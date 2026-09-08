@@ -13,6 +13,9 @@ import { WorkflowJourneyService } from "./workflow-journey.service";
 import { JourneyFactsService } from "./journey-facts.service";
 import { JourneyEventsService } from "./journey-events.service";
 
+import { InspectionRepository } from "./inspection/inspection.repository";
+import { RuleEvaluatorService } from "./inspection/recommendations/rule-evaluator.service";
+
 /**
  * The operations spine: the work-order lifecycle and the gates that guard
  * it. WorkOrderLifecycleService is the only exported way to change a work
@@ -31,6 +34,8 @@ import { JourneyEventsService } from "./journey-events.service";
     WorkflowJourneyService,
     JourneyFactsService,
     JourneyEventsService,
+    InspectionRepository,
+    RuleEvaluatorService,
   ],
   exports: [
     WorkOrderLifecycleService,
@@ -42,6 +47,8 @@ import { JourneyEventsService } from "./journey-events.service";
     WorkflowJourneyService,
     JourneyFactsService,
     JourneyEventsService,
+    InspectionRepository,
+    RuleEvaluatorService,
   ],
 })
 export class OperationsModule {}

@@ -8,17 +8,15 @@ import { ErrorBanner } from '../../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../../ui/button/button.directive';
 import type { PresentedError } from '../../../runtime/http/error.interceptor';
 import { WorkOrdersApi, type BoardResult, type BoardRow } from './work-orders.api';
+import { AttentionApi, type AttentionItem } from '../attention-center/attention.api';
 
 type State = 'loading' | 'ready' | 'empty' | 'no-results' | 'forbidden' | 'error';
+export type OperationsTab = 'lanes' | 'attention' | 'delivery';
 
 /**
- * The board -- everything open, grouped by who is holding it.
- *
- * Structure is argued in docs/phases/PHASE_5.md (5.D). The short version:
- * this is a rack, not a kanban. Status is owned by
- * WorkOrderLifecycleService and every transition is gated, so a card the
- * manager could drag would be a card that refuses to move -- an interface
- * promising something the domain forbids.
+ * The consolidated Branch Operations Hub.
+ * Brings together live lane tracking, urgent blockers, quick intake, and delivery release
+ * onto a unified command station so managers have fewer fragmented pages.
  */
 @Component({
   selector: 'app-work-orders-board',
@@ -28,7 +26,12 @@ type State = 'loading' | 'ready' | 'empty' | 'no-results' | 'forbidden' | 'error
 })
 export class WorkOrdersBoard {
   private readonly api = inject(WorkOrdersApi);
+  private readonly attentionApi = inject(AttentionApi);
   private readonly destroyRef = inject(DestroyRef);
+
+  protected readonly activeTab = signal<OperationsTab>('lanes');
+  protected readonly attentionItems = signal<readonly AttentionItem[]>([]);
+  protected readonly attentionCounts = signal<Record<string, number>>({});
 
   protected readonly query = signal('');
   protected readonly board = signal<BoardResult | null>(null);
@@ -46,6 +49,12 @@ export class WorkOrdersBoard {
     return WORK_ORDER_LANES.filter((lane) => !lane.closed)
       .map((lane) => ({ ...lane, rows: rowsByLane.get(lane.key) ?? [] }))
       .filter((lane) => lane.rows.length > 0);
+  });
+
+  protected readonly readyForDeliveryRows = computed(() => {
+    const result = this.board();
+    if (!result) return [];
+    return result.lanes.flatMap((l) => l.rows).filter((r) => r.status === 'READY_FOR_PICKUP' || r.status === 'COMPLETED');
   });
 
   constructor() {
@@ -86,6 +95,17 @@ export class WorkOrdersBoard {
       .subscribe({
         next: (result) => this.receive(result),
         error: (err: PresentedError) => this.fail(err),
+      });
+
+    this.attentionApi
+      .attention()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => {
+          this.attentionItems.set(res.items);
+          this.attentionCounts.set(res.counts);
+        },
+        error: () => {},
       });
   }
 

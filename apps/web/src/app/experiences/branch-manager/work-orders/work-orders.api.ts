@@ -13,6 +13,11 @@ export interface BoardRow {
   readonly sinceHours: number;
   readonly assignedTo: string | null;
   readonly inspectionDeclined: boolean;
+  readonly specialistRecommendation?: {
+    readonly teamName?: string;
+    readonly technicianName?: string;
+    readonly subsystem?: string;
+  } | null;
 }
 
 export interface BoardLane {

@@ -1,144 +1,530 @@
-<section class="onb-struct">
-  <div class="onb-struct-head">
-    <h3>Branches</h3>
-    <p>
-      @if (multiBranch()) {
-        This workshop runs several locations, each with its own board and staff.
-      } @else {
-        One location. A job is taken in here, so at least one has to exist.
-      }
-    </p>
-  </div>
+<div class="topo-container">
+  <!-- ----------------------------------------------------------------- -->
+  <!-- Topology Architecture Presets (1-Click Strategy)                  -->
+  <!-- ----------------------------------------------------------------- -->
+  <section class="topo-presets-card">
+    <div class="topo-presets-header">
+      <div class="topo-presets-title-group">
+        <span class="topo-badge">Architecture Blueprint</span>
+        <h3>Inventory & Branch Topology Strategy</h3>
+        <p>Choose how parts and warehouses connect to your physical branch network.</p>
+      </div>
+      <div class="topo-presets-actions">
+        <button
+          type="button"
+          class="topo-preset-btn"
+          (click)="applyPreset('CENTRAL_HUB')"
+        >
+          <span class="preset-icon">🏢</span>
+          <span class="preset-name">Central Hub (1:N)</span>
+          <span class="preset-desc">One central warehouse supplies all branches</span>
+        </button>
 
-  @for (branch of store.draft().branches; track $index) {
-    <div class="onb-row">
-      <div class="onb-field onb-field--grow">
-        <label [for]="'branch-name-' + $index">Name</label>
-        <input
-          [id]="'branch-name-' + $index"
-          type="text"
-          autocomplete="off"
-          [value]="branch.name"
-          (input)="store.updateBranch($index, { name: $any($event.target).value })"
-        />
+        <button
+          type="button"
+          class="topo-preset-btn"
+          (click)="applyPreset('DEDICATED')"
+        >
+          <span class="preset-icon">🏪</span>
+          <span class="preset-name">Dedicated Stores (1:1)</span>
+          <span class="preset-desc">Each branch has its own local parts store</span>
+        </button>
+
+        <button
+          type="button"
+          class="topo-preset-btn"
+          (click)="applyPreset('CUSTOM')"
+        >
+          <span class="preset-icon">🕸️</span>
+          <span class="preset-name">Custom Mesh (M:N)</span>
+          <span class="preset-desc">Custom regional or multi-warehouse matrix</span>
+        </button>
       </div>
-      <div class="onb-field onb-field--code">
-        <label [for]="'branch-code-' + $index">Code</label>
-        <input
-          [id]="'branch-code-' + $index"
-          type="text"
-          maxlength="12"
-          autocomplete="off"
-          [value]="branch.code"
-          (input)="setBranchCode($index, $any($event.target).value)"
-        />
-      </div>
-      <div class="onb-field onb-field--grow">
-        <label [for]="'branch-city-' + $index">City</label>
-        <input
-          [id]="'branch-city-' + $index"
-          type="text"
-          autocomplete="off"
-          [value]="branch.city ?? ''"
-          (input)="store.updateBranch($index, { city: $any($event.target).value })"
-        />
-      </div>
+    </div>
+  </section>
+
+  <!-- View Sub-tabs -->
+  <div class="topo-subnav">
+    <button
+      type="button"
+      class="topo-subnav-tab"
+      [class.active]="activeTab() === 'ALL'"
+      (click)="activeTab.set('ALL')"
+    >
+      Full Overview
+    </button>
+    <button
+      type="button"
+      class="topo-subnav-tab"
+      [class.active]="activeTab() === 'BRANCHES'"
+      (click)="activeTab.set('BRANCHES')"
+    >
+      Branches ({{ store.draft().branches.length }})
+    </button>
+    @if (hasInventory()) {
       <button
         type="button"
-        class="onb-row-remove"
-        [attr.aria-label]="'Remove branch ' + (branch.name || branch.code)"
-        (click)="store.removeBranch($index)"
+        class="topo-subnav-tab"
+        [class.active]="activeTab() === 'WAREHOUSES'"
+        (click)="activeTab.set('WAREHOUSES')"
       >
-        Remove
+        Warehouses & Stores ({{ store.draft().warehouses.length }})
       </button>
-    </div>
+      <button
+        type="button"
+        class="topo-subnav-tab"
+        [class.active]="activeTab() === 'MATRIX'"
+        (click)="activeTab.set('MATRIX')"
+      >
+        Serving Matrix Grid
+      </button>
+    }
+  </div>
+
+  <!-- ----------------------------------------------------------------- -->
+  <!-- Section: Branches Management                                      -->
+  <!-- ----------------------------------------------------------------- -->
+  @if (activeTab() === 'ALL' || activeTab() === 'BRANCHES') {
+    <section class="topo-card">
+      <div class="topo-card-header">
+        <div class="topo-card-title">
+          <h4>Workshop Branches (Physical Locations)</h4>
+          <p>
+            @if (multiBranch()) {
+              Multi-branch operations enabled. Add all physical locations where cars are inspected and repaired.
+            } @else {
+              Single location mode. At least one trading location is required for intake and work orders.
+            }
+          </p>
+        </div>
+        <button type="button" class="btn-primary-action" (click)="openAddBranch()">
+          <span class="btn-icon">+</span> Add Branch
+        </button>
+      </div>
+
+      @if (store.draft().branches.length === 0) {
+        <div class="topo-empty-state">
+          <div class="empty-icon">📍</div>
+          <h5>No branches declared yet</h5>
+          <p>If left empty, a default branch will be created automatically from your workshop name.</p>
+          <button type="button" class="btn-secondary-action" (click)="openAddBranch()">+ Create First Branch</button>
+        </div>
+      } @else {
+        <div class="table-responsive">
+          <table class="topo-table">
+            <thead>
+              <tr>
+                <th>Branch Name</th>
+                <th>Code</th>
+                <th>City</th>
+                <th>Address</th>
+                <th>Status</th>
+                <th class="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (branch of store.draft().branches; track $index) {
+                <tr>
+                  <td class="font-medium">
+                    <div class="name-cell">
+                      <span class="pin-icon">📍</span>
+                      <span>{{ branch.name || 'Unnamed Branch' }}</span>
+                    </div>
+                  </td>
+                  <td><code class="code-pill">{{ branch.code }}</code></td>
+                  <td>{{ branch.city || '—' }}</td>
+                  <td class="address-cell">{{ branch.address || '—' }}</td>
+                  <td><span class="status-pill status--active">Active</span></td>
+                  <td class="text-right actions-cell">
+                    <button
+                      type="button"
+                      class="btn-icon-action"
+                      title="Edit Branch"
+                      (click)="openEditBranch($index)"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-icon-action action--delete"
+                      title="Remove Branch"
+                      (click)="store.removeBranch($index)"
+                    >
+                      🗑️
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
   }
 
-  @if (store.draft().branches.length === 0) {
-    <p class="onb-hint">
-      None yet. If you add none, one is created from the workshop's name — a workshop with no branch could not accept
-      its first job.
-    </p>
+  <!-- ----------------------------------------------------------------- -->
+  <!-- Section: Warehouses & Inventory Management                        -->
+  <!-- ----------------------------------------------------------------- -->
+  @if (hasInventory() && (activeTab() === 'ALL' || activeTab() === 'WAREHOUSES')) {
+    <section class="topo-card">
+      <div class="topo-card-header">
+        <div class="topo-card-title">
+          <h4>Warehouses & Parts Stores</h4>
+          <p>
+            @if (multiWarehouse()) {
+              Multi-store inventory enabled. Stock is isolated per warehouse and tracked across transfers.
+            } @else {
+              Single store configuration. Every part requested and issued is stocked here.
+            }
+          </p>
+        </div>
+        <button type="button" class="btn-primary-action" (click)="openAddWarehouse()">
+          <span class="btn-icon">+</span> Add Store
+        </button>
+      </div>
+
+      @if (store.draft().warehouses.length === 0) {
+        <div class="topo-empty-state">
+          <div class="empty-icon">📦</div>
+          <h5>No parts stores declared</h5>
+          <p>Inventory capability is active. Add at least one warehouse so technicians can request parts.</p>
+          <button type="button" class="btn-secondary-action" (click)="openAddWarehouse()">+ Create First Store</button>
+        </div>
+      } @else {
+        <div class="table-responsive">
+          <table class="topo-table">
+            <thead>
+              <tr>
+                <th>Store / Warehouse Name</th>
+                <th>Code</th>
+                <th>Topology Role</th>
+                <th>Supplying Branches</th>
+                <th class="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (warehouse of store.draft().warehouses; track $index) {
+                @let role = getWarehouseRoleBadge(warehouse);
+                <tr>
+                  <td class="font-medium">
+                    <div class="name-cell">
+                      <span class="box-icon">📦</span>
+                      <span>{{ warehouse.name || 'Unnamed Store' }}</span>
+                    </div>
+                  </td>
+                  <td><code class="code-pill">{{ warehouse.code }}</code></td>
+                  <td><span class="role-pill" [class]="role.class">{{ role.label }}</span></td>
+                  <td>
+                    <span class="supplying-branches-text">{{ getSupplyingBranchesText(warehouse) }}</span>
+                  </td>
+                  <td class="text-right actions-cell">
+                    <button
+                      type="button"
+                      class="btn-icon-action"
+                      title="Edit Store"
+                      (click)="openEditWarehouse($index)"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-icon-action action--delete"
+                      title="Remove Store"
+                      (click)="store.removeWarehouse($index)"
+                    >
+                      🗑️
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
   }
 
-  <button type="button" class="onb-add" (click)="addBranch()">Add a branch</button>
-</section>
+  <!-- ----------------------------------------------------------------- -->
+  <!-- Section: Interactive Serving Matrix (The M:N Topology Grid)       -->
+  <!-- ----------------------------------------------------------------- -->
+  @if (hasInventory() && store.draft().branches.length > 0 && store.draft().warehouses.length > 0 && (activeTab() === 'ALL' || activeTab() === 'MATRIX')) {
+    <section class="topo-card topo-matrix-section">
+      <div class="topo-card-header">
+        <div class="topo-card-title">
+          <h4>Interactive Serving Matrix (Cross-Branch Parts Access)</h4>
+          <p>
+            Define precisely which warehouses supply which branches. Work orders at a branch can only directly issue parts from checked stores.
+          </p>
+        </div>
+        <div class="matrix-legend">
+          <span class="legend-item"><span class="legend-box checked"></span> Direct Supply Authorized</span>
+          <span class="legend-item"><span class="legend-box"></span> Transfer Required</span>
+        </div>
+      </div>
 
-@if (hasInventory()) {
-  <section class="onb-struct">
-    <div class="onb-struct-head">
-      <h3>Stores</h3>
-      <p>
-        @if (multiWarehouse()) {
-          Stock is counted per store, and moves between them.
-        } @else {
-          One store. Every part comes out of it.
-        }
-      </p>
-    </div>
+      <div class="table-responsive">
+        <table class="topo-matrix-table">
+          <thead>
+            <tr>
+              <th class="matrix-corner-header">Store \ Branch Location</th>
+              @for (branch of store.draft().branches; track branch.code) {
+                <th class="matrix-branch-col">
+                  <div class="branch-col-header">
+                    <span class="branch-pin">📍</span>
+                    <span class="branch-col-name">{{ branch.name || branch.code }}</span>
+                    <code class="branch-col-code">{{ branch.code }}</code>
+                  </div>
+                </th>
+              }
+              <th class="matrix-status-col text-right">Coverage Summary</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (warehouse of store.draft().warehouses; track $index; let whIdx = $index) {
+              <tr>
+                <td class="matrix-wh-row-header">
+                  <div class="wh-row-info">
+                    <span class="wh-icon">📦</span>
+                    <div>
+                      <span class="wh-row-name">{{ warehouse.name || warehouse.code }}</span>
+                      <code class="wh-row-code">{{ warehouse.code }}</code>
+                    </div>
+                  </div>
+                </td>
+                @for (branch of store.draft().branches; track branch.code) {
+                  @let isLinked = isStoreServingBranch(warehouse, branch.code);
+                  <td class="matrix-cell">
+                    <button
+                      type="button"
+                      class="matrix-toggle"
+                      [class.matrix-toggle--active]="isLinked"
+                      [attr.aria-label]="'Toggle ' + warehouse.name + ' serving ' + branch.name"
+                      (click)="store.toggleWarehouseBranch(whIdx, branch.code)"
+                    >
+                      <span class="matrix-check">{{ isLinked ? '✓' : '' }}</span>
+                    </button>
+                  </td>
+                }
+                <td class="matrix-status-cell text-right">
+                  <span class="coverage-count-pill">
+                    {{ warehouse.branchCodes.length === 0 ? 'Serves All (' + store.draft().branches.length + ')' : 'Serves ' + warehouse.branchCodes.length + ' branch(es)' }}
+                  </span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
 
-    @for (warehouse of store.draft().warehouses; track $index) {
-      <div class="onb-warehouse">
-        <div class="onb-row">
-          <div class="onb-field onb-field--grow">
-            <label [for]="'wh-name-' + $index">Name</label>
-            <input
-              [id]="'wh-name-' + $index"
-              type="text"
-              autocomplete="off"
-              [value]="warehouse.name"
-              (input)="store.updateWarehouse($index, { name: $any($event.target).value })"
-            />
-          </div>
-          <div class="onb-field onb-field--code">
-            <label [for]="'wh-code-' + $index">Code</label>
-            <input
-              [id]="'wh-code-' + $index"
-              type="text"
-              maxlength="12"
-              autocomplete="off"
-              [value]="warehouse.code"
-              (input)="setWarehouseCode($index, $any($event.target).value)"
-            />
-          </div>
-          <button
-            type="button"
-            class="onb-row-remove"
-            [attr.aria-label]="'Remove store ' + (warehouse.name || warehouse.code)"
-            (click)="store.removeWarehouse($index)"
-          >
-            Remove
-          </button>
+      <!-- Live Branch Supply Status Indicators -->
+      <div class="coverage-status-group">
+        <h5>Branch Supply Readiness Status</h5>
+        <div class="coverage-cards-grid">
+          @for (cov of store.branchCoverage(); track cov.branch.code) {
+            <div class="coverage-card" [class.coverage-card--ready]="cov.isCovered" [class.coverage-card--warn]="!cov.isCovered">
+              <div class="cov-card-header">
+                <span class="cov-pin">📍</span>
+                <span class="cov-branch-name">{{ cov.branch.name || cov.branch.code }}</span>
+                <span class="cov-badge" [class.cov-badge--ok]="cov.isCovered" [class.cov-badge--alert]="!cov.isCovered">
+                  {{ cov.isCovered ? '✓ Direct Supply OK' : '⚠️ No Direct Store' }}
+                </span>
+              </div>
+              <p class="cov-card-desc">
+                @if (cov.isCovered) {
+                  Supplied directly by:
+                  <strong>{{ getCoverageWarehousesList(cov.warehouses) }}</strong>
+                } @else {
+                  <span class="text-danger">Cars repaired here have no direct parts store. Parts must be transferred in.</span>
+                }
+              </p>
+            </div>
+          }
+        </div>
+      </div>
+    </section>
+  }
+</div>
+
+<!-- ----------------------------------------------------------------- -->
+<!-- Modal: Add / Edit Branch                                          -->
+<!-- ----------------------------------------------------------------- -->
+@if (branchModalOpen()) {
+  <div class="modal-backdrop" (click)="closeBranchModal()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h4>{{ editingBranchIndex() !== null ? 'Edit Branch' : 'Add New Branch' }}</h4>
+        <button type="button" class="modal-close" (click)="closeBranchModal()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="modal-br-name">Branch Name *</label>
+          <input
+            id="modal-br-name"
+            type="text"
+            class="form-control"
+            placeholder="e.g. Main Downtown Branch"
+            [value]="branchName()"
+            (input)="branchName.set($any($event.target).value)"
+          />
         </div>
 
-        @if (store.draft().branches.length > 1) {
-          <fieldset class="onb-grants">
-            <legend>Which branches may draw from it?</legend>
-            <div class="onb-grant-row">
-              @for (branch of store.draft().branches; track branch.code) {
-                <label class="onb-grant" [class.onb-grant--on]="warehouse.branchCodes.includes(branch.code)">
-                  <input
-                    type="checkbox"
-                    [checked]="warehouse.branchCodes.includes(branch.code)"
-                    (change)="store.toggleWarehouseBranch($index, branch.code)"
-                  />
-                  <span>{{ branch.name || branch.code }}</span>
-                </label>
-              }
-            </div>
-            @if (warehouse.branchCodes.length === 0) {
-              <p class="onb-hint">None ticked, so every branch may draw from it.</p>
-            }
-          </fieldset>
-        }
-      </div>
-    }
+        <div class="form-row">
+          <div class="form-group col-half">
+            <label for="modal-br-code">Branch Code * (Uppercase)</label>
+            <input
+              id="modal-br-code"
+              type="text"
+              maxlength="12"
+              class="form-control font-mono"
+              placeholder="e.g. BR-MAIN"
+              [value]="branchCode()"
+              (input)="branchCode.set($any($event.target).value.toUpperCase())"
+            />
+          </div>
+          <div class="form-group col-half">
+            <label for="modal-br-city">City</label>
+            <input
+              id="modal-br-city"
+              type="text"
+              class="form-control"
+              placeholder="e.g. Cairo"
+              [value]="branchCity()"
+              (input)="branchCity.set($any($event.target).value)"
+            />
+          </div>
+        </div>
 
-    <button type="button" class="onb-add" (click)="addWarehouse()">Add a store</button>
-  </section>
-} @else {
-  <p class="onb-hint">
-    This workshop holds no stock, so there is nothing to store. Parts are bought for the job or supplied by the
-    customer, and a wait for one is recorded as a blocker on the job.
-  </p>
+        <div class="form-group">
+          <label for="modal-br-address">Physical Address</label>
+          <input
+            id="modal-br-address"
+            type="text"
+            class="form-control"
+            placeholder="e.g. 123 El Nasr Street, Heliopolis"
+            [value]="branchAddress()"
+            (input)="branchAddress.set($any($event.target).value)"
+          />
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" (click)="closeBranchModal()">Cancel</button>
+        <button type="button" class="btn-save" (click)="saveBranch()">Save Branch</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ----------------------------------------------------------------- -->
+<!-- Modal: Add / Edit Warehouse & Parts Store                         -->
+<!-- ----------------------------------------------------------------- -->
+@if (warehouseModalOpen()) {
+  <div class="modal-backdrop" (click)="closeWarehouseModal()">
+    <div class="modal-card modal-card--wide" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h4>{{ editingWarehouseIndex() !== null ? 'Edit Store & Supply Routing' : 'Add New Parts Store' }}</h4>
+        <button type="button" class="modal-close" (click)="closeWarehouseModal()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group col-half">
+            <label for="modal-wh-name">Store Name *</label>
+            <input
+              id="modal-wh-name"
+              type="text"
+              class="form-control"
+              placeholder="e.g. Central Parts Hub"
+              [value]="warehouseName()"
+              (input)="warehouseName.set($any($event.target).value)"
+            />
+          </div>
+          <div class="form-group col-half">
+            <label for="modal-wh-code">Store Code * (Uppercase)</label>
+            <input
+              id="modal-wh-code"
+              type="text"
+              maxlength="12"
+              class="form-control font-mono"
+              placeholder="e.g. WH-MAIN"
+              [value]="warehouseCode()"
+              (input)="warehouseCode.set($any($event.target).value.toUpperCase())"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Store Topology Role</label>
+          <div class="role-selector-grid">
+            <label class="role-opt" [class.active]="warehouseTopology() === 'CENTRAL_HUB'">
+              <input
+                type="radio"
+                name="wh-role"
+                [checked]="warehouseTopology() === 'CENTRAL_HUB'"
+                (change)="warehouseTopology.set('CENTRAL_HUB'); setModalSelectAllBranches(true)"
+              />
+              <span class="role-opt-title">🏢 Central Hub (1:N)</span>
+              <span class="role-opt-sub">Serves all branches in network</span>
+            </label>
+
+            <label class="role-opt" [class.active]="warehouseTopology() === 'BRANCH_STORE'">
+              <input
+                type="radio"
+                name="wh-role"
+                [checked]="warehouseTopology() === 'BRANCH_STORE'"
+                (change)="warehouseTopology.set('BRANCH_STORE')"
+              />
+              <span class="role-opt-title">🏪 Branch Dedicated Store</span>
+              <span class="role-opt-sub">Dedicated to specific branch</span>
+            </label>
+
+            <label class="role-opt" [class.active]="warehouseTopology() === 'CUSTOM'">
+              <input
+                type="radio"
+                name="wh-role"
+                [checked]="warehouseTopology() === 'CUSTOM'"
+                (change)="warehouseTopology.set('CUSTOM')"
+              />
+              <span class="role-opt-title">🕸️ Custom Regional Hub</span>
+              <span class="role-opt-sub">Supplies selected subset</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="grant-head">
+            <label>Which branches may directly draw parts from this store?</label>
+            <div class="grant-quick-links">
+              <button type="button" class="btn-text-link" (click)="setModalSelectAllBranches(true)">Select All</button>
+              <span class="separator">·</span>
+              <button type="button" class="btn-text-link" (click)="setModalSelectAllBranches(false)">Clear All</button>
+            </div>
+          </div>
+
+          <div class="branch-checkboxes-grid">
+            @for (branch of store.draft().branches; track branch.code) {
+              <label class="branch-check-card" [class.checked]="warehouseBranchCodes().includes(branch.code)">
+                <input
+                  type="checkbox"
+                  [checked]="warehouseBranchCodes().includes(branch.code)"
+                  (change)="toggleWarehouseModalBranch(branch.code)"
+                />
+                <span class="check-branch-name">{{ branch.name || branch.code }}</span>
+                <code class="check-branch-code">{{ branch.code }}</code>
+              </label>
+            }
+          </div>
+          @if (warehouseBranchCodes().length === 0) {
+            <p class="form-hint text-warning">⚠️ No branches selected: This store will serve as a reserve warehouse for inter-store transfers only.</p>
+          }
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" (click)="closeWarehouseModal()">Cancel</button>
+        <button type="button" class="btn-save" (click)="saveWarehouse()">Save Store</button>
+      </div>
+    </div>
+  </div>
 }

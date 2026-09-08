@@ -7,16 +7,16 @@
   }
 
   @case ('not-mine') {
-    <!-- Same answer as not-found, so job ids cannot be probed. -->
     <div class="state">
       <p class="state-title">That job isn't yours</p>
-      <a class="big-button" routerLink="/tech/work">My work</a>
+      <a class="big-button" routerLink="/tech">Back to Vehicles</a>
     </div>
   }
 
   @case ('forbidden') {
     <div class="state">
       <p class="state-title">You don't have technician access</p>
+      <a class="big-button" routerLink="/tech">Back to Vehicles</a>
     </div>
   }
 
@@ -29,623 +29,935 @@
 
   @case ('ready') {
     @if (card(); as c) {
-      <header class="card-head">
-        <a class="card-back" routerLink="/tech/work">My work</a>
-        <h1 class="card-plate"><mop-identifier [value]="c.identifier ?? '—'" /></h1>
-        <p class="card-customer">{{ c.customerName }} · {{ label(c.status) }}</p>
-
-        @if (c.complaint?.trim()) {
-          <div class="card-complaint">
-            <span class="card-complaint-label">Customer reported:</span>
-            <p class="card-complaint-text">{{ c.complaint }}</p>
-          </div>
-        }
-
-        @if (c.inspectionDeclined) {
-          <p class="card-note">Customer refused inspection. Do only what was agreed.</p>
-        }
-      </header>
-
-      @if (journey(); as j) {
-        <!-- Where this job actually is, generated from the workshop's own
-             effective graph. A workshop without QC has no QC stage here.
-
-             The job-level move a technician can make lives INSIDE this,
-             in the "Now" panel, rather than in a section of its own: the
-             journey's actions are checked against both the graph AND
-             this technician's real permission, where the work card's own
-             `primaryAction` only ever asked the graph. Two buttons for
-             one move, one of which could be refused after the press, is
-             worse than one button that cannot be. -->
-        <app-workflow-strip [journey]="j" (act)="runJourneyAction($event)" />
-      }
-
-      <app-tech-vehicle-history [workOrderId]="id()" />
-
-      @if (actionError(); as message) {
-        <!-- On the page, never a toast: a technician who put the tablet
-             down would miss a toast and believe the press had worked. -->
-        <p class="action-error" role="alert">{{ message }}</p>
-      }
-
-      @if (blockedTask(); as blocked) {
-        <section class="blocked">
-          <p class="blocked-title">Blocked</p>
-          <p class="blocked-why">{{ blocked.blockedReason }}</p>
-          <p class="blocked-note">Your branch manager can see this. They have to clear it.</p>
-        </section>
-      }
-
-      <!-- ── mission 1: the inspection ───────────────────────────────── -->
-      <!-- First on the card because it is first on the car. Everything
-           below is repair work, and repair work is not legal until this
-           is done and the customer has agreed to what it found.
-
-           Every value here is the server's. The lock is explained here,
-           not imposed here: the same request sent by hand is refused by
-           the API with this same sentence. -->
-
-      <section class="mission" [attr.data-state]="c.inspection.state">
-        <p class="mission-step">Mission 1</p>
-        <h2 class="mission-title">Inspection</h2>
-
-        @switch (c.inspection.state) {
-          @case ('DECLINED') {
-            <p class="mission-state">Declined by the customer</p>
-            <p class="mission-note">They asked for one named service. Do only what was agreed.</p>
-          }
-          @case ('COMPLETED') {
-            <p class="mission-state mission-state--done">Completed</p>
-            <p class="mission-note">
-              {{ c.inspection.faultCount }} finding{{ c.inspection.faultCount === 1 ? '' : 's' }} recorded.
-              @if (c.inspection.actualMinutes !== null) {
-                <span>· {{ c.inspection.actualMinutes }} min</span>
+      @if (isInspectionState()) {
+        <!-- ═════════════════════════════════════════════════════════════════ -->
+        <!-- ── INSPECTION STAGE (Multi-Step: Checkpoints -> Photo 3 Replica) ── -->
+        <!-- ═════════════════════════════════════════════════════════════════ -->
+        <div class="studio-inspection-page">
+          <!-- Top Vehicle Status & Navigation Bar -->
+          <header class="studio-top-bar">
+            <div class="top-bar-vehicle">
+              @if (c.vehicleModel) {
+                <span class="vehicle-meta-badge">🚗 {{ c.vehicleModel }}</span>
               }
-            </p>
+              @if (c.vin) {
+                <span class="vehicle-meta-badge font-mono">VIN: {{ c.vin }}</span>
+              }
+              <span class="vehicle-customer">👤 Customer: {{ c.customerName }}</span>
+            </div>
 
-            @if (c.repairLocked) {
-              <div class="mission-locked-banner" role="status">
-                @if (c.status === 'AWAITING_CUSTOMER_APPROVAL') {
-                  <p class="mission-locked-title">Waiting for customer decision</p>
-                  <p class="mission-locked-text">Inspection is complete. Repair work is waiting for the customer's decision.</p>
-                } @else if (c.status === 'UNDER_INSPECTION') {
-                  <p class="mission-locked-title">Inspection complete — authorization required</p>
-                  <p class="mission-locked-text">Inspection is complete, but the job cannot move to repair work yet.</p>
-                  @if (c.repairLockReason) {
-                    <p class="mission-locked-reason">{{ c.repairLockReason }}</p>
+            <a class="nav-back-button" routerLink="/tech" title="Back to Vehicles Queue">
+              ← Back to Queue
+            </a>
+          </header>
+
+          @switch (inspectionSubStep()) {
+            @case ('checkpoints') {
+              <!-- ── SUB-STEP 1: 3D CAR & CHECKPOINTS ── -->
+              <!-- 3D Studio Car Viewer (Photorealistic Studio Cutaway Turntable) -->
+              <main class="studio-car-section">
+                <app-car-3d-viewer
+                  [activePart]="active3dPart()"
+                  [highlightParts]="highlighted3dParts()"
+                  (partSelect)="on3dPartSelected($any($event))"
+                />
+              </main>
+
+              <!-- Inspection Checkpoints Grid with 3D Volumetric Claymorphic Drawings -->
+              <section class="studio-bottom-section">
+                <div class="bottom-section-header">
+                  <div class="header-title-wrap">
+                    <h2 class="bottom-section-title">Inspection Checkpoints</h2>
+                    <span class="title-chevron">›</span>
+                  </div>
+                  <div class="header-tools-wrap">
+                    @if (totalBoxesCount() > 0) {
+                      <span class="completion-pill" [class.completion-pill--all-done]="allBoxesDone()">
+                        {{ completedBoxesCount() }} / {{ totalBoxesCount() }} Completed
+                      </span>
+                    }
+                  </div>
+                </div>
+
+                <!-- Full-Width Responsive Checkpoint Boxes Grid -->
+                <div class="inspection-boxes-row">
+                  @for (box of inspectionBoxes(); track box.partKey) {
+                    <div
+                      class="studio-service-card"
+                      [class.studio-service-card--done]="box.isDone"
+                      [class.studio-service-card--active]="active3dPart() === box.partKey"
+                      (click)="on3dPartSelected(box.partKey)"
+                    >
+                      <div class="service-icon-container">
+                        <app-animated-part-icon [part]="box.partKey" />
+                      </div>
+
+                      <h3 class="service-title">{{ box.nameEn }}</h3>
+                      <p class="service-desc">
+                        @if (box.symptoms && box.symptoms.length > 0) {
+                          {{ box.symptoms[0] }}
+                        } @else {
+                          Comprehensive inspection and standards check
+                        }
+                      </p>
+
+                      <div class="service-card-actions" (click)="$event.stopPropagation()">
+                        <button
+                          type="button"
+                          class="btn-customer-details"
+                          (click)="openCustomerDetailModal(box)"
+                          title="Customer Details"
+                        >
+                          <span class="btn-icon">👤</span>
+                          <span class="btn-text">Details</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          class="btn-done-status"
+                          [class.btn-done-status--checked]="box.isDone"
+                          [disabled]="togglingBox() === box.partKey"
+                          (click)="toggleBoxDone(box)"
+                        >
+                          @if (togglingBox() === box.partKey) {
+                            <span>...</span>
+                          } @else if (box.isDone) {
+                            <span>✓ Done</span>
+                          } @else {
+                            <span>Mark Done</span>
+                          }
+                        </button>
+                      </div>
+                    </div>
                   }
-                } @else {
-                  <p class="mission-locked-title">Repair work locked</p>
-                  @if (c.repairLockReason) {
-                    <p class="mission-locked-reason">{{ c.repairLockReason }}</p>
-                  }
-                }
+                </div>
+
+                <!-- Action Footer: Continue to Findings & POS Parts -->
+                <div class="inspection-footer-actions">
+                  <div class="proceed-action-wrap">
+                    <button
+                      type="button"
+                      class="btn-complete-inspection btn-complete-inspection--ready"
+                      (click)="proceedToFindingsAndParts()"
+                    >
+                      <span>✓ Continue to Findings, POS Parts &amp; Services (Photo 3) →</span>
+                    </button>
+                    <span class="action-gate-ready">
+                      Click to set inspection findings, select needed parts from POS inventory, and specify labor services.
+                    </span>
+                  </div>
+                </div>
+              </section>
+            }
+
+            @case ('findings_and_parts') {
+              <!-- ── SUB-STEP 2: PHOTO 3 REPLICA (FINDINGS, POS PARTS & SERVICES) ── -->
+              <div class="photo3-replica-container">
+                <!-- Header Bar (Clean Title & Real-Time Quote Summary, fake stepper removed) -->
+                <div class="photo3-header-row">
+                  <div class="photo3-title-wrap">
+                    <div class="photo3-step-bubble">📋</div>
+                    <div>
+                      <h1 class="photo3-main-title">Vehicle Inspection &amp; Component Findings</h1>
+                      <p class="photo3-subtitle">Set component severity, attach replacement stock parts directly from POS, and link labor suggestions.</p>
+                    </div>
+                  </div>
+
+                  <div class="quote-summary-badge">
+                    <span class="quote-summary-label">Estimated Scope:</span>
+                    <span class="quote-summary-item">Parts <strong>${{ totalEstimatedQuote().partsSum }}</strong></span>
+                    <span class="quote-summary-sep">+</span>
+                    <span class="quote-summary-item">Labor <strong>${{ totalEstimatedQuote().laborSum }}</strong></span>
+                    <span class="quote-summary-sep">=</span>
+                    <strong class="quote-summary-total">${{ totalEstimatedQuote().grandTotal }}</strong>
+                  </div>
+                </div>
+
+                <!-- Vehicle Info Hero Banner matching Photo 3 -->
+                <div class="photo3-vehicle-card">
+                  <div class="photo3-vehicle-photo">
+                    <img [src]="mechanicHeroImg" alt="Inspected Vehicle" class="hero-vehicle-img" />
+                  </div>
+                  <div class="photo3-vehicle-info">
+                    <span class="photo3-in-progress-pill">In Progress</span>
+                    <h2 class="photo3-vehicle-name">{{ c.vehicleModel || 'Toyota Corolla 2021' }}</h2>
+                    <div class="photo3-meta-line">
+                      <span class="meta-icon">🚗</span>
+                      <span class="meta-text">VIN: {{ c.vin || '1NXBR32E7MZ123456' }}</span>
+                    </div>
+                    <div class="photo3-meta-line">
+                      <span class="meta-icon">👤</span>
+                      <span class="meta-text">Customer: {{ c.customerName }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Large Component Inspection Boxes Container (Full-Width, No Right-Side POS/Services Columns) -->
+                <div class="large-inspection-boxes-container">
+                  <div class="section-badge-bar">
+                    <div class="section-title-wrap">
+                      <span class="section-icon">🛠️</span>
+                      <div>
+                        <h3 class="section-heading">Component Findings Checklist</h3>
+                        <p class="section-subtext">Each subsystem includes direct severity tagging, POS workshop stock inventory linking, and service suggestions.</p>
+                      </div>
+                    </div>
+                    <span class="boxes-count-pill">{{ findings().length }} Monitored Subsystems</span>
+                  </div>
+
+                  <!-- Large Component Boxes Grid -->
+                  <div class="large-boxes-grid">
+                    @for (f of findings(); track f.id) {
+                      <div
+                        class="large-component-card"
+                        [class.large-component-card--critical]="f.severity === 'CRITICAL'"
+                        [class.large-component-card--medium]="f.severity === 'MEDIUM' || f.severity === 'HIGH'"
+                        [class.large-component-card--low]="f.severity === 'LOW'"
+                      >
+                        <!-- Card Main Header -->
+                        <div class="card-main-header">
+                          <div class="card-identity-left">
+                            <div class="large-part-icon-box">
+                              <app-animated-part-icon [part]="f.partKey" />
+                            </div>
+                            <div class="large-part-text">
+                              <div class="title-and-status">
+                                <h4 class="large-part-title">{{ f.title }}</h4>
+                                @if (getPartsForFinding(f.partKey).length > 0 || getServicesForFinding(f.partKey).length > 0) {
+                                  <span class="configured-badge">✓ Configured</span>
+                                }
+                              </div>
+                              <p class="large-part-desc">{{ f.description }}</p>
+                            </div>
+                          </div>
+
+                          <!-- Severity Picker (Critical / Medium / Low) Directly on Box -->
+                          <div class="severity-picker-group">
+                            <span class="picker-label">Condition:</span>
+                            <div class="sev-button-group">
+                              <button
+                                type="button"
+                                class="sev-pill-btn sev-pill-btn--critical"
+                                [class.sev-pill-btn--active]="f.severity === 'CRITICAL'"
+                                (click)="updateFindingSeverity(f.id, 'CRITICAL')"
+                                title="Mark as Critical condition"
+                              >
+                                <span class="sev-dot">●</span> Critical
+                              </button>
+                              <button
+                                type="button"
+                                class="sev-pill-btn sev-pill-btn--medium"
+                                [class.sev-pill-btn--active]="f.severity === 'MEDIUM' || f.severity === 'HIGH'"
+                                (click)="updateFindingSeverity(f.id, 'MEDIUM')"
+                                title="Mark as Medium condition"
+                              >
+                                <span class="sev-dot">●</span> Medium
+                              </button>
+                              <button
+                                type="button"
+                                class="sev-pill-btn sev-pill-btn--low"
+                                [class.sev-pill-btn--active]="f.severity === 'LOW'"
+                                (click)="updateFindingSeverity(f.id, 'LOW')"
+                                title="Mark as Low condition"
+                              >
+                                <span class="sev-dot">●</span> Low
+                              </button>
+                            </div>
+
+                            <button
+                              type="button"
+                              class="btn-dismiss-card"
+                              (click)="removeFinding(f.id)"
+                              title="Remove component"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+
+                        <!-- Card Two Action Buttons (Replaces separate POS and Services columns) -->
+                        <div class="card-action-bar">
+                          <button
+                            type="button"
+                            class="card-action-btn card-action-btn--pos"
+                            (click)="openPosForFinding(f)"
+                          >
+                            <span class="btn-icon">🛒</span>
+                            <span class="btn-label">Attach Parts (from POS)</span>
+                            @if (getPartsForFinding(f.partKey).length > 0) {
+                              <span class="attached-count-pill">{{ getPartsForFinding(f.partKey).length }}</span>
+                            }
+                          </button>
+
+                          <button
+                            type="button"
+                            class="card-action-btn card-action-btn--services"
+                            [class.card-action-btn--active]="openServicesBoxKey() === f.partKey"
+                            (click)="toggleServicesForFinding(f)"
+                          >
+                            <span class="btn-icon">🔧</span>
+                            <span class="btn-label">Service Suggestions</span>
+                            @if (getServicesForFinding(f.partKey).length > 0) {
+                              <span class="attached-count-pill">{{ getServicesForFinding(f.partKey).length }}</span>
+                            }
+                            <span class="btn-caret">{{ openServicesBoxKey() === f.partKey ? '▲' : '▼' }}</span>
+                          </button>
+                        </div>
+
+                        <!-- In-Card Service Suggestions Drawer (When Toggled) -->
+                        @if (openServicesBoxKey() === f.partKey) {
+                          <div class="box-suggestions-panel">
+                            <div class="suggestions-panel-header">
+                              <span class="panel-header-icon">💡</span>
+                              <div class="panel-header-text">
+                                <strong class="panel-header-title">Recommended Labor Tasks for {{ f.title }}</strong>
+                                <span class="panel-header-sub">Click "+ Add Service" to attach labor directly to this subsystem.</span>
+                              </div>
+                            </div>
+
+                            <div class="service-chips-grid">
+                              @for (sug of getComponentServiceSuggestions(f.partKey); track sug.serviceName) {
+                                @let isSelected = isBoxServiceSelected(f.partKey, sug.serviceName);
+                                <div class="suggestion-chip-card" [class.suggestion-chip-card--selected]="isSelected">
+                                  <div class="chip-info">
+                                    <strong class="chip-name">{{ sug.serviceName }}</strong>
+                                    <span class="chip-price">${{ sug.laborPrice }}</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    class="btn-chip-toggle"
+                                    [class.btn-chip-toggle--remove]="isSelected"
+                                    (click)="isSelected ? removeBoxService(f.partKey, sug.serviceName) : addServiceToBox(f.partKey, sug.serviceName, sug.laborPrice)"
+                                  >
+                                    {{ isSelected ? '✕ Remove' : '+ Add Service' }}
+                                  </button>
+                                </div>
+                              }
+                            </div>
+                          </div>
+                        }
+
+                        <!-- In-Card Attached POS Inventory Parts Table -->
+                        @if (getPartsForFinding(f.partKey).length > 0) {
+                          <div class="box-attached-section box-attached-section--parts">
+                            <div class="attached-section-head">
+                              <span class="section-tag">📦 Attached Workshop POS Parts ({{ getPartsForFinding(f.partKey).length }})</span>
+                            </div>
+                            <div class="attached-parts-table">
+                              @for (part of getPartsForFinding(f.partKey); track part.sku) {
+                                <div class="attached-part-row">
+                                  <div class="part-cell-main">
+                                    <strong class="part-item-name">{{ part.name }}</strong>
+                                    <span class="part-item-sku font-mono">{{ part.sku }}</span>
+                                  </div>
+                                  <div class="part-cell-qty">
+                                    <button type="button" class="qty-btn" (click)="updateBoxPartQty(f.partKey, part.sku, -1)">−</button>
+                                    <span class="qty-display">{{ part.quantity }}</span>
+                                    <button type="button" class="qty-btn" (click)="updateBoxPartQty(f.partKey, part.sku, 1)">+</button>
+                                  </div>
+                                  <div class="part-cell-pricing">
+                                    <span class="part-unit-price">${{ part.unitPrice }} / unit</span>
+                                    <strong class="part-subtotal">${{ part.unitPrice * part.quantity }}</strong>
+                                  </div>
+                                  <button type="button" class="btn-remove-item" (click)="removeBoxPart(f.partKey, part.sku)" title="Remove part">
+                                    ✕
+                                  </button>
+                                </div>
+                              }
+                            </div>
+                          </div>
+                        }
+
+                        <!-- In-Card Attached Labor Services List -->
+                        @if (getServicesForFinding(f.partKey).length > 0) {
+                          <div class="box-attached-section box-attached-section--services">
+                            <div class="attached-section-head">
+                              <span class="section-tag">⚙️ Attached Labor Services ({{ getServicesForFinding(f.partKey).length }})</span>
+                            </div>
+                            <div class="attached-services-list">
+                              @for (srv of getServicesForFinding(f.partKey); track srv.serviceName) {
+                                <div class="attached-service-row">
+                                  <div class="service-cell-main">
+                                    <strong class="service-item-name">{{ srv.serviceName }}</strong>
+                                    <span class="service-item-tag">Standard Workshop Labor</span>
+                                  </div>
+                                  <div class="service-cell-pricing">
+                                    <strong class="service-price">${{ srv.laborPrice }}</strong>
+                                  </div>
+                                  <button type="button" class="btn-remove-item" (click)="removeBoxService(f.partKey, srv.serviceName)" title="Remove service">
+                                    ✕
+                                  </button>
+                                </div>
+                              }
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    }
+
+                    <!-- + Add Finding Interactive Row -->
+                    @if (!isAddFindingOpen()) {
+                      <button type="button" class="btn-add-finding-row" (click)="openAddFinding()">
+                        <div class="add-icon-circle">+</div>
+                        <div class="add-text-wrap">
+                          <strong class="add-title">Add Another Component Finding</strong>
+                          <span class="add-subtitle">Record an additional subsystem or defect observed during inspection</span>
+                        </div>
+                        <span class="add-chevron">›</span>
+                      </button>
+                    } @else {
+                      <!-- Add Finding Inline Form -->
+                      <div class="add-finding-inline-form">
+                        <div class="form-header">
+                          <h4 class="form-title">Add New Subsystem Finding</h4>
+                          <button type="button" class="btn-close-form" (click)="closeAddFinding()">✕</button>
+                        </div>
+
+                        <div class="form-grid">
+                          <div class="form-field">
+                            <label class="field-label">System / Subsystem</label>
+                            <select
+                              class="form-select"
+                              [value]="newFindingPart()"
+                              (change)="newFindingPart.set($any($event.target).value)"
+                            >
+                              <option value="brakes">Brakes &amp; Rotors</option>
+                              <option value="battery">Battery &amp; Electrical</option>
+                              <option value="steering">Steering &amp; Pinion</option>
+                              <option value="infotainment">Infotainment &amp; Audio</option>
+                              <option value="tires">Tires &amp; Wheels</option>
+                              <option value="fluids">Engine Oil &amp; Fluids</option>
+                              <option value="engine">Engine Block</option>
+                              <option value="transmission">Transmission / Gearbox</option>
+                              <option value="suspension">Suspension &amp; Struts</option>
+                              <option value="cooling">Cooling &amp; Radiator</option>
+                              <option value="ac">Climate &amp; A/C</option>
+                              <option value="exhaust">Exhaust &amp; Muffler</option>
+                              <option value="general">General Maintenance</option>
+                            </select>
+                          </div>
+
+                          <div class="form-field">
+                            <label class="field-label">Severity Level</label>
+                            <div class="severity-radios">
+                              <button
+                                type="button"
+                                class="sev-choice sev-choice--low"
+                                [class.sev-choice--active]="newFindingSeverity() === 'LOW'"
+                                (click)="newFindingSeverity.set('LOW')"
+                              >
+                                Low
+                              </button>
+                              <button
+                                type="button"
+                                class="sev-choice sev-choice--med"
+                                [class.sev-choice--active]="newFindingSeverity() === 'MEDIUM'"
+                                (click)="newFindingSeverity.set('MEDIUM')"
+                              >
+                                Medium
+                              </button>
+                              <button
+                                type="button"
+                                class="sev-choice sev-choice--crit"
+                                [class.sev-choice--active]="newFindingSeverity() === 'CRITICAL'"
+                                (click)="newFindingSeverity.set('CRITICAL')"
+                              >
+                                Critical
+                              </button>
+                            </div>
+                          </div>
+
+                          <div class="form-field full-span">
+                            <label class="field-label">Issue Title</label>
+                            <input
+                              type="text"
+                              class="form-input"
+                              placeholder="e.g. Brake Pad Wear, Battery Voltage Low"
+                              [value]="newFindingTitle()"
+                              (input)="newFindingTitle.set($any($event.target).value)"
+                            />
+                          </div>
+
+                          <div class="form-field full-span">
+                            <label class="field-label">Description / Inspection Observation</label>
+                            <textarea
+                              class="form-textarea"
+                              rows="2"
+                              placeholder="Detailed inspection finding notes..."
+                              [value]="newFindingDesc()"
+                              (input)="newFindingDesc.set($any($event.target).value)"
+                            ></textarea>
+                          </div>
+                        </div>
+
+                        <div class="form-actions">
+                          <button type="button" class="btn-cancel-small" (click)="closeAddFinding()">Cancel</button>
+                          <button
+                            type="button"
+                            class="btn-save-finding"
+                            [disabled]="!newFindingTitle().trim()"
+                            (click)="addFinding()"
+                          >
+                            Save Finding
+                          </button>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </div>
+
+                <!-- Bottom Sticky Bar with Live Pricing -->
+                <div class="photo3-bottom-bar">
+                  <div class="bottom-bar-left">
+                    <div class="check-circle-icon">✓</div>
+                    <div class="bottom-bar-text">
+                      <h4 class="bar-title">Inspection Findings Configured?</h4>
+                      <p class="bar-subtitle">
+                        Estimated Scope:
+                        <strong>${{ totalEstimatedQuote().partsSum }}</strong> Parts +
+                        <strong>${{ totalEstimatedQuote().laborSum }}</strong> Labor =
+                        <strong class="highlight-total">${{ totalEstimatedQuote().grandTotal }}</strong> Total
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="bottom-bar-actions">
+                    <button type="button" class="btn-back-checkpoints" (click)="backToCheckpoints()">
+                      ← Back to Checkpoints
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-submit-report"
+                      [disabled]="isSubmittingReport()"
+                      (click)="submitFindingsAndPartsReport()"
+                    >
+                      @if (isSubmittingReport()) {
+                        <span>Sending to Operator Desk...</span>
+                      } @else {
+                        <span>✈ Complete Inspection &amp; Send Report to Operator →</span>
+                      }
+                    </button>
+                  </div>
+                </div>
               </div>
             }
 
-            <div class="mission-findings">
-              <h3 class="mission-subheading">Recorded findings</h3>
-              @if (c.findings.length === 0) {
-                <p class="findings-empty">No findings recorded.</p>
-              } @else {
-                <ul class="findings-list">
-                  @for (finding of c.findings; track finding.id) {
-                    <li class="finding-item">
-                      <div class="finding-header">
-                        <span class="severity-badge" [attr.data-severity]="finding.severity">
-                          {{ finding.severity }}
-                        </span>
-                        @if (finding.code) {
-                          <span class="finding-code">{{ finding.code }}</span>
+            @case ('awaiting_operator') {
+              <!-- ── SUB-STEP 3: AWAITING OPERATOR APPROVAL & REPAIR DISPATCH ── -->
+              <div class="awaiting-operator-card">
+                <div class="awaiting-icon-wrap">
+                  <div class="radar-ping"></div>
+                  <span class="awaiting-emoji">📋</span>
+                </div>
+                <h2 class="awaiting-title">Inspection Report Sent to Operator Desk</h2>
+                <p class="awaiting-subtitle">
+                  The operator is currently reviewing your recorded findings, POS parts list, and required labor services to prepare customer quotation and repair dispatch.
+                </p>
+
+                <div class="awaiting-summary-chips">
+                  <div class="sum-chip">
+                    <strong>{{ findings().length }}</strong>
+                    <span>Findings Recorded</span>
+                  </div>
+                  <div class="sum-chip">
+                    <strong>{{ selectedPosParts().length }}</strong>
+                    <span>POS Parts Requested</span>
+                  </div>
+                  <div class="sum-chip">
+                    <strong>{{ selectedServices().length }}</strong>
+                    <span>Services Specified</span>
+                  </div>
+                </div>
+
+                <div class="awaiting-actions">
+                  <a class="btn-queue-return" routerLink="/tech">
+                    ← Return to Technician Queue
+                  </a>
+                  <button type="button" class="btn-re-check" (click)="load()">
+                    🔄 Refresh Work Order Status
+                  </button>
+                </div>
+              </div>
+            }
+          }
+
+          <!-- POS Inventory Modal Window -->
+          @if (posModalOpen()) {
+            <div class="studio-modal-backdrop" (click)="closePosModal()">
+              <div class="pos-modal-card" (click)="$event.stopPropagation()">
+                <div class="modal-header">
+                  <div class="modal-title-wrap">
+                    <span class="modal-icon">🛒</span>
+                    <div>
+                      <h3 class="modal-title">POS Parts Inventory Catalog</h3>
+                      <p class="modal-subtitle">
+                        @if (activeBoxPartKey(); as key) {
+                          <span>Attaching workshop inventory to: <strong style="color: #0284c7; text-transform: uppercase;">{{ key }}</strong></span>
+                        } @else {
+                          <span>Pick genuine replacement parts from workshop inventory</span>
                         }
-                        <span class="decision-badge" [attr.data-decision]="findingDecisionStatus(finding)">
-                          {{ findingDecisionLabel(findingDecisionStatus(finding)) }}
-                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  <button type="button" class="modal-close-btn" (click)="closePosModal()">✕</button>
+                </div>
+
+                <div class="modal-search-bar">
+                  <input
+                    type="search"
+                    class="pos-search-input"
+                    placeholder="Search inventory by part name, SKU, or category..."
+                    [value]="posSearchQuery()"
+                    (input)="posSearchQuery.set($any($event.target).value)"
+                  />
+                </div>
+
+                <div class="pos-inventory-list">
+                  @for (item of filteredPosCatalog(); track item.sku) {
+                    <div class="pos-item-card">
+                      <div class="pos-item-icon">
+                        <app-animated-part-icon [part]="item.category.toLowerCase()" />
                       </div>
-                      <p class="finding-desc">{{ finding.description }}</p>
-                      @if (finding.recommendedService) {
-                        <p class="finding-service">Recommended: {{ finding.recommendedService }}</p>
-                      }
-                    </li>
+                      <div class="pos-item-details">
+                        <strong class="pos-item-name">{{ item.name }}</strong>
+                        <div class="pos-item-meta">
+                          <span class="font-mono text-xs">{{ item.sku }}</span>
+                          <span class="meta-dot">•</span>
+                          <span class="item-cat-badge">{{ item.category }}</span>
+                          <span class="meta-dot">•</span>
+                          <span class="stock-pill">{{ item.stock }} in stock</span>
+                        </div>
+                      </div>
+                      <div class="pos-item-action">
+                        <strong class="pos-price-tag">\${{ item.unitPrice }}</strong>
+                        <button type="button" class="btn-add-part-pos" (click)="addPosPart(item)">
+                          + Add to Job
+                        </button>
+                      </div>
+                    </div>
                   }
-                </ul>
-              }
+                </div>
+
+                <div class="modal-footer">
+                  <button type="button" class="btn-cancel" (click)="closePosModal()">Done</button>
+                </div>
+              </div>
             </div>
           }
-          @case ('IN_PROGRESS') {
-            <!-- 1. Inspection status/context -->
-            <div class="mission-status-group">
-              <p class="mission-state">Under way</p>
-              <p class="mission-note">Record findings, request approvals if necessary, and complete the inspection.</p>
-            </div>
 
-            <!-- 2. Recorded Findings -->
-            <div class="mission-findings">
-              <h3 class="mission-subheading">Recorded findings</h3>
-              @if (c.findings.length === 0) {
-                <p class="findings-empty">No findings recorded yet.</p>
-              } @else {
-                <ul class="findings-list">
-                  @for (finding of c.findings; track finding.id) {
-                    <li class="finding-item">
-                      <div class="finding-header">
-                        <span class="severity-badge" [attr.data-severity]="finding.severity">
-                          {{ finding.severity }}
-                        </span>
-                        @if (finding.code) {
-                          <span class="finding-code">{{ finding.code }}</span>
-                        }
-                        <span class="decision-badge" [attr.data-decision]="findingDecisionStatus(finding)">
-                          {{ findingDecisionLabel(findingDecisionStatus(finding)) }}
-                        </span>
-                      </div>
-                      <p class="finding-desc">{{ finding.description }}</p>
-                      @if (finding.recommendedService) {
-                        <p class="finding-service">Recommended: {{ finding.recommendedService }}</p>
-                      }
-                    </li>
-                  }
-                </ul>
-              }
-            </div>
+          <!-- Customer Details Modal Window -->
+          @if (customerDetailModalBox(); as modalBox) {
+            <div class="studio-modal-backdrop" (click)="closeCustomerDetailModal()">
+              <div class="studio-modal-card" (click)="$event.stopPropagation()">
+                <div class="modal-header">
+                  <div class="modal-title-wrap">
+                    <span class="modal-icon">{{ modalBox.icon }}</span>
+                    <div>
+                      <h3 class="modal-title">Customer Details — {{ modalBox.nameEn }}</h3>
+                      <p class="modal-subtitle">{{ modalBox.systemCategoryEn }}</p>
+                    </div>
+                  </div>
+                  <button type="button" class="modal-close-btn" (click)="closeCustomerDetailModal()">✕</button>
+                </div>
 
-            <!-- 3. Log Finding action / form -->
-            <div class="mission-log-finding">
-              <button
-                class="tap tap--wide tap--log-finding"
-                type="button"
-                [class.tap--selected]="missionFindingOpen()"
-                (click)="missionFindingOpen.set(!missionFindingOpen())"
-              >
-                {{ missionFindingOpen() ? 'Close finding form' : '+ Log finding' }}
-              </button>
-
-              @if (missionFindingOpen()) {
-                <div class="fault mission-fault-form">
-                  <textarea
-                    class="fault-text"
-                    rows="3"
-                    placeholder="What did you find?"
-                    [value]="faultText()"
-                    (input)="faultText.set($any($event.target).value)"
-                  ></textarea>
-
-                  <div class="severity">
-                    @for (level of ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']; track level) {
-                      <button
-                        class="tap tap--severity"
-                        type="button"
-                        [class.tap--selected]="faultSeverity() === level"
-                        (click)="faultSeverity.set(level)"
-                      >
-                        {{ level }}
-                      </button>
-                    }
+                <div class="modal-body">
+                  <div class="customer-info-grid">
+                    <div class="info-item">
+                      <span class="info-label">Customer Name</span>
+                      <strong class="info-val">{{ modalBox.customerDetails.customerName }}</strong>
+                    </div>
+                    <div class="info-item">
+                      <span class="info-label">Vehicle Category</span>
+                      <strong class="info-val">{{ modalBox.customerDetails.vehicleCategory || 'Sedan / Passenger' }}</strong>
+                    </div>
+                    <div class="info-item">
+                      <span class="info-label">Inspection Status</span>
+                      <span class="modal-status-badge" [class.modal-status-badge--done]="modalBox.isDone">
+                        {{ modalBox.isDone ? '✓ Completed' : 'Under Inspection' }}
+                      </span>
+                    </div>
                   </div>
 
-                  <label class="ask-toggle">
-                    <input
-                      type="checkbox"
-                      [checked]="askCustomer()"
-                      (change)="askCustomer.set($any($event.target).checked)"
-                    />
-                    Ask the customer to approve this
-                  </label>
-
-                  @if (askCustomer()) {
-                    <div class="ask-price">
-                      <label class="ask-price-field">
-                        <span>Price</span>
-                        <input
-                          type="text"
-                          inputmode="decimal"
-                          placeholder="0.00"
-                          [value]="faultPrice()"
-                          (input)="faultPrice.set($any($event.target).value)"
-                        />
-                      </label>
-                      <label class="ask-price-field">
-                        <span>Labor (optional)</span>
-                        <input
-                          type="text"
-                          inputmode="decimal"
-                          placeholder="0.00"
-                          [value]="faultLaborPrice()"
-                          (input)="faultLaborPrice.set($any($event.target).value)"
-                        />
-                      </label>
-                      <p class="ask-price-hint">Parts and labor entered here form the estimate shown to the customer.</p>
+                  @if (modalBox.customerDetails.complaint) {
+                    <div class="complaint-box">
+                      <span class="complaint-label">Customer Concern &amp; Notes:</span>
+                      <p class="complaint-text">{{ modalBox.customerDetails.complaint }}</p>
                     </div>
                   }
 
+                  @if (modalBox.symptoms && modalBox.symptoms.length > 0) {
+                    <div class="symptoms-section">
+                      <span class="symptoms-label">Reported Symptoms:</span>
+                      <div class="symptoms-chips">
+                        @for (sym of modalBox.symptoms; track sym) {
+                          <span class="sym-chip">{{ sym }}</span>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+
+                <div class="modal-footer">
+                  <button type="button" class="btn-cancel" (click)="closeCustomerDetailModal()">Close</button>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      } @else {
+        <!-- ═════════════════════════════════════════════════════════════════ -->
+        <!-- ── STAGE 2: REPAIRING / FIXING (Photo 1 Overhaul)                 ── -->
+        <!-- ═════════════════════════════════════════════════════════════════ -->
+        <div class="repair-stage-page">
+          <!-- Top Strip Header: Plate and Phone REMOVED per user instructions -->
+          <header class="live-strip-header">
+            <div class="live-strip-main">
+              <span class="live-pulse-dot"></span>
+              <span class="live-tag">WO #{{ c.workOrderId.slice(-6).toUpperCase() }}</span>
+              <span class="live-dot-sep">•</span>
+              <span class="live-vehicle-title">{{ c.vehicleModel || 'Vehicle' }}</span>
+              <span class="live-dot-sep">•</span>
+              <span class="live-customer-label">Customer: {{ c.customerName }}</span>
+              <span class="live-dot-sep">•</span>
+              <span class="live-status-pill" [class]="'pill-status-' + c.status.toLowerCase()">{{ label(c.status) }}</span>
+            </div>
+
+            <div class="live-strip-controls">
+              <button
+                type="button"
+                class="btn-toggle-live-view"
+                (click)="toggleHeaderExpanded()"
+                id="btn-toggle-live-header"
+              >
+                {{ headerExpanded() ? '▲ Collapse Info' : '▼ Expand Details' }}
+              </button>
+              <a class="nav-back-button" routerLink="/tech" title="Back to Vehicles Queue">
+                ← Back to Queue
+              </a>
+            </div>
+          </header>
+
+          <!-- Extended Info & MERGED Vehicle History Panel (Photo 1 Requirement) -->
+          @if (headerExpanded()) {
+            <section class="live-details-expanded" aria-label="Extended Vehicle Details and Service History">
+              <div class="details-row">
+                <div class="detail-cell">
+                  <span class="cell-label">Vehicle Model</span>
+                  <strong class="cell-value">{{ c.vehicleModel || '—' }}</strong>
+                </div>
+                <div class="detail-cell">
+                  <span class="cell-label">VIN / Chassis</span>
+                  <strong class="cell-value font-mono">{{ c.vin || '—' }}</strong>
+                </div>
+                <div class="detail-cell">
+                  <span class="cell-label">Mileage</span>
+                  <strong class="cell-value">{{ c.mileage || '—' }}</strong>
+                </div>
+                <div class="detail-cell">
+                  <span class="cell-label">Status</span>
+                  <strong class="cell-value">{{ label(c.status) }}</strong>
+                </div>
+              </div>
+
+              @if (c.inspectionReport) {
+                <div class="expanded-report-box">
+                  <span class="report-tag">📋 Inspection Findings Summary:</span>
+                  <p class="report-text">{{ c.inspectionReport }}</p>
+                </div>
+              }
+
+              @if (c.complaint?.trim()) {
+                <div class="expanded-complaint-box">
+                  <span class="complaint-tag">Customer Complaint:</span>
+                  <p class="complaint-text">{{ c.complaint }}</p>
+                </div>
+              }
+
+              <!-- Unified Vehicle Service History inside top expandable box (merged as requested) -->
+              <div class="merged-top-history-wrap">
+                <app-tech-vehicle-history [workOrderId]="id()" />
+              </div>
+            </section>
+          }
+
+          <!-- 2-Column Responsive Workspace Layout: Landscape Tracking Left, Tasks Right -->
+          <div class="repair-stage-layout">
+            <!-- Left Column: Landscape Live Tracking Rectangle with Piece Drawings & NO Time Settings -->
+            <div class="repair-column-left">
+              <div class="landscape-tracking-rectangle">
+                <div class="tracking-rect-head">
+                  <div class="rect-head-title-wrap">
+                    <span class="tracking-indicator-dot"></span>
+                    <h2 class="tracking-rect-title">Live Tracking &amp; Pieces Overview</h2>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn-expand-tracking"
+                    (click)="toggleLiveTrackingDetails()"
+                  >
+                    {{ liveTrackingDetailsOpen() ? 'Hide Detailed Milestones' : 'Expand Stages & Milestones' }}
+                  </button>
+                </div>
+
+                <!-- Workflow Strip: [showTimes]="false" removes time setting completely! -->
+                @if (journey(); as j) {
+                  <div class="workflow-strip-wrapper">
+                    <app-workflow-strip
+                      [journey]="j"
+                      [showTimes]="false"
+                      (act)="runJourneyAction($event)"
+                    />
+                  </div>
+                }
+
+                <!-- Pieces Drawing Shelf: Simple 3D claymorphic style drawings of repair pieces -->
+                <div class="repair-pieces-shelf">
+                  <div class="pieces-shelf-head">
+                    <span class="pieces-icon">🧩</span>
+                    <h3 class="pieces-shelf-title">Repair Components &amp; Pieces</h3>
+                  </div>
+
+                  <div class="pieces-shelf-grid">
+                    @for (piece of repairPieces(); track piece.partKey) {
+                      <div class="piece-drawing-card">
+                        <div class="piece-drawing-icon">
+                          <app-animated-part-icon [part]="piece.partKey" />
+                        </div>
+                        <div class="piece-drawing-info">
+                          <strong class="piece-name">{{ piece.name }}</strong>
+                          <span class="piece-status-badge">{{ piece.status }}</span>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </div>
+              </div>
+
+              @if (actionError(); as message) {
+                <p class="action-error" role="alert">{{ message }}</p>
+              }
+
+              @if (blockedTask(); as blocked) {
+                <section class="blocked">
+                  <p class="blocked-title">Blocked</p>
+                  <p class="blocked-why">{{ blocked.blockedReason }}</p>
+                  <p class="blocked-note">Your branch manager can see this. They have to clear it.</p>
+                </section>
+              }
+
+              <!-- Primary Job Action (e.g. Start Work or Finish) -->
+              @if (primaryJobAction(); as action) {
+                <section class="tools primary-action-card">
+                  <h3 class="tools-title">Job Status Progression</h3>
                   <button
                     class="tap tap--primary tap--wide"
                     type="button"
-                    [disabled]="busy() !== null || faultText().trim().length < 3 || (askCustomer() && !priceValid())"
-                    (click)="logFault()"
+                    [disabled]="busy() !== null"
+                    (click)="pressPrimaryJobAction(action)"
                   >
-                    {{ busy() === 'fault' ? 'Saving…' : 'Save finding' }}
+                    {{ busy() === 'primary' ? '…' : action.label }}
                   </button>
-                </div>
+                </section>
               }
             </div>
 
-            <!-- 4. Complete Inspection section -->
-            <div class="mission-complete-inspection">
-              <h3 class="mission-subheading">Complete inspection</h3>
+            <!-- Right Column: My tasks (Fixing / Repair) matching Photo 1 -->
+            <div class="repair-column-right">
+              <section class="tools tasks-right-section">
+                <div class="tasks-section-head">
+                  <h2 class="tools-title">MY TASKS (FIXING / REPAIR)</h2>
+                  <span class="tasks-count-badge">{{ c.tasks.length }} task{{ c.tasks.length === 1 ? '' : 's' }}</span>
+                </div>
 
-              <div class="completion-fields">
-                <div class="completion-type-group">
-                  <span class="completion-field-label">Inspection type</span>
-                  <div class="completion-type-toggle">
-                    <button
-                      class="tap tap--toggle"
-                      type="button"
-                      [class.tap--selected]="inspectionType() === 'QUICK'"
-                      (click)="inspectionType.set('QUICK')"
-                    >
-                      Quick check
-                    </button>
-                    <button
-                      class="tap tap--toggle"
-                      type="button"
-                      [class.tap--selected]="inspectionType() === 'FULL'"
-                      (click)="inspectionType.set('FULL')"
-                    >
-                      Full inspection
-                    </button>
+                @if (c.repairLocked) {
+                  <p class="tools-locked" role="status">
+                    <span class="tools-locked-title">Repair work is locked</span>
+                    <span class="tools-locked-why">{{ c.repairLockReason }}</span>
+                  </p>
+                }
+
+                @if (c.tasks.length === 0) {
+                  <div class="tools-empty-card">
+                    <span class="empty-icon">✓</span>
+                    <p>No repair tasks currently assigned to you on this vehicle.</p>
                   </div>
-                </div>
-
-                <label class="completion-field">
-                  <span class="completion-field-label">Odometer / Hours (optional)</span>
-                  <input
-                    class="completion-input"
-                    type="number"
-                    inputmode="numeric"
-                    min="0"
-                    placeholder="e.g. 54000"
-                    [value]="inspectionOdometer()"
-                    (input)="inspectionOdometer.set($any($event.target).value)"
-                  />
-                </label>
-
-                <label class="completion-field">
-                  <span class="completion-field-label">Diagnostic minutes (optional)</span>
-                  <input
-                    class="completion-input"
-                    type="number"
-                    inputmode="numeric"
-                    min="0"
-                    step="1"
-                    placeholder="e.g. 25"
-                    [value]="inspectionMinutes()"
-                    (input)="inspectionMinutes.set($any($event.target).value)"
-                  />
-                </label>
-
-                <label class="completion-field">
-                  <span class="completion-field-label">Inspection note (optional)</span>
-                  <textarea
-                    class="completion-textarea"
-                    rows="2"
-                    placeholder="Inspection summary or observations…"
-                    [value]="inspectionNote()"
-                    (input)="inspectionNote.set($any($event.target).value)"
-                  ></textarea>
-                </label>
-              </div>
-
-              <div class="mission-actions">
-                <button
-                  class="tap tap--primary tap--wide"
-                  type="button"
-                  [disabled]="busy() !== null"
-                  (click)="completeInspection()"
-                >
-                  {{ busy() === 'complete-inspection' ? 'Completing…' : 'Complete inspection' }}
-                </button>
-              </div>
-            </div>
-          }
-          @default {
-            <p class="mission-state">Not started</p>
-            <p class="mission-note">The vehicle must be inspected before repair work begins.</p>
-            <div class="mission-actions">
-              <button
-                class="tap tap--primary tap--wide"
-                type="button"
-                [disabled]="busy() !== null"
-                (click)="startInspection()"
-              >
-                {{ busy() === 'start-inspection' ? 'Starting…' : 'Start inspection' }}
-              </button>
-            </div>
-          }
-        }
-      </section>
-
-      <!-- ── group 1: record what I did ─────────────────────────────── -->
-      <!-- Cheap, frequent, one tap. -->
-
-      <section class="tools">
-        <h2 class="tools-title">My tasks</h2>
-
-        @if (c.repairLocked) {
-          <!-- Says WHY, and says what would clear it. A greyed-out row with
-               no reason is the thing a technician taps twice and then asks
-               the branch manager about. -->
-          <p class="tools-locked" role="status">
-            <span class="tools-locked-title">Repair work is locked</span>
-            <span class="tools-locked-why">{{ c.repairLockReason }}</span>
-          </p>
-        }
-
-        @if (c.tasks.length === 0) {
-          <p class="tools-empty">Nothing assigned to you on this job yet.</p>
-        }
-
-        <ul class="tasks">
-          @for (task of c.tasks; track task.id) {
-            <li class="task" [class.task--done]="task.status === 'DONE'">
-              <span class="task-main">
-                <span class="task-title">{{ task.title }}</span>
-                <span class="task-status">{{ label(task.status) }}</span>
-              </span>
-
-              @if (task.status === 'ASSIGNED' || task.status === 'RETURNED_FOR_REWORK') {
-                <button
-                  class="tap tap--primary"
-                  type="button"
-                  [disabled]="busy() !== null || c.repairLocked"
-                  (click)="start(task)"
-                >
-                  {{ busy() === 'start-' + task.id ? '…' : 'Start' }}
-                </button>
-              } @else if (task.status === 'IN_PROGRESS') {
-                @if (c.timeTracking !== 'OFF') {
-                  <label class="time-entry">
-                    <span>Minutes</span>
-                    <input
-                      type="number"
-                      inputmode="numeric"
-                      min="0"
-                      step="1"
-                      [value]="taskMinutes()[task.id] ?? ''"
-                      (input)="setTaskMinutes(task.id, $any($event.target).value)"
-                    />
-                  </label>
                 }
-                <button
-                  class="tap tap--primary"
-                  type="button"
-                  [disabled]="busy() !== null || !canComplete(task)"
-                  (click)="complete(task)"
-                >
-                  {{ busy() === 'done-' + task.id ? '…' : 'Done' }}
-                </button>
-              }
-            </li>
-          }
-        </ul>
-      </section>
 
-      @if (openParts().length > 0) {
-        <!-- Above the "something's wrong" tools on purpose: when a car is
-             WAITING_PARTS this is the reason, and a technician should not
-             have to open a panel to find out what is holding their job. -->
-        <section class="tools">
-          <h2 class="tools-title">Parts</h2>
+                <ul class="tasks">
+                  @for (task of c.tasks; track task.id) {
+                    <li class="task" [class.task--done]="task.status === 'DONE'">
+                      <div class="task-main">
+                        <strong class="task-title">{{ task.title }}</strong>
+                        <span class="task-status">{{ label(task.status) }}</span>
+                      </div>
 
-          <app-part-list
-            [parts]="openParts()"
-            [busy]="busy()"
-            (receive)="receivePart($event)"
-            (markUsed)="usePart($event)"
-            (returned)="returnPart($event)"
-            (clarified)="answerClarification($event)"
-          />
-        </section>
-      }
-
-      <!-- ── group 2: tell someone something ────────────────────────── -->
-      <!-- Costs someone else's time, so each needs a reason. -->
-
-      <section class="tools">
-        <h2 class="tools-title">Something's wrong</h2>
-
-        <div class="tool-row">
-          <!-- A page, not a panel. Asking for parts is browsing a
-               catalogue and building a basket, and that does not fit
-               beside a fault form on a phone. -->
-          <a class="tap" [routerLink]="['/tech', 'card', id(), 'parts']">Need parts</a>
-          <button class="tap" type="button" (click)="panel.set(panel() === 'external' ? 'none' : 'external')">
-            Part from outside
-          </button>
-          <button class="tap" type="button" (click)="panel.set(panel() === 'blocker' ? 'none' : 'blocker')">
-            I'm blocked
-          </button>
-          <button class="tap" type="button" (click)="panel.set(panel() === 'fault' ? 'none' : 'fault')">
-            Found a fault
-          </button>
+                      <div class="task-action-wrap">
+                        @if (task.status === 'ASSIGNED' || task.status === 'RETURNED_FOR_REWORK') {
+                          <button
+                            class="task-start-btn"
+                            type="button"
+                            [disabled]="busy() !== null || c.repairLocked"
+                            (click)="start(task)"
+                          >
+                            {{ busy() === 'start-' + task.id ? '…' : 'Start' }}
+                          </button>
+                        } @else if (task.status === 'IN_PROGRESS') {
+                          <button
+                            class="task-done-btn"
+                            type="button"
+                            [disabled]="busy() !== null || !canComplete(task)"
+                            (click)="complete(task)"
+                          >
+                            {{ busy() === 'done-' + task.id ? '…' : 'Done' }}
+                          </button>
+                        }
+                      </div>
+                    </li>
+                  }
+                </ul>
+              </section>
+            </div>
+          </div>
         </div>
-
-        @if (panel() === 'external') {
-          <!-- A part that never came off a shelf: the customer brought it,
-               or it was bought outside. Its own door rather than a mode
-               inside the picker, because the picker searches the
-               workshop's catalogue and this part is by definition not in
-               it. No stock moves, and a customer-supplied part is not
-               warranted by the workshop -- the server decides both. -->
-          <div class="fault">
-            <input
-              class="fault-text"
-              type="text"
-              placeholder="What is the part?"
-              [value]="externalPartName()"
-              (input)="externalPartName.set($any($event.target).value)"
-            />
-
-            <div class="severity">
-              <button
-                class="tap tap--severity"
-                type="button"
-                [class.tap--selected]="externalProvenance() === 'CUSTOMER_SUPPLIED'"
-                (click)="externalProvenance.set('CUSTOMER_SUPPLIED')"
-              >
-                Customer brought it
-              </button>
-              <button
-                class="tap tap--severity"
-                type="button"
-                [class.tap--selected]="externalProvenance() === 'EXTERNAL_PURCHASE'"
-                (click)="externalProvenance.set('EXTERNAL_PURCHASE')"
-              >
-                Bought outside
-              </button>
-            </div>
-
-            <label class="part-panel-field">
-              <span>How many</span>
-              <input
-                type="number"
-                inputmode="numeric"
-                min="1"
-                step="1"
-                [value]="externalQuantity()"
-                (input)="externalQuantity.set($any($event.target).value)"
-              />
-            </label>
-
-            <button
-              class="tap tap--primary tap--wide"
-              type="button"
-              [disabled]="busy() !== null || !externalNameValid()"
-              (click)="addExternalPart()"
-            >
-              {{ busy() === 'external' ? '…' : 'Record it' }}
-            </button>
-          </div>
-        }
-
-        @if (panel() === 'blocker') {
-          <!-- Reasons, not a text box. A technician with one free hand
-               will not type, and the reason enum is what routes this to
-               the right person. -->
-          <ul class="reasons">
-            @for (reason of reasons; track reason.key) {
-              <li>
-                <button class="tap tap--wide" type="button" (click)="reportBlocker(reason.key)">
-                  {{ reason.label }}
-                </button>
-              </li>
-            }
-          </ul>
-        }
-
-        @if (panel() === 'fault') {
-          <div class="fault">
-            <textarea
-              class="fault-text"
-              rows="3"
-              placeholder="What did you find?"
-              [value]="faultText()"
-              (input)="faultText.set($any($event.target).value)"
-            ></textarea>
-
-            <div class="severity">
-              @for (level of ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']; track level) {
-                <button
-                  class="tap tap--severity"
-                  type="button"
-                  [class.tap--selected]="faultSeverity() === level"
-                  (click)="faultSeverity.set(level)"
-                >
-                  {{ label(level) }}
-                </button>
-              }
-            </div>
-
-            <label class="ask-toggle">
-              <input
-                type="checkbox"
-                [checked]="askCustomer()"
-                (change)="askCustomer.set($any($event.target).checked)"
-              />
-              Ask the customer to approve this
-            </label>
-
-            @if (askCustomer()) {
-              <div class="ask-price">
-                <label class="ask-price-field">
-                  <span>Price</span>
-                  <input
-                    type="text"
-                    inputmode="decimal"
-                    placeholder="0.00"
-                    [value]="faultPrice()"
-                    (input)="faultPrice.set($any($event.target).value)"
-                  />
-                </label>
-                <label class="ask-price-field">
-                  <span>Labour (optional)</span>
-                  <input
-                    type="text"
-                    inputmode="decimal"
-                    placeholder="0.00"
-                    [value]="faultLaborPrice()"
-                    (input)="faultLaborPrice.set($any($event.target).value)"
-                  />
-                </label>
-                @if (!priceValid()) {
-                  <p class="ask-price-hint">Enter the price you'd charge for this, e.g. 450 or 450.00.</p>
-                }
-              </div>
-            }
-
-            <button
-              class="tap tap--primary tap--wide"
-              type="button"
-              [disabled]="busy() !== null || (askCustomer() && !priceValid())"
-              (click)="logFault()"
-            >
-              {{ busy() === 'fault' ? '…' : askCustomer() ? 'Log it and ask the customer' : 'Log it' }}
-            </button>
-          </div>
-        }
-      </section>
-
-
-      <!-- ── group 3: finish ────────────────────────────────────────── -->
-      <!-- The gate result BEFORE the press, never as a failure after it. -->
-
-      @if (c.finish.available) {
-        <section class="tools">
-          <h2 class="tools-title">Finish</h2>
-
-          <ul class="checks">
-            @for (condition of c.finish.conditions; track condition.text) {
-              <li class="check" [class.check--bad]="!condition.satisfied">
-                <span class="check-mark">{{ condition.satisfied ? '✓' : '✗' }}</span>
-                <span class="check-text">{{ condition.text }}</span>
-              </li>
-            }
-          </ul>
-
-          @if (c.finish.passed) {
-            <button
-              class="tap tap--primary tap--wide"
-              type="button"
-              [disabled]="busy() !== null"
-              (click)="finish()"
-            >
-              {{ busy() === 'finish' ? '…' : 'Ready to finish' }}
-            </button>
-          } @else {
-            <p class="checks-note">Clear the items above before this job can finish.</p>
-          }
-        </section>
       }
     }
   }
 }
+
+<!-- Modal: Recommendation Dismissal Reason (INV-5 Audit Enforcement) -->
+@if (dismissingRec(); as rec) {
+  <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+    <div style="background: white; border-radius: 8px; padding: 1.25rem; max-width: 460px; width: 90%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);">
+      <h3 style="margin: 0 0 0.5rem; font-size: 1rem; color: #0f172a;">
+        Dismiss Recommendation: {{ rec.serviceDisplayName }}
+      </h3>
+      <p style="font-size: 0.825rem; color: #64748b; margin: 0 0 0.75rem;">
+        A technician reason is required by domain policy to reject a recommended service for auditability (INV-5).
+      </p>
+      <textarea
+        style="width: 100%; min-height: 80px; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; margin-bottom: 0.75rem; box-sizing: border-box;"
+        placeholder="e.g. Customer replaced brake pads 2 weeks ago; or already addressed in previous job..."
+        [value]="dismissalReasonInput()"
+        (input)="dismissalReasonInput.set($any($event.target).value)"
+      ></textarea>
+      <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+        <button
+          type="button"
+          style="padding: 0.4rem 0.8rem; background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer;"
+          (click)="cancelDismissModal()"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          style="padding: 0.4rem 0.8rem; background: #dc2626; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;"
+          [disabled]="!dismissalReasonInput().trim()"
+          (click)="confirmDismissRecommendation()"
+        >
+          Confirm Dismissal
+        </button>
+      </div>
+    </div>
+  </div>
+}
+

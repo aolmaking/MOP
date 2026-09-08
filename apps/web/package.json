@@ -23,8 +23,10 @@
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/ibm-plex-sans": "^5.3.0",
     "@mop/shared": "workspace:*",
+    "@types/three": "^0.185.4",
     "chart.js": "^4.5.1",
     "rxjs": "~7.8.0",
+    "three": "^0.185.1",
     "tslib": "^2.3.0"
   },
   "devDependencies": {

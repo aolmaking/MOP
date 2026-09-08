@@ -272,24 +272,38 @@ export const routes: Routes = [
     loadComponent: () => import('./experiences/customer/shell/customer-shell').then((m) => m.CustomerShell),
     children: [
       { path: '', loadComponent: () => import('./experiences/customer/portal-home').then((m) => m.PortalHome) },
-      { path: 'assets', loadComponent: () => import('./experiences/customer/my-assets').then((m) => m.MyAssets) },
       {
-        path: 'service',
-        loadComponent: () => import('./experiences/customer/current-service').then((m) => m.CurrentService),
+        path: 'garage',
+        loadComponent: () =>
+          import('./experiences/customer/garage/customer-garage').then((m) => m.CustomerGarage),
       },
       {
-        // The authenticated way to answer what the workshop asked. The
-        // token link at /decide/:token still works and always will --
-        // this is the other end of the same feature, for a customer who
-        // no longer has the message.
-        path: 'decisions',
-        loadComponent: () => import('./experiences/customer/my-decisions').then((m) => m.MyDecisions),
+        path: 'pos',
+        loadComponent: () =>
+          import('./experiences/technician/parts-catalog').then((m) => m.PartsCatalog),
+      },
+      { path: 'service', redirectTo: '', pathMatch: 'full' },
+      { path: 'decisions', redirectTo: '', pathMatch: 'full' },
+      { path: 'assets', redirectTo: 'garage', pathMatch: 'full' },
+      { path: 'invoices', redirectTo: 'garage', pathMatch: 'full' },
+      { path: 'history', redirectTo: 'garage', pathMatch: 'full' },
+    ],
+  },
+  {
+    // The Operator / Receptionist workstation
+    path: 'operator',
+    canActivate: [authGuard],
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./experiences/operator/operator-home').then((m) => m.OperatorHome),
       },
       {
-        path: 'invoices',
-        loadComponent: () => import('./experiences/customer/invoice-status').then((m) => m.InvoiceStatus),
+        path: 'pos',
+        loadComponent: () =>
+          import('./experiences/technician/parts-catalog').then((m) => m.PartsCatalog),
       },
-      { path: 'history', loadComponent: () => import('./experiences/customer/safe-history').then((m) => m.SafeHistory) },
     ],
   },
   {
@@ -353,7 +367,7 @@ export const routes: Routes = [
       import('./experiences/technician/shell/technician-shell').then((m) => m.TechnicianShell),
     children: [
       { path: '', loadComponent: () => import('./experiences/technician/tech-now').then((m) => m.TechNow) },
-      { path: 'work', loadComponent: () => import('./experiences/technician/tech-my-work').then((m) => m.TechMyWork) },
+      { path: 'work', redirectTo: '', pathMatch: 'full' },
       {
         path: 'card/:id',
         loadComponent: () => import('./experiences/technician/tech-work-card').then((m) => m.TechWorkCard),

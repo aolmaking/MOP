@@ -4,6 +4,7 @@ import { OperationEventsModule } from "../operations/operation-events.module";
 import { AuthModule } from "../../identity/auth/auth.module";
 import { PoliciesModule } from "../../control/policies/policies.module";
 import { OperationsModule } from "../operations/operations.module";
+import { InventoryModule } from "../inventory/inventory.module";
 import { CustomerDecisionController } from "./decision.controller";
 import { CustomerDecisionService } from "./decision.service";
 import { CustomerPortalController } from "./customer-portal.controller";
@@ -24,7 +25,8 @@ import { RegisterCustomerService } from "./register.service";
 @Module({
   // OperationsModule: the portal draws the same workflow strip the
   // technician and the manager see, generated from one projection.
-  imports: [DatabaseModule, OperationEventsModule, AuthModule, PoliciesModule, OperationsModule],
+  // InventoryModule: supplies CatalogBrowseService and StockService for customer POS parts shopping.
+  imports: [DatabaseModule, OperationEventsModule, AuthModule, PoliciesModule, OperationsModule, InventoryModule],
   controllers: [CustomerDecisionController, CustomerPortalController, RegisterController],
   providers: [CustomerDecisionService, CustomerPortalService, RegisterCustomerService],
   // CustomerDecisionService is needed by BranchManagerModule's staff-facing

@@ -12,6 +12,7 @@ import {
   RejectReturnDto,
   RequestClarificationDto,
   ReturnDto,
+  TransferStockDto,
   WarehouseStatusDto,
 } from "./inventory.dto";
 import { StockService } from "./stock.service";
@@ -312,6 +313,24 @@ export class InventoryController {
       actorId: session.accountId,
       referenceType: "STOCK_ADJUSTMENT",
       referenceId: dto.reason || undefined,
+    });
+  }
+
+  @Post("items/:id/transfer")
+  async transferStock(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: TransferStockDto,
+  ) {
+    const tenantId = await this.require(session, "inventory.stock.adjust");
+    return this.stockService.transferStock({
+      tenantId,
+      inventoryItemId: id,
+      sourceWarehouseId: dto.sourceWarehouseId,
+      destinationWarehouseId: dto.destinationWarehouseId,
+      quantity: dto.quantity,
+      actorId: session.accountId,
+      notes: dto.notes,
     });
   }
 

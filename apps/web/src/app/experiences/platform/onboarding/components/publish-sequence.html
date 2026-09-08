@@ -49,6 +49,16 @@
         </ol>
       </section>
 
+      @if (registrationCode()) {
+        <section class="onb-invite" style="margin-bottom: 1rem; border-color: var(--color-primary-500, #3b82f6);">
+          <h2>Workshop Customer Code</h2>
+          <p>
+            Customers use this code on the login page and registration wizard to access this workshop.
+          </p>
+          <code class="onb-invite-link" style="font-size: 1.25rem; font-weight: 700; letter-spacing: 0.1em; color: var(--color-primary-400, #60a5fa);">{{ registrationCode() }}</code>
+        </section>
+      }
+
       <section class="onb-invite">
         <h2>The owner's invite link</h2>
         <p>

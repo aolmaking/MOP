@@ -17,16 +17,13 @@ describe('CustomerShell', () => {
     return { fixture, stub: authStoreStub, element: fixture.nativeElement as HTMLElement };
   }
 
-  it('links to all five portal pages, none dead', () => {
+  it('links to consolidated portal destinations, none dead', () => {
     const { element } = render({ displayName: 'Ahmed', role: 'CUSTOMER' } as SessionContext);
 
     const routes = [...element.querySelectorAll('.portal-nav-link')].map((a) => a.getAttribute('href'));
     expect(routes).toEqual([
       '/customer',
-      '/customer/assets',
-      '/customer/service',
-      '/customer/invoices',
-      '/customer/history',
+      '/customer/garage',
     ]);
   });
 
@@ -34,7 +31,7 @@ describe('CustomerShell', () => {
     const { element } = render({ displayName: 'Ahmed', role: 'CUSTOMER' } as SessionContext);
 
     const labels = [...element.querySelectorAll('.portal-nav-link')].map((a) => a.textContent?.trim());
-    expect(labels).toEqual(['Home', 'Assets', 'Service', 'Invoices', 'History']);
+    expect(labels).toEqual(['Live Service', 'Garage & Records']);
   });
 
   it('signing out clears the session and returns to /login', async () => {

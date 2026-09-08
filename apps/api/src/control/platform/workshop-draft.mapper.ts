@@ -26,6 +26,9 @@ export function draftFromDto(dto: CreateWorkshopDto): WorkshopDraft {
       businessType: dto.businessType,
       businessTypeOther: dto.businessTypeOther,
       primaryCategory: dto.primaryCategory as OperatingCategory,
+      themePalette: dto.themePalette,
+      logoUrl: dto.logoUrl,
+      navigationLayout: dto.navigationLayout as any,
     },
     owner: {
       ownerFullName: dto.ownerFullName,
@@ -50,6 +53,7 @@ export function draftFromDto(dto: CreateWorkshopDto): WorkshopDraft {
       name: warehouse.name,
       code: warehouse.code,
       branchCodes: warehouse.branchCodes ?? [],
+      topologyType: warehouse.topologyType as any,
     })),
     services: (dto.services ?? []).map((service) => ({
       name: service.name,

@@ -14,6 +14,7 @@ export interface WorkshopRow {
   id: string;
   name: string;
   slug: string;
+  customerRegistrationCode?: string;
   status: string;
   currency: string;
   timezone: string;
@@ -136,6 +137,7 @@ export class WorkshopsService {
         id: tenant.id,
         name: tenant.name,
         slug: tenant.slug,
+        customerRegistrationCode: tenant.customerRegistrationCode,
         country: tenant.country,
         city: tenant.city,
         businessType: tenant.businessType,
@@ -398,6 +400,7 @@ export class WorkshopsService {
         id: tenant.id,
         name: tenant.name,
         slug: tenant.slug,
+        customerRegistrationCode: tenant.customerRegistrationCode,
         status: tenant.status,
         currency: tenant.currency,
         timezone: tenant.timezone,

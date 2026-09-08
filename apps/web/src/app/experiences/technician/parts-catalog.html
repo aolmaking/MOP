@@ -1,7 +1,35 @@
 <section class="catalog" [class.catalog--cart-open]="cartOpen()">
   <header class="catalog-head">
-    <a class="card-back" [routerLink]="['/tech', 'card', id()]">← Back to the job</a>
-    <h1 class="catalog-title">Parts</h1>
+    @if (isTechMode()) {
+      <a class="card-back" [routerLink]="['/tech', 'card', id()]">← Back to the job</a>
+      <div class="head-title-row">
+        <h1 class="catalog-title">Parts</h1>
+        <button
+          class="chip chip--external"
+          type="button"
+          id="btn-pos-external-part"
+          (click)="openExternalModal()"
+        >
+          📦 Part from outside
+        </button>
+      </div>
+    } @else if (isOperatorMode()) {
+      <a class="card-back" [routerLink]="['/operator']" id="btn-back-to-operator">← Back to Reception Workstation</a>
+      <div class="head-title-row">
+        <div>
+          <h1 class="catalog-title">Over-The-Counter Point of Sale (POS)</h1>
+          <p class="catalog-mode-subtitle">Front-desk retail checkout. Sell parts directly to walk-in customers with instant receipt generation.</p>
+        </div>
+      </div>
+    } @else {
+      <a class="card-back" [routerLink]="['/customer']">← Back to Customer Portal</a>
+      <div class="head-title-row">
+        <div>
+          <h1 class="catalog-title">Point of Sale — Workshop Parts</h1>
+          <p class="catalog-mode-subtitle">Over-the-counter parts purchase. Select items and checkout to pick up at the workshop.</p>
+        </div>
+      </div>
+    }
   </header>
 
   <label class="catalog-search">
@@ -14,6 +42,10 @@
       (input)="onQuery($any($event.target).value)"
     />
   </label>
+
+  @if (externalSuccess(); as msg) {
+    <p class="catalog-sent" role="status">✓ {{ msg }}</p>
+  }
 
   @if (state() === 'forbidden') {
     <p class="catalog-note">You are not allowed to ask the store for parts.</p>
@@ -91,10 +123,40 @@
       <span class="catalog-total" aria-live="polite">{{ total() }} parts</span>
     </div>
 
+    @if (externalSuccess(); as msg) {
+      <p class="catalog-sent" role="status">✓ {{ msg }}</p>
+    }
+
     @if (submitted(); as count) {
       <p class="catalog-sent" role="status">
         Sent to the store — {{ count }} {{ count === 1 ? 'request' : 'requests' }}. They will approve and issue.
       </p>
+    }
+
+    @if (customerOrderResult(); as order) {
+      <article class="pos-receipt-card" role="status">
+        <div class="receipt-icon">✓</div>
+        <div class="receipt-content">
+          <h2 class="receipt-title">Over-the-Counter Order Placed!</h2>
+          <p class="receipt-subtitle">
+            Counter sale invoice <strong>#{{ order.invoiceNumber }}</strong> generated for <strong>{{ order.total }}</strong>.
+          </p>
+          <p class="receipt-note">
+            {{ order.itemsCount }} {{ order.itemsCount === 1 ? 'item' : 'items' }} ordered. You can collect your parts at the front counter.
+          </p>
+          <div class="receipt-actions">
+            <a class="tap tap--primary" routerLink="/customer/garage" [queryParams]="{ tab: 'invoices' }">
+              View Invoice
+            </a>
+            <a class="tap" routerLink="/customer">
+              Return to Portal
+            </a>
+            <button class="tap" type="button" (click)="customerOrderResult.set(null)">
+              Buy More Parts
+            </button>
+          </div>
+        </div>
+      </article>
     }
 
     @if (error(); as message) {
@@ -106,7 +168,11 @@
     } @else if (state() === 'no-results') {
       <p class="catalog-note">
         Nothing matches that. Try a different category, or clear the filters.
-        <a class="card-back" [routerLink]="['/tech', 'card', id()]">Not stocked at all? Go back and say you're blocked.</a>
+        @if (isTechMode()) {
+          <a class="card-back" [routerLink]="['/tech', 'card', id()]">Not stocked at all? Go back and say you're blocked.</a>
+        } @else {
+          <a class="card-back" [routerLink]="['/customer']">Need workshop service instead? Return to Customer Portal.</a>
+        }
       </p>
     } @else if (state() === 'empty') {
       <p class="catalog-note">There are no parts in this workshop's catalogue yet.</p>
@@ -195,19 +261,18 @@
   }
 </section>
 
-<!-- The basket. Always reachable while there is something in it: a cart
-     a technician has to go looking for is a cart they submit late. -->
+<!-- The basket. Always reachable while there is something in it -->
 @if (cartCount() > 0) {
   <button class="cart-tab tap" type="button" (click)="toggleCart()" [attr.aria-expanded]="cartOpen()">
     <span class="cart-tab-count">{{ cartCount() }}</span>
-    {{ cartOpen() ? 'Hide request' : 'Review request' }}
+    {{ cartOpen() ? (isTechMode() ? 'Hide request' : 'Hide basket') : (isTechMode() ? 'Review request' : 'Review basket') }}
   </button>
 }
 
 @if (cartOpen()) {
-  <aside class="cart" aria-label="Request cart">
+  <aside class="cart" [attr.aria-label]="isTechMode() ? 'Request cart' : 'Parts basket'">
     <header class="cart-head">
-      <h2 class="cart-title">Request</h2>
+      <h2 class="cart-title">{{ isTechMode() ? 'Request' : 'Parts Basket' }}</h2>
       <button class="tap cart-close" type="button" (click)="toggleCart()">Close</button>
     </header>
 
@@ -217,6 +282,7 @@
           <div class="cart-line-body">
             <p class="cart-line-name">{{ line.item.name }}</p>
             <p class="cart-line-sku">{{ line.item.sku }}</p>
+            <p class="cart-line-price">{{ line.item.sellingPrice }}</p>
             @if (line.item.stockTracked && line.item.onHand < line.quantity) {
               <p class="cart-line-warn">Only {{ line.item.onHand }} on the shelf — the store will order the rest.</p>
             }
@@ -247,11 +313,108 @@
       }
     </ul>
 
-    <p class="cart-total">{{ cartCount() }} items across {{ cartLines() }} {{ cartLines() === 1 ? 'part' : 'parts' }}</p>
+    <p class="cart-total">
+      {{ cartCount() }} items across {{ cartLines() }} {{ cartLines() === 1 ? 'part' : 'parts' }}
+      @if (cartTotalAmount(); as total) {
+        • <strong>{{ total }}</strong>
+      }
+    </p>
 
     <button class="tap tap--primary tap--wide" type="button" [disabled]="submitting()" (click)="submit()">
-      {{ submitting() ? 'Sending…' : 'Send to the store' }}
+      @if (submitting()) {
+        {{ isTechMode() ? 'Sending…' : 'Processing order…' }}
+      } @else {
+        {{ isTechMode() ? 'Send to the store' : ('Buy Parts (' + (cartTotalAmount() ?? '') + ')') }}
+      }
     </button>
     <button class="tap cart-empty" type="button" [disabled]="submitting()" (click)="emptyCart()">Empty the cart</button>
   </aside>
+}
+
+<!-- Part from outside modal (Strictly tech mode only) -->
+@if (isTechMode() && externalModalOpen()) {
+  <div class="modal-backdrop" (click)="closeExternalModal()">
+    <div
+      class="modal-card"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-ext-title"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="modal-head">
+        <div>
+          <h2 class="modal-title" id="modal-ext-title">Part from outside</h2>
+          <p class="modal-subtitle">Customer-supplied or bought outside (not from workshop inventory).</p>
+        </div>
+        <button type="button" class="modal-close-btn" (click)="closeExternalModal()" aria-label="Close dialog">✕</button>
+      </header>
+
+      @if (externalError(); as err) {
+        <p class="catalog-error" role="alert">{{ err }}</p>
+      }
+
+      <div class="modal-form">
+        <label class="form-field">
+          <span class="field-label">What is the part?</span>
+          <input
+            id="external-part-name"
+            class="field-input"
+            type="text"
+            placeholder="e.g. Brembo brake pads, oil filter..."
+            [value]="externalPartName()"
+            (input)="externalPartName.set($any($event.target).value)"
+          />
+        </label>
+
+        <div class="form-field">
+          <span class="field-label">Provenance</span>
+          <div class="provenance-pills">
+            <button
+              class="pill-btn"
+              type="button"
+              [class.pill-btn--active]="externalProvenance() === 'CUSTOMER_SUPPLIED'"
+              (click)="externalProvenance.set('CUSTOMER_SUPPLIED')"
+            >
+              Customer brought it
+            </button>
+            <button
+              class="pill-btn"
+              type="button"
+              [class.pill-btn--active]="externalProvenance() === 'EXTERNAL_PURCHASE'"
+              (click)="externalProvenance.set('EXTERNAL_PURCHASE')"
+            >
+              Bought outside
+            </button>
+          </div>
+        </div>
+
+        <label class="form-field">
+          <span class="field-label">How many</span>
+          <input
+            id="external-part-qty"
+            class="field-input field-input--sm"
+            type="number"
+            inputmode="numeric"
+            min="1"
+            step="1"
+            [value]="externalQuantity()"
+            (input)="externalQuantity.set($any($event.target).value)"
+          />
+        </label>
+
+        <div class="modal-actions">
+          <button
+            id="btn-record-external-part"
+            class="tap tap--primary tap--wide"
+            type="button"
+            [disabled]="externalSubmitting() || !externalNameValid()"
+            (click)="recordExternalPart()"
+          >
+            {{ externalSubmitting() ? 'Recording…' : 'Record it on job' }}
+          </button>
+          <button class="tap" type="button" (click)="closeExternalModal()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
 }

@@ -98,6 +98,10 @@ export class CreateWorkshopWarehouseDto {
   @IsString({ each: true })
   @ArrayMaxSize(50)
   branchCodes!: string[];
+
+  @IsOptional()
+  @IsString()
+  topologyType?: string;
 }
 
 /**
@@ -179,6 +183,21 @@ export class CreateWorkshopDto {
 
   @IsIn(INITIAL_STATUSES)
   initialStatus!: (typeof INITIAL_STATUSES)[number];
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 40)
+  themePalette?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 500)
+  logoUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 40)
+  navigationLayout?: string;
 
   // -----------------------------------------------------------------
   // The workshop's actual shape

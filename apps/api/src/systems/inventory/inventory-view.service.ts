@@ -79,11 +79,17 @@ export class InventoryViewService {
         createdAt: true,
         workOrderId: true,
         inventoryItem: { select: { id: true, sku: true, name: true } },
-        workOrder: { select: { asset: { select: { plateNumber: true, serialNumber: true } } } },
+        workOrder: { select: { branchId: true, asset: { select: { plateNumber: true, serialNumber: true } } } },
         issuedItems: { select: { quantity: true } },
       },
       orderBy: { createdAt: "asc" },
     });
+
+    const branchAccess = await this.prisma.branchWarehouseAccess.findMany({
+      where: { tenantId },
+      select: { branchId: true, warehouseId: true },
+    });
+    const accessSet = new Set(branchAccess.map((a) => `${a.branchId}:${a.warehouseId}`));
 
     const itemIds = [...new Set(rows.map((row) => row.inventoryItem.id))];
     const balances = await this.prisma.warehouseStockBalance.findMany({
@@ -115,6 +121,7 @@ export class InventoryViewService {
     return rows
       .map((row) => {
         const issued = row.issuedItems.reduce((sum, issue) => sum + issue.quantity, 0);
+        const itemSources = sourcesByItem.get(row.inventoryItem.id) ?? [];
         return {
           id: row.id,
           status: row.status,
@@ -128,7 +135,10 @@ export class InventoryViewService {
           urgency: row.urgency,
           waitingHours: (now - row.createdAt.getTime()) / 3_600_000,
           onHand: onHand.get(row.inventoryItem.id) ?? 0,
-          sources: sourcesByItem.get(row.inventoryItem.id) ?? [],
+          sources: itemSources.map((s) => ({
+            ...s,
+            servesWorkOrderBranch: accessSet.size === 0 || accessSet.has(`${row.workOrder.branchId}:${s.warehouseId}`),
+          })),
         };
       })
       // A fully-issued request in a non-terminal status is nobody's queue.

@@ -34,6 +34,7 @@ const PUBLIC_CONTROLLERS: Readonly<Record<string, string>> = {
   CustomerDecisionController:
     "The approval link. The customer has no login -- the one-time token in the URL is the credential, and the service treats an unknown token and a real one identically.",
   RegisterController: "Customer self-registration. By definition there is no session yet.",
+  WorkshopBrandingPublicController: "Public workshop branding query by code before login so login screen can display the theme and name.",
 };
 
 /**

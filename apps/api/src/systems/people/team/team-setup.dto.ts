@@ -1,4 +1,4 @@
-import { IsOptional, IsString, Length } from "class-validator";
+import { IsArray, IsOptional, IsString, Length } from "class-validator";
 
 export class CreateTeamDto {
   @IsString()
@@ -12,6 +12,17 @@ export class CreateTeamDto {
   @IsString()
   @Length(1, 40)
   teamLeaderId!: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  specializations?: string[];
+}
+
+export class UpdateTeamSpecializationsDto {
+  @IsArray()
+  @IsString({ each: true })
+  specializations!: string[];
 }
 
 export class AssignLeaderDto {

@@ -12,6 +12,7 @@ import { CapabilitiesModule } from "../../control/capabilities/capabilities.modu
 import { SpecializationModule } from "../../systems/people/specialization/specialization.module";
 import { TechnicianController } from "./technician.controller";
 import { TechnicianWorkViewService } from "./technician-work-view.service";
+import { TechnicianInspectionService } from "./technician-inspection.service";
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { TechnicianWorkViewService } from "./technician-work-view.service";
     SpecializationModule,
   ],
   controllers: [TechnicianController],
-  providers: [TechnicianWorkViewService],
+  providers: [TechnicianWorkViewService, TechnicianInspectionService],
+  exports: [TechnicianWorkViewService, TechnicianInspectionService],
 })
 export class TechnicianModule {}

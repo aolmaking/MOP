@@ -8,6 +8,7 @@ const INVITABLE_ROLES: StaffRole[] = [
   "INVENTORY_MANAGER",
   "TEAM_LEADER",
   "DATA_ANALYST",
+  "OPERATOR",
 ];
 
 export class InviteStaffDto {

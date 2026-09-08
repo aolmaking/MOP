@@ -161,26 +161,39 @@
 
   <section class="onb-review-section">
     <div class="onb-review-section-head">
-      <h3>Structure</h3>
+      <h3>Structure &amp; Topology</h3>
       <button type="button" class="onb-review-edit" (click)="jumpTo.emit('STRUCTURE')">Edit</button>
     </div>
-    <ul class="onb-review-list">
-      @for (branch of store.draft().branches; track branch.code) {
-        <li><strong>{{ branch.name || branch.code }}</strong> <span class="onb-review-note">{{ branch.code }}</span></li>
+    <div class="onb-review-struct-summary">
+      <p class="onb-review-subhead"><strong>Branches ({{ store.draft().branches.length }})</strong></p>
+      <ul class="onb-review-list">
+        @for (branch of store.draft().branches; track branch.code) {
+          <li>
+            <span>📍 <strong>{{ branch.name || branch.code }}</strong> ({{ branch.code }})</span>
+            <span class="onb-review-note">{{ branch.city || 'No city' }}</span>
+          </li>
+        }
+        @if (store.draft().branches.length === 0) {
+          <li>One branch will be created automatically from the workshop's name.</li>
+        }
+      </ul>
+
+      @if (store.draft().warehouses.length > 0) {
+        <p class="onb-review-subhead" style="margin-top: 0.75rem;"><strong>Warehouses &amp; Stores ({{ store.draft().warehouses.length }})</strong></p>
+        <ul class="onb-review-list">
+          @for (warehouse of store.draft().warehouses; track warehouse.code) {
+            <li>
+              <div>
+                <span>📦 <strong>{{ warehouse.name || warehouse.code }}</strong> ({{ warehouse.code }})</span>
+                <span class="onb-review-note" style="display: block; font-size: 0.8rem; color: #94a3b8;">
+                  Supplies: {{ warehouse.branchCodes.length === 0 ? 'All Branches (' + store.draft().branches.length + ')' : warehouse.branchCodes.join(', ') }}
+                </span>
+              </div>
+            </li>
+          }
+        </ul>
       }
-      @for (warehouse of store.draft().warehouses; track warehouse.code) {
-        <li>
-          <strong>{{ warehouse.name || warehouse.code }}</strong>
-          <span class="onb-review-note">
-            store &middot;
-            {{ warehouse.branchCodes.length === 0 ? 'every branch' : warehouse.branchCodes.join(', ') }}
-          </span>
-        </li>
-      }
-      @if (store.draft().branches.length === 0) {
-        <li>One branch will be created from the workshop's name.</li>
-      }
-    </ul>
+    </div>
   </section>
 
   @if (store.draft().services.length > 0) {

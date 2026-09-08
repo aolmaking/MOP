@@ -31,10 +31,12 @@
 
         <section class="group">
           <div class="group-head">
-            <h2 class="group-title">Service Catalog</h2>
-            <button appButton variant="secondary" size="small" (click)="openAddPrice()">+ Add / Update Price</button>
+            <div>
+              <h2 class="group-title">Service Catalog</h2>
+              <p class="hint">Labor rates for standard services. Adjusting a price updates quotes for <strong>this workshop only</strong> without affecting other workshops or the master database. Parts are selected and priced separately via POS / stock.</p>
+            </div>
+            <button appButton variant="secondary" size="small" (click)="openAddPrice()">+ Add Service Price</button>
           </div>
-          <p class="hint">Editing a price only affects quotes created after you save. Existing quotes and invoices keep their original price.</p>
           @if (catalog().length === 0) {
             <p class="state-body">No priced items yet.</p>
           } @else {
@@ -42,19 +44,23 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Item</th>
+                  <th>Service / Labor Item</th>
                   <th>Type</th>
-                  <th>Unit price ({{ c.currency }})</th>
-                  <th>Labor price</th>
+                  <th>Standard Time</th>
+                  <th>Labor Price ({{ c.currency }})</th>
+                  <th style="text-align: right;">Action</th>
                 </tr>
               </thead>
               <tbody>
                 @for (item of catalog(); track item.id) {
                   <tr>
-                    <td>{{ item.itemKey }}</td>
-                    <td>{{ item.itemType }}</td>
-                    <td>{{ item.unitPrice }}</td>
-                    <td>{{ item.laborPrice ?? '—' }}</td>
+                    <td style="font-weight: 500;">{{ item.itemKey }}</td>
+                    <td><span class="service-badge">{{ item.itemType }}</span></td>
+                    <td style="color: #64748b; font-weight: 500;"><span class="hours-badge">{{ resolveStandardHours(item.itemKey) }}h <span title="Locked Operational Benchmark" style="font-size: 0.75rem;">🔒</span></span></td>
+                    <td class="labor-price-cell">{{ (item.laborPrice ?? item.unitPrice) }} {{ c.currency }}</td>
+                    <td style="text-align: right;">
+                      <button appButton variant="secondary" size="small" (click)="openEditPrice(item)">Edit Price</button>
+                    </td>
                   </tr>
                 }
               </tbody>
@@ -165,47 +171,41 @@
   @if (showAddPrice()) {
     <div class="modal-backdrop" (click)="showAddPrice.set(false)">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="addprice-title" appDismissOnEscape (dismissed)="showAddPrice.set(false)" (click)="$event.stopPropagation()">
-        <h2 class="modal-title" id="addprice-title">Add / Update Price</h2>
+        <h2 class="modal-title" id="addprice-title">{{ isEditing() ? 'Edit Service Labor Price' : 'Add / Update Service Labor Price' }}</h2>
+        <p class="hint" style="margin-top: -0.25rem; margin-bottom: 0.5rem;">
+          Rate applies locally to <strong>this workshop only</strong>. Physical parts are managed and billed through the POS.
+        </p>
         @if (priceError(); as err) {
           <app-error-banner [error]="err" />
         }
         <label class="field">
-          <span class="field-label">Item name</span>
+          <span class="field-label">Service Name</span>
           <input
             type="text"
+            [disabled]="isEditing()"
             [ngModel]="priceDraft().itemKey"
             (ngModelChange)="priceDraft.set({ ...priceDraft(), itemKey: $event })"
           />
         </label>
+        <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 0.625rem 0.875rem; margin-bottom: 0.75rem;">
+          <span style="font-size: 0.85rem; color: #64748b; font-weight: 500;">Standard Flat-Rate Time</span>
+          <span style="font-size: 0.875rem; font-weight: 600; color: #2563eb; display: flex; align-items: center; gap: 0.25rem;">
+            {{ resolveStandardHours(priceDraft().itemKey) }} hours <span title="Locked Operational Benchmark" style="font-size: 0.75rem;">🔒</span>
+          </span>
+        </div>
         <label class="field">
-          <span class="field-label">Type</span>
-          <input
-            type="text"
-            [ngModel]="priceDraft().itemType"
-            (ngModelChange)="priceDraft.set({ ...priceDraft(), itemType: $event })"
-          />
-        </label>
-        <label class="field">
-          <span class="field-label">Unit price</span>
+          <span class="field-label">Labor Price ({{ config()?.currency ?? 'EGP' }})</span>
           <input
             type="number"
             min="0"
-            [ngModel]="priceDraft().unitPrice"
-            (ngModelChange)="priceDraft.set({ ...priceDraft(), unitPrice: $event })"
-          />
-        </label>
-        <label class="field">
-          <span class="field-label">Labor price (optional)</span>
-          <input
-            type="number"
-            min="0"
+            step="1"
             [ngModel]="priceDraft().laborPrice"
-            (ngModelChange)="priceDraft.set({ ...priceDraft(), laborPrice: $event })"
+            (ngModelChange)="priceDraft.set({ ...priceDraft(), laborPrice: $event, unitPrice: $event })"
           />
         </label>
         <div class="modal-actions">
           <button appButton variant="secondary" (click)="showAddPrice.set(false)">Cancel</button>
-          <button appButton variant="primary" [disabled]="!priceDraft().itemKey.trim()" (click)="submitPrice()">Save</button>
+          <button appButton variant="primary" [disabled]="!priceDraft().itemKey.trim()" (click)="submitPrice()">Save Labor Rate</button>
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
-import { country, searchCountries, type CountryEntry, type OperatingCategory, WORKSHOP_PALETTES, type WorkshopPaletteKey } from '@mop/shared';
+import { country, searchCountries, type CountryEntry, type OperatingCategory, WORKSHOP_PALETTES, type WorkshopPaletteKey, type NavigationLayoutType } from '@mop/shared';
 import { OnboardingStore } from '../onboarding.store';
 import type { OnboardingBlueprint } from '../onboarding.api';
 
@@ -135,5 +135,9 @@ export class StageIdentity {
 
   protected onPalette(key: WorkshopPaletteKey): void {
     this.store.patchIdentity({ themePalette: key });
+  }
+
+  protected onLayout(layout: NavigationLayoutType): void {
+    this.store.patchIdentity({ navigationLayout: layout });
   }
 }

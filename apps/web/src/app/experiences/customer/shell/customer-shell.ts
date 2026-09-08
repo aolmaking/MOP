@@ -2,6 +2,7 @@ import { Component, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthStore } from '../../../identity/auth.store';
 import { ToastContainer } from '../../../ui/toast/toast-container';
+import { WorkshopBrandingService } from '../../../ui/workshop-branding.service';
 
 /**
  * The Customer Portal shell.
@@ -25,15 +26,13 @@ import { ToastContainer } from '../../../ui/toast/toast-container';
 export class CustomerShell {
   private readonly authStore = inject(AuthStore);
   private readonly router = inject(Router);
+  protected readonly branding = inject(WorkshopBrandingService);
 
   protected readonly session = this.authStore.session;
 
   protected readonly navigation = [
-    { label: 'Home', route: '/customer' },
-    { label: 'Assets', route: '/customer/assets' },
-    { label: 'Service', route: '/customer/service' },
-    { label: 'Invoices', route: '/customer/invoices' },
-    { label: 'History', route: '/customer/history' },
+    { label: 'Live Service', route: '/customer' },
+    { label: 'Garage & Records', route: '/customer/garage' },
   ];
 
   async logout(): Promise<void> {
