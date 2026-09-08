@@ -144,6 +144,10 @@ export interface WorkCard {
   readonly primaryAction: WorkCardPrimaryAction | null;
   readonly inspectionBoxes?: readonly InspectionBoxItem[];
   readonly inspectionReport?: string | null;
+  readonly inspectionReportSubmitted?: boolean;
+  readonly submittedFindings?: readonly any[];
+  readonly submittedParts?: readonly any[];
+  readonly submittedServices?: readonly any[];
 }
 
 /**

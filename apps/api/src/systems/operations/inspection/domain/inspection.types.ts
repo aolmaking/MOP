@@ -218,4 +218,31 @@ export interface InspectionAggregateDocument {
   submittedAt?: string;
   technicianStaffId: string;
   snapshot?: InspectionReportSnapshot;
+  // Quote items & read-model projections attached by technician or quote builder
+  findings?: any[];
+  parts?: Array<{
+    inventoryItemId?: string;
+    name: string;
+    sku?: string;
+    quantity: number;
+    unitPrice: number;
+  }>;
+  services?: Array<{
+    id?: string;
+    name: string;
+    laborPrice: number;
+    hours?: number;
+  }>;
+  pricing?: {
+    partsTotal: number;
+    laborTotal: number;
+    grandTotal: number;
+  };
+  note?: string;
+  findingsSummary?: string;
+  inspectionReport?: string;
+  inspectionReportSubmitted?: boolean;
+  operatorApproved?: boolean;
+  approvedAt?: string;
+  approvedBy?: string;
 }

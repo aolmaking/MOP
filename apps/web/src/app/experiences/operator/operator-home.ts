@@ -115,7 +115,26 @@ export class OperatorHome {
   protected readonly customServiceName = signal<string>('');
   protected readonly customServiceLabor = signal<number>(50);
 
-  // Computed Totals
+  // Approval selection & expansion state (Image 2)
+  protected readonly approvedFindingIndices = signal<Set<number>>(new Set());
+  protected readonly expandedFindingIndices = signal<Set<number>>(new Set());
+  protected readonly targetFindingIndex = signal<number | null>(null);
+
+  // Computed Totals & Severity Counts matching Image 2
+  protected readonly criticalCount = computed(() =>
+    this.editableFindings().filter((f) => f.severity === 'CRITICAL').length,
+  );
+  protected readonly highCount = computed(() =>
+    this.editableFindings().filter((f) => f.severity === 'HIGH').length,
+  );
+  protected readonly mediumCount = computed(() =>
+    this.editableFindings().filter((f) => f.severity === 'MEDIUM').length,
+  );
+  protected readonly lowCount = computed(() =>
+    this.editableFindings().filter((f) => f.severity === 'LOW' || !f.severity).length,
+  );
+  protected readonly approvedFindingsCount = computed(() => this.approvedFindingIndices().size);
+
   protected readonly quotePartsTotal = computed(() =>
     this.editableParts().reduce((acc, p) => acc + (Number(p.unitPrice) || 0) * (Number(p.quantity) || 1), 0),
   );
@@ -128,6 +147,7 @@ export class OperatorHome {
 
   constructor() {
     this.loadOverview();
+    this.loadInspectionReports();
   }
 
   protected loadOverview(): void {
@@ -357,8 +377,28 @@ export class OperatorHome {
       .getInspectionReports()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (reports) => {
-          this.inspectionReports.set(reports);
+        next: (reports: any[]) => {
+          const normalized: OperatorInspectionReportItem[] = (reports || []).map((r) => ({
+            workOrderId: r.workOrderId,
+            vehicle: {
+              id: r.vehicle?.id ?? 'asset',
+              plateNumber: r.vehicle?.plateNumber ?? r.identifier ?? 'Vehicle',
+              model: r.vehicle?.model ?? r.vehicleModel ?? 'Vehicle',
+              vin: r.vehicle?.vin ?? r.vin ?? '—',
+            },
+            customer: {
+              id: r.customer?.id ?? 'cust',
+              name: r.customer?.name ?? r.customerName ?? 'Customer',
+              phone: r.customer?.phone ?? r.customerPhone ?? '',
+            },
+            submittedAt: r.submittedAt,
+            status: r.status,
+            findingsCount: r.findingsCount ?? (r.findings ? r.findings.length : 0),
+            partsCount: r.partsCount ?? (r.parts ? r.parts.length : 0),
+            servicesCount: r.servicesCount ?? (r.services ? r.services.length : 0),
+            totalEstimate: Number(r.totalEstimate ?? r.pricing?.grandTotal ?? 0),
+          }));
+          this.inspectionReports.set(normalized);
           this.isLoadingReports.set(false);
         },
         error: (err) => {
@@ -368,7 +408,7 @@ export class OperatorHome {
       });
   }
 
-  protected openReportDetail(report: OperatorInspectionReportItem): void {
+  protected openReportDetail(report: OperatorInspectionReportItem | { workOrderId: string }): void {
     this.isLoadingReportDetail.set(true);
     this.quoteError.set(null);
     this.isReportModalOpen.set(true);
@@ -377,14 +417,63 @@ export class OperatorHome {
       .getInspectionReportDetail(report.workOrderId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (detail) => {
-          this.selectedReportDetail.set(detail);
+        next: (detail: any) => {
+          const plate = detail.vehicle?.plateNumber ?? detail.identifier ?? 'Vehicle';
+          const model = detail.vehicle?.model ?? detail.vehicleModel ?? 'Vehicle';
+          const vin = detail.vehicle?.vin ?? detail.vin ?? '—';
+          const custName = detail.customer?.name ?? detail.customerName ?? 'Customer';
+          const custPhone = detail.customer?.phone ?? detail.customerPhone ?? '';
+
+          const findings = detail.inspection?.findings ?? detail.findings ?? [];
+          const parts = detail.inspection?.parts ?? detail.parts ?? [];
+          const services = detail.inspection?.services ?? detail.services ?? [];
+          const note = detail.inspection?.note ?? detail.notes ?? '';
+
+          const normalized: OperatorInspectionReportDetail = {
+            workOrderId: detail.workOrderId,
+            status: detail.status,
+            vehicle: {
+              id: detail.vehicle?.id ?? 'asset',
+              plateNumber: plate,
+              model,
+              vin,
+            },
+            customer: {
+              id: detail.customer?.id ?? 'cust',
+              name: custName,
+              phone: custPhone,
+            },
+            inspection: {
+              id: detail.inspection?.id,
+              submittedAt: detail.inspection?.submittedAt ?? detail.submittedAt,
+              submittedBy: detail.inspection?.submittedBy,
+              note,
+              findings,
+              parts,
+              services,
+              pricing: detail.inspection?.pricing ?? detail.pricing ?? {
+                partsTotal: 0,
+                laborTotal: 0,
+                grandTotal: 0,
+              },
+            },
+          };
+
+          this.selectedReportDetail.set(normalized);
           this.isLoadingReportDetail.set(false);
           // Initialize editable state
-          this.editableFindings.set(detail.inspection?.findings ? [...detail.inspection.findings] : []);
-          this.editableParts.set(detail.inspection?.parts ? [...detail.inspection.parts] : []);
-          this.editableServices.set(detail.inspection?.services ? [...detail.inspection.services] : []);
-          this.quoteNote.set(detail.inspection?.note ?? '');
+          this.editableFindings.set([...findings]);
+          this.editableParts.set([...parts]);
+          this.editableServices.set([...services]);
+          this.quoteNote.set(note);
+
+          // Default all findings to approved
+          const approved = new Set<number>();
+          for (let i = 0; i < findings.length; i++) {
+            approved.add(i);
+          }
+          this.approvedFindingIndices.set(approved);
+          this.expandedFindingIndices.set(new Set());
         },
         error: (err) => {
           this.isLoadingReportDetail.set(false);
@@ -393,12 +482,103 @@ export class OperatorHome {
       });
   }
 
+  protected openReportForWorkOrderId(workOrderId: string): void {
+    this.openReportDetail({ workOrderId });
+  }
+
   protected closeReportModal(): void {
     if (this.isSavingQuote() || this.isDispatchingRepair()) return;
     this.isReportModalOpen.set(false);
     this.selectedReportDetail.set(null);
     this.closePosPicker();
     this.closeServicePicker();
+  }
+
+  // Findings Approval Selection (Image 2)
+  protected isFindingApproved(index: number): boolean {
+    return this.approvedFindingIndices().has(index);
+  }
+
+  protected toggleFindingApproval(index: number): void {
+    const next = new Set(this.approvedFindingIndices());
+    if (next.has(index)) {
+      next.delete(index);
+    } else {
+      next.add(index);
+    }
+    this.approvedFindingIndices.set(next);
+  }
+
+  protected toggleAllFindings(approved: boolean): void {
+    if (approved) {
+      const all = new Set<number>();
+      for (let i = 0; i < this.editableFindings().length; i++) {
+        all.add(i);
+      }
+      this.approvedFindingIndices.set(all);
+    } else {
+      this.approvedFindingIndices.set(new Set());
+    }
+  }
+
+  // Findings Expansion
+  protected isFindingExpanded(index: number): boolean {
+    return this.expandedFindingIndices().has(index);
+  }
+
+  protected toggleFindingExpanded(index: number): void {
+    const next = new Set(this.expandedFindingIndices());
+    if (next.has(index)) {
+      next.delete(index);
+    } else {
+      next.add(index);
+    }
+    this.expandedFindingIndices.set(next);
+  }
+
+  // Finding Display & Category Helpers
+  protected getFindingTitle(f: OperatorInspectionFinding): string {
+    return f.recommendedService || f.description || 'Inspection Finding';
+  }
+
+  protected getFindingCode(f: OperatorInspectionFinding, index: number): string {
+    if (f.code) return f.code;
+    const desc = `${f.description || ''} ${f.recommendedService || ''}`.toLowerCase();
+    if (desc.includes('oil') || desc.includes('lubric')) return 'ENG-03';
+    if (desc.includes('tir') || desc.includes('wheel')) return 'TIR-04';
+    if (desc.includes('filter') || desc.includes('air')) return 'AIR-05';
+    if (desc.includes('brake') || desc.includes('pad')) return 'BRK-01';
+    if (desc.includes('battery')) return 'ELC-02';
+    return `FND-0${index + 1}`;
+  }
+
+  protected getFindingIconType(f: OperatorInspectionFinding): 'oil' | 'tire' | 'filter' | 'brake' | 'battery' | 'suspension' | 'general' {
+    const text = `${f.description || ''} ${f.recommendedService || ''} ${f.code || ''}`.toLowerCase();
+    if (text.includes('oil') || text.includes('lubric') || text.includes('fluid') || text.includes('eng-')) return 'oil';
+    if (text.includes('tir') || text.includes('wheel') || text.includes('alignment')) return 'tire';
+    if (text.includes('filter') || text.includes('air') || text.includes('intake') || text.includes('cabin')) return 'filter';
+    if (text.includes('brake') || text.includes('pad') || text.includes('disc') || text.includes('rotor')) return 'brake';
+    if (text.includes('battery') || text.includes('electric') || text.includes('alternator')) return 'battery';
+    if (text.includes('shock') || text.includes('strut') || text.includes('suspension')) return 'suspension';
+    return 'general';
+  }
+
+  protected openPosPickerForFinding(index: number): void {
+    this.targetFindingIndex.set(index);
+    const f = this.editableFindings()[index];
+    if (f) {
+      this.posSearch.set(f.recommendedService || f.description || '');
+    }
+    this.openPosPicker();
+  }
+
+  protected openServicePickerForFinding(index: number): void {
+    this.targetFindingIndex.set(index);
+    const f = this.editableFindings()[index];
+    if (f) {
+      this.customServiceName.set(f.recommendedService || f.description || '');
+    }
+    this.openServicePicker();
   }
 
   // Findings Severity & Editing
@@ -419,10 +599,18 @@ export class OperatorHome {
         recommendedService: 'Inspection & Repair',
       },
     ]);
+    const newIdx = this.editableFindings().length - 1;
+    this.toggleFindingApproval(newIdx);
   }
 
   protected removeFinding(index: number): void {
     this.editableFindings.update((prev) => prev.filter((_, i) => i !== index));
+    const nextApproved = new Set<number>();
+    this.approvedFindingIndices().forEach((idx) => {
+      if (idx < index) nextApproved.add(idx);
+      else if (idx > index) nextApproved.add(idx - 1);
+    });
+    this.approvedFindingIndices.set(nextApproved);
   }
 
   // POS Parts
@@ -565,17 +753,27 @@ export class OperatorHome {
     this.isDispatchingRepair.set(true);
     this.quoteError.set(null);
 
-    // Generate tasks from services and critical/medium findings
+    // Only dispatch approved findings, parts, and services
+    const approvedFindings = this.editableFindings().filter((_, i) => this.isFindingApproved(i));
+    const approvedFindingIds = this.editableFindings()
+      .map((f, i) => (this.isFindingApproved(i) ? (f.id || f.code || String(i)) : null))
+      .filter((id): id is string => id !== null);
+
+    // Filter parts and services associated with approved findings or selected
+    const approvedParts = this.editableParts();
+    const approvedPartIds = approvedParts.map((p) => String(p.id || p.sku || p.name));
+
+    const approvedServices = this.editableServices();
+    const approvedServiceIds = approvedServices.map((s) => String(s.id || s.serviceName));
+
     const tasks: Array<{ title: string; estimatedMinutes?: number }> = [];
-    for (const s of this.editableServices()) {
+    for (const s of approvedServices) {
       tasks.push({ title: s.serviceName, estimatedMinutes: 60 });
     }
-    for (const f of this.editableFindings()) {
-      if (f.severity === 'CRITICAL' || f.severity === 'HIGH') {
-        const title = f.recommendedService ? `Repair: ${f.recommendedService} (${f.description})` : `Fix: ${f.description}`;
-        if (!tasks.some((t) => t.title === title)) {
-          tasks.push({ title, estimatedMinutes: 45 });
-        }
+    for (const f of approvedFindings) {
+      const title = f.recommendedService ? `Repair: ${f.recommendedService} (${f.description})` : `Fix: ${f.description}`;
+      if (!tasks.some((t) => t.title === title)) {
+        tasks.push({ title, estimatedMinutes: 45 });
       }
     }
 
@@ -583,42 +781,32 @@ export class OperatorHome {
       tasks.push({ title: 'Standard Vehicle Maintenance & Quality Check', estimatedMinutes: 45 });
     }
 
-    // First save latest quote
+    // Call approveRepair directly on the backend
     this.api
-      .updateQuote(detail.workOrderId, {
-        findings: this.editableFindings(),
-        parts: this.editableParts(),
-        services: this.editableServices(),
-        note: this.quoteNote(),
+      .approveRepair(detail.workOrderId, {
+        approvedFindingIds,
+        approvedPartIds,
+        approvedServiceIds,
+        approvedFindings,
+        approvedServices,
+        operatorNote: this.quoteNote(),
+        tasks,
+        note: `Quote approved for $${this.quoteGrandTotal().toFixed(2)} (${approvedFindings.length} findings approved). Dispatched to repair floor.`,
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
-          // Then dispatch repair
-          this.api
-            .dispatchRepair(detail.workOrderId, {
-              tasks,
-              note: `Quote approved for $${this.quoteGrandTotal().toFixed(2)}. Dispatched to repair floor.`,
-            })
-            .pipe(takeUntilDestroyed(this.destroyRef))
-            .subscribe({
-              next: () => {
-                this.isDispatchingRepair.set(false);
-                this.closeReportModal();
-                this.showSuccessNotification(
-                  `Work order for ${detail.vehicle.plateNumber || 'vehicle'} approved & dispatched to repair! Technician can now start fixing.`,
-                );
-                this.loadInspectionReports();
-              },
-              error: (err) => {
-                this.isDispatchingRepair.set(false);
-                this.quoteError.set(err.message ?? 'Failed to dispatch work order to repair.');
-              },
-            });
+          this.isDispatchingRepair.set(false);
+          this.closeReportModal();
+          this.showSuccessNotification(
+            `Work order for ${detail.vehicle.plateNumber || 'vehicle'} approved & dispatched to repair! Technician can now start fixing.`,
+          );
+          this.loadInspectionReports();
+          this.loadOverview();
         },
         error: (err) => {
           this.isDispatchingRepair.set(false);
-          this.quoteError.set(err.message ?? 'Failed to save quote before dispatch.');
+          this.quoteError.set(err.message ?? 'Failed to approve & dispatch work order.');
         },
       });
   }

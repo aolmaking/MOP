@@ -1,3 +1,75 @@
+# Inspection Reports Hub: Strict Queue Filtering, 2-Column Real Report Approval UI, Approved-Only Inventory & Technician Start Working Box
+
+## Executive Summary
+
+We resolved the issues in the Inspection-to-Repair cycle according to the user's explicit workflow, design reference, and 5 mandatory architectural corrections:
+
+1. **Unified Canonical Predicate for Strict Report Filtering**:
+   - Implemented and exported `isAwaitingOperatorReview(order, insp)` in [`operator.service.ts`](file:///c:/Users/ahmed/Desktop/MOP_Product_Platform_v11_9_Pnpm_Install_Root_Fix_FULL_PROJECT/apps/api/src/experiences/operator/operator.service.ts).
+   - Applied consistently across:
+     - Reports List: `getInspectionReports()`
+     - Overview Metric: `getOverview().pendingReportsCount`
+     - Vehicle Active Order Card: `hasInspectionReport`
+   - Jobs in `IN_PROGRESS` or unsubmitted inspection states are **strictly excluded** from the Operator queue.
+
+2. **Full-Fidelity 2-Column Inspection Report & Quote Review Page (Matching Reference Image)**:
+   - Clicking on any inspection report card opens the dedicated 2-column review workspace:
+     - **Left Column (Findings List)**:
+       - Category icons (Engine Oil, Tire, Air Filter, Brakes, Battery, Suspension, Transmission, General).
+       - Color-coded severity pills (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`).
+       - Finding description and recommendation pills (e.g. `ENG-03 Recommended: Oil and filter change`).
+       - Action buttons: `[🔧 Create Service]` and `[🛒 View Parts]`.
+       - Nested drawers for parts & services breakdown.
+       - **Approval Selection Checkboxes**: The operator selects exactly which findings are approved.
+     - **Right Column (Sidebar Cards)**:
+       - **Summary Card**: Total findings count, breakdown by severity (Critical, High, Medium, Low) with colored indicator icon circles.
+       - **Estimated Cost Card**: Itemized Parts total, Labor total, and Grand Total calculated dynamically based on selections.
+       - Operator notes textarea.
+     - **Bottom Action Banner**:
+       - Soft light-blue banner with circular glyph.
+       - Heading: *"Inspection Review Complete?"*
+       - Subtitle: *"Review the technician findings and select the services and parts approved for repair."*
+       - Primary button: **"✓ Approve Selected & Dispatch Repair"**.
+
+3. **Backend Authority & Persisted Operator Repair Approval**:
+   - New dedicated endpoint: `POST /api/v1/operator/work-orders/:id/approve-repair` (with `dispatch-repair` alias).
+   - Validates that the work order is `UNDER_INSPECTION` and has a submitted report.
+   - Authoritatively recalculates `partsTotal`, `laborTotal`, and `grandTotal` on the backend based on approved items (UI preview is never the source of truth).
+   - Persists an immutable, auditable `OperatorRepairApprovalRecord`:
+     - `workOrderId`, `approvedFindingIds`, `approvedPartIds`, `approvedServiceIds`, `approvedAt`, `approvedByStaffId`, `operatorNote`, and authoritative `pricing`.
+
+4. **Approved-Only Inventory Allocation & Shortage Isolation**:
+   - **Crucial Rule**: ONLY parts approved by the operator are processed:
+     - In-stock approved parts &rarr; reserved in warehouse stock balance, added to `WorkOrderPartLine`.
+     - Out-of-stock approved parts &rarr; official `PartRequest` created (`status: REQUESTED`) for the Inventory Manager queue.
+     - **Unapproved parts &rarr; ZERO inventory impact! No reservations, No PartRequests!**
+
+5. **Technician "Repair Work Approved — Ready to Start" Mission Box**:
+   - Once approved, the work order status transitions to `APPROVED_FOR_WORK` and repair tasks are created for the approved items.
+   - On the technician's screen (`tech-work-card`), the "Awaiting Operator" blocker is replaced by a prominent **"Repair Work Approved — Ready to Start"** hero box showing approved tasks and allocated parts.
+   - Clicking **"⚡ Start Working"** invokes `/api/v1/technician/work-orders/:id/start-work` through the workflow gate, advancing the job to `IN_PROGRESS` and unlocking repair execution tools.
+
+---
+
+## Automated Verification Suite
+
+All 14 tests in the Operator Experience test suite passed with 100% success:
+
+| Test Suite | Spec File | Result |
+| :--- | :--- | :--- |
+| **Strict Queue Filtering & Selective Task Creation** | [`operator-technician-cycle.spec.ts`](file:///c:/Users/ahmed/Desktop/MOP_Product_Platform_v11_9_Pnpm_Install_Root_Fix_FULL_PROJECT/apps/api/src/experiences/operator/operator-technician-cycle.spec.ts) | **PASS** (6/6 tests) |
+| **Approved-Only Inventory, Shortage Isolation & Audit Record** | [`operator-approval-inventory.spec.ts`](file:///c:/Users/ahmed/Desktop/MOP_Product_Platform_v11_9_Pnpm_Install_Root_Fix_FULL_PROJECT/apps/api/src/experiences/operator/operator-approval-inventory.spec.ts) | **PASS** (8/8 tests) |
+
+### Key Test Scenarios Verified:
+- **Test A (Strict Queue)**: Work orders with `status: 'IN_PROGRESS'` or unsubmitted inspections are strictly excluded.
+- **Test B (Submitted Report)**: Work orders with `status: 'UNDER_INSPECTION'` + submitted inspection appear in the queue.
+- **Test C (Partial Approval)**: When Part A & B are approved and Part C is unapproved &rarr; Part A & B stock reserved, Part C stock balance is completely untouched.
+- **Test D (Inventory Shortage)**: Approved out-of-stock part generates `PartRequest` with `status: REQUESTED`.
+- **Test E (Unapproved Shortage Isolation)**: Out-of-stock part that is NOT approved by the operator generates **ZERO PartRequests**!
+- **Test F (Start Working Flow)**: `UNDER_INSPECTION` &rarr; Operator Approval &rarr; `APPROVED_FOR_WORK` &rarr; Technician Start Working &rarr; `IN_PROGRESS`.
+
+---
+
 # MOP Workshops, Themes & Consolidated Worker Stations Walkthrough
 
 ## Executive Summary

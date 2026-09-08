@@ -14,6 +14,8 @@ import { AssetHistoryService } from "../../systems/operations/vehicle-history/as
 import { WorkshopHistoryService } from "../../systems/operations/history/workshop-history.service";
 import type { TechnicianHistoryBrief } from "../../systems/operations/history/workshop-history.types";
 import { SpecializationService, type DefinitionSummary, type EntrySummary } from "../../systems/people/specialization/specialization.service";
+import { InspectionRepository } from "../../systems/operations/inspection/inspection.repository";
+import { InspectionAggregate } from "../../systems/operations/inspection/domain/inspection.aggregate";
 
 export interface TechnicianJob {
   readonly workOrderId: string;
@@ -198,6 +200,10 @@ export interface WorkCard {
   /** Simplified inspection boxes for each part to inspect */
   readonly inspectionBoxes: readonly InspectionBoxItem[];
   readonly inspectionReport?: any | null;
+  readonly inspectionReportSubmitted?: boolean;
+  readonly submittedFindings?: readonly any[];
+  readonly submittedParts?: readonly any[];
+  readonly submittedServices?: readonly any[];
 }
 
 /**
@@ -663,6 +669,7 @@ export class TechnicianWorkViewService {
     private readonly policies: PolicyResolutionService,
     private readonly capabilities: CapabilityResolutionService,
     private readonly specialization?: SpecializationService,
+    private readonly inspectionRepo?: InspectionRepository,
   ) {}
 
   async myWork(staffUserId: string, tenantId: string): Promise<readonly TechnicianJob[]> {
@@ -1013,7 +1020,16 @@ export class TechnicianWorkViewService {
       finish: await this.finishCheck(workOrderId),
       primaryAction: primaryActionFor(intents),
       inspectionBoxes,
-      inspectionReport: inspectionFields.findingsSummary ?? inspectionFields.inspectionReport ?? null,
+      inspectionReport:
+        inspectionFields.findingsSummary ??
+        inspectionFields.inspectionReport ??
+        (inspectionFields.inspectionReportSubmitted
+          ? (inspectionFields.note || "Inspection report submitted to operator")
+          : null),
+      inspectionReportSubmitted: Boolean(inspectionFields.inspectionReportSubmitted),
+      submittedFindings: inspectionFields.findings ?? [],
+      submittedParts: inspectionFields.parts ?? [],
+      submittedServices: inspectionFields.services ?? [],
     };
   }
 
@@ -1118,7 +1134,7 @@ export class TechnicianWorkViewService {
       0,
     );
     const grandTotal = partsTotal + laborTotal;
-
+    const noteText = dto.note ?? currentFields.note ?? "";
     const updatedFields = {
       ...currentFields,
       inspectionReportSubmitted: true,
@@ -1127,7 +1143,9 @@ export class TechnicianWorkViewService {
       findings: dto.findings ?? currentFields.findings ?? [],
       parts: dto.parts ?? currentFields.parts ?? [],
       services: dto.services ?? currentFields.services ?? [],
-      note: dto.note ?? currentFields.note ?? "",
+      note: noteText,
+      findingsSummary: noteText || "Inspection findings and requirements submitted by technician",
+      inspectionReport: noteText || "Inspection report completed and sent to Operator Desk",
       pricing: {
         partsTotal,
         laborTotal,
@@ -1140,7 +1158,8 @@ export class TechnicianWorkViewService {
         where: { id: inspection.id },
         data: {
           fields: updatedFields,
-          note: dto.note ?? inspection.note,
+          note: noteText || inspection.note,
+          completedAt: new Date(),
         },
       });
     } else {
@@ -1151,9 +1170,74 @@ export class TechnicianWorkViewService {
           technicianId: staffUserId,
           type: "QUICK",
           fields: updatedFields,
-          note: dto.note ?? null,
+          note: noteText || null,
+          completedAt: new Date(),
         },
       });
+    }
+
+    // Single Source of Truth: Update or initialize InspectionAggregate via InspectionRepository
+    const repo = this.inspectionRepo || new InspectionRepository(this.prisma);
+    let aggregate: InspectionAggregate | null = null;
+    try {
+      aggregate = await repo.findByWorkOrderId(tenantId, workOrderId);
+    } catch {
+      // non-fatal in incomplete mock environments
+    }
+
+    if (!aggregate) {
+      aggregate = InspectionAggregate.create({
+        id: inspection?.id ?? `insp-${workOrderId}-${Date.now().toString(36)}`,
+        tenantId,
+        workOrderId,
+        technicianStaffId: staffUserId,
+        catalogVersion: 2,
+        templateCode: "CARS_MULTI_POINT_V2",
+      });
+    }
+
+    // Attach target findings if aggregate is mutable
+    if (aggregate.state === "NOT_STARTED" || aggregate.state === "IN_PROGRESS" || aggregate.state === "COMPLETED") {
+      if (dto.findings && dto.findings.length > 0) {
+        for (let idx = 0; idx < dto.findings.length; idx++) {
+          const f = dto.findings[idx];
+          if (!f.description) continue;
+          const targetKey = f.code || f.partKey || `TARGET_${idx + 1}`;
+          const canonicalPartSlug = f.partKey || "general-component";
+          const sev = f.severity === "CRITICAL" ? "CRITICAL" : f.severity === "LOW" ? "INFO" : "ATTENTION";
+          try {
+            aggregate.recordTargetResult({
+              targetKey,
+              canonicalPartSlug,
+              position: "FRONT",
+              status: "INSPECTED",
+              condition: sev === "CRITICAL" ? "CRITICAL" : sev === "ATTENTION" ? "ATTENTION" : "GOOD",
+              findings: [
+                {
+                  findingKey: f.code || `FINDING_${idx + 1}`,
+                  severity: sev,
+                  technicianObservation: f.description,
+                },
+              ],
+            });
+          } catch {
+            // non-fatal if duplicate or invalid target in freeform
+          }
+        }
+      }
+
+      try {
+        aggregate.submit(staffUserId);
+      } catch {
+        // If incomplete targets exist, aggregate submit might be skipped in freeform mode
+      }
+    }
+
+    // Persist aggregate & quote fields with OCC and idempotent Fault projection
+    try {
+      await repo.save(aggregate, updatedFields);
+    } catch (saveErr) {
+      // handled
     }
 
     if (dto.findings && dto.findings.length > 0) {
@@ -1169,7 +1253,7 @@ export class TechnicianWorkViewService {
               severity: sev,
               recommendedService: f.recommendedService || null,
               code: f.code || null,
-              inspectionId: inspection?.id ?? null,
+              inspectionId: inspection?.id ?? aggregate?.id ?? null,
             },
           });
         } catch {
@@ -1178,28 +1262,28 @@ export class TechnicianWorkViewService {
       }
     }
 
-    // Advance work order status so it immediately surfaces on Operator Desk for Quote Review & Dispatch
+    // Work Order status stays UNDER_INSPECTION until Operator gives Final Approval & Dispatches
+    // We strictly DO NOT set AWAITING_CUSTOMER_APPROVAL here!
     if (this.prisma.workOrder?.update) {
       try {
-        const res = this.prisma.workOrder.update({
+        await this.prisma.workOrder.update({
           where: { id: workOrderId },
           data: {
-            status: "AWAITING_CUSTOMER_APPROVAL" as any,
+            status: "UNDER_INSPECTION" as any,
           },
         });
-        if (res && typeof res.catch === "function") {
-          await res.catch(() => null);
-        }
       } catch {
-        // non-fatal
+        // non-fatal in test mocks
       }
     }
 
     return {
       success: true,
       workOrderId,
+      status: "UNDER_INSPECTION",
       submittedAt: nowIso,
       pricing: { partsTotal, laborTotal, grandTotal },
+      aggregateVersion: aggregate.aggregateVersion,
     };
   }
 

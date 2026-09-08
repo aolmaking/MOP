@@ -88,7 +88,10 @@ export class TechWorkCard {
   protected readonly isInspectionState = computed(() => {
     const c = this.card();
     if (!c) return false;
-    return c.status === 'UNDER_INSPECTION' || c.status === 'REGISTERED' || c.inspection.state !== 'COMPLETED';
+    if (c.status === 'APPROVED_FOR_WORK' || c.status === 'IN_PROGRESS' || c.status === 'COMPLETED') {
+      return false;
+    }
+    return c.status === 'UNDER_INSPECTION' || c.status === 'REGISTERED';
   });
 
   protected openCustomerDetailModal(box: InspectionBoxItem): void {
@@ -1115,7 +1118,18 @@ export class TechWorkCard {
       next: (card) => {
         this.card.set(card);
         this.state.set('ready');
-        if (card.inspectionReport || card.status === 'WAITING_FOR_ESTIMATE' || card.status === 'WAITING_APPROVAL') {
+        const isAwaitingOp =
+          (card.inspectionReport || card.inspectionReportSubmitted) &&
+          card.status !== 'APPROVED_FOR_WORK' &&
+          card.status !== 'IN_PROGRESS' &&
+          card.status !== 'COMPLETED';
+
+        if (
+          isAwaitingOp ||
+          card.status === 'AWAITING_CUSTOMER_APPROVAL' ||
+          card.status === 'WAITING_FOR_ESTIMATE' ||
+          card.status === 'WAITING_APPROVAL'
+        ) {
           this.inspectionSubStep.set('awaiting_operator');
         }
         // Started after the card resolves, so a technician never sees a
@@ -1160,6 +1174,10 @@ export class TechWorkCard {
     } else {
       this.run('start-work', this.api.startWork(this.id()));
     }
+  }
+
+  protected startRepairWork(): void {
+    this.run('start-work', this.api.startWork(this.id()));
   }
 
   protected start(task: TechnicianTask): void {

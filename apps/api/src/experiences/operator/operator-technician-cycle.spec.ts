@@ -253,6 +253,8 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
           {
             id: 'insp-1',
             fields: {
+              inspectionReportSubmitted: true,
+              state: 'SUBMITTED',
               services: [
                 { name: 'Front Brake Pads Replacement', laborPrice: 80 },
                 { name: 'Engine Oil & Filter Service', laborPrice: 45 },
@@ -296,5 +298,98 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
       );
       expect(mockPrisma.task.create).toHaveBeenCalledTimes(2);
     });
+
+    it('strictly excludes IN_PROGRESS or unsubmitted work orders from operator inspection queue', async () => {
+      mockPrisma.workOrder.findMany.mockResolvedValue([
+        {
+          id: 'wo-in-progress',
+          status: 'IN_PROGRESS', // Should be excluded!
+          asset: { plateNumber: 'INP-100', category: 'CARS' },
+          customer: { fullName: 'In Progress Customer' },
+          inspections: [{ fields: { inspectionReportSubmitted: true } }],
+          faults: [{ id: 'f1', description: 'Fault' }],
+        },
+        {
+          id: 'wo-unsubmitted',
+          status: 'UNDER_INSPECTION', // Status correct, but report NOT submitted -> Should be excluded!
+          asset: { plateNumber: 'UNS-200', category: 'CARS' },
+          customer: { fullName: 'Unsubmitted Customer' },
+          inspections: [{ fields: { inspectionReportSubmitted: false } }],
+          faults: [{ id: 'f2', description: 'Fault' }],
+        },
+        {
+          id: 'wo-valid-submitted',
+          status: 'UNDER_INSPECTION', // Valid: UNDER_INSPECTION + inspectionReportSubmitted
+          asset: { plateNumber: 'VAL-300', category: 'CARS' },
+          customer: { fullName: 'Submitted Customer' },
+          inspections: [{ fields: { inspectionReportSubmitted: true, pricing: { grandTotal: 250 } } }],
+          faults: [],
+        },
+      ]);
+
+      const reports = await operatorService.getInspectionReports(tenantId);
+      expect(reports.length).toBe(1);
+      expect(reports[0].workOrderId).toBe('wo-valid-submitted');
+    });
+
+    it('dispatches only selectively approved services into repair tasks', async () => {
+      mockPrisma.workOrder.findFirst.mockResolvedValue({
+        id: workOrderId,
+        status: 'UNDER_INSPECTION',
+        inspections: [
+          {
+            id: 'insp-1',
+            fields: {
+              inspectionReportSubmitted: true,
+              state: 'SUBMITTED',
+              services: [
+                { name: 'Front Brake Pads Replacement', laborPrice: 80 },
+                { name: 'Engine Oil & Filter Service', laborPrice: 45 },
+                { name: 'Air Filter Replacement', laborPrice: 25 },
+              ],
+            },
+          },
+        ],
+      });
+      mockPrisma.inspection.update.mockResolvedValue({ id: 'insp-1' });
+      mockPrisma.workOrder.update.mockResolvedValue({
+        id: workOrderId,
+        status: 'APPROVED_FOR_WORK',
+      });
+      mockPrisma.task.create.mockResolvedValue({ id: 'task-1' });
+
+      const session: any = {
+        accountId: 'operator-account-1',
+        actorId: 'operator-1',
+        tenantId,
+        roles: ['OPERATOR'],
+      };
+
+      // Operator only approves 1 service out of 3:
+      const result = await operatorService.dispatchRepair(
+        tenantId,
+        workOrderId,
+        {
+          approvedServices: [
+            { name: 'Front Brake Pads Replacement', laborPrice: 80 },
+          ],
+          note: 'Only brake replacement approved by customer',
+        },
+        session,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.newStatus).toBe('APPROVED_FOR_WORK');
+      // Only 1 task should be created for the selectively approved service:
+      expect(mockPrisma.task.create).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.task.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            title: 'Front Brake Pads Replacement',
+          }),
+        }),
+      );
+    });
   });
 });
+

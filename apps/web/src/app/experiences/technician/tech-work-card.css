@@ -2121,6 +2121,187 @@
 }
 
 /* ===================================================================== */
+/* READY TO WORK HERO BOX (OPERATOR APPROVED)                             */
+/* ===================================================================== */
+.ready-to-work-hero {
+  background: linear-gradient(135deg, #091933 0%, #0d2752 50%, #061630 100%);
+  border: 2px solid #2563eb;
+  border-radius: 16px;
+  padding: 1.5rem 2rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 12px 36px rgba(37, 99, 235, 0.25), 0 0 20px rgba(37, 99, 235, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.ready-to-work-hero::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.ready-hero-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ready-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+}
+
+.ready-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: pulse-glow 1.5s infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.7; }
+}
+
+.ready-meta-time {
+  font-size: 0.82rem;
+  color: #93c5fd;
+}
+
+.ready-hero-main {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.ready-hero-icon-wrap {
+  width: 60px;
+  height: 60px;
+  border-radius: 14px;
+  background: rgba(37, 99, 235, 0.25);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.ready-hero-text {
+  flex: 1;
+}
+
+.ready-hero-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 0.35rem 0;
+  letter-spacing: -0.01em;
+}
+
+.ready-hero-desc {
+  font-size: 0.9rem;
+  color: #cbd5e1;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.ready-summary-chips-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ready-sum-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.ready-sum-num {
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: #38bdf8;
+}
+
+.ready-findings-preview {
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.preview-tag {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.ready-hero-action-row {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 0.5rem;
+}
+
+.btn-start-repair-hero {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  border: none;
+  padding: 0.85rem 2rem;
+  border-radius: 10px;
+  font-weight: 800;
+  font-size: 1.05rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
+  transition: all 0.2s ease;
+}
+
+.btn-start-repair-hero:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(37, 99, 235, 0.55);
+}
+
+.btn-start-repair-hero:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-hero-bolt {
+  font-size: 1.25rem;
+}
+
+/* ===================================================================== */
 /* REPAIR STAGE: 2-COLUMN LAYOUT WITH TASKS ON THE RIGHT                 */
 /* ===================================================================== */
 .repair-stage-layout {
@@ -4071,5 +4252,7 @@
   font-size: 15px;
   font-weight: 800;
 }
+
+
 
 

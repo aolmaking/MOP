@@ -272,11 +272,7 @@ export class TechnicianInspectionService {
 
       await this.inspectionRepo.save(aggregate);
 
-      // If work order is in UNDER_INSPECTION, advance it
-      await this.prisma.workOrder.updateMany({
-        where: { id: workOrderId, tenantId, status: "UNDER_INSPECTION" },
-        data: { status: "WAITING_APPROVAL" as any },
-      });
+      // Work order remains UNDER_INSPECTION awaiting Operator Final Approval
 
       return {
         success: true,

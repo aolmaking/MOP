@@ -25,15 +25,17 @@ export class TechNow {
 
   protected readonly activeCount = computed(() => this.queue().filter((j) => j.active || j.status === 'IN_PROGRESS').length);
   protected readonly blockedCount = computed(() => this.queue().filter((j) => j.blocked || j.status === 'BLOCKED').length);
-  protected readonly inspectionCount = computed(() => this.queue().filter((j) => j.status === 'UNDER_INSPECTION').length);
+  protected readonly inspectionCount = computed(
+    () => this.queue().filter((j) => j.status === 'UNDER_INSPECTION' || (!j.inspectionDeclined && j.status === 'REGISTERED')).length,
+  );
 
   protected readonly filteredQueue = computed(() => {
     const q = this.queue();
     const f = this.filter();
     if (f === 'ALL') return q;
     if (f === 'BLOCKED') return q.filter((j) => j.blocked || j.status === 'BLOCKED');
-    if (f === 'READY') return q.filter((j) => ['REGISTERED', 'READY_TO_START', 'APPROVED_FOR_WORK'].includes(j.status));
-    if (f === 'INSPECTION') return q.filter((j) => j.status === 'UNDER_INSPECTION');
+    if (f === 'READY') return q.filter((j) => ['READY_TO_START', 'APPROVED_FOR_WORK'].includes(j.status));
+    if (f === 'INSPECTION') return q.filter((j) => j.status === 'UNDER_INSPECTION' || (!j.inspectionDeclined && j.status === 'REGISTERED'));
     if (f === 'IN_PROGRESS') return q.filter((j) => j.status === 'IN_PROGRESS' || j.active);
     return q;
   });

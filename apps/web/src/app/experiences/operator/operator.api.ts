@@ -14,8 +14,9 @@ export interface OperatorVehicle {
   activeWorkOrder?: {
     id: string;
     status: string;
-    complaint: string | null;
+    complaint?: string | null;
     createdAt: string;
+    hasInspectionReport?: boolean;
   } | null;
 }
 
@@ -24,6 +25,7 @@ export interface OperatorOverview {
     totalVehicles: number;
     inServiceCount: number;
     intakeQueueCount: number;
+    pendingReportsCount?: number;
   };
   branches: Array<{ id: string; name: string; code: string }>;
   vehicles: OperatorVehicle[];
@@ -61,6 +63,7 @@ export interface OperatorPosOrderResult {
 }
 
 export interface OperatorInspectionFinding {
+  id?: string;
   description: string;
   severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   recommendedService?: string;
@@ -68,6 +71,8 @@ export interface OperatorInspectionFinding {
 }
 
 export interface OperatorInspectionPart {
+  id?: string;
+  inventoryItemId?: string;
   sku: string;
   name: string;
   quantity: number;
@@ -75,6 +80,7 @@ export interface OperatorInspectionPart {
 }
 
 export interface OperatorInspectionService {
+  id?: string;
   serviceName: string;
   laborPrice: number;
 }
@@ -188,17 +194,40 @@ export class OperatorApi {
     );
   }
 
-  dispatchRepair(
+  approveRepair(
     workOrderId: string,
     payload: {
+      approvedFindingIds?: string[];
+      approvedPartIds?: string[];
+      approvedServiceIds?: string[];
+      approvedFindings?: any[];
+      approvedServices?: any[];
+      operatorNote?: string;
+      note?: string;
       technicianId?: string;
       tasks?: Array<{ title: string; estimatedMinutes?: number }>;
-      note?: string;
     },
   ): Observable<{ success: boolean; workOrderId: string; status: string }> {
     return this.http.post<{ success: boolean; workOrderId: string; status: string }>(
-      `${this.base}/work-orders/${encodeURIComponent(workOrderId)}/dispatch-repair`,
+      `${this.base}/work-orders/${encodeURIComponent(workOrderId)}/approve-repair`,
       payload,
     );
+  }
+
+  dispatchRepair(
+    workOrderId: string,
+    payload: {
+      approvedFindingIds?: string[];
+      approvedPartIds?: string[];
+      approvedServiceIds?: string[];
+      approvedFindings?: any[];
+      approvedServices?: any[];
+      operatorNote?: string;
+      note?: string;
+      technicianId?: string;
+      tasks?: Array<{ title: string; estimatedMinutes?: number }>;
+    },
+  ): Observable<{ success: boolean; workOrderId: string; status: string }> {
+    return this.approveRepair(workOrderId, payload);
   }
 }

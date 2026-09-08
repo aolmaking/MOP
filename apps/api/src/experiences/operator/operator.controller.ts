@@ -13,6 +13,7 @@ import { CurrentSession } from "../../identity/auth/current-session.decorator";
 import type { SessionContext } from "@mop/shared";
 import { OperatorService } from "./operator.service";
 import {
+  OperatorApproveRepairDto,
   OperatorDispatchRepairDto,
   OperatorIntakeDto,
   OperatorPosOrderDto,
@@ -113,6 +114,16 @@ export class OperatorController {
     return this.operatorService.updateQuote(tenantId, id, dto);
   }
 
+  @Post("work-orders/:id/approve-repair")
+  async approveRepair(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: OperatorApproveRepairDto,
+  ) {
+    const { tenantId } = this.require(session);
+    return this.operatorService.approveRepair(tenantId, id, dto, session);
+  }
+
   @Post("work-orders/:id/dispatch-repair")
   async dispatchRepair(
     @CurrentSession() session: SessionContext,
@@ -120,7 +131,7 @@ export class OperatorController {
     @Body() dto: OperatorDispatchRepairDto,
   ) {
     const { tenantId } = this.require(session);
-    return this.operatorService.dispatchRepair(tenantId, id, dto, session);
+    return this.operatorService.approveRepair(tenantId, id, dto, session);
   }
 
   private require(session: SessionContext): { tenantId: string } {

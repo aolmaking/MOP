@@ -1,4 +1,4 @@
-import { Component, DestroyRef, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, debounceTime, switchMap } from 'rxjs';
@@ -44,6 +44,8 @@ export class PartsCatalog {
 
   /** Optional because customer POS (/customer/pos) and operator POS (/operator/pos) do not have a route id */
   readonly id = input<string>('');
+  /** Optional category name/slug passed via query param to pre-filter catalog */
+  readonly category = input<string>('');
 
   /** Technician mode vs Operator reception POS vs Customer over-the-counter POS mode */
   readonly isTechMode = computed(() => this.router.url.includes('/tech'));
@@ -168,6 +170,25 @@ export class PartsCatalog {
       const targetId = this.isTechMode() ? this.id() : 'customer-pos';
       if (this.cartKey()) return;
       this.cartKey.set(this.restoreKey(targetId));
+    });
+
+    effect(() => {
+      const catParam = this.category()?.trim().toLowerCase();
+      const pageData = this.page();
+      if (catParam && pageData && !this.categoryId()) {
+        const flatten = (nodes: readonly PartCategoryNode[]): PartCategoryNode[] =>
+          nodes.flatMap((node) => [node, ...flatten(node.children ?? [])]);
+        const allCats = flatten(pageData.categories);
+        const match = allCats.find(
+          (c) => c.name.toLowerCase().includes(catParam) || c.id.toLowerCase().includes(catParam)
+        );
+        if (match) {
+          untracked(() => {
+            this.categoryId.set(match.id);
+            this.fetchNow();
+          });
+        }
+      }
     });
 
     this.refresh

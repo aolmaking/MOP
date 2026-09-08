@@ -30,7 +30,7 @@ export interface MasterPosItem {
   }[];
 }
 
-export const CARS_CATEGORIES: readonly MasterCategoryDef[] = [
+export const CARS_CATEGORIES: readonly MasterPosCategory[] = [
   {
     name: "Brake System",
     slug: "brakes",
@@ -141,7 +141,7 @@ export const CARS_CATEGORIES: readonly MasterCategoryDef[] = [
   },
 ];
 
-export const CARS_ITEMS: readonly MasterItemDef[] = [
+export const CARS_ITEMS: readonly MasterPosItem[] = [
   // ── 1. BRAKE SYSTEM (Pads, Rotors, Calipers, Fluids, Sensors) ─────────────
   {
     sku: "BRK-PAD-TOY-01",

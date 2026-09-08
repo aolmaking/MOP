@@ -277,17 +277,18 @@
 
                         <!-- Card Two Action Buttons (Replaces separate POS and Services columns) -->
                         <div class="card-action-bar">
-                          <button
-                            type="button"
+                          <a
                             class="card-action-btn card-action-btn--pos"
-                            (click)="openPosForFinding(f)"
+                            [routerLink]="['/tech', 'card', id(), 'parts']"
+                            [queryParams]="{ category: f.partKey }"
+                            id="btn-nav-pos-{{ f.partKey }}"
                           >
                             <span class="btn-icon">🛒</span>
                             <span class="btn-label">Attach Parts (from POS)</span>
                             @if (getPartsForFinding(f.partKey).length > 0) {
                               <span class="attached-count-pill">{{ getPartsForFinding(f.partKey).length }}</span>
                             }
-                          </button>
+                          </a>
 
                           <button
                             type="button"
@@ -581,69 +582,7 @@
             }
           }
 
-          <!-- POS Inventory Modal Window -->
-          @if (posModalOpen()) {
-            <div class="studio-modal-backdrop" (click)="closePosModal()">
-              <div class="pos-modal-card" (click)="$event.stopPropagation()">
-                <div class="modal-header">
-                  <div class="modal-title-wrap">
-                    <span class="modal-icon">🛒</span>
-                    <div>
-                      <h3 class="modal-title">POS Parts Inventory Catalog</h3>
-                      <p class="modal-subtitle">
-                        @if (activeBoxPartKey(); as key) {
-                          <span>Attaching workshop inventory to: <strong style="color: #0284c7; text-transform: uppercase;">{{ key }}</strong></span>
-                        } @else {
-                          <span>Pick genuine replacement parts from workshop inventory</span>
-                        }
-                      </p>
-                    </div>
-                  </div>
-                  <button type="button" class="modal-close-btn" (click)="closePosModal()">✕</button>
-                </div>
 
-                <div class="modal-search-bar">
-                  <input
-                    type="search"
-                    class="pos-search-input"
-                    placeholder="Search inventory by part name, SKU, or category..."
-                    [value]="posSearchQuery()"
-                    (input)="posSearchQuery.set($any($event.target).value)"
-                  />
-                </div>
-
-                <div class="pos-inventory-list">
-                  @for (item of filteredPosCatalog(); track item.sku) {
-                    <div class="pos-item-card">
-                      <div class="pos-item-icon">
-                        <app-animated-part-icon [part]="item.category.toLowerCase()" />
-                      </div>
-                      <div class="pos-item-details">
-                        <strong class="pos-item-name">{{ item.name }}</strong>
-                        <div class="pos-item-meta">
-                          <span class="font-mono text-xs">{{ item.sku }}</span>
-                          <span class="meta-dot">•</span>
-                          <span class="item-cat-badge">{{ item.category }}</span>
-                          <span class="meta-dot">•</span>
-                          <span class="stock-pill">{{ item.stock }} in stock</span>
-                        </div>
-                      </div>
-                      <div class="pos-item-action">
-                        <strong class="pos-price-tag">\${{ item.unitPrice }}</strong>
-                        <button type="button" class="btn-add-part-pos" (click)="addPosPart(item)">
-                          + Add to Job
-                        </button>
-                      </div>
-                    </div>
-                  }
-                </div>
-
-                <div class="modal-footer">
-                  <button type="button" class="btn-cancel" (click)="closePosModal()">Done</button>
-                </div>
-              </div>
-            </div>
-          }
 
           <!-- Customer Details Modal Window -->
           @if (customerDetailModalBox(); as modalBox) {
@@ -776,6 +715,67 @@
               <!-- Unified Vehicle Service History inside top expandable box (merged as requested) -->
               <div class="merged-top-history-wrap">
                 <app-tech-vehicle-history [workOrderId]="id()" />
+              </div>
+            </section>
+          }
+
+          <!-- ═════════════════════════════════════════════════════════════ -->
+          <!-- ── REPAIR WORK APPROVED: "START WORKING" HERO MISSION BOX  ── -->
+          <!-- ═════════════════════════════════════════════════════════════ -->
+          @if (c.status === 'APPROVED_FOR_WORK') {
+            <section class="ready-to-work-hero" aria-label="Repair Approved Mission Box">
+              <div class="ready-hero-banner">
+                <div class="ready-badge-pill">
+                  <span class="ready-pulse-dot"></span>
+                  <span>✓ REPAIR WORK APPROVED BY OPERATOR</span>
+                </div>
+                <span class="ready-meta-time">Operator approved findings &amp; quote</span>
+              </div>
+
+              <div class="ready-hero-main">
+                <div class="ready-hero-icon-wrap">
+                  <span class="ready-hero-emoji">🚀</span>
+                </div>
+                <div class="ready-hero-text">
+                  <h2 class="ready-hero-title">Repair Work Approved — Ready to Start</h2>
+                  <p class="ready-hero-desc">
+                    The operator has reviewed the inspection report and approved repair work. 
+                    Assigned repair procedures and inventory parts are ready in your bay. Click below to start working.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Quick Summary of approved tasks & parts -->
+              <div class="ready-summary-chips-row">
+                <div class="ready-sum-chip">
+                  <span class="ready-sum-num">{{ c.tasks.length }}</span>
+                  <span class="ready-sum-label">Repair Tasks</span>
+                </div>
+                @if (openParts().length > 0) {
+                  <div class="ready-sum-chip">
+                    <span class="ready-sum-num">{{ openParts().length }}</span>
+                    <span class="ready-sum-label">Parts Allocated</span>
+                  </div>
+                }
+                @if (c.inspectionReport) {
+                  <div class="ready-findings-preview">
+                    <span class="preview-tag">Findings:</span>
+                    <span class="preview-text">{{ c.inspectionReport }}</span>
+                  </div>
+                }
+              </div>
+
+              <div class="ready-hero-action-row">
+                <button
+                  type="button"
+                  class="btn-start-repair-hero"
+                  (click)="startRepairWork()"
+                  [disabled]="busy() !== null"
+                  id="btn-start-working-action"
+                >
+                  <span class="btn-hero-bolt">⚡</span>
+                  <span class="btn-hero-text">{{ busy() === 'start-work' ? 'Starting Work…' : 'Start Working' }}</span>
+                </button>
               </div>
             </section>
           }

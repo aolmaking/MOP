@@ -196,14 +196,47 @@
                   </div>
 
                   <div class="vehicle-actions">
-                    <button
-                      type="button"
-                      class="btn-intake-card"
-                      (click)="openIntakeForVehicle(v)"
-                      [id]="'btn-intake-' + v.id"
-                    >
-                      <span class="btn-icon">🔧</span> Report Issue / Book Service
-                    </button>
+                    @if (v.activeWorkOrder; as order) {
+                      @if (order.hasInspectionReport) {
+                        <button
+                          type="button"
+                          class="btn-intake-card btn-review-direct"
+                          style="background: linear-gradient(135deg, #0284c7, #0369a1); color: #ffffff; font-weight: 700;"
+                          (click)="openReportForWorkOrderId(order.id)"
+                          [id]="'btn-review-quote-' + order.id"
+                        >
+                          <span class="btn-icon">📑</span> Review Inspection Report &amp; Quote
+                        </button>
+                      } @else if (order.status === 'UNDER_INSPECTION') {
+                        <button
+                          type="button"
+                          class="btn-intake-card"
+                          style="background: rgba(2, 132, 199, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);"
+                          (click)="openReportForWorkOrderId(order.id)"
+                          [id]="'btn-inspecting-' + order.id"
+                        >
+                          <span class="btn-icon">🔍</span> Under Inspection (View Findings)
+                        </button>
+                      } @else {
+                        <button
+                          type="button"
+                          class="btn-intake-card"
+                          (click)="openIntakeForVehicle(v)"
+                          [id]="'btn-intake-' + v.id"
+                        >
+                          <span class="btn-icon">🔧</span> Report Issue / Add Service
+                        </button>
+                      }
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn-intake-card"
+                        (click)="openIntakeForVehicle(v)"
+                        [id]="'btn-intake-' + v.id"
+                      >
+                        <span class="btn-icon">🔧</span> Report Issue / Book Service
+                      </button>
+                    }
                   </div>
                 </article>
               }
@@ -239,7 +272,13 @@
           } @else {
             <div class="reports-grid">
               @for (rep of inspectionReports(); track rep.workOrderId) {
-                <article class="report-card">
+                <article
+                  class="report-card"
+                  (click)="openReportDetail(rep)"
+                  role="button"
+                  tabindex="0"
+                  title="Click to view inspection report and quote builder"
+                >
                   <div class="report-card-header">
                     <div class="report-vehicle-title">
                       <span class="report-plate">{{ rep.vehicle.plateNumber || 'NO PLATE' }}</span>
@@ -639,243 +678,400 @@
               </div>
             </div>
 
-            <!-- Section 1: Inspection Findings & Severity Assignment -->
-            <section class="quote-section">
-              <div class="quote-section-head">
-                <div class="section-title-wrap">
-                  <span class="sec-icon">🔍</span>
-                  <h3 class="sec-title">Recorded Inspection Findings</h3>
+            <!-- ═════════════════════════════════════════════════════════════ -->
+            <!-- ── TWO-COLUMN WORKSPACE: FINDINGS LEFT, SUMMARY & COST RIGHT ── -->
+            <!-- ═════════════════════════════════════════════════════════════ -->
+            <div class="report-review-layout">
+              <!-- Left Column: Findings Cards with Icons, Badges, Pills & Approval Checkboxes -->
+              <div class="report-review-main">
+                <div class="review-main-header">
+                  <div class="main-header-left">
+                    <h3 class="review-section-title">Recorded Inspection Findings</h3>
+                    <span class="review-approval-badge">
+                      ✓ {{ approvedFindingsCount() }} of {{ editableFindings().length }} Approved
+                    </span>
+                  </div>
+                  <div class="main-header-actions">
+                    <button
+                      type="button"
+                      class="btn-toggle-all"
+                      (click)="toggleAllFindings(approvedFindingsCount() !== editableFindings().length)"
+                    >
+                      {{ approvedFindingsCount() === editableFindings().length ? 'Deselect All' : 'Select All' }}
+                    </button>
+                    <button type="button" class="btn-add-finding-sm" (click)="addFinding()">
+                      + Add Finding
+                    </button>
+                  </div>
                 </div>
-                <button type="button" class="btn-sec-action" (click)="addFinding()">+ Add Finding</button>
-              </div>
 
-              @if (editableFindings().length === 0) {
-                <p class="sec-empty">No inspection findings recorded yet. Click "+ Add Finding" to add one.</p>
-              } @else {
-                <div class="findings-edit-list">
-                  @for (f of editableFindings(); track $index; let i = $index) {
-                    <div class="finding-edit-row">
-                      <div class="finding-main-inputs">
-                        <input
-                          type="text"
-                          class="input-finding-desc"
-                          placeholder="Finding description (e.g. Front Brake Pads 80% Worn)"
-                          [(ngModel)]="f.description"
-                        />
-                        <input
-                          type="text"
-                          class="input-finding-service"
-                          placeholder="Recommended Service (e.g. Brake Replacement)"
-                          [(ngModel)]="f.recommendedService"
-                        />
-                      </div>
-
-                      <!-- Severity Selector: Critical, Medium, Low -->
-                      <div class="severity-picker-group">
-                        <span class="sev-label">Severity:</span>
-                        <div class="sev-options">
-                          <button
-                            type="button"
-                            class="sev-btn sev-btn--critical"
-                            [class.sev-btn--active]="f.severity === 'CRITICAL' || f.severity === 'HIGH'"
-                            (click)="updateFindingSeverity(i, 'CRITICAL')"
-                          >
-                            Critical
-                          </button>
-                          <button
-                            type="button"
-                            class="sev-btn sev-btn--medium"
-                            [class.sev-btn--active]="f.severity === 'MEDIUM'"
-                            (click)="updateFindingSeverity(i, 'MEDIUM')"
-                          >
-                            Medium
-                          </button>
-                          <button
-                            type="button"
-                            class="sev-btn sev-btn--low"
-                            [class.sev-btn--active]="f.severity === 'LOW'"
-                            (click)="updateFindingSeverity(i, 'LOW')"
-                          >
-                            Low
-                          </button>
-                        </div>
-                      </div>
-
-                      <button type="button" class="btn-remove-item" (click)="removeFinding(i)" title="Remove finding">✕</button>
-                    </div>
-                  }
-                </div>
-              }
-            </section>
-
-            <!-- Section 2: Parts from POS & Inventory -->
-            <section class="quote-section">
-              <div class="quote-section-head">
-                <div class="section-title-wrap">
-                  <span class="sec-icon">📦</span>
-                  <h3 class="sec-title">Required Parts (POS / Inventory)</h3>
-                </div>
-                <button type="button" class="btn-sec-action btn-pos-action" (click)="openPosPicker()">
-                  🛒 + Get Part from POS
-                </button>
-              </div>
-
-              @if (editableParts().length === 0) {
-                <div class="parts-empty-state">
-                  <p>No parts added yet. Click <strong>"+ Get Part from POS"</strong> to browse inventory or counter stock.</p>
-                </div>
-              } @else {
-                <div class="quote-table-wrap">
-                  <table class="quote-table">
-                    <thead>
-                      <tr>
-                        <th>SKU</th>
-                        <th>Part Name</th>
-                        <th class="col-center">Qty</th>
-                        <th class="col-right">Unit Price</th>
-                        <th class="col-right">Subtotal</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (p of editableParts(); track p.sku + $index; let i = $index) {
-                        <tr>
-                          <td class="font-mono">{{ p.sku }}</td>
-                          <td><strong>{{ p.name }}</strong></td>
-                          <td class="col-center">
-                            <div class="qty-control">
-                              <button type="button" class="qty-btn" (click)="updatePartQty(i, p.quantity - 1)">-</button>
-                              <span class="qty-val">{{ p.quantity }}</span>
-                              <button type="button" class="qty-btn" (click)="updatePartQty(i, p.quantity + 1)">+</button>
-                            </div>
-                          </td>
-                          <td class="col-right">${{ (p.unitPrice || 0).toFixed(2) }}</td>
-                          <td class="col-right font-semibold">${{ ((p.unitPrice || 0) * (p.quantity || 1)).toFixed(2) }}</td>
-                          <td class="col-right">
-                            <button type="button" class="btn-remove-item" (click)="removePart(i)">✕</button>
-                          </td>
-                        </tr>
-                      }
-                    </tbody>
-                    <tfoot>
-                      <tr>
-                        <td colspan="4" class="font-semibold text-right">Parts Subtotal:</td>
-                        <td class="col-right font-bold">${{ quotePartsTotal().toFixed(2) }}</td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              }
-            </section>
-
-            <!-- Section 3: Services & Labor -->
-            <section class="quote-section">
-              <div class="quote-section-head">
-                <div class="section-title-wrap">
-                  <span class="sec-icon">🔧</span>
-                  <h3 class="sec-title">Services &amp; Labor</h3>
-                </div>
-                <button type="button" class="btn-sec-action" (click)="openServicePicker()">
-                  🔧 + Choose Service
-                </button>
-              </div>
-
-              @if (editableServices().length === 0) {
-                <div class="parts-empty-state">
-                  <p>No services added yet. Click <strong>"+ Choose Service"</strong> to select repair or maintenance procedures.</p>
-                </div>
-              } @else {
-                <div class="quote-table-wrap">
-                  <table class="quote-table">
-                    <thead>
-                      <tr>
-                        <th>Service / Labor Description</th>
-                        <th class="col-right">Labor Rate ($)</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (s of editableServices(); track s.serviceName + $index; let i = $index) {
-                        <tr>
-                          <td><strong>{{ s.serviceName }}</strong></td>
-                          <td class="col-right">
+                @if (editableFindings().length === 0) {
+                  <div class="empty-findings-box">
+                    <p>No inspection findings recorded. Click "+ Add Finding" to add one.</p>
+                  </div>
+                } @else {
+                  <div class="findings-cards-stack">
+                    @for (f of editableFindings(); track $index; let i = $index) {
+                      <div
+                        class="finding-item-card"
+                        [class.finding-item-card--approved]="isFindingApproved(i)"
+                      >
+                        <!-- Top Row: Checkbox, Icon, Info, Actions -->
+                        <div class="finding-card-top">
+                          <!-- Approval Checkbox -->
+                          <div class="approval-chk-wrap" title="Confirm approval for this finding">
                             <input
-                              type="number"
-                              class="input-labor-rate"
-                              min="0"
-                              [(ngModel)]="s.laborPrice"
+                              type="checkbox"
+                              class="approval-chk-input"
+                              [checked]="isFindingApproved(i)"
+                              (change)="toggleFindingApproval(i)"
+                              [id]="'chk-approve-' + i"
                             />
-                          </td>
-                          <td class="col-right">
-                            <button type="button" class="btn-remove-item" (click)="removeService(i)">✕</button>
-                          </td>
+                            <label [for]="'chk-approve-' + i" class="approval-chk-label"></label>
+                          </div>
+
+                          <!-- Category / Part Visual Icon -->
+                          <div
+                            class="finding-icon-container"
+                            [class]="'icon-type--' + getFindingIconType(f)"
+                          >
+                            @switch (getFindingIconType(f)) {
+                              @case ('oil') { <span class="cat-glyph">🛢️</span> }
+                              @case ('tire') { <span class="cat-glyph">🛞</span> }
+                              @case ('filter') { <span class="cat-glyph">♨️</span> }
+                              @case ('brake') { <span class="cat-glyph">🛑</span> }
+                              @case ('battery') { <span class="cat-glyph">🔋</span> }
+                              @case ('suspension') { <span class="cat-glyph">🪓</span> }
+                              @default { <span class="cat-glyph">🔍</span> }
+                            }
+                          </div>
+
+                          <!-- Content: Badge, Title, Description, Recommendation Pill -->
+                          <div class="finding-card-body">
+                            <div class="body-badge-row">
+                              <span
+                                class="finding-sev-pill"
+                                [class]="'sev-pill--' + (f.severity?.toLowerCase() || 'medium')"
+                              >
+                                {{ f.severity || 'MEDIUM' }}
+                              </span>
+                            </div>
+                            <h4 class="finding-title-text">{{ getFindingTitle(f) }}</h4>
+                            <p class="finding-obs-text">{{ f.description }}</p>
+
+                            <!-- Recommendation Tag matching Image 2 -->
+                            <div class="finding-rec-pill">
+                              <span class="rec-code-tag">{{ getFindingCode(f, i) }}</span>
+                              <span class="rec-text-tag">Recommended: {{ f.recommendedService || f.description }}</span>
+                            </div>
+                          </div>
+
+                          <!-- Action Buttons (Right) -->
+                          <div class="finding-card-actions">
+                            <button
+                              type="button"
+                              class="btn-card-action btn-create-srv"
+                              (click)="openServicePickerForFinding(i)"
+                              title="Add service labor procedure"
+                            >
+                              🔧 Create Service
+                            </button>
+                            <button
+                              type="button"
+                              class="btn-card-action btn-view-pts"
+                              (click)="openPosPickerForFinding(i)"
+                              title="Add part from POS inventory"
+                            >
+                              🛒 View Parts
+                            </button>
+                            <button
+                              type="button"
+                              class="btn-card-expand"
+                              (click)="toggleFindingExpanded(i)"
+                              [title]="isFindingExpanded(i) ? 'Collapse details' : 'Expand details'"
+                            >
+                              {{ isFindingExpanded(i) ? '▲' : '▼' }}
+                            </button>
+                          </div>
+                        </div>
+
+                        <!-- Expanded Section: Edit Finding, Linked Items -->
+                        @if (isFindingExpanded(i)) {
+                          <div class="finding-expanded-drawer">
+                            <div class="drawer-edit-row">
+                              <div class="drawer-input-field">
+                                <label class="drawer-label">Observation Details:</label>
+                                <input
+                                  type="text"
+                                  class="drawer-input"
+                                  [(ngModel)]="f.description"
+                                  placeholder="Describe the finding"
+                                />
+                              </div>
+                              <div class="drawer-input-field">
+                                <label class="drawer-label">Recommended Service:</label>
+                                <input
+                                  type="text"
+                                  class="drawer-input"
+                                  [(ngModel)]="f.recommendedService"
+                                  placeholder="e.g. Oil and filter change"
+                                />
+                              </div>
+                            </div>
+
+                            <div class="drawer-tools-row">
+                              <div class="sev-picker-inline">
+                                <span class="drawer-label">Severity:</span>
+                                <button
+                                  type="button"
+                                  class="sev-btn-sm sev-btn-sm--critical"
+                                  [class.active]="f.severity === 'CRITICAL' || f.severity === 'HIGH'"
+                                  (click)="updateFindingSeverity(i, 'CRITICAL')"
+                                >
+                                  Critical
+                                </button>
+                                <button
+                                  type="button"
+                                  class="sev-btn-sm sev-btn-sm--medium"
+                                  [class.active]="f.severity === 'MEDIUM'"
+                                  (click)="updateFindingSeverity(i, 'MEDIUM')"
+                                >
+                                  Medium
+                                </button>
+                                <button
+                                  type="button"
+                                  class="sev-btn-sm sev-btn-sm--low"
+                                  [class.active]="f.severity === 'LOW'"
+                                  (click)="updateFindingSeverity(i, 'LOW')"
+                                >
+                                  Low
+                                </button>
+                              </div>
+
+                              <button
+                                type="button"
+                                class="btn-drawer-remove"
+                                (click)="removeFinding(i)"
+                              >
+                                ✕ Delete Finding
+                              </button>
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+
+                <!-- Linked Parts & Services Tables below findings -->
+                @if (editableParts().length > 0) {
+                  <section class="nested-quote-table-sec">
+                    <div class="table-sec-head">
+                      <span class="table-sec-title">📦 Attached Parts ({{ editableParts().length }})</span>
+                      <button type="button" class="btn-add-nested" (click)="openPosPicker()">+ Add More Parts</button>
+                    </div>
+                    <table class="nested-mini-table">
+                      <thead>
+                        <tr>
+                          <th>SKU</th>
+                          <th>Part Name</th>
+                          <th class="col-center">Qty</th>
+                          <th class="col-right">Price</th>
+                          <th class="col-right">Subtotal</th>
+                          <th></th>
                         </tr>
-                      }
-                    </tbody>
-                    <tfoot>
-                      <tr>
-                        <td class="font-semibold text-right">Labor Subtotal:</td>
-                        <td class="col-right font-bold">${{ quoteLaborTotal().toFixed(2) }}</td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              }
-            </section>
+                      </thead>
+                      <tbody>
+                        @for (p of editableParts(); track p.sku + $index; let pi = $index) {
+                          <tr>
+                            <td class="font-mono text-xs">{{ p.sku }}</td>
+                            <td><strong>{{ p.name }}</strong></td>
+                            <td class="col-center">
+                              <div class="qty-stepper-sm">
+                                <button type="button" (click)="updatePartQty(pi, p.quantity - 1)">-</button>
+                                <span>{{ p.quantity }}</span>
+                                <button type="button" (click)="updatePartQty(pi, p.quantity + 1)">+</button>
+                              </div>
+                            </td>
+                            <td class="col-right">${{ (p.unitPrice || 0).toFixed(2) }}</td>
+                            <td class="col-right font-semibold">${{ ((p.unitPrice || 0) * (p.quantity || 1)).toFixed(2) }}</td>
+                            <td class="col-right">
+                              <button type="button" class="btn-del-sm" (click)="removePart(pi)">✕</button>
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </section>
+                }
 
-            <!-- Section 4: Itemized Pricing Total Card ("written on a very good way with the price and everything") -->
-            <section class="quote-summary-card">
-              <h3 class="summary-card-title">Itemized Work Order Quote Breakdown</h3>
-              <div class="summary-rows">
-                <div class="summary-row">
-                  <span class="s-label">Parts &amp; Materials ({{ editableParts().length }} item{{ editableParts().length === 1 ? '' : 's' }}):</span>
-                  <strong class="s-val">${{ quotePartsTotal().toFixed(2) }}</strong>
+                @if (editableServices().length > 0) {
+                  <section class="nested-quote-table-sec">
+                    <div class="table-sec-head">
+                      <span class="table-sec-title">🔧 Labor &amp; Services ({{ editableServices().length }})</span>
+                      <button type="button" class="btn-add-nested" (click)="openServicePicker()">+ Add Service</button>
+                    </div>
+                    <table class="nested-mini-table">
+                      <thead>
+                        <tr>
+                          <th>Service Description</th>
+                          <th class="col-right">Labor Rate ($)</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (s of editableServices(); track s.serviceName + $index; let si = $index) {
+                          <tr>
+                            <td><strong>{{ s.serviceName }}</strong></td>
+                            <td class="col-right">
+                              <input
+                                type="number"
+                                class="input-labor-sm"
+                                min="0"
+                                [(ngModel)]="s.laborPrice"
+                              />
+                            </td>
+                            <td class="col-right">
+                              <button type="button" class="btn-del-sm" (click)="removeService(si)">✕</button>
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </section>
+                }
+              </div>
+
+              <!-- Right Column: Summary Card & Estimated Cost Card matching Image 2 -->
+              <aside class="report-review-sidebar">
+                <!-- Summary Card -->
+                <div class="sidebar-card summary-breakdown-card">
+                  <h3 class="sidebar-card-title">Summary</h3>
+                  <div class="breakdown-list">
+                    <div class="breakdown-row">
+                      <div class="breakdown-icon-wrap icon-wrap--blue">
+                        <span class="b-icon">👤</span>
+                      </div>
+                      <span class="b-label">Total Findings</span>
+                      <strong class="b-value">{{ editableFindings().length }}</strong>
+                    </div>
+
+                    <div class="breakdown-row">
+                      <div class="breakdown-icon-wrap icon-wrap--red">
+                        <span class="b-icon">💧</span>
+                      </div>
+                      <span class="b-label">Critical</span>
+                      <strong class="b-value">{{ criticalCount() }}</strong>
+                    </div>
+
+                    <div class="breakdown-row">
+                      <div class="breakdown-icon-wrap icon-wrap--orange">
+                        <span class="b-icon">⚠️</span>
+                      </div>
+                      <span class="b-label">High</span>
+                      <strong class="b-value">{{ highCount() }}</strong>
+                    </div>
+
+                    <div class="breakdown-row">
+                      <div class="breakdown-icon-wrap icon-wrap--amber">
+                        <span class="b-icon">🔥</span>
+                      </div>
+                      <span class="b-label">Medium</span>
+                      <strong class="b-value">{{ mediumCount() }}</strong>
+                    </div>
+
+                    <div class="breakdown-row">
+                      <div class="breakdown-icon-wrap icon-wrap--green">
+                        <span class="b-icon">🌱</span>
+                      </div>
+                      <span class="b-label">Low</span>
+                      <strong class="b-value">{{ lowCount() }}</strong>
+                    </div>
+                  </div>
                 </div>
-                <div class="summary-row">
-                  <span class="s-label">Labor &amp; Service Charges ({{ editableServices().length }} service{{ editableServices().length === 1 ? '' : 's' }}):</span>
-                  <strong class="s-val">${{ quoteLaborTotal().toFixed(2) }}</strong>
+
+                <!-- Estimated Cost Card -->
+                <div class="sidebar-card estimated-cost-card">
+                  <h3 class="sidebar-card-title">Estimated Cost</h3>
+                  <div class="cost-rows-stack">
+                    <div class="cost-item-row">
+                      <span class="cost-item-label">
+                        <span class="cost-icon">🚗</span> Parts
+                      </span>
+                      <strong class="cost-item-val">$ {{ quotePartsTotal().toFixed(2) }}</strong>
+                    </div>
+
+                    <div class="cost-item-row">
+                      <span class="cost-item-label">
+                        <span class="cost-icon">🪙</span> Labor
+                      </span>
+                      <strong class="cost-item-val">$ {{ quoteLaborTotal().toFixed(2) }}</strong>
+                    </div>
+
+                    <div class="cost-divider-line"></div>
+
+                    <div class="cost-item-row cost-item-row--total">
+                      <span class="cost-total-tag">Total <span class="cost-est-note">(est.)</span></span>
+                      <strong class="cost-grand-val">$ {{ quoteGrandTotal().toFixed(2) }}</strong>
+                    </div>
+                  </div>
                 </div>
-                <div class="summary-row summary-grand-total">
-                  <span class="s-grand-label">Grand Total (Parts + Labor):</span>
-                  <strong class="s-grand-val">${{ quoteGrandTotal().toFixed(2) }}</strong>
+
+                <!-- Operator Notes Box -->
+                <div class="sidebar-card notes-card">
+                  <label class="notes-header-label" for="report-quote-notes">Operator Notes:</label>
+                  <textarea
+                    id="report-quote-notes"
+                    class="notes-textarea"
+                    rows="2"
+                    placeholder="Notes or instructions for technician…"
+                    [(ngModel)]="quoteNote"
+                  ></textarea>
+                </div>
+              </aside>
+            </div>
+
+            <!-- ═════════════════════════════════════════════════════════════ -->
+            <!-- ── BOTTOM BANNER: INSPECTION COMPLETE & APPROVE DONE ─────── -->
+            <!-- ═════════════════════════════════════════════════════════════ -->
+            <div class="inspection-complete-banner">
+              <div class="banner-content-left">
+                <div class="banner-icon-circle">
+                  <span class="banner-plane-icon">✈️</span>
+                </div>
+                <div class="banner-text-block">
+                  <h4 class="banner-heading">Inspection Review Complete?</h4>
+                  <p class="banner-subtext">
+                    Review the technician findings and select the services and parts approved for repair.
+                  </p>
                 </div>
               </div>
 
-              <div class="quote-notes-box">
-                <label class="notes-label" for="quote-customer-notes">Operator &amp; Customer Notes:</label>
-                <textarea
-                  id="quote-customer-notes"
-                  class="quote-textarea"
-                  rows="2"
-                  placeholder="Additional customer comments, warranty terms, or repair instructions…"
-                  [(ngModel)]="quoteNote"
-                ></textarea>
+              <div class="banner-actions-right">
+                <button type="button" class="btn-banner-cancel" (click)="closeReportModal()">
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn-banner-save"
+                  (click)="saveQuote()"
+                  [disabled]="isSavingQuote() || isDispatchingRepair()"
+                >
+                  {{ isSavingQuote() ? 'Saving…' : '💾 Save Draft' }}
+                </button>
+                <button
+                  type="button"
+                  class="btn-banner-send-done"
+                  (click)="dispatchToRepair()"
+                  [disabled]="isSavingQuote() || isDispatchingRepair() || approvedFindingsCount() === 0"
+                  id="btn-approve-done-action"
+                >
+                  <span class="btn-plane-glyph">✓</span>
+                  <span>{{ isDispatchingRepair() ? 'Approving & Dispatching…' : '✓ Approve Selected & Dispatch Repair' }}</span>
+                </button>
               </div>
-            </section>
+            </div>
           </div>
-
-          <footer class="modal-footer quote-modal-footer">
-            <button type="button" class="btn-modal-cancel" (click)="closeReportModal()">Cancel</button>
-            <button
-              type="button"
-              class="btn-save-quote"
-              (click)="saveQuote()"
-              [disabled]="isSavingQuote() || isDispatchingRepair()"
-            >
-              {{ isSavingQuote() ? 'Saving…' : '💾 Save Quote' }}
-            </button>
-            <button
-              type="button"
-              class="btn-dispatch-repair"
-              (click)="dispatchToRepair()"
-              [disabled]="isSavingQuote() || isDispatchingRepair()"
-              id="btn-approve-dispatch-repair"
-            >
-              {{ isDispatchingRepair() ? 'Dispatching…' : '🚀 Approve & Dispatch to Repair' }}
-            </button>
-          </footer>
         }
       </div>
     </div>

@@ -75,7 +75,7 @@ export class InspectionRepository {
    * Saves the Inspection Aggregate to the database with Optimistic Concurrency Control (OCC).
    * If state is SUBMITTED, projects actionable findings into model Fault idempotently.
    */
-  async save(aggregate: InspectionAggregate): Promise<void> {
+  async save(aggregate: InspectionAggregate, extraFields?: Record<string, any>): Promise<void> {
     const existing = await this.prisma.inspection.findFirst({
       where: { id: aggregate.id },
     });
@@ -96,7 +96,12 @@ export class InspectionRepository {
     // Bump aggregate version on save
     aggregate.bumpAggregateVersion();
 
-    const doc = aggregate.toDocument();
+    const existingFields = (existing?.fields as Record<string, any>) || {};
+    const doc = {
+      ...existingFields,
+      ...aggregate.toDocument(),
+      ...(extraFields || {}),
+    };
     const completedAt = aggregate.completedAt ? new Date(aggregate.completedAt) : null;
 
     // 1. Upsert aggregate document into Inspection table
