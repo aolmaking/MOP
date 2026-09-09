@@ -845,6 +845,84 @@
                 </section>
               }
 
+              <!--
+                SOMETHING'S WRONG.
+
+                Restored. The redesign dropped every one of these controls
+                while leaving the methods behind them on the component, so a
+                technician could not ask for a part, record a customer-supplied
+                one, log a fault, or say they were blocked. `blocker.report` is
+                a permission the product grants and the `no_open_blocker`
+                delivery gate exists to read what it produces -- with no way to
+                report one, the gate could never hold anything back.
+              -->
+              <section class="tools exception-tools">
+                <h2 class="tools-title">Something's wrong</h2>
+
+                <div class="tool-row">
+                  <!-- A page, not a panel: asking for parts is browsing a
+                       catalogue and building a basket, which does not fit
+                       beside a fault form on a phone. -->
+                  <a class="tap" [routerLink]="['/tech', 'card', id(), 'parts']">Need parts</a>
+                  <button class="tap" type="button" (click)="panel.set(panel() === 'blocker' ? 'none' : 'blocker')">
+                    I'm blocked
+                  </button>
+                </div>
+
+                @if (panel() === 'blocker') {
+                  <!-- Reasons, not a text box. A technician with one free hand
+                       will not type, and the reason enum is what routes this to
+                       the right person. -->
+                  <ul class="reasons">
+                    @for (reason of reasons; track reason.key) {
+                      <li>
+                        <button class="tap tap--wide" type="button" (click)="reportBlocker(reason.key)">
+                          {{ reason.label }}
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                }
+              </section>
+
+              <!--
+                FINISH.
+
+                The gate result BEFORE the press, never as a failure after it.
+                This was dropped too, and `finish()` was left on the component
+                with no caller -- so a technician had no way to finish a job,
+                and it sat in IN_PROGRESS forever. The server does not offer
+                FINISH as a journey action for this audience by design, which
+                is exactly why the card has to own this control.
+              -->
+              @if (c.finish.available) {
+                <section class="tools finish-tools">
+                  <h2 class="tools-title">Finish</h2>
+
+                  <ul class="checks">
+                    @for (condition of c.finish.conditions; track condition.text) {
+                      <li class="check" [class.check--bad]="!condition.satisfied">
+                        <span class="check-mark">{{ condition.satisfied ? '✓' : '✗' }}</span>
+                        <span class="check-text">{{ condition.text }}</span>
+                      </li>
+                    }
+                  </ul>
+
+                  @if (c.finish.passed) {
+                    <button
+                      class="tap tap--primary tap--wide"
+                      type="button"
+                      [disabled]="busy() !== null"
+                      (click)="finish()"
+                    >
+                      {{ busy() === 'finish' ? '…' : 'Ready to finish' }}
+                    </button>
+                  } @else {
+                    <p class="checks-note">Clear the items above before this job can finish.</p>
+                  }
+                </section>
+              }
+
               <!-- Primary Job Action (e.g. Start Work or Finish) -->
               @if (primaryJobAction(); as action) {
                 <section class="tools primary-action-card">
@@ -902,6 +980,29 @@
                             {{ busy() === 'start-' + task.id ? '…' : 'Start' }}
                           </button>
                         } @else if (task.status === 'IN_PROGRESS') {
+                          <!--
+                            Time entry, when the workshop asks for it.
+                            `canComplete` refuses a task with no minutes under
+                            TIME_TRACKING: REQUIRED, and this field was dropped
+                            in the redesign while that rule stayed. So Done was
+                            permanently disabled and a technician in a
+                            time-tracking workshop could not finish a task at
+                            all -- a configuration option the product sells,
+                            switched on, bricking the page that uses it.
+                          -->
+                          @if (c.timeTracking !== 'OFF') {
+                            <label class="time-entry">
+                              <span>Minutes</span>
+                              <input
+                                type="number"
+                                inputmode="numeric"
+                                min="0"
+                                step="1"
+                                [value]="taskMinutes()[task.id] ?? ''"
+                                (input)="setTaskMinutes(task.id, $any($event.target).value)"
+                              />
+                            </label>
+                          }
                           <button
                             class="task-done-btn"
                             type="button"
