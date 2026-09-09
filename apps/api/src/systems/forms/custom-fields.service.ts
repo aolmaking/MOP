@@ -29,6 +29,10 @@ export interface FormFieldsView {
   readonly label: string;
   readonly coreFields: readonly string[];
   readonly customFields: readonly CustomFieldView[];
+  /** False when this form has nowhere to keep an answer -- see the registry. */
+  readonly acceptsCustomFields: boolean;
+  /** Why not, in the owner's words. Absent when it does. */
+  readonly captureNote?: string;
 }
 
 export interface AddFieldInput {
@@ -78,10 +82,27 @@ export class CustomFieldsService {
       label: def.label,
       coreFields: def.coreFields,
       customFields: rows.map((r) => this.toView(r)),
+      acceptsCustomFields: def.captureSite !== null,
+      ...(def.captureNote ? { captureNote: def.captureNote } : {}),
     };
   }
 
   async addField(tenantId: string, formKey: FormKey, input: AddFieldInput, actor: FormsActor): Promise<CustomFieldView> {
+    // Refused where the answer would have nowhere to go.
+    //
+    // Eight of the nine forms write to models with no bucket for an extra
+    // value, so a field added to them could be defined, listed, archived and
+    // restored -- and never filled in by anyone. Accepting it and saying
+    // nothing is how an owner discovers, months later, that the field they
+    // built their intake around was never on any screen.
+    const form = FORM_REGISTRY[formKey];
+    if (form.captureSite === null) {
+      throw new BadRequestException({
+        code: "form_cannot_capture",
+        message: form.captureNote ?? "This form cannot hold extra fields yet.",
+      });
+    }
+
     const label = input.label.trim();
     if (!label) throw new BadRequestException({ code: "label_required", message: "A field needs a name." });
     if (!CUSTOM_FIELD_TYPES.includes(input.fieldType)) {

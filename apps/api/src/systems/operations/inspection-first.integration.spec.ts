@@ -28,6 +28,7 @@ import { GateEvaluatorService } from "./gate-evaluator.service";
 import { OperationEventsService } from "./operation-events.service";
 import { CustomerSafeProjectionService } from "./customer-safe-projection.service";
 import { TechnicianWorkService } from "./technician-work.service";
+import { CustomFieldsService } from "../forms/custom-fields.service";
 import { PartRequestService } from "../inventory/part-request.service";
 import { StockService } from "../inventory/stock.service";
 import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
@@ -48,7 +49,7 @@ const capabilities = new CapabilityResolutionService(asService);
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
 const gates = new GateEvaluatorService(asService, policiesForTest);
 const lifecycle = new WorkOrderLifecycleService(asService, capabilities, events, gates, policiesForTest, new StockService(asService));
-const techWork = new TechnicianWorkService(asService, events, lifecycle, policiesForTest);
+const techWork = new TechnicianWorkService(asService, events, lifecycle, policiesForTest, new CustomFieldsService(asService, new AuditService(asService)));
 const stock = new StockService(asService);
 const partRequests = new PartRequestService(asService, capabilities, stock, events, policiesForTest, lifecycle);
 

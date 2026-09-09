@@ -492,6 +492,71 @@
                       </section>
                     }
 
+                    <!--
+                      The workshop's own questions on this form.
+                      Forms & Fields could define a field, list it, archive it
+                      and restore it, and no screen in the product ever asked
+                      one -- so a required field was a requirement nobody could
+                      meet. These are the definitions for THIS vehicle's
+                      category; the server validates the answers against them
+                      again on submit, because a disabled input is not a rule.
+                    -->
+                    @if (customFields().length > 0) {
+                      <section class="custom-fields" aria-label="Workshop questions">
+                        <h4 class="custom-fields-title">This workshop also asks</h4>
+
+                        @for (field of customFields(); track field.fieldKey) {
+                          <label class="custom-field">
+                            <span class="custom-field-label">
+                              {{ field.label }}
+                              @if (field.required) {
+                                <span class="custom-field-required" aria-hidden="true">*</span>
+                              }
+                            </span>
+
+                            @switch (field.fieldType) {
+                              @case ('SELECT') {
+                                <select
+                                  class="custom-field-input"
+                                  [value]="$any(customFieldValues()[field.fieldKey]) ?? ''"
+                                  (change)="setCustomField(field.fieldKey, $any($event.target).value)"
+                                >
+                                  <option value="">—</option>
+                                  @for (option of field.options ?? []; track option.key) {
+                                    <option [value]="option.key">{{ option.label }}</option>
+                                  }
+                                </select>
+                              }
+                              @case ('CHECKBOX') {
+                                <input
+                                  class="custom-field-check"
+                                  type="checkbox"
+                                  [checked]="$any(customFieldValues()[field.fieldKey]) === true"
+                                  (change)="setCustomField(field.fieldKey, $any($event.target).checked)"
+                                />
+                              }
+                              @case ('TEXTAREA') {
+                                <textarea
+                                  class="custom-field-input"
+                                  rows="3"
+                                  [value]="$any(customFieldValues()[field.fieldKey]) ?? ''"
+                                  (input)="setCustomField(field.fieldKey, $any($event.target).value)"
+                                ></textarea>
+                              }
+                              @default {
+                                <input
+                                  class="custom-field-input"
+                                  [type]="field.fieldType === 'NUMBER' ? 'number' : field.fieldType === 'DATE' ? 'date' : 'text'"
+                                  [value]="$any(customFieldValues()[field.fieldKey]) ?? ''"
+                                  (input)="setCustomField(field.fieldKey, $any($event.target).value)"
+                                />
+                              }
+                            }
+                          </label>
+                        }
+                      </section>
+                    }
+
                     <!-- + Add Finding Interactive Row -->
                     @if (!isAddFindingOpen()) {
                       <button type="button" class="btn-add-finding-row" (click)="openAddFinding()">
@@ -1294,3 +1359,18 @@
   </div>
 }
 
+<!--
+  The message to send the customer, in the workshop's own words.
+
+  MOP does not send it: there is no messaging sender, and the decision link
+  goes out by hand. What Messages & Templates could never do before is reach
+  the person doing the sending -- an owner could write and version a message
+  and nothing anywhere would ever say it.
+-->
+@if (decisionMessage(); as message) {
+  <div class="decision-message" role="status">
+    <p class="decision-message-title">Send this to the customer</p>
+    <p class="decision-message-body">{{ message }}</p>
+    <button type="button" class="decision-message-close" (click)="dismissDecisionMessage()">Done</button>
+  </div>
+}

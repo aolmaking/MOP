@@ -5,6 +5,7 @@ import { PrismaService } from "../../runtime/database/prisma.service";
 import { OperationEventsService } from "./operation-events.service";
 import { WorkOrderLifecycleService, type LifecycleActor } from "./work-order-lifecycle.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
+import { CustomFieldsService } from "../forms/custom-fields.service";
 
 export interface RecordInspectionInput {
   readonly workOrderId: string;
@@ -56,6 +57,7 @@ export class TechnicianWorkService {
     private readonly events: OperationEventsService,
     private readonly lifecycle: WorkOrderLifecycleService,
     private readonly policies: PolicyResolutionService,
+    private readonly customFields: CustomFieldsService,
   ) {}
 
   /**
@@ -701,6 +703,27 @@ export class TechnicianWorkService {
     // unnecessarily.
     const approvalScope = await this.policies.resolveValue(workOrder.tenantId, "APPROVAL_REQUIRED_SCOPE");
 
+    // The workshop's own extra questions on this form, checked against the
+    // definitions rather than trusted from the page.
+    //
+    // Forms & Fields could define a field, list it, archive it and restore it,
+    // and nothing in the product ever asked it or stored an answer -- the
+    // validation link existed and had no caller. Required-ness, the option
+    // list on a SELECT and the category scope are all decided here, so a
+    // hand-built request cannot post a value the owner never offered.
+    const asset = await this.prisma.workOrder.findFirst({
+      where: { id: input.workOrderId, tenantId },
+      select: { asset: { select: { category: true } } },
+    });
+    const submittedCustom = (input.fields as { customFields?: Record<string, unknown> }).customFields ?? {};
+    const customFieldValues = await this.customFields.validateValues(
+      tenantId,
+      input.type === "QUICK" ? "QUICK_INSPECTION" : "FULL_INSPECTION",
+      asset?.asset.category ?? null,
+      submittedCustom,
+    );
+    const fields = { ...input.fields, customFields: customFieldValues };
+
     const completedAt = new Date();
 
     const inspection = await this.prisma.$transaction(async (tx) => {
@@ -724,7 +747,7 @@ export class TechnicianWorkService {
             technicianId: input.technicianId,
             type: input.type,
             odometerOrHours: input.odometerOrHours,
-            fields: input.fields as Prisma.InputJsonValue,
+            fields: fields as Prisma.InputJsonValue,
             note: input.note,
           },
         });
@@ -740,7 +763,7 @@ export class TechnicianWorkService {
             technicianId: input.technicianId,
             type: input.type,
             odometerOrHours: input.odometerOrHours,
-            fields: input.fields as Prisma.InputJsonValue,
+            fields: fields as Prisma.InputJsonValue,
             note: input.note,
             startedAt: completedAt,
           },

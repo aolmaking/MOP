@@ -4376,3 +4376,122 @@
 .rec-decided-why {
   font-style: italic;
 }
+
+/* --- the workshop's own questions ----------------------------------- */
+
+/*
+ * On the findings sheet, above the technician's own additions, for the same
+ * reason the recommendation panel sits there: the form asks first, the
+ * technician adds after. These are the fields Forms & Fields could define and
+ * no screen ever rendered.
+ */
+.custom-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  margin-block-end: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.custom-fields-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.custom-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.custom-field-label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--text-muted);
+}
+
+/* Not colour alone: a required marker has to survive a bright forecourt. */
+.custom-field-required {
+  margin-inline-start: var(--space-1);
+  font-weight: 700;
+}
+
+.custom-field-input {
+  min-block-size: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-family: inherit;
+}
+
+.custom-field-input:focus-visible {
+  outline: 2px solid var(--brand-text);
+  outline-offset: 2px;
+}
+
+/* A tick box a gloved hand can actually hit. */
+.custom-field-check {
+  inline-size: var(--tap);
+  min-block-size: var(--tap);
+  align-self: start;
+}
+
+/* --- the message to send by hand ------------------------------------ */
+
+/*
+ * Pinned to the foot of the screen because it is a hand-off: the technician
+ * reads it out or copies it into WhatsApp, then dismisses it. It stays until
+ * they say they are done rather than vanishing on a timer -- a message that
+ * disappears while somebody is retyping it is worse than no message.
+ */
+.decision-message {
+  position: fixed;
+  inset-block-end: var(--space-4);
+  inset-inline: var(--space-4);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--brand-text);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raised, 0 8px 24px rgb(0 0 0 / 18%));
+}
+
+.decision-message-title {
+  margin: 0;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--text-muted);
+}
+
+/* Selectable and wrapping: it exists to be copied. */
+.decision-message-body {
+  margin: 0;
+  font-size: var(--text-sm);
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+
+.decision-message-close {
+  align-self: end;
+  min-block-size: var(--tap);
+  padding-inline: var(--space-4);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}

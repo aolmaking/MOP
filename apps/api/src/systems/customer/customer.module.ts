@@ -11,6 +11,8 @@ import { CustomerPortalController } from "./customer-portal.controller";
 import { CustomerPortalService } from "./customer-portal.service";
 import { RegisterController } from "./register.controller";
 import { RegisterCustomerService } from "./register.service";
+// The workshop's own wording for the decision link it asks staff to send.
+import { MessagesModule } from "./messages/messages.module";
 
 /**
  * The customer-facing surface.
@@ -26,7 +28,15 @@ import { RegisterCustomerService } from "./register.service";
   // OperationsModule: the portal draws the same workflow strip the
   // technician and the manager see, generated from one projection.
   // InventoryModule: supplies CatalogBrowseService and StockService for customer POS parts shopping.
-  imports: [DatabaseModule, OperationEventsModule, AuthModule, PoliciesModule, OperationsModule, InventoryModule],
+  imports: [
+    DatabaseModule,
+    OperationEventsModule,
+    AuthModule,
+    PoliciesModule,
+    OperationsModule,
+    InventoryModule,
+    MessagesModule,
+  ],
   controllers: [CustomerDecisionController, CustomerPortalController, RegisterController],
   providers: [CustomerDecisionService, CustomerPortalService, RegisterCustomerService],
   // CustomerDecisionService is needed by BranchManagerModule's staff-facing

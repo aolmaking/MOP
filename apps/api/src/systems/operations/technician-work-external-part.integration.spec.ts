@@ -2,6 +2,7 @@ process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { TechnicianWorkService } from "./technician-work.service";
+import { CustomFieldsService } from "../forms/custom-fields.service";
 import { WorkOrderLifecycleService } from "./work-order-lifecycle.service";
 import { StockService } from "../inventory/stock.service";
 import { OperationEventsService } from "./operation-events.service";
@@ -20,7 +21,7 @@ const policies = new PolicyResolutionService(asService, audit, caps);
 const events = new OperationEventsService(asService, audit, new CustomerSafeProjectionService());
 const gates = new GateEvaluatorService(asService, policies);
 const lifecycle = new WorkOrderLifecycleService(asService, caps, events, gates, policies, new StockService(asService));
-const work = new TechnicianWorkService(asService, events, lifecycle, policies);
+const work = new TechnicianWorkService(asService, events, lifecycle, policies, new CustomFieldsService(asService, new AuditService(asService)));
 
 describe("W3-A3-010 external-part billing", () => {
   it("CUSTOMER_SUPPLIED creates line with 0 price, not warranted, no stock movement", async () => {

@@ -29,6 +29,7 @@ import { GateEvaluatorService } from "./gate-evaluator.service";
 import { OperationEventsService } from "./operation-events.service";
 import { CustomerSafeProjectionService } from "./customer-safe-projection.service";
 import { TechnicianWorkService } from "./technician-work.service";
+import { CustomFieldsService } from "../forms/custom-fields.service";
 import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 import { AuditService } from "../../audit/audit.service";
 import type { PrismaService } from "../../runtime/database/prisma.service";
@@ -46,7 +47,7 @@ const capabilities = new CapabilityResolutionService(asService);
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
 const gates = new GateEvaluatorService(asService, policiesForTest);
 const lifecycle = new WorkOrderLifecycleService(asService, capabilities, events, gates, policiesForTest, new StockService(asService));
-const techWork = new TechnicianWorkService(asService, events, lifecycle, policiesForTest);
+const techWork = new TechnicianWorkService(asService, events, lifecycle, policiesForTest, new CustomFieldsService(asService, new AuditService(asService)));
 
 const ACTOR = { accountId: "tech-t01", displayName: "Technician T01", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `t01-${Date.now()}`;

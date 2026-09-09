@@ -232,10 +232,12 @@ export class TechnicianController {
         technicianId: staffUserId,
         type: dto.type,
         odometerOrHours: dto.odometerOrHours,
-        // The category-specific form is Phase 15/16 work; a note is what
-        // a technician can honestly give today, and an empty object is
-        // truthful about that rather than inventing fields.
-        fields: {},
+        // The workshop's own extra questions, checked against their
+        // definitions inside the service. This used to be a hardcoded `{}`
+        // with a comment saying the category-specific form was future work --
+        // which it no longer is: the definitions, the validation and the
+        // technician's card all exist, and this was the last link missing.
+        fields: { customFields: dto.customFields ?? {} },
         note: dto.note,
         actualMinutes: dto.actualMinutes,
       },

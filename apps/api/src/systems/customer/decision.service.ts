@@ -6,6 +6,7 @@ import { PrismaService } from "../../runtime/database/prisma.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 import { WorkOrderLifecycleService, type LifecycleActor } from "../operations/work-order-lifecycle.service";
+import { MessageTemplateService } from "./messages/message-template.service";
 
 /** What the public page is allowed to know. Nothing internal appears here. */
 export interface PublicDecisionItem {
@@ -168,6 +169,7 @@ export class CustomerDecisionService {
     private readonly events: OperationEventsService,
     private readonly policies: PolicyResolutionService,
     private readonly lifecycle: WorkOrderLifecycleService,
+    private readonly templates: MessageTemplateService,
   ) {}
 
   /**
@@ -368,7 +370,7 @@ export class CustomerDecisionService {
       readonly serviceKey?: string;
     },
     actor: StaffActor,
-  ): Promise<{ readonly requestId: string; readonly secureToken: string }> {
+  ): Promise<{ readonly requestId: string; readonly secureToken: string; readonly message: string }> {
     const workOrder = await this.prisma.workOrder.findFirst({
       where: { id: workOrderId, tenantId },
       select: { id: true, customerId: true, status: true },
@@ -466,7 +468,49 @@ export class CustomerDecisionService {
       actorType: "TENANT_STAFF",
     });
 
-    return created;
+    // The words to send, from the workshop's own published template.
+    //
+    // Messages & Templates let an owner write and version a message, and
+    // nothing ever read one: `currentBody` -- documented as "the exact body
+    // any real sender must read" -- had no caller anywhere in the product. MOP
+    // still does not send anything itself; the link is delivered by hand. What
+    // changes here is that the person delivering it is handed the workshop's
+    // own wording instead of composing it themselves, so an owner who edits
+    // the template changes what customers actually receive.
+    const message = await this.decisionMessage(tenantId, workOrderId, created.secureToken);
+
+    return { ...created, message };
+  }
+
+  /**
+   * The WhatsApp/SMS body for one decision link, rendered from the published
+   * template or the platform default if this workshop has never published one.
+   *
+   * Rendering failures fall back to the raw body rather than throwing: the ask
+   * itself is already durable by the time this runs, and losing the request
+   * because a template variable was misspelled would be the tail wagging the
+   * dog. The unrendered body is visibly wrong, which is the right failure --
+   * the staff member reads it before sending.
+   */
+  private async decisionMessage(tenantId: string, workOrderId: string, secureToken: string): Promise<string> {
+    const [{ body }, context] = await Promise.all([
+      this.templates.currentBody(tenantId, "WHATSAPP_DECISION"),
+      this.prisma.workOrder.findFirst({
+        where: { id: workOrderId, tenantId },
+        select: {
+          id: true,
+          customer: { select: { fullName: true } },
+          branch: { select: { name: true } },
+        },
+      }),
+    ]);
+
+    return this.templates.preview("WHATSAPP_DECISION", body, {
+      customer_name: context?.customer.fullName ?? "there",
+      branch_name: context?.branch?.name ?? "the workshop",
+      work_order_id: workOrderId,
+      decision_link: `/decide/${secureToken}`,
+    });
   }
 
   /**

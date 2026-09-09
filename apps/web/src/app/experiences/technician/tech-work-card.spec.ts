@@ -63,7 +63,7 @@ async function render(
     returnPart: vi.fn(() => of({})),
     answerClarification: vi.fn(() => of({})),
     addExternalPart: vi.fn(() => of({})),
-    raiseDecision: vi.fn(() => of({ requestId: 'r1', secureToken: 't1' })),
+    raiseDecision: vi.fn(() => of({ requestId: 'r1', secureToken: 't1', message: 'Hi Mona, Main Branch needs your approval. Answer here: /decide/t1' })),
     vehicleHistory: vi.fn(() => of(options.history ?? brief())),
     // The card loads the inspection aggregate as well as the card itself.
     // Absent from this mock, the call threw synchronously rather than

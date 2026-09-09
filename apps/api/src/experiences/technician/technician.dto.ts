@@ -6,6 +6,7 @@ import {
   IsEnum,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   Length,
@@ -61,6 +62,19 @@ export class RecordInspectionDto {
   @IsInt()
   @Min(0)
   actualMinutes?: number;
+
+  /**
+   * Answers to the workshop's own questions on this form.
+   *
+   * Validated against `CustomFieldDefinition` on the way in -- required-ness,
+   * the option list on a SELECT and the category scope are all the server's
+   * answer, not the page's. Typed loosely here because what a field accepts is
+   * the owner's configuration rather than something a DTO can enumerate; the
+   * shape check that matters happens against the definitions.
+   */
+  @IsOptional()
+  @IsObject()
+  customFields?: Record<string, unknown>;
 }
 
 export class RequestPartDto {

@@ -82,7 +82,7 @@ async function render(result: WorkCard, apiOverrides: Record<string, unknown> = 
     returnPart: vi.fn(() => of({})),
     answerClarification: vi.fn(() => of({})),
     addExternalPart: vi.fn(() => of({})),
-    raiseDecision: vi.fn(() => of({ requestId: 'r1', secureToken: 't1' })),
+    raiseDecision: vi.fn(() => of({ requestId: 'r1', secureToken: 't1', message: 'Hi Mona, Main Branch needs your approval. Answer here: /decide/t1' })),
     vehicleHistory: vi.fn(() => of(emptyHistory)),
     getInspectionAggregate: vi.fn(() => of(null)),
     submitInspectionReport: vi.fn(() => of({ success: true, workOrderId: 'wo1', submittedAt: '2026-09-09T10:00:00.000Z' })),
@@ -479,5 +479,73 @@ describe('what the checks recommended', () => {
     const { element } = await onFindings({ inspection: null });
 
     expect(element.querySelector('.rec-panel')).toBeNull();
+  });
+});
+
+/**
+ * REC-023: the workshop's own questions, finally on a screen.
+ *
+ * An owner could define a custom field, list it, archive it and restore it,
+ * and nothing in the product ever asked one -- so a *required* field was a
+ * requirement nobody could meet. The definitions arrive on the work card and
+ * the answers go back with the inspection.
+ */
+describe('the questions this workshop also asks', () => {
+  const field = (overrides: Record<string, unknown> = {}) => ({
+    fieldKey: 'coolant_colour',
+    label: 'Coolant Colour',
+    fieldType: 'TEXT' as const,
+    options: null,
+    required: false,
+    ...overrides,
+  });
+
+  async function onFindings(fields: unknown[], values: Record<string, unknown> = {}) {
+    const rendered = await render(
+      inspecting({ customInspectionFields: fields, customInspectionValues: values } as never),
+    );
+    press(rendered.element, 'Continue to Findings')!.click();
+    rendered.fixture.detectChanges();
+    return rendered;
+  }
+
+  it('asks the question the owner defined', async () => {
+    const { element } = await onFindings([field()]);
+
+    const panel = element.querySelector('.custom-fields');
+    expect(panel).not.toBeNull();
+    expect(panel!.textContent).toContain('Coolant Colour');
+  });
+
+  it('shows nothing at all when the workshop asks nothing extra', async () => {
+    const { element } = await onFindings([]);
+
+    expect(element.querySelector('.custom-fields')).toBeNull();
+  });
+
+  it('offers the options the owner listed, and nothing else', async () => {
+    const { element } = await onFindings([
+      field({
+        fieldKey: 'coolant_type',
+        label: 'Coolant Type',
+        fieldType: 'SELECT',
+        options: [
+          { key: 'long_life', label: 'Long life' },
+          { key: 'standard', label: 'Standard' },
+        ],
+      }),
+    ]);
+
+    const options = [...element.querySelectorAll('.custom-field-input option')].map((o) => o.textContent?.trim());
+    // The empty choice plus the two the owner offered -- a select that starts
+    // pre-filled would record an answer nobody gave.
+    expect(options).toEqual(['—', 'Long life', 'Standard']);
+  });
+
+  it('shows the answer already captured rather than a blank form', async () => {
+    // Re-opening a part-finished inspection has to show what was written.
+    const { element } = await onFindings([field()], { coolant_colour: 'Pink' });
+
+    expect((element.querySelector('.custom-field-input') as HTMLInputElement).value).toBe('Pink');
   });
 });

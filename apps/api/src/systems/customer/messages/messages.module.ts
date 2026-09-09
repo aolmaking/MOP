@@ -10,5 +10,8 @@ import { MessageTemplateService } from "./message-template.service";
   imports: [DatabaseModule, AuthModule, AccessModule, AuditModule],
   controllers: [MessagesController],
   providers: [MessageTemplateService],
+  // The templates exist to be sent. Until a sender exists, the workshop sends
+  // them by hand -- which still means somebody has to be handed the words.
+  exports: [MessageTemplateService],
 })
 export class MessagesModule {}

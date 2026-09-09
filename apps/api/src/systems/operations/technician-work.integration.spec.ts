@@ -11,6 +11,7 @@ process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { TechnicianWorkService } from "./technician-work.service";
+import { CustomFieldsService } from "../forms/custom-fields.service";
 import { IntakeService } from "./intake.service";
 import { WorkOrderLifecycleService } from "./work-order-lifecycle.service";
 import { StockService } from "../inventory/stock.service";
@@ -52,7 +53,7 @@ const lifecycle = new WorkOrderLifecycleService(
   new StockService(asService),
 );
 const intake = new IntakeService(asService, events, lifecycle);
-const work = new TechnicianWorkService(asService, events, lifecycle, policiesForTest);
+const work = new TechnicianWorkService(asService, events, lifecycle, policiesForTest, new CustomFieldsService(asService, new AuditService(asService)));
 const priceCatalog = new PriceCatalogService(asService, new AuditService(asService));
 const finance = new FinanceService(
   asService,

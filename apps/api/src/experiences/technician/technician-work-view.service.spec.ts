@@ -29,6 +29,9 @@ function build(options: {
   faults?: unknown[];
 }) {
   const prisma = {
+  // The workshop's own questions on the inspection form. A mock without this
+  // is a mock of a database that cannot exist.
+  customFieldDefinition: { findMany: jest.fn(async () => []) },
     workOrder: { findFirst: jest.fn().mockResolvedValue(workOrder(options.order)) },
     partRequest: { findMany: jest.fn().mockResolvedValue(options.parts ?? []) },
     // Mission 1 reads both: the inspection for its state, the faults for

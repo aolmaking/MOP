@@ -207,6 +207,14 @@ function subsystemsForCategory(category: string): readonly InspectionSubsystem[]
   }));
 }
 
+export interface CustomInspectionField {
+  readonly fieldKey: string;
+  readonly label: string;
+  readonly fieldType: string;
+  readonly options: readonly { key: string; label: string }[] | null;
+  readonly required: boolean;
+}
+
 export interface WorkCard {
   readonly workOrderId: string;
   readonly identifier: string | null;
@@ -236,6 +244,17 @@ export interface WorkCard {
   readonly tasks: readonly TechnicianTask[];
   readonly parts: readonly WorkCardPart[];
   readonly specializationForms: readonly DefinitionSummary[];
+  /**
+   * The workshop's own extra questions on the inspection form, and any answers
+   * already given.
+   *
+   * Forms & Fields could define a field and nothing ever asked it: no page
+   * rendered one, so a required field was a requirement nobody could meet.
+   * Scoped to this vehicle's category here, so a question the owner asked only
+   * about motorcycles does not appear on a car.
+   */
+  readonly customInspectionFields: readonly CustomInspectionField[];
+  readonly customInspectionValues: Readonly<Record<string, unknown>>;
   readonly specializationEntries: readonly EntrySummary[];
   readonly finish: FinishCheck;
   /** Null when the job is not waiting on a move only this technician can make. */
@@ -891,7 +910,7 @@ export class TechnicianWorkViewService {
       }
     }
 
-    const [complaints, timeTracking, profile, intents, inspection, repairLockReason, faults, [specializationForms, specializationEntries], inspectionRow] = await Promise.all([
+    const [complaints, timeTracking, profile, intents, inspection, repairLockReason, faults, [specializationForms, specializationEntries], inspectionRow, customFieldRows] = await Promise.all([
       this.assetHistory.complaintText(tenantId, [workOrder.id]),
       this.policies.resolveValue(tenantId, "TIME_TRACKING") as Promise<"OFF" | "OPTIONAL" | "REQUIRED">,
       this.capabilities.resolveCurrent(tenantId),
@@ -929,11 +948,34 @@ export class TechnicianWorkViewService {
         where: { workOrderId: workOrder.id, tenantId },
         orderBy: { startedAt: "desc" },
       }),
+      // The workshop's own extra questions on the inspection form. Live ones
+      // only: an archived field stays readable on records that captured it and
+      // is not asked again.
+      this.prisma.customFieldDefinition.findMany({
+        where: { tenantId, formKey: { in: ["QUICK_INSPECTION", "FULL_INSPECTION"] }, isArchived: false },
+        orderBy: { order: "asc" },
+      }),
     ]);
+
+    // Scoped to this vehicle's category, the same rule `validateValues`
+    // applies when the answers come back: a question the owner asked only
+    // about motorcycles must not appear on a car, or the technician is shown a
+    // required field the server will then ignore.
+    const assetCategory = workOrder.asset.category;
+    const customInspectionFields = customFieldRows
+      .filter((row) => row.categoryScope.length === 0 || row.categoryScope.includes(assetCategory))
+      .map((row) => ({
+        fieldKey: row.fieldKey,
+        label: row.label,
+        fieldType: row.fieldType,
+        options: (row.options as { key: string; label: string }[] | null) ?? null,
+        required: row.required,
+      }));
 
     const rawComplaint = complaints.get(workOrder.id) ?? "";
     const inspectionFields = (inspectionRow?.fields as Record<string, any>) ?? {};
     const completedBoxes = (inspectionFields.completedBoxes as Record<string, any>) ?? {};
+    const customInspectionValues = (inspectionFields.customFields as Record<string, unknown>) ?? {};
 
     // Detect which subsystems were requested by the customer
     let targetKeys: string[] = [];
@@ -1098,6 +1140,8 @@ export class TechnicianWorkViewService {
         };
       }),
       specializationForms,
+      customInspectionFields,
+      customInspectionValues,
       specializationEntries,
       finish: await this.finishCheck(workOrderId, tenantId),
       primaryAction: primaryActionFor(intents),

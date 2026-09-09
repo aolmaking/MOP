@@ -110,6 +110,29 @@ export class TechWorkCard {
   protected readonly togglingBox = signal<string | null>(null);
 
   protected readonly inspectionBoxes = computed(() => this.card()?.inspectionBoxes ?? []);
+
+  /**
+   * The workshop's own questions on the inspection form, and the answers so
+   * far.
+   *
+   * Forms & Fields could define a field and no screen ever asked it, so a
+   * required one was a requirement nobody could meet. The values start from
+   * whatever this inspection already captured, so re-opening a part-finished
+   * inspection shows what was already written rather than a blank form.
+   */
+  protected readonly customFields = computed(() => this.card()?.customInspectionFields ?? []);
+  protected readonly customFieldValues = signal<Record<string, unknown>>({});
+
+  /** The message to send the customer, once an ask has been raised. */
+  protected readonly decisionMessage = signal<string | null>(null);
+
+  protected dismissDecisionMessage(): void {
+    this.decisionMessage.set(null);
+  }
+
+  protected setCustomField(fieldKey: string, value: unknown): void {
+    this.customFieldValues.update((all) => ({ ...all, [fieldKey]: value }));
+  }
   protected readonly completedBoxesCount = computed(() => this.inspectionBoxes().filter((b) => b.isDone).length);
   protected readonly totalBoxesCount = computed(() => this.inspectionBoxes().length);
   protected readonly allBoxesDone = computed(
@@ -1183,6 +1206,7 @@ export class TechWorkCard {
     this.api.workCard(this.id()).subscribe({
       next: (card) => {
         this.card.set(card);
+        this.customFieldValues.set({ ...(card.customInspectionValues ?? {}) });
         this.state.set('ready');
         const isAwaitingOp =
           (card.inspectionReport || card.inspectionReportSubmitted) &&
@@ -1305,11 +1329,24 @@ export class TechWorkCard {
       return;
     }
 
+    // The workshop's own questions, answered on this screen.
+    //
+    // Checked here only to save a round trip; the server validates against the
+    // definitions regardless, which is what makes a required field required.
+    const missing = this.customFields().filter(
+      (field) => field.required && !String(this.customFieldValues()[field.fieldKey] ?? '').trim(),
+    );
+    if (missing.length > 0) {
+      this.actionError.set(`${missing[0].label} is required.`);
+      return;
+    }
+
     const payload: RecordInspectionPayload = {
       type,
       ...(odometerOrHours !== undefined ? { odometerOrHours } : {}),
       ...(actualMinutes !== undefined ? { actualMinutes } : {}),
       ...(noteRaw ? { note: noteRaw } : {}),
+      ...(this.customFields().length > 0 ? { customFields: this.customFieldValues() } : {}),
     };
 
     this.run('complete-inspection', this.api.recordInspection(this.id(), payload));
@@ -1383,11 +1420,16 @@ export class TechWorkCard {
             faultId: fault.id,
           })
           .subscribe({
-            next: () => {
+            next: (raised) => {
               this.busy.set(null);
               this.askCustomer.set(false);
               this.faultPrice.set('');
               this.faultLaborPrice.set('');
+              // The words to send, from the workshop's own template. Nothing
+              // in the product sends the link, so whoever does needs them --
+              // and an owner who edits the template changes what the customer
+              // actually receives, which was not true before.
+              this.decisionMessage.set(raised.message);
               this.load();
             },
             error: (err: PresentedError) => {

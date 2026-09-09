@@ -143,6 +143,8 @@ export interface WorkCard {
   readonly parts: readonly WorkCardPart[];
   readonly finish: FinishCheck;
   readonly primaryAction: WorkCardPrimaryAction | null;
+  readonly customInspectionFields?: readonly CustomInspectionFieldView[];
+  readonly customInspectionValues?: Readonly<Record<string, unknown>>;
   readonly inspectionBoxes?: readonly InspectionBoxItem[];
   readonly inspectionReport?: string | null;
   readonly inspectionReportSubmitted?: boolean;
@@ -351,6 +353,30 @@ export interface RecordInspectionPayload {
   readonly odometerOrHours?: number;
   readonly actualMinutes?: number;
   readonly note?: string;
+  /** Answers to the workshop's own questions. Checked server-side, always. */
+  readonly customFields?: Record<string, unknown>;
+}
+
+/** One of the workshop's own questions on the inspection form. */
+/**
+ * What comes back from asking the customer.
+ *
+ * `message` is the workshop's own published wording with this job's details
+ * already in it. MOP does not send it -- the link goes out by hand -- so the
+ * person who has to send it is handed the words rather than composing them.
+ */
+export interface RaisedDecision {
+  readonly requestId: string;
+  readonly secureToken: string;
+  readonly message: string;
+}
+
+export interface CustomInspectionFieldView {
+  readonly fieldKey: string;
+  readonly label: string;
+  readonly fieldType: 'TEXT' | 'NUMBER' | 'SELECT' | 'CHECKBOX' | 'DATE' | 'TEXTAREA';
+  readonly options: readonly { key: string; label: string }[] | null;
+  readonly required: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -516,11 +542,8 @@ export class TechnicianApi {
       laborPrice?: string;
       faultId?: string;
     },
-  ): Observable<{ requestId: string; secureToken: string }> {
-    return this.http.post<{ requestId: string; secureToken: string }>(
-      `/api/v1/technician/work-orders/${workOrderId}/decisions`,
-      item,
-    );
+  ): Observable<RaisedDecision> {
+    return this.http.post<RaisedDecision>(`/api/v1/technician/work-orders/${workOrderId}/decisions`, item);
   }
 
   /** Mark a simplified inspection box as Done (or toggle state). */

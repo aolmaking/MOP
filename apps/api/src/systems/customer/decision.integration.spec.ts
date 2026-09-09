@@ -15,6 +15,7 @@ import "reflect-metadata";
 import { randomBytes } from "node:crypto";
 import { PrismaClient } from "@mop/database";
 import { CustomerDecisionService } from "./decision.service";
+import { MessageTemplateService } from "./messages/message-template.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../operations/customer-safe-projection.service";
 import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
@@ -38,7 +39,7 @@ const lifecycle = new WorkOrderLifecycleService(
   policies,
   new StockService(asService),
 );
-const decisions = new CustomerDecisionService(asService, events, policies, lifecycle);
+const decisions = new CustomerDecisionService(asService, events, policies, lifecycle, new MessageTemplateService(asService, new AuditService(asService)));
 
 const SUFFIX = `dec-${Date.now()}`;
 let tenantId: string;
@@ -1056,5 +1057,81 @@ describe("VIEWED + CANCEL (W2-A3-007)", () => {
     await decisions.cancel(tenantId, [], made.requestId, staff);
     const open = await prisma.customerDecisionRequest.count({ where: { workOrderId: reqBefore.workOrderId, status: { notIn: ["RESOLVED", "EXPIRED", "CANCELLED"] } } });
     expect(open).toBe(0);
+  });
+});
+
+/**
+ * REC-023, the templates half.
+ *
+ * Messages & Templates let an owner write and version the message a customer
+ * receives, and `currentBody` -- documented as "the exact body any real sender
+ * must read" -- had no caller anywhere in the product. An owner could rewrite
+ * their wording and nothing, anywhere, would ever say it.
+ *
+ * MOP still does not send the message itself; the link goes out by hand. What
+ * these prove is that the words handed to whoever sends it come from the
+ * workshop's own template.
+ */
+describe("the decision link carries the workshop's own wording", () => {
+  const STAFF_ACTOR = { accountId: "staff-1", displayName: "Amira Hassan", actorType: "TENANT_STAFF" as const };
+
+  /** A job a technician could legitimately raise a question on. */
+  async function makeWorkOrder(): Promise<string> {
+    const workOrder = await prisma.workOrder.create({
+      data: { tenantId, branchId, assetId, customerId, status: "UNDER_INSPECTION" },
+    });
+    return workOrder.id;
+  }
+
+  it("uses the platform default before the owner has published anything", async () => {
+    const workOrderId = await makeWorkOrder();
+
+    const raised = await decisions.raiseAndSend(
+      tenantId,
+      workOrderId,
+      { name: "Brake pads", explanation: "Worn to 2mm", importance: "CRITICAL", price: "450.00" },
+      STAFF_ACTOR,
+    );
+
+    expect(raised.message).toContain("needs your approval");
+    expect(raised.message).toContain(raised.secureToken);
+    // Rendered, not left with braces in it.
+    expect(raised.message).not.toContain("{{");
+  });
+
+  it("uses the owner's published template once there is one", async () => {
+    const templates = new MessageTemplateService(asService, new AuditService(asService));
+    await templates.publish(
+      tenantId,
+      "WHATSAPP_DECISION",
+      "Salam {{customer_name}} — {{branch_name}} has a question about job {{work_order_id}}. Answer here: {{decision_link}}",
+      { accountId: "owner-1", displayName: "Owner" },
+    );
+
+    const workOrderId = await makeWorkOrder();
+    const raised = await decisions.raiseAndSend(
+      tenantId,
+      workOrderId,
+      { name: "Air filter", explanation: "Clogged", importance: "MEDIUM", price: "120.00" },
+      STAFF_ACTOR,
+    );
+
+    expect(raised.message.startsWith("Salam ")).toBe(true);
+    expect(raised.message).toContain("has a question about job");
+    expect(raised.message).toContain(raised.secureToken);
+  });
+
+  it("names the customer and the branch, because that is what the variables are for", async () => {
+    const workOrderId = await makeWorkOrder();
+
+    const raised = await decisions.raiseAndSend(
+      tenantId,
+      workOrderId,
+      { name: "Wipers", explanation: "Streaking", importance: "LOW", price: "60.00" },
+      STAFF_ACTOR,
+    );
+
+    const customer = await prisma.customer.findFirstOrThrow({ where: { tenantId } });
+    expect(raised.message).toContain(customer.fullName);
   });
 });

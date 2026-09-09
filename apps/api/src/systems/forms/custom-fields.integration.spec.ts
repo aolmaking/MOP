@@ -81,9 +81,9 @@ describe("CustomFieldsService -- the spec's worked example", () => {
   });
 
   it("refuses a duplicate field name on the same form", async () => {
-    await fields.addField(tenantId, "PART_REQUEST", { label: "Supplier Note", fieldType: "TEXT" }, actor);
+    await fields.addField(tenantId, "FULL_INSPECTION", { label: "Supplier Note", fieldType: "TEXT" }, actor);
     await expect(
-      fields.addField(tenantId, "PART_REQUEST", { label: "Supplier Note", fieldType: "TEXTAREA" }, actor),
+      fields.addField(tenantId, "FULL_INSPECTION", { label: "Supplier Note", fieldType: "TEXTAREA" }, actor),
     ).rejects.toMatchObject({ status: 409, response: { code: "field_key_taken" } });
   });
 
@@ -102,19 +102,66 @@ describe("CustomFieldsService -- the spec's worked example", () => {
   });
 
   it("archiving removes a field from the live form but keeps it findable, and restore brings it back", async () => {
-    const field = await fields.addField(tenantId, "RETURN_UNUSED", { label: "Restocking Fee", fieldType: "NUMBER" }, actor);
+    const field = await fields.addField(tenantId, "QUICK_INSPECTION", { label: "Restocking Fee", fieldType: "NUMBER" }, actor);
 
     await fields.setArchived(tenantId, field.id, true, actor);
-    let form = await fields.list(tenantId, "RETURN_UNUSED");
+    let form = await fields.list(tenantId, "QUICK_INSPECTION");
     expect(form.customFields.find((f) => f.id === field.id)?.isArchived).toBe(true);
 
     // Archived fields are excluded from validation against new records --
     // the live form genuinely no longer collects them.
-    const validated = await fields.validateValues(tenantId, "RETURN_UNUSED", null, { restocking_fee: 10 });
+    const validated = await fields.validateValues(tenantId, "QUICK_INSPECTION", null, { restocking_fee: 10 });
     expect(validated).toEqual({});
 
     await fields.setArchived(tenantId, field.id, false, actor);
-    form = await fields.list(tenantId, "RETURN_UNUSED");
+    form = await fields.list(tenantId, "QUICK_INSPECTION");
     expect(form.customFields.find((f) => f.id === field.id)?.isArchived).toBe(false);
+  });
+});
+
+/**
+ * The precondition that was missing for as long as this feature has existed.
+ *
+ * Eight of the nine forms write to models with no bucket for an extra value,
+ * so a field added to them could be defined, listed, archived and restored --
+ * and never filled in by anybody, because no page asked it and no column held
+ * it. The definition was accepted in silence, which is how an owner discovers
+ * months later that the field they built their intake around was never real.
+ */
+describe("a form that cannot hold an answer says so", () => {
+  it("refuses a field on Customer Intake, and says why", async () => {
+    await expect(
+      fields.addField(tenantId, "CUSTOMER_INTAKE", { label: "Referred By", fieldType: "TEXT" }, actor),
+    ).rejects.toMatchObject({ response: { code: "form_cannot_capture" } });
+  });
+
+  it("writes nothing when it refuses", async () => {
+    await fields
+      .addField(tenantId, "WORK_ORDER", { label: "Fleet Code", fieldType: "TEXT" }, actor)
+      .catch(() => null);
+
+    const form = await fields.list(tenantId, "WORK_ORDER");
+    expect(form.customFields).toHaveLength(0);
+  });
+
+  it("tells the owner which forms accept fields, and why the others do not", async () => {
+    const inspection = await fields.list(tenantId, "FULL_INSPECTION");
+    const intake = await fields.list(tenantId, "CUSTOMER_INTAKE");
+
+    expect(inspection.acceptsCustomFields).toBe(true);
+    expect(inspection.captureNote).toBeUndefined();
+    expect(intake.acceptsCustomFields).toBe(false);
+    expect(intake.captureNote).toContain("nowhere to keep");
+  });
+
+  it("still accepts one on an inspection form", async () => {
+    const field = await fields.addField(
+      tenantId,
+      "FULL_INSPECTION",
+      { label: "Coolant Colour", fieldType: "TEXT" },
+      actor,
+    );
+
+    expect(field.fieldKey).toBe("coolant_colour");
   });
 });

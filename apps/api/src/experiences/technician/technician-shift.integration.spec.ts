@@ -24,6 +24,7 @@ import { GateEvaluatorService } from "../../systems/operations/gate-evaluator.se
 import { OperationEventsService } from "../../systems/operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../../systems/operations/customer-safe-projection.service";
 import { TechnicianWorkService } from "../../systems/operations/technician-work.service";
+import { CustomFieldsService } from "../../systems/forms/custom-fields.service";
 import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 import { AuditService } from "../../audit/audit.service";
 import { AttentionQueueService } from "../branch-manager/attention-queue.service";
@@ -58,7 +59,7 @@ const lifecycle = new WorkOrderLifecycleService(
   new StockService(asService),
 );
 const intake = new IntakeService(asService, events, lifecycle);
-const techWork = new TechnicianWorkService(asService, events, lifecycle, policiesForTest);
+const techWork = new TechnicianWorkService(asService, events, lifecycle, policiesForTest, new CustomFieldsService(asService, new AuditService(asService)));
 const assetHistoryForTest = new AssetHistoryService(asService);
 const techView = new TechnicianWorkViewService(
   asService,

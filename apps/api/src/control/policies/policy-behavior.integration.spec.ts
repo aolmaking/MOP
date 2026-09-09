@@ -18,6 +18,7 @@ import { StockService } from "../../systems/inventory/stock.service";
 import { OperationEventsService } from "../../systems/operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../../systems/operations/customer-safe-projection.service";
 import { TechnicianWorkService } from "../../systems/operations/technician-work.service";
+import { CustomFieldsService } from "../../systems/forms/custom-fields.service";
 import { FinanceService } from "../../systems/finance/finance.service";
 import { BillingService } from "../../systems/billing/billing.service";
 import { GenericBillingAdapter } from "../../systems/billing/generic-billing-adapter.service";
@@ -35,7 +36,7 @@ const policies = new PolicyResolutionService(asService, audit, caps);
 const events = new OperationEventsService(asService, audit, new CustomerSafeProjectionService());
 const gates = new GateEvaluatorService(asService, policies);
 const lifecycle = new WorkOrderLifecycleService(asService, caps, events, gates, policies, new StockService(asService));
-const techWork = new TechnicianWorkService(asService, events, lifecycle, policies);
+const techWork = new TechnicianWorkService(asService, events, lifecycle, policies, new CustomFieldsService(asService, new AuditService(asService)));
 const priceCatalog = new PriceCatalogService(asService, audit);
 const billing = new BillingService(asService, new GenericBillingAdapter());
 const finance = new FinanceService(
