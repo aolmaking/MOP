@@ -311,8 +311,13 @@ describe("Parts loop (real HTTP, real Postgres)", () => {
     // A different workshop's storekeeper must not see it. Tenant
     // isolation asserted from the outside, over HTTP, rather than
     // trusted from a `where` clause somewhere.
+    // ACTIVE specifically. Any other tenant will do for the assertion, but a
+    // frozen or half-provisioned one -- which a sibling jest worker can leave
+    // lying around -- refuses the intruder at login with tenant_unavailable,
+    // and the test then fails for a reason that has nothing to do with
+    // isolation.
     const otherTenant = await booted.prisma.tenant.findFirst({
-      where: { id: { not: tenantId } },
+      where: { id: { not: tenantId }, status: "ACTIVE" },
       select: { id: true },
     });
     if (otherTenant) {

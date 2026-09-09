@@ -66,25 +66,53 @@
 
 ---
 
-## Phase 2 — Security & tenant isolation · **IN PROGRESS**
+## Phase 2 — Security & tenant isolation · **COMPLETE for every proven path**
 
 ### REC-011 — Tenant-owned rows reachable by bare id · **P0**
-- **Verification:** `VERIFIED_RUNTIME` (four separate attacks executed against a live API)
+- **Verification:** `VERIFIED_RUNTIME` (attacks executed against a live API, before and after)
 - **Symptom, proven at runtime with real sessions:**
   - Alpha's technician started, completed and blocked **Beta's** task (`201` each; `ASSIGNED → IN_PROGRESS → DONE`).
   - Alpha's branch manager read **Beta's** invoice and recorded ₤250 against it — Beta's balance `1000 → 750`, `Payment.tenantId` = **Alpha**.
   - Alpha's inventory manager approved **Gamma's** part request and issued stock — Gamma's stock `18 → 17`, `StockMovement.tenantId` = Gamma, `actorId` = Alpha.
   - Alpha's branch manager read **Beta's** job total (`200`).
 - **Root cause:** No global tenant enforcement (`PrismaService` is a bare `PrismaClient`; no `$use`, no `$extends`, no RLS). Controllers resolve `session.tenantId` and hand services a bare id; the tenantId is used for capability and policy lookups but not for row ownership.
-- **Scale:** 84 sites flagged by `lint-tenant-scope`.
-- **Two pre-existing tests already assert the correct behaviour and are currently failing** — `technician-shift.integration.spec.ts` ("refused another technician's job outright") and `journey.http.spec.ts` ("refuses a job outside the reader's own scope"). These are regressions, not new requirements.
-- **Status:** `OPEN`
+- **Fix strategy:** scope at the **load**, not the caller, so a future route cannot skip it — `requireTask`, `requireOwnedInvoice`, `requireOwnedWorkOrder`, `PartRequestService.load(id, tenantId)`. `NotFoundException` throughout, never `Forbidden`: a 403 on a foreign id confirms the id is real.
+- **Files:** `technician-work.service.ts`, `finance.service.ts`, `part-request.service.ts`, `technician.controller.ts`, `inventory.controller.ts`, `finance.controller.ts`
+- **Runtime test:** the same 13-probe suite that found the leaks — **13/13 blocked, 0 leaks** (was 4 leaking, plus 2 more that opened once a legitimately-delegable permission was granted).
+- **Status:** **VERIFIED** for all proven paths. **75 sites remain flagged** by `lint-tenant-scope`; every one inspected so far is an internal helper called after an ownership check in the same method, but they are **not individually verified** — tracked as REC-031.
+
+### REC-030 — Two isolation guarantees the suite already asserted had regressed · **P0**
+- **Verification:** `VERIFIED_RUNTIME`
+- `TechnicianWorkViewService.workCard` — the third arm of its `OR` degraded to `{ tenantId }` when a technician had no branch scope (the default), matching every job in the workshop and making the two assignment arms decide nothing. The auto-assign immediately below then **claimed** whatever was opened, so reading a colleague's job silently made it yours.
+- `activeJob` fell through to `work[0]`, so a technician holding nothing still got a car on the "on now" page.
+- Both were asserted by existing tests that were failing; both now pass.
+- **Status:** **VERIFIED**
+
+### REC-017 / REC-018 / WORKSHOP-GAP-006 — creation ignored capability and plan ceiling · **P2**
+- **Verification:** `VERIFIED_RUNTIME`
+- A workshop created with `INVENTORY: DISABLED` was provisioned a warehouse and 42 catalogue items it can never reach; a plan capped at `maxWarehouses: 0` was put over its ceiling at creation, after which `PlanLimitsService` correctly refused to let the owner add anything.
+- **Fix:** structure and catalogue now follow the declared capability profile and the plan's ceiling; `seedStructure` reports what it actually wrote rather than `warehouses.length || 1`.
+- Closed the `workshop-capability-divergence` and `onboarding` suite failures, which already asserted the correct behaviour.
+- **Status:** **VERIFIED**
 
 ### REC-010 — `WorkOrder.status` written outside the lifecycle service · **P1**
 - **Verification:** `VERIFIED_CODE`
 - **Sites:** `operator.service.ts:432, 981` (update), `operator.service.ts:560` + `customer-portal.service.ts:325` (create at `PAYMENT_PENDING`), `technician-work-view.service.ts:1269` (update). `intake.service.ts:102` is legitimate — it creates at `WORK_ORDER_GRAPH.initial` — and needs an exemption comment rather than a change.
 - **Consequence:** no graph check, no gate, no `OperationEvent`, no audit row; cycle-time analytics and the `ORPHANED_STATUS_CHANGE` detector both go blind.
+- **Status:** `OPEN` — this is Phase 3 (spine convergence), not a scoping fix.
+
+### REC-031 — 75 remaining bare-id loads, triaged but not individually verified · **P1**
+- **Verification:** `PARTIALLY_VERIFIED`
+- Every one sampled is an internal helper operating on a row its own method already loaded under a tenant filter (e.g. `refundRequest.update` immediately after `findFirst({ id, tenantId })`). That is safe, but "sampled" is not "verified".
+- **Next step:** annotate each with `tenant-scope-ok:` and its reason, or scope it — until the linter reports zero, this is an open surface.
 - **Status:** `OPEN`
+
+### REC-032 — The integration suite is not safe to run in parallel · **P2**
+- **Verification:** `VERIFIED_RUNTIME`
+- 139 suites share one Postgres database. Under jest's default workers, suites see each other's tenants: `parts-loop`'s "never in another workshop's queue" test picked an arbitrary other tenant that a sibling worker had left non-`ACTIVE`, and failed at login with `tenant_unavailable` — nothing to do with isolation.
+- Serial: **139/139 suites, 1282/1282 tests.** Parallel before the fix: 138/139.
+- **Fix so far:** that one fixture now picks an `ACTIVE` tenant. The general problem — one database, many workers — remains.
+- **Status:** `OPEN` (general case)
 
 ---
 
