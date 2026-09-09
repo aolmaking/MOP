@@ -1,3 +1,5 @@
+import { templateUrl, urlForDatabase, workerDatabaseName } from "./worker-databases";
+
 /**
  * Test-environment defaults, applied before any application module is
  * imported.
@@ -18,6 +20,17 @@
  * and prove throttling actually works.
  */
 process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432/mop_platform_test?schema=public";
+
+// Under parallelism, this worker talks to its own clone of that database.
+//
+// Set here rather than in the config because `JEST_WORKER_ID` only exists
+// inside a worker, and this file is the first thing that runs in one. Without
+// it the suites share a database and start seeing each other's workshops --
+// which is the whole reason the suite ran serially for so long.
+if (process.env.MOP_TEST_WORKERS && process.env.JEST_WORKER_ID) {
+  const { url, database } = templateUrl();
+  process.env.DATABASE_URL = urlForDatabase(url, workerDatabaseName(database, process.env.JEST_WORKER_ID));
+}
 
 // An integration suite legitimately logs in dozens of times from one
 // address. Production defaults would fail it for a reason that has

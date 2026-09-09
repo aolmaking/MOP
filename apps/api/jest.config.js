@@ -10,9 +10,12 @@
  * nobody reads, which is how eight deleted capabilities went unnoticed for
  * weeks (REC-013 and the seven findings beside it).
  *
- * This does not make the suite parallel-safe; it removes the one way to run it
- * that silently is not. Real parallelism needs a schema per worker, which is
- * recorded as the open half of REC-032 rather than pretended here.
+ * Parallelism is possible now, and it is opt-in: `MOP_TEST_WORKERS=4` clones
+ * the migrated test database once per worker (Postgres `CREATE DATABASE ...
+ * TEMPLATE`, so it costs a file copy rather than 47 migrations replayed), and
+ * each worker talks only to its own. Serial stays the default because the
+ * trade -- a database per worker for wall-clock time -- is the runner's to
+ * make on the machine in front of them.
  */
 module.exports = {
   rootDir: "src",
@@ -22,7 +25,12 @@ module.exports = {
     "^.+\.ts$": "ts-jest",
   },
   setupFiles: ["<rootDir>/testing/jest-env.ts"],
+  globalSetup: "<rootDir>/testing/jest-global-setup.ts",
+  globalTeardown: "<rootDir>/testing/jest-global-teardown.ts",
   moduleFileExtensions: ["ts", "js", "json"],
   testTimeout: 120000,
-  maxWorkers: 1,
+  // Serial unless the runner asks otherwise. `MOP_TEST_WORKERS=4` clones the
+  // migrated test database once per worker, so the suites stop sharing one and
+  // parallelism becomes safe rather than merely faster.
+  maxWorkers: Number(process.env.MOP_TEST_WORKERS) > 1 ? Number(process.env.MOP_TEST_WORKERS) : 1,
 };
