@@ -463,10 +463,31 @@ const POPULATED = brief({
   ],
 });
 
-/** Opens the history panel and lets the lazy fetch settle. */
+/**
+ * Opens the history panel and lets the lazy fetch settle.
+ *
+ * History moved inside the card's expandable header when the repair stage was
+ * redesigned; it is the same panel, behind a different control. Failing loudly
+ * on a missing toggle rather than `!`-asserting it, so a future move of this
+ * button says so instead of throwing "cannot read properties of null".
+ */
 async function openHistory(fixture: ComponentFixture<TechWorkCard>): Promise<HTMLElement> {
   const element = fixture.nativeElement as HTMLElement;
-  element.querySelector<HTMLButtonElement>('.history-toggle')!.click();
+  // Two presses now, because history moved inside the card's expandable
+  // header and kept its own collapse: the card's "Expand Details", then the
+  // panel's own heading. Failing loudly on either rather than `!`-asserting
+  // it, so a future move says which control went missing instead of throwing
+  // "cannot read properties of null" from a helper.
+  const header = element.querySelector<HTMLButtonElement>('#btn-toggle-live-header');
+  if (!header) throw new Error('No card header toggle -- vehicle history cannot be reached.');
+  header.click();
+  fixture.detectChanges();
+  await Promise.resolve();
+  fixture.detectChanges();
+
+  const panel = element.querySelector<HTMLButtonElement>('.history-header');
+  if (!panel) throw new Error('No vehicle-history panel on the card.');
+  panel.click();
   fixture.detectChanges();
   await Promise.resolve();
   fixture.detectChanges();

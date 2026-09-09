@@ -100,6 +100,71 @@
               </div>
             </div>
           }
+
+          <!--
+            PAST RECOMMENDATIONS, and the evidence behind each status.
+
+            docs/HISTORY_MODULE.md names the recommendation outcome model as
+            the reason this panel exists, and the server computes and ships all
+            of it -- `previousRecommendations`, each with an `outcomeLabel`,
+            the `linkedTasks` that did or did not deliver it, and dated
+            `evidence`. A redesign dropped the markup and left
+            `toggleRecommendation`, `openRecommendation` and `outcomeTone` on
+            the component with no caller, so a whole read surface went dark
+            while the payload kept arriving. The Attention strip above survived
+            and says WHAT was not done; this is the part that says why anyone
+            should believe it.
+
+            Every status is checkable rather than merely trusted, which is the
+            whole point: a technician about to tell a customer "you were told
+            about this last time" needs to be able to see that they were.
+          -->
+          @if (h.previousRecommendations.length > 0) {
+            <div class="history-section">
+              <div class="section-heading">
+                <span class="heading-label">Past Recommendations</span>
+                <span class="heading-count">{{ h.previousRecommendations.length }}</span>
+              </div>
+
+              @for (recommendation of preview(h.previousRecommendations, 'recommendations'); track recommendation.id) {
+                <div class="history-item">
+                  <button type="button" class="history-rec" (click)="toggleRecommendation(recommendation)">
+                    <span class="history-outcome" [class]="'history-outcome--' + outcomeTone(recommendation)">
+                      {{ recommendation.outcomeLabel }}
+                    </span>
+                    <span class="history-item-main">{{ recommendation.name }}</span>
+                  </button>
+
+                  @if (openRecommendation() === recommendation.id) {
+                    <div class="history-detail">
+                      <p class="history-item-line">{{ recommendation.explanation }}</p>
+                      @if (recommendation.linkedTasks.length > 0) {
+                        @for (task of recommendation.linkedTasks; track task.id) {
+                          <p class="history-item-line">Work: {{ task.title }} — {{ label(task.status) }}</p>
+                        }
+                      } @else {
+                        <p class="history-item-line">No work on that job was linked to it.</p>
+                      }
+                      <ol class="history-evidence">
+                        @for (item of recommendation.evidence; track $index) {
+                          <li>
+                            <span class="history-evidence-when">{{ item.at ? shortDate(item.at) : 'not dated' }}</span>
+                            <span>{{ item.text }}</span>
+                          </li>
+                        }
+                      </ol>
+                    </div>
+                  }
+                </div>
+              }
+
+              @if (hasMore(h.previousRecommendations, 'recommendations')) {
+                <button type="button" class="btn-more" (click)="toggleList('recommendations')">
+                  View all {{ h.previousRecommendations.length }} recommendations
+                </button>
+              }
+            </div>
+          }
         }
       }
     </div>

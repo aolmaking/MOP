@@ -276,3 +276,77 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+
+/*
+  Past recommendations, and the evidence behind each outcome.
+
+  Restored alongside the markup: a redesign dropped the section from the
+  template, and its styles went with it, while the server kept computing and
+  sending every recommendation, its outcome, its linked work and its dated
+  evidence. See tech-vehicle-history.html for why this surface exists.
+*/
+.history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-block: var(--space-2);
+  border-block-end: 1px solid var(--border);
+}
+.history-item-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--text);
+  font-size: var(--tech-text-sm);
+  font-weight: 600;
+  text-align: start;
+}
+.history-item-line {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+}
+.history-outcome {
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.history-outcome--good {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.history-outcome--warn {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+.history-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+}
+.history-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+}
+.history-evidence li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+}
+.history-evidence-when {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+
