@@ -352,15 +352,15 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  border-left: 4px solid var(--primary, #3b82f6);
+  border-inline-start: 4px solid var(--primary, #3b82f6);
 }
 
 .attention-card[data-tier="1"] {
-  border-left-color: #ef4444;
+  border-inline-start-color: #ef4444;
 }
 
 .attention-card[data-tier="2"] {
-  border-left-color: #f59e0b;
+  border-inline-start-color: #f59e0b;
 }
 
 .att-head, .del-head {

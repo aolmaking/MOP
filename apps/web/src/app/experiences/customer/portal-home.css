@@ -113,7 +113,7 @@
   content: '';
   position: absolute;
   top: 0;
-  left: 0;
+  inset-inline-start: 0;
   width: 4px;
   height: 100%;
   background: linear-gradient(180deg, #10b981, #0284c7);
@@ -970,7 +970,7 @@
 .choice-check {
   position: absolute;
   top: 6px;
-  right: 6px;
+  inset-inline-end: 6px;
 }
 
 .check-box {

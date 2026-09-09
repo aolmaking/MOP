@@ -205,7 +205,7 @@
 }
 
 .active-tag {
-  margin-left: auto;
+  margin-inline-start: auto;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;

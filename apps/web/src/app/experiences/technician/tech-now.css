@@ -259,7 +259,9 @@
 /* Technician POS overview UX upgrade */
 .now { gap: var(--space-6); }
 .now-title { font-size: clamp(var(--tech-text-lg), 5vw, var(--tech-text-xl)); }
-.job-link, .job-card { border-radius: var(--radius-lg); box-shadow: var(--shadow-1); transition: transform var(--duration-fast) var(--ease-spring), box-shadow var(--duration-fast) var(--easing); }
+/* A job card is the primary thing a gloved hand aims at on this page, and
+   nothing declared the floor for it -- the size came out of its content. */
+.job-link, .job-card { min-block-size: var(--tap); border-radius: var(--radius-lg); box-shadow: var(--shadow-1); transition: transform var(--duration-fast) var(--ease-spring), box-shadow var(--duration-fast) var(--easing); }
 .job-link:hover, .job-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-2); }
 
 /* Consolidated Station enhancements */
@@ -442,7 +444,10 @@
   padding: var(--space-4);
   color: var(--text);
   text-decoration: none;
-  min-height: 56px;
+  /* 56px, not the 44px floor: PHASE_6 section 2 calls 48-56 the size at
+     which gloved operation becomes reliable, and a queue is scanned and
+     tapped at speed. Logical, so it still means "tall" under any writing mode. */
+  min-block-size: 56px;
 }
 
 /* Top Row: Plate & State Badge */

@@ -122,6 +122,9 @@ const PERMITTED_INTO_HIDDEN = {
   // listing them here is what makes the blind spot visible rather than
   // silent. Verify by reading the two fields.
   "/owner/audit": "Guarded at runtime by `historyVisible` in owner-home-page.ts, which reads the same manifest.",
+  "/owner/reports":
+    "Guarded at runtime by `reportsVisible` in owner-home-page.ts, which reads the same manifest. " +
+    "This was an unguarded hero button until the architectural linters were finally reached.",
   "/owner/organization/teams":
     "Guarded at runtime by `teamsVisible` in organization-page.ts, which reads the same manifest.",
 };

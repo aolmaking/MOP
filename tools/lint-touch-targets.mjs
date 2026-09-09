@@ -45,10 +45,43 @@ function walk(dir) {
   }
 }
 
+/** The floor itself, so a literal length can be judged against it. */
+const TAP_PX = 44;
+
+/**
+ * Does this declaration block put the control at or above the floor?
+ *
+ * `var(--tap)` is the canonical way to say so and stays the preferred one --
+ * it tracks the token if the floor ever moves. A literal is accepted when it
+ * is at least the floor, because a control deliberately set to the 56px
+ * "reliable with gloves" size is not a violation, and rewriting it to
+ * `var(--tap)` to satisfy a regex would make the surface *worse*.
+ */
+function declaresFloor(body) {
+  if (/min-block-size:\s*var\(--tap\)/.test(body)) return true;
+  const literal = body.match(/min-block-size:\s*(\d+(?:\.\d+)?)px/);
+  return literal !== null && Number(literal[1]) >= TAP_PX;
+}
+
 function check(file) {
   const css = readFileSync(file, "utf8");
   // Strip comments so a selector mentioned in prose is not linted.
   const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+  // A control is often styled by more than one rule -- the base rule, then a
+  // later one adding a transition or a shadow. The floor belongs to the
+  // CONTROL, not to each block that mentions it, so collect what every rule
+  // for a selector declares before judging any of them. Demanding the
+  // declaration in each block just produces duplicated CSS that can drift
+  // from the real one.
+  const satisfied = new Set();
+  const collect = /([^{}]+)\{([^{}]*)\}/g;
+  let seen;
+  while ((seen = collect.exec(stripped)) !== null) {
+    if (declaresFloor(seen[2])) {
+      for (const one of seen[1].split(",")) satisfied.add(one.trim().replace(/\s+/g, " "));
+    }
+  }
 
   const rulePattern = /([^{}]+)\{([^{}]*)\}/g;
   let match;
@@ -60,7 +93,8 @@ function check(file) {
     if (selector.startsWith("@") || selector.includes("keyframes")) continue;
     if (!INTERACTIVE.test(selector)) continue;
     if (MODIFIER.test(selector)) continue;
-    if (/min-block-size:\s*var\(--tap\)/.test(body)) continue;
+    if (declaresFloor(body)) continue;
+    if (selector.split(",").every((one) => satisfied.has(one.trim().replace(/\s+/g, " ")))) continue;
     // A descendant selector refines a control that is defined -- and
     // therefore already checked -- by its own rule. `.reasons .tap` only
     // widens `.tap`; demanding the floor again would just be duplicated

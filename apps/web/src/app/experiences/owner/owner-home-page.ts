@@ -44,6 +44,15 @@ export class OwnerHomePage {
    */
   protected readonly historyVisible = !isHeldBack('/owner/audit');
 
+  /**
+   * The Analytics button in the hero, guarded the same way and for the same
+   * reason. It was not: `/owner/reports` is on the held-back list, so the one
+   * prominent call to action on the owner's landing page went to the wildcard
+   * redirect. `lint-dead-links` was reporting it, but the linter itself was
+   * never reached while eslint failed first.
+   */
+  protected readonly reportsVisible = !isHeldBack('/owner/reports');
+
   private readonly api = inject(OwnerHomeApi);
   private readonly destroyRef = inject(DestroyRef);
 

@@ -467,7 +467,7 @@
   height: 100vh !important;
   position: sticky !important;
   top: 0 !important;
-  left: 0 !important;
+  inset-inline-start: 0 !important;
   z-index: 100 !important;
   padding: var(--space-4) var(--space-3) !important;
   gap: var(--space-1) !important;
@@ -540,7 +540,7 @@
 }
 
 :root[data-layout='NAVBAR'] .rail-footer {
-  margin-left: auto !important;
+  margin-inline-start: auto !important;
   display: flex !important;
   align-items: center !important;
   gap: var(--space-3) !important;
@@ -568,8 +568,8 @@
   justify-content: center !important;
   position: fixed !important;
   bottom: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
+  inset-inline-start: 0 !important;
+  inset-inline-end: 0 !important;
   top: auto !important;
   z-index: 1000 !important;
   height: 56px !important;
@@ -589,7 +589,7 @@
 }
 
 :root[data-layout='BOTTOM_BAR'] .rail-footer {
-  margin-left: var(--space-3) !important;
+  margin-inline-start: var(--space-3) !important;
 }
 
 /* =============================================================================

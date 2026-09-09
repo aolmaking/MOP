@@ -12,7 +12,7 @@
 .register-theme-bar {
   position: absolute;
   top: var(--space-5);
-  right: var(--space-6);
+  inset-inline-end: var(--space-6);
   z-index: 50;
 }
 
@@ -79,7 +79,7 @@
 .steps-tracker::before {
   content: '';
   position: absolute;
-  left: 17px;
+  inset-inline-start: 17px;
   top: 16px;
   bottom: 16px;
   width: 2px;
@@ -516,7 +516,7 @@
 .submit-btn {
   background: var(--brand);
   color: #ffffff;
-  margin-left: auto;
+  margin-inline-start: auto;
   box-shadow: 0 4px 14px -2px var(--brand);
 }
 .next-btn:hover:not(:disabled),
@@ -582,7 +582,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  text-align: left;
+  text-align: start;
 }
 
 .summary-item {

@@ -358,7 +358,7 @@
 .toggle-switch-thumb {
   position: absolute;
   top: 2px;
-  left: 2px;
+  inset-inline-start: 2px;
   width: 14px;
   height: 14px;
   border-radius: 50%;
@@ -467,7 +467,7 @@
   gap: 0.75rem;
   max-height: 60vh;
   overflow-y: auto;
-  padding-right: 0.5rem;
+  padding-inline-end: 0.5rem;
 }
 
 .subsystems-24-grid {
@@ -486,7 +486,7 @@
   align-items: flex-start;
   gap: 0.35rem;
   cursor: pointer;
-  text-align: left;
+  text-align: start;
   position: relative;
   transition: all 0.15s ease;
   user-select: none;
@@ -524,7 +524,7 @@
 .subsystem-check-badge {
   position: absolute;
   top: 6px;
-  right: 6px;
+  inset-inline-end: 6px;
   width: 16px;
   height: 16px;
   border-radius: 50%;

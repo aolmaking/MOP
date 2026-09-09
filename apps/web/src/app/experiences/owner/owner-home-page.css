@@ -27,7 +27,7 @@
   content: '';
   position: absolute;
   top: 0;
-  right: 0;
+  inset-inline-end: 0;
   width: 280px;
   height: 100%;
   background: radial-gradient(circle at top right, var(--brand-muted), transparent 70%);
@@ -350,7 +350,7 @@
 }
 
 .recent-when {
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--text-faint);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
