@@ -243,20 +243,4 @@ export class OperatorApi {
     );
   }
 
-  dispatchRepair(
-    workOrderId: string,
-    payload: {
-      approvedFindingIds?: string[];
-      approvedPartIds?: string[];
-      approvedServiceIds?: string[];
-      approvedFindings?: any[];
-      approvedServices?: any[];
-      operatorNote?: string;
-      note?: string;
-      technicianId?: string;
-      tasks?: Array<{ title: string; estimatedMinutes?: number }>;
-    },
-  ): Observable<{ success: boolean; workOrderId: string; status: string }> {
-    return this.approveRepair(workOrderId, payload);
-  }
 }

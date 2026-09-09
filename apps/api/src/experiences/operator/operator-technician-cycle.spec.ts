@@ -8,6 +8,8 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
   let mockIntake: any;
   let mockCatalog: any;
   let mockLifecycle: any;
+  let mockStock: any;
+  let mockPartRequests: any;
 
   const tenantId = 'test-tenant';
   const workOrderId = 'wo-123';
@@ -60,7 +62,18 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
       })),
     };
 
-    operatorService = new OperatorService(mockPrisma, mockIntake, mockLifecycle, mockCatalog);
+    // Stock and part requests both go through the services that own them, so
+    // the mocks have to answer for them the way the real ones would.
+    mockStock = { record: jest.fn(async () => ({ availableQty: 0, reservedQty: 0 })) };
+    mockPartRequests = { request: jest.fn(async () => ({ id: "pr-1", status: "REQUESTED" })) };
+    operatorService = new OperatorService(
+      mockPrisma,
+      mockIntake,
+      mockLifecycle,
+      mockStock,
+      mockPartRequests,
+      mockCatalog,
+    );
     technicianService = new TechnicianWorkViewService(
       mockPrisma,
       {} as any,
@@ -291,7 +304,7 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
         roles: ['OPERATOR'],
       };
 
-      const result = await operatorService.dispatchRepair(
+      const result = await operatorService.approveRepair(
         tenantId,
         workOrderId,
         {
@@ -376,7 +389,7 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
       };
 
       // Operator only approves 1 service out of 3:
-      const result = await operatorService.dispatchRepair(
+      const result = await operatorService.approveRepair(
         tenantId,
         workOrderId,
         {

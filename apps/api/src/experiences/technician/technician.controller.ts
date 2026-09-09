@@ -23,7 +23,6 @@ import {
   RequestReturnDto,
   ReturnPartDto,
   ClarificationDto,
-  RespondToClarificationDto,
   ExternalPartDto,
   SubmitCartDto,
   SubmitSpecializationEntryDto,
@@ -593,6 +592,17 @@ export class TechnicianController {
     return this.partRequests.requestReturn(id, tenantId, dto.quantity, this.actor(session), dto.reason);
   }
 
+  /**
+   * The technician's answer to the store's clarifying question on a
+   * return-in-progress -- the other end of `inventory.controller.ts`'s
+   * `returns/:id/clarify`. Loops the return back to RETURN_REQUESTED so the
+   * store's next move is the same decision as a first-time request.
+   *
+   * There were two routes for this, `parts/:id/clarification` and
+   * `parts/:id/return/respond`, with two DTOs whose only difference was
+   * whether the field was called `answer` or `response` -- and both called
+   * this same method with the same arguments. The second had no caller.
+   */
   @Post("parts/:id/clarification")
   async answerClarification(
     @CurrentSession() session: SessionContext,
@@ -601,22 +611,6 @@ export class TechnicianController {
   ) {
     const { tenantId } = await this.requirePartOnMyJob(session, id);
     return this.partRequests.respondToClarification(id, tenantId, this.actor(session), dto.answer);
-  }
-
-  /**
-   * The technician's answer to the store's clarifying question on a
-   * return-in-progress -- the other end of `inventory.controller.ts`'s
-   * `returns/:id/clarify`. Loops the return back to RETURN_REQUESTED so
-   * the store's next move is the same decision as a first-time request.
-   */
-  @Post("parts/:id/return/respond")
-  async respondToReturnClarification(
-    @CurrentSession() session: SessionContext,
-    @Param("id") id: string,
-    @Body() dto: RespondToClarificationDto,
-  ) {
-    const { tenantId } = await this.requirePartOnMyJob(session, id);
-    return this.partRequests.respondToClarification(id, tenantId, this.actor(session), dto.response);
   }
 
   @Post("work-orders/:id/external-parts")

@@ -15,7 +15,6 @@ import { EffectiveAccessService } from "../../identity/access/effective-access.s
 import { OperatorService } from "./operator.service";
 import {
   OperatorApproveRepairDto,
-  OperatorDispatchRepairDto,
   OperatorIntakeDto,
   OperatorPosOrderDto,
   OperatorUpdateQuoteDto,
@@ -133,16 +132,6 @@ export class OperatorController {
     @CurrentSession() session: SessionContext,
     @Param("id") id: string,
     @Body() dto: OperatorApproveRepairDto,
-  ) {
-    const { tenantId } = await this.require(session, "workorders.branch.dispatch_repair");
-    return this.operatorService.approveRepair(tenantId, id, dto, session);
-  }
-
-  @Post("work-orders/:id/dispatch-repair")
-  async dispatchRepair(
-    @CurrentSession() session: SessionContext,
-    @Param("id") id: string,
-    @Body() dto: OperatorDispatchRepairDto,
   ) {
     const { tenantId } = await this.require(session, "workorders.branch.dispatch_repair");
     return this.operatorService.approveRepair(tenantId, id, dto, session);

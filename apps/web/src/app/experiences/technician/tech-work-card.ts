@@ -602,13 +602,16 @@ export class TechWorkCard {
   // Phase A-E Domain Aggregate and Fitment Integration Methods
   protected loadInspection(): void {
     this.api.getInspectionAggregate(this.id()).subscribe({
-      next: (agg) => {
-        if (agg) {
-          this.inspectionAggregate.set(agg);
-          this.aggregateVersion.set(agg.aggregateVersion ?? 1);
-          this.generatedRecommendations.set(agg.recommendations || []);
-          this.recommendationDecisions.set(agg.decisions || []);
-        }
+      next: (res) => {
+        // The document is one level down. Reading the top level found
+        // undefined and fell back to empty, which is why the panel showed no
+        // recommendations on any job.
+        const doc = res?.inspection;
+        if (!doc) return;
+        this.inspectionAggregate.set(doc);
+        this.aggregateVersion.set(doc.aggregateVersion ?? res.aggregateVersion ?? 1);
+        this.generatedRecommendations.set([...doc.recommendations]);
+        this.recommendationDecisions.set([...doc.decisions]);
       },
       error: () => {
         // Uninitialized or legacy row
@@ -638,8 +641,14 @@ export class TechWorkCard {
           if (res.aggregateVersion) {
             this.aggregateVersion.set(res.aggregateVersion);
           }
-          if (res.newlyGeneratedRecommendations && res.newlyGeneratedRecommendations.length > 0) {
-            this.generatedRecommendations.set(res.newlyGeneratedRecommendations);
+          // The server sends the aggregate's whole recommendation set, not a
+          // delta, so this replaces rather than appends -- and a checkpoint
+          // that generated none legitimately clears them.
+          if (res.recommendations) {
+            this.generatedRecommendations.set([...res.recommendations]);
+          }
+          if (res.decisions) {
+            this.recommendationDecisions.set([...res.decisions]);
           }
         },
         error: (err: PresentedError) => {
@@ -649,6 +658,19 @@ export class TechWorkCard {
           }
         },
       });
+  }
+
+  /**
+   * What was decided about one recommendation, if anything yet.
+   *
+   * A decision is kept on screen rather than removing the row: a dismissal
+   * carries the reason it was dismissed for, and that reason is the record
+   * INV-5 exists to force.
+   */
+  protected decisionFor(recommendationId: string): RecommendationDecisionView | undefined {
+    return this.recommendationDecisions().find(
+      (decision) => decision.recommendationId === recommendationId && decision.decision !== 'PENDING',
+    );
   }
 
   protected acceptRecommendation(rec: GeneratedRecommendationView): void {

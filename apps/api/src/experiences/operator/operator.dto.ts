@@ -206,7 +206,15 @@ export class DispatchTaskDto {
   estimatedMinutes?: number;
 }
 
-export class OperatorDispatchRepairDto {
+/**
+ * What the operator approves off an inspection quote.
+ *
+ * One class, after `OperatorApproveRepairDto extends OperatorDispatchRepairDto
+ * {}` -- an empty subclass -- was found sitting behind a second route that
+ * called the same service method with the same permission and had no caller
+ * anywhere. Two names for one contract is how two contracts eventually happen.
+ */
+export class OperatorApproveRepairDto {
   @IsOptional()
   @IsString()
   note?: string;
@@ -255,8 +263,6 @@ export class OperatorDispatchRepairDto {
  * extension rather than duplicated, because the two drifting apart is exactly
  * how one of them ended up missing `tasks`.
  */
-export class OperatorApproveRepairDto extends OperatorDispatchRepairDto {}
-
 export interface OperatorRepairApprovalRecord {
   readonly workOrderId: string;
   approvedFindingIds: string[];

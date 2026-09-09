@@ -63,7 +63,7 @@ const emptyHistory: TechnicianHistoryBrief = {
   generatedAt: '2026-09-03T10:00:00.000Z',
 };
 
-async function render(result: WorkCard) {
+async function render(result: WorkCard, apiOverrides: Record<string, unknown> = {}) {
   const api = {
     workCard: vi.fn(() => of(result)),
     startTask: vi.fn(() => of({})),
@@ -92,6 +92,8 @@ async function render(result: WorkCard) {
     getSmartSuggestions: vi.fn(() => of({ recommended: [], related: [], diagnostic: [], suggestions: [] })),
     submitInspectionAggregate: vi.fn(() => of({ success: true, submittedAt: '2026-09-09T10:00:00.000Z' })),
   };
+
+  Object.assign(api, apiOverrides);
 
   TestBed.configureTestingModule({
     providers: [provideRouter([]), { provide: TechnicianApi, useValue: api }],
@@ -380,5 +382,102 @@ describe('a finished inspection is a record, not a form', () => {
     const { element } = await render(done({ inspectionDeclined: true, inspection: undefined }));
 
     expect(element.querySelector('.btn-add-finding-row')).toBeNull();
+  });
+});
+
+/**
+ * REC-051 and REC-052, which were one defect wearing two coats.
+ *
+ * The client declared the inspection aggregate's fields at the top level while
+ * the server has always answered `{ inspection, aggregateVersion,
+ * lifecycleState }`; typed `http.get<any>`, neither side checked the other, so
+ * the card read `agg.recommendations`, found undefined and fell back to an
+ * empty list. And nothing rendered that list anyway: the accept path, the
+ * dismissal modal and its INV-5 reason were all on the component with no way in.
+ */
+describe('what the checks recommended', () => {
+  const RECOMMENDATION = {
+    id: 'rec1',
+    ruleId: 'brake-wear',
+    ruleVersion: 1,
+    engineVersion: 'v2',
+    targetResultId: 'tr1',
+    serviceKey: 'brake-pads-front',
+    serviceDisplayName: 'Front brake pads',
+    recommendationLevel: 'RECOMMENDED' as const,
+    score: 90,
+    generatedAt: '2026-09-09T09:00:00.000Z',
+    evaluationContext: { findingKeys: ['pad-thin'], severities: ['CRITICAL'], position: 'FRONT' },
+  };
+
+  /** The envelope the server actually sends. */
+  const aggregate = (overrides: Record<string, unknown> = {}) => ({
+    inspection: {
+      schemaVersion: 2,
+      aggregateVersion: 4,
+      catalogVersion: 1,
+      templateCode: 'CARS_FULL',
+      state: 'IN_PROGRESS',
+      targets: {},
+      recommendations: [RECOMMENDATION],
+      decisions: [],
+      ...overrides,
+    },
+    aggregateVersion: 4,
+    lifecycleState: 'IN_PROGRESS',
+  });
+
+  /**
+   * The card loads the aggregate as part of its own load, so the mock has to
+   * answer before the component is created -- `render` builds it and calls
+   * `load()` in one step.
+   */
+  async function onFindings(aggregateResponse: unknown) {
+    const rendered = await render(inspecting(), { getInspectionAggregate: () => of(aggregateResponse) });
+    press(rendered.element, 'Continue to Findings')!.click();
+    rendered.fixture.detectChanges();
+    return rendered;
+  }
+
+  it('reads the recommendations out of the envelope the server sends', async () => {
+    const { element } = await onFindings(aggregate());
+
+    const panel = element.querySelector('.rec-panel');
+    expect(panel).not.toBeNull();
+    expect(panel!.textContent).toContain('Front brake pads');
+  });
+
+  it('offers both answers, because a suggestion is not a decision', async () => {
+    const { element } = await onFindings(aggregate());
+
+    const labels = [...element.querySelectorAll('.rec-actions button')].map((b) => b.textContent?.trim());
+    expect(labels).toEqual(['Add to the job', 'Not needed']);
+  });
+
+  it('keeps a dismissal and its reason on screen rather than dropping the row', async () => {
+    // INV-5: a dismissal has to carry why. Hiding the row would hide the
+    // reason with it, and the reason is the record.
+    const { element } = await onFindings(
+      aggregate({
+        decisions: [
+          { recommendationId: 'rec1', decision: 'DISMISSED', dismissalReason: 'Customer declined for now' },
+        ],
+      }),
+    );
+
+    expect(element.querySelector('.rec-decided')?.textContent).toContain('Customer declined for now');
+    expect(element.querySelector('.rec-actions')).toBeNull();
+  });
+
+  it('says nothing at all when the checks suggested nothing', async () => {
+    const { element } = await onFindings(aggregate({ recommendations: [] }));
+
+    expect(element.querySelector('.rec-panel')).toBeNull();
+  });
+
+  it('shows nothing rather than failing when the job has no aggregate yet', async () => {
+    const { element } = await onFindings({ inspection: null });
+
+    expect(element.querySelector('.rec-panel')).toBeNull();
   });
 });

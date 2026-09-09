@@ -441,6 +441,57 @@
                       </div>
                     }
 
+                    <!--
+                      What the checks themselves suggested.
+                      The aggregate has generated these from the findings since
+                      Phase C, `acceptRecommendation` and `openDismissModal`
+                      were on the component, the dismissal modal was written --
+                      and nothing rendered the list, so no technician could
+                      reach any of it. The decision each one carries is the
+                      Decision spine's own record; INV-5 is why a dismissal
+                      needs a reason and an acceptance does not.
+                    -->
+                    @if (generatedRecommendations().length > 0) {
+                      <section class="rec-panel" aria-label="Recommended from the checks">
+                        <header class="rec-panel-head">
+                          <h4 class="rec-panel-title">Recommended from the checks</h4>
+                          <span class="rec-panel-count">{{ generatedRecommendations().length }}</span>
+                        </header>
+
+                        <ul class="rec-list">
+                          @for (rec of generatedRecommendations(); track rec.id) {
+                            <li class="rec-item">
+                              <div class="rec-item-main">
+                                <strong class="rec-name">{{ rec.serviceDisplayName }}</strong>
+                                <span class="rec-level">{{ rec.recommendationLevel }}</span>
+                              </div>
+
+                              @if (decisionFor(rec.id); as decided) {
+                                <!-- Already answered. The answer stays on screen:
+                                     a dismissal with a reason is a record, not a
+                                     row that disappears. -->
+                                <p class="rec-decided">
+                                  {{ decided.decision === 'ACCEPTED' ? 'Added to the job' : 'Dismissed' }}
+                                  @if (decided.dismissalReason) {
+                                    <span class="rec-decided-why">— {{ decided.dismissalReason }}</span>
+                                  }
+                                </p>
+                              } @else {
+                                <div class="rec-actions">
+                                  <button type="button" class="btn-rec-accept" (click)="acceptRecommendation(rec)">
+                                    Add to the job
+                                  </button>
+                                  <button type="button" class="btn-rec-dismiss" (click)="openDismissModal(rec)">
+                                    Not needed
+                                  </button>
+                                </div>
+                              }
+                            </li>
+                          }
+                        </ul>
+                      </section>
+                    }
+
                     <!-- + Add Finding Interactive Row -->
                     @if (!isAddFindingOpen()) {
                       <button type="button" class="btn-add-finding-row" (click)="openAddFinding()">

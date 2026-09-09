@@ -219,7 +219,33 @@ describe('End-to-End Inspection → Operator Final Approval → Inventory Flow',
         return updated;
       }),
     };
-    operatorService = new OperatorService(mockPrisma, {} as any, lifecycle as any, stock as any, {} as any);
+    const partRequestService = {
+      request: jest.fn(async (input: any) => {
+        const req = {
+          id: `req-${partRequests.length + 1}`,
+          createdAt: new Date(),
+          tenantId: input.tenantId,
+          workOrderId: input.workOrderId,
+          inspectionId: input.inspectionId ?? null,
+          inventoryItemId: input.inventoryItemId,
+          quantity: input.quantity,
+          reason: input.reason,
+          urgency: input.urgency ?? "normal",
+          status: "REQUESTED",
+        };
+        partRequests.push(req);
+        return { id: req.id, status: req.status };
+      }),
+    };
+
+    operatorService = new OperatorService(
+      mockPrisma,
+      {} as any,
+      lifecycle as any,
+      stock as any,
+      partRequestService as any,
+      {} as any,
+    );
     technicianService = new TechnicianWorkViewService(
       mockPrisma,
       {} as any,
@@ -275,7 +301,7 @@ describe('End-to-End Inspection → Operator Final Approval → Inventory Flow',
       // Setup warehouse stock balance: 10 units available
       stockBalances.set(`item-brake-pads:${warehouseId}`, { availableQty: 10, reservedQty: 0 });
 
-      const response = await operatorService.dispatchRepair(
+      const response = await operatorService.approveRepair(
         tenantId,
         workOrderId,
         {},
@@ -317,7 +343,7 @@ describe('End-to-End Inspection → Operator Final Approval → Inventory Flow',
       // Setup warehouse stock balance: 0 units available
       stockBalances.set(`item-brake-pads:${warehouseId}`, { availableQty: 0, reservedQty: 0 });
 
-      const response = await operatorService.dispatchRepair(
+      const response = await operatorService.approveRepair(
         tenantId,
         workOrderId,
         {},
@@ -392,7 +418,7 @@ describe('End-to-End Inspection → Operator Final Approval → Inventory Flow',
       stockBalances.set(`item-oil-filter:${warehouseId}`, { availableQty: 0, reservedQty: 0 });
       stockBalances.set(`item-rotor:${warehouseId}`, { availableQty: 2, reservedQty: 0 });
 
-      const response = await operatorService.dispatchRepair(
+      const response = await operatorService.approveRepair(
         tenantId,
         workOrderId,
         {},
@@ -435,7 +461,7 @@ describe('End-to-End Inspection → Operator Final Approval → Inventory Flow',
       stockBalances.set(`item-brake-pads:${warehouseId}`, { availableQty: 10, reservedQty: 0 });
 
       // First Approval
-      const res1 = await operatorService.dispatchRepair(
+      const res1 = await operatorService.approveRepair(
         tenantId,
         workOrderId,
         {},
@@ -446,7 +472,7 @@ describe('End-to-End Inspection → Operator Final Approval → Inventory Flow',
       expect(stockBalances.get(`item-brake-pads:${warehouseId}`)?.reservedQty).toBe(2);
 
       // Second Approval (duplicate click / network retry)
-      const res2 = await operatorService.dispatchRepair(
+      const res2 = await operatorService.approveRepair(
         tenantId,
         workOrderId,
         {},
@@ -471,7 +497,7 @@ describe('End-to-End Inspection → Operator Final Approval → Inventory Flow',
       // Cairo order should only draw from Cairo warehouse, not Alexandria
       stockBalances.set(`item-brake-pads:${warehouseId}`, { availableQty: 3, reservedQty: 0 });
 
-      await operatorService.dispatchRepair(
+      await operatorService.approveRepair(
         tenantId,
         workOrderId,
         {},

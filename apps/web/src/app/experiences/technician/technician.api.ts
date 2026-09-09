@@ -443,20 +443,6 @@ export class TechnicianApi {
     });
   }
 
-  requestPart(
-    workOrderId: string,
-    inventoryItemId: string,
-    quantity: number,
-    reason?: string,
-    inspectionId?: string,
-  ): Observable<unknown> {
-    return this.http.post(`/api/v1/technician/work-orders/${workOrderId}/parts`, {
-      inventoryItemId,
-      quantity,
-      reason,
-      ...(inspectionId ? { inspectionId } : {}),
-    });
-  }
 
   /**
    * CONTRACTS-v0 C1/C2. Which of the two to call is not a decision this
@@ -516,11 +502,6 @@ export class TechnicianApi {
 
   usePart(partRequestId: string): Observable<unknown> {
     return this.http.post(`/api/v1/technician/parts/${partRequestId}/used`, {});
-  }
-
-  /** Answer the store's clarifying question on a return in progress. */
-  respondToReturnClarification(partRequestId: string, response: string): Observable<unknown> {
-    return this.http.post(`/api/v1/technician/parts/${partRequestId}/return/respond`, { response });
   }
 
   /** "Ask the customer" -- creates the decision request and sends it in one call. */
@@ -611,10 +592,6 @@ export class TechnicianApi {
     return this.http.post<GroupedSuggestionsView>('/api/v1/technician/smart-suggestions', query);
   }
 
-  getInspectionCheckpoints(category?: 'CARS' | 'MOTORCYCLES' | 'HEAVY_EQUIPMENT'): Observable<{ checkpoints: MasterInspectionCheckpointView[] }> {
-    const params = category ? `?category=${category}` : '';
-    return this.http.get<{ checkpoints: MasterInspectionCheckpointView[] }>(`/api/v1/technician/inspection-checkpoints${params}`);
-  }
 
   getWorkshopInventory(): Observable<{
     items: Array<{
@@ -639,56 +616,61 @@ export class TechnicianApi {
   }
 
   // Phase C: Inspection Aggregate Lifecycle (OCC, Real-Time Delta Auto-Save, Decisions, Submission)
-  getInspectionAggregate(workOrderId: string): Observable<{
-    id: string;
-    tenantId: string;
-    workOrderId: string;
-    state: string;
-    aggregateVersion: number;
-    catalogVersion: number;
-    templateCode: string;
-    targets: Record<string, TargetInspectionResultView>;
-    recommendations: GeneratedRecommendationView[];
-    decisions: RecommendationDecisionView[];
-    snapshot?: any;
-  }> {
-    return this.http.get<any>(`/api/v1/technician/work-orders/${workOrderId}/inspection`);
+  /**
+   * The inspection aggregate, in the envelope the server actually sends.
+   *
+   * This method used to declare the aggregate's fields at the top level --
+   * `state`, `targets`, `recommendations`, `decisions` -- while the server has
+   * always answered `{ inspection, aggregateVersion, lifecycleState }` with the
+   * document one level down. Typed `http.get<any>`, nothing checked either
+   * side, so the work card read `agg.recommendations`, got `undefined`, fell
+   * back to `[]` and showed a technician no generated recommendations and no
+   * decisions, on every job, forever. The mocks in its spec returned `null`,
+   * so no test ever looked at the shape.
+   */
+  getInspectionAggregate(workOrderId: string): Observable<InspectionAggregateResponse> {
+    return this.http.get<InspectionAggregateResponse>(
+      `/api/v1/technician/work-orders/${workOrderId}/inspection`,
+    );
   }
 
+  /**
+   * Records what was found on one checkpoint.
+   *
+   * `targetResult` and `recommendations` are the server's names. The client
+   * called them `target` and `newlyGeneratedRecommendations`, so the
+   * recommendations a saved checkpoint had just generated -- the entire point
+   * of saving it -- never reached the panel.
+   */
   patchInspectionTarget(
     workOrderId: string,
     targetKey: string,
     dto: PatchInspectionTargetPayload,
-  ): Observable<{
-    success: boolean;
-    aggregateVersion: number;
-    target: TargetInspectionResultView;
-    newlyGeneratedRecommendations: GeneratedRecommendationView[];
-  }> {
-    return this.http.patch<any>(`/api/v1/technician/work-orders/${workOrderId}/inspection/targets/${targetKey}`, dto);
+  ): Observable<PatchInspectionTargetResult> {
+    return this.http.patch<PatchInspectionTargetResult>(
+      `/api/v1/technician/work-orders/${workOrderId}/inspection/targets/${targetKey}`,
+      dto,
+    );
   }
 
   recordRecommendationDecision(
     workOrderId: string,
     dto: RecordRecommendationDecisionPayload,
-  ): Observable<{
-    success: boolean;
-    aggregateVersion: number;
-    decision: RecommendationDecisionView;
-  }> {
-    return this.http.post<any>(`/api/v1/technician/work-orders/${workOrderId}/inspection/decisions`, dto);
+  ): Observable<RecordDecisionResult> {
+    return this.http.post<RecordDecisionResult>(
+      `/api/v1/technician/work-orders/${workOrderId}/inspection/decisions`,
+      dto,
+    );
   }
 
   submitInspectionAggregate(
     workOrderId: string,
     dto: { expectedVersion?: number; technicianNotes?: string },
-  ): Observable<{
-    success: boolean;
-    aggregateId: string;
-    state: string;
-    snapshot: any;
-  }> {
-    return this.http.post<any>(`/api/v1/technician/work-orders/${workOrderId}/inspection/submit`, dto);
+  ): Observable<SubmitInspectionResult> {
+    return this.http.post<SubmitInspectionResult>(
+      `/api/v1/technician/work-orders/${workOrderId}/inspection/submit`,
+      dto,
+    );
   }
 
   // Phase D & E: Vehicle Fitment and POS Live Stock & Price Selection
@@ -777,6 +759,56 @@ export interface RecommendationDecisionView {
   decidedAt?: string;
   dismissalReason?: string;
   scopeModificationNote?: string;
+}
+
+/**
+ * The inspection aggregate as the server sends it: the document, plus the two
+ * facts the caller needs without opening it.
+ */
+export interface InspectionAggregateDocumentView {
+  readonly schemaVersion: number;
+  readonly aggregateVersion: number;
+  readonly catalogVersion: number;
+  readonly templateCode: string;
+  readonly state: string;
+  readonly targets: Record<string, TargetInspectionResultView>;
+  readonly recommendations: readonly GeneratedRecommendationView[];
+  readonly decisions: readonly RecommendationDecisionView[];
+  readonly startedAt?: string | null;
+  readonly completedAt?: string | null;
+  readonly submittedAt?: string | null;
+  readonly technicianStaffId?: string | null;
+  readonly snapshot?: unknown;
+}
+
+export interface InspectionAggregateResponse {
+  /** Null when this job has no aggregate yet -- an honest empty, not an error. */
+  readonly inspection: InspectionAggregateDocumentView | null;
+  readonly aggregateVersion?: number;
+  readonly lifecycleState?: string;
+}
+
+export interface PatchInspectionTargetResult {
+  readonly success: boolean;
+  readonly targetKey: string;
+  readonly targetResult: TargetInspectionResultView;
+  readonly recommendations: readonly GeneratedRecommendationView[];
+  readonly decisions: readonly RecommendationDecisionView[];
+  readonly aggregateVersion: number;
+}
+
+export interface RecordDecisionResult {
+  readonly success: boolean;
+  readonly decision: RecommendationDecisionView;
+  readonly aggregateVersion: number;
+}
+
+export interface SubmitInspectionResult {
+  readonly success: boolean;
+  readonly workOrderId: string;
+  readonly submittedAt?: string | null;
+  readonly snapshot?: unknown;
+  readonly aggregateVersion: number;
 }
 
 export interface ResolvedFitmentItemView {

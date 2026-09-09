@@ -130,12 +130,6 @@ export class ReturnPartDto {
   reason?: string;
 }
 
-export class RespondToClarificationDto {
-  @IsString()
-  @Length(1, 1000)
-  response!: string;
-}
-
 export class CreateFaultDto {
   @IsString()
   @Length(3, 1000)

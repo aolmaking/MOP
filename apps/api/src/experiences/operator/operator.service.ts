@@ -3,12 +3,12 @@ import { PrismaService } from "../../runtime/database/prisma.service";
 import { IntakeService } from "../../systems/operations/intake.service";
 import { CatalogBrowseService } from "../../systems/inventory/catalog-browse.service";
 import { StockService } from "../../systems/inventory/stock.service";
+import { PartRequestService } from "../../systems/inventory/part-request.service";
 import { WORK_ORDER_GRAPH, type SessionContext } from "@mop/shared";
 import { type CategoryCode, Prisma, type WorkOrderStatus } from "@mop/database";
 import { WorkOrderLifecycleService, type LifecycleActor } from "../../systems/operations/work-order-lifecycle.service";
 import type {
   OperatorApproveRepairDto,
-  OperatorDispatchRepairDto,
   OperatorIntakeDto,
   OperatorPosOrderDto,
   OperatorRepairApprovalRecord,
@@ -70,6 +70,7 @@ export class OperatorService {
     private readonly intakeService: IntakeService,
     private readonly lifecycle: WorkOrderLifecycleService,
     private readonly stock: StockService,
+    private readonly partRequests: PartRequestService,
     @Optional() private readonly browse?: CatalogBrowseService,
   ) {}
 
@@ -542,6 +543,9 @@ export class OperatorService {
       const transition = await this.lifecycle.apply(result.workOrderId, tenantId, "START_INSPECTION", actor);
       finalStatus = transition.to;
 
+      // Not swallowed. The transition above says this job is under
+      // inspection; an inspection row that quietly failed to exist leaves the
+      // technician a job in a state with nothing to fill in.
       await this.prisma.inspection.create({
         data: {
           tenantId,
@@ -553,7 +557,7 @@ export class OperatorService {
             completedBoxes: {},
           },
         },
-      }).catch(() => null);
+      });
     }
 
     return {
@@ -1142,6 +1146,9 @@ export class OperatorService {
     const titles = plannedTitles.length > 0 ? plannedTitles : ["Complete Inspected Repairs & Adjustments"];
 
     for (const title of titles) {
+      // Not swallowed, for the reason the line above states: a dispatched job
+      // whose tasks silently did not save is a technician staring at an empty
+      // card, and the operator was told it went through.
       await this.prisma.task.create({
         data: {
           tenantId,
@@ -1149,7 +1156,7 @@ export class OperatorService {
           title,
           status: "ASSIGNED",
         },
-      }).catch(() => null);
+      });
     }
 
     // 9. Process approved parts against inventory:
@@ -1167,48 +1174,43 @@ export class OperatorService {
       const partName = p.name || "Replacement Part";
 
       // Idempotency: Check if this part was already processed for this work order
-      let alreadyHandled = false;
-      if (this.prisma.workOrderPartLine) {
-        try {
-          const existingLines = await this.prisma.workOrderPartLine.findMany({
-            where: {
-              tenantId,
-              workOrderId,
-            },
-          });
-          alreadyHandled = existingLines.some(
-            (line: any) =>
-              (p.inventoryItemId && line.inventoryItemId === p.inventoryItemId) ||
-              line.name === partName,
-          );
-        } catch {
-          // non-fatal in mock tests
-        }
-      }
+      // Whether this part has already been put on the job.
+      //
+      // The read used to sit inside `try {} catch { /* non-fatal in mock
+      // tests */ }`, so any failure answered "not handled yet" and the part
+      // was allocated, charged and requested a second time. An idempotency
+      // check that fails open is not an idempotency check.
+      const existingLines = await this.prisma.workOrderPartLine.findMany({
+        where: { tenantId, workOrderId },
+        select: { inventoryItemId: true, name: true },
+      });
+      const alreadyHandled = existingLines.some(
+        (line) => (p.inventoryItemId && line.inventoryItemId === p.inventoryItemId) || line.name === partName,
+      );
 
       if (alreadyHandled) {
         continue;
       }
 
       // Resolve inventory item from master/tenant inventory
-      let inventoryItem: { id: string; sku?: string; name: string } | null = null;
-      if ((this.prisma as any).inventoryItem) {
-        try {
-          if (p.inventoryItemId) {
-            inventoryItem = await (this.prisma as any).inventoryItem.findFirst({
-              where: { id: p.inventoryItemId, tenantId },
-              select: { id: true, sku: true, name: true },
-            });
-          }
-          if (!inventoryItem && p.sku) {
-            inventoryItem = await (this.prisma as any).inventoryItem.findFirst({
-              where: { sku: p.sku, tenantId },
-              select: { id: true, sku: true, name: true },
-            });
-          }
-        } catch {
-          // non-fatal
-        }
+      // Which catalogued part this quote line means, by id then by SKU.
+      //
+      // Behind an `as any` cast and a swallow, a failure here left
+      // `inventoryItem` null -- which reads downstream as "not a stocked part
+      // at all", so nothing was reserved, no shortfall was requested, and the
+      // customer was charged for a part no shelf had been asked for.
+      let inventoryItem: { id: string; sku: string; name: string } | null = null;
+      if (p.inventoryItemId) {
+        inventoryItem = await this.prisma.inventoryItem.findFirst({
+          where: { id: p.inventoryItemId, tenantId },
+          select: { id: true, sku: true, name: true },
+        });
+      }
+      if (!inventoryItem && p.sku) {
+        inventoryItem = await this.prisma.inventoryItem.findFirst({
+          where: { sku: p.sku, tenantId },
+          select: { id: true, sku: true, name: true },
+        });
       }
 
       // A catalogued part with nowhere to draw it from is a configuration
@@ -1226,21 +1228,19 @@ export class OperatorService {
       }
 
       // If inventory item and warehouse exist, check stock balance
-      if (inventoryItem && warehouseId && (this.prisma as any).warehouseStockBalance) {
-        let balanceRow: { availableQty: number; reservedQty: number } | null = null;
-        try {
-          balanceRow = await (this.prisma as any).warehouseStockBalance.findUnique({
-            where: {
-              inventoryItemId_warehouseId: {
-                inventoryItemId: inventoryItem.id,
-                warehouseId,
-              },
+      if (inventoryItem && warehouseId) {
+        // How much is actually on that shelf. Swallowed, this read answered
+        // "nothing available" on any failure, which sent a part that was in
+        // stock down the shortfall path and told the store to order one.
+        const balanceRow = await this.prisma.warehouseStockBalance.findUnique({
+          where: {
+            inventoryItemId_warehouseId: {
+              inventoryItemId: inventoryItem.id,
+              warehouseId,
             },
-            select: { availableQty: true, reservedQty: true },
-          });
-        } catch {
-          // non-fatal
-        }
+          },
+          select: { availableQty: true, reservedQty: true },
+        });
 
         const available = balanceRow ? Math.max(0, balanceRow.availableQty) : 0;
 
@@ -1248,21 +1248,19 @@ export class OperatorService {
           // Scenario A: FULLY IN STOCK
           await this.reserve(tenantId, inventoryItem.id, warehouseId, requiredQty, workOrderId, session.accountId);
 
-          if (this.prisma.workOrderPartLine) {
-            await this.prisma.workOrderPartLine.create({
-              data: {
-                tenantId,
-                workOrderId,
-                name: partName,
-                provenance: "INVENTORY",
-                inventoryItemId: inventoryItem.id,
-                quantity: requiredQty,
-                sellingPrice: unitPrice,
-                addedById: session.accountId,
-                workshopWarranted: true,
-              },
-            }).catch(() => null);
-          }
+          await this.prisma.workOrderPartLine.create({
+            data: {
+              tenantId,
+              workOrderId,
+              name: partName,
+              provenance: "INVENTORY",
+              inventoryItemId: inventoryItem.id,
+              quantity: requiredQty,
+              sellingPrice: unitPrice,
+              addedById: session.accountId,
+              workshopWarranted: true,
+            },
+          });
           partsAllocated++;
         } else {
           // Scenario B: SHORTFALL OR COMPLETELY OUT OF STOCK
@@ -1276,48 +1274,6 @@ export class OperatorService {
             // read and this write was silently erased.
             await this.reserve(tenantId, inventoryItem.id, warehouseId, allocQty, workOrderId, session.accountId);
 
-            if (this.prisma.workOrderPartLine) {
-              await this.prisma.workOrderPartLine.create({
-                data: {
-                  tenantId,
-                  workOrderId,
-                  name: partName,
-                  provenance: "INVENTORY",
-                  inventoryItemId: inventoryItem.id,
-                  quantity: allocQty,
-                  sellingPrice: unitPrice,
-                  addedById: session.accountId,
-                  workshopWarranted: true,
-                },
-              }).catch(() => null);
-            }
-            partsAllocated++;
-          }
-
-          // Create official PartRequest for shortfall quantity (status: REQUESTED)
-          let partRequestId: string | null = null;
-          if ((this.prisma as any).partRequest) {
-            try {
-              const req = await (this.prisma as any).partRequest.create({
-                data: {
-                  tenantId,
-                  workOrderId,
-                  inspectionId: insp?.id ?? null,
-                  inventoryItemId: inventoryItem.id,
-                  requestedById: session.accountId,
-                  quantity: shortfallQty,
-                  reason: `Required part for approved inspection quote (${partName})`,
-                  urgency: "urgent",
-                  status: "REQUESTED",
-                },
-              });
-              partRequestId = req?.id ?? null;
-            } catch {
-              // non-fatal
-            }
-          }
-
-          if (this.prisma.workOrderPartLine) {
             await this.prisma.workOrderPartLine.create({
               data: {
                 tenantId,
@@ -1325,33 +1281,79 @@ export class OperatorService {
                 name: partName,
                 provenance: "INVENTORY",
                 inventoryItemId: inventoryItem.id,
-                partRequestId: partRequestId ?? undefined,
-                quantity: shortfallQty,
+                quantity: allocQty,
                 sellingPrice: unitPrice,
                 addedById: session.accountId,
                 workshopWarranted: true,
               },
-            }).catch(() => null);
+            });
+            partsAllocated++;
           }
-          partsRequested++;
-        }
-      } else {
-        // Scenario C: Non-inventory / custom workshop-sourced part
-        if (this.prisma.workOrderPartLine) {
+
+          // The shortfall becomes a real part request, through the service
+          // that owns the concept.
+          //
+          // This used to write the row by hand behind an `as any` cast, inside
+          // a `try {} catch { /* non-fatal */ }` -- so it produced a
+          // PartRequest with no `part_request.created` event, no audit entry,
+          // and no `REQUEST_PART` transition, and when it failed the operator
+          // was told the repair had been dispatched anyway. A second writer of
+          // a table with different rules is the same defect as the operator
+          // writing WarehouseStockBalance by hand (REC-015); this one hid
+          // longer because the cast turned the type system off.
+          //
+          // Not swallowed: the customer has approved a repair that needs a part
+          // the shelf cannot supply, and if the store is never told, the job
+          // waits for a part nobody ordered.
+          const created = await this.partRequests.request(
+            {
+              tenantId,
+              workOrderId,
+              inspectionId: insp?.id ?? undefined,
+              inventoryItemId: inventoryItem.id,
+              quantity: shortfallQty,
+              reason: `Required part for approved inspection quote (${partName})`,
+              urgency: "urgent",
+            },
+            {
+              accountId: session.accountId,
+              displayName: session.displayName ?? "Operator",
+              actorType: "TENANT_STAFF",
+            },
+          );
+          const partRequestId: string = created.id;
+
           await this.prisma.workOrderPartLine.create({
             data: {
               tenantId,
               workOrderId,
               name: partName,
-              provenance: inventoryItem ? "INVENTORY" : "EXTERNAL_PURCHASE",
-              inventoryItemId: inventoryItem?.id ?? null,
-              quantity: requiredQty,
+              provenance: "INVENTORY",
+              inventoryItemId: inventoryItem.id,
+              partRequestId: partRequestId ?? undefined,
+              quantity: shortfallQty,
               sellingPrice: unitPrice,
               addedById: session.accountId,
               workshopWarranted: true,
             },
-          }).catch(() => null);
+          });
+          partsRequested++;
         }
+      } else {
+        // Scenario C: Non-inventory / custom workshop-sourced part
+        await this.prisma.workOrderPartLine.create({
+          data: {
+            tenantId,
+            workOrderId,
+            name: partName,
+            provenance: inventoryItem ? "INVENTORY" : "EXTERNAL_PURCHASE",
+            inventoryItemId: inventoryItem?.id ?? null,
+            quantity: requiredQty,
+            sellingPrice: unitPrice,
+            addedById: session.accountId,
+            workshopWarranted: true,
+          },
+        });
       }
     }
 
@@ -1370,15 +1372,4 @@ export class OperatorService {
     };
   }
 
-  /**
-   * Backward-compatible alias delegating to approveRepair.
-   */
-  async dispatchRepair(
-    tenantId: string,
-    workOrderId: string,
-    dto: OperatorDispatchRepairDto,
-    session: SessionContext,
-  ) {
-    return this.approveRepair(tenantId, workOrderId, dto, session);
-  }
 }
