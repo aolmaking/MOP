@@ -26,6 +26,19 @@ export class PlanEntitlementLayer implements PermissionLayer {
       return { allowed: false, locked: true, reason: "Exports are not included in your current plan" };
     }
 
+    // Which individual reports the plan sells. `Plan.allowedReports` sat
+    // beside `allowedModules` and `allowedExports` and was read by nothing
+    // anywhere, so a plan that included one report granted all four: the
+    // module gate is all-or-nothing and there was no finer answer below it.
+    // Empty means no restriction -- see planAllowedReports' own note.
+    if (
+      permissionKey.startsWith("reports.") &&
+      context.planAllowedReports.length > 0 &&
+      !context.planAllowedReports.includes(permissionKey)
+    ) {
+      return { allowed: false, locked: true, reason: "That report is not included in your current plan" };
+    }
+
     return null;
   }
 }

@@ -6,11 +6,16 @@ process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { WorkflowIntegrityService } from "./workflow-integrity.service";
+import { AuditService } from "../../audit/audit.service";
+import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
+import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 import type { PrismaService } from "../../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
-const integrity = new WorkflowIntegrityService(asService);
+const capabilities = new CapabilityResolutionService(asService);
+const policies = new PolicyResolutionService(asService, new AuditService(asService), capabilities);
+const integrity = new WorkflowIntegrityService(asService, policies, capabilities);
 
 const SUFFIX = `wint-${Date.now()}`;
 let tenantId: string;
@@ -355,9 +360,14 @@ describe("WorkflowIntegrityService", () => {
     }
   });
 
-  it("names the Customer-Portal-policy check as explicitly not computable, rather than faking it", async () => {
+  it("runs the Customer-Portal-policy check rather than declaring it impossible", async () => {
+    // It used to be named in `notComputable` because it wanted a flag in a
+    // configuration blob nothing wrote. What it was really asking -- can the
+    // policy be satisfied at all? -- is answerable from the policy and the
+    // capability, both of which are real. See the "a policy that only a
+    // missing capability could satisfy" block below for its behaviour.
     const report = await integrity.build(tenantId);
-    expect(report.notComputable.some((n) => n.issueType === "CUSTOMER_PORTAL_POLICY_MODULE_CONTRADICTION")).toBe(true);
+    expect(report.notComputable.some((n) => n.issueType === "CUSTOMER_PORTAL_POLICY_MODULE_CONTRADICTION")).toBe(false);
   });
 
   it("never leaks across tenants", async () => {
@@ -544,5 +554,98 @@ describe("WorkflowIntegrityService -- issue lifecycle", () => {
 
     await prisma.tenant.delete({ where: { id: other.id } });
     await prisma.plan.delete({ where: { id: otherPlan.id } });
+  });
+});
+
+/**
+ * The seventh check, which the spec asked for and this service had declined to
+ * run for want of data. The data it wanted -- a "portal enabled" flag in a
+ * configuration blob -- described a product with two sources of truth for a
+ * workshop's shape. There is one now, so the contradiction it looked for
+ * cannot happen. This is the one that can, and it is far worse.
+ */
+describe("a policy that only a missing capability could satisfy", () => {
+  const ACTOR = { accountId: "admin", displayName: "Platform Admin", actorType: "PLATFORM" as const };
+
+  afterEach(async () => {
+    await prisma.workshopPolicy.deleteMany({ where: { tenantId } });
+    await prisma.tenantCapability.deleteMany({ where: { tenantId, capabilityKey: "CUSTOMER_PORTAL" } });
+  });
+
+  it("flags PORTAL_ONLY approval in a workshop with no customer portal", async () => {
+    await prisma.tenantCapability.create({
+      data: {
+        tenantId,
+        capabilityKey: "CUSTOMER_PORTAL",
+        status: "DISABLED",
+        source: "OWNER_CONFIGURATION",
+        effectiveFrom: new Date(Date.now() - 60_000),
+        configuredBy: "test",
+      },
+    });
+    await policies.set(tenantId, "PORTAL_COUNTER_APPROVAL", "PORTAL_ONLY", ACTOR, "PLATFORM", "Portal answers only");
+
+    const report = await integrity.build(tenantId);
+    const issue = report.issues.find((i) => i.type === "CUSTOMER_PORTAL_POLICY_MODULE_CONTRADICTION");
+
+    expect(issue).toBeDefined();
+    // Nothing can move until somebody changes a setting, so it is critical
+    // and it is the owner's to fix.
+    expect(issue!.severity).toBe("CRITICAL");
+    expect(issue!.ownerFixable).toBe(true);
+  });
+
+  it("says nothing when the workshop has a portal", async () => {
+    await policies.set(tenantId, "PORTAL_COUNTER_APPROVAL", "PORTAL_ONLY", ACTOR, "PLATFORM", "Portal answers only");
+
+    // No capability row at all means ENABLED, which is the common shape.
+    const report = await integrity.build(tenantId);
+
+    expect(report.issues.some((i) => i.type === "CUSTOMER_PORTAL_POLICY_MODULE_CONTRADICTION")).toBe(false);
+  });
+
+  it("says nothing when the counter may record the decision", async () => {
+    // The default. Removing the portal moves approval to the counter rather
+    // than deleting consent -- CAPABILITY_MODEL.md Rule 3 -- so this is a
+    // legitimate shape, not a contradiction.
+    await prisma.tenantCapability.create({
+      data: {
+        tenantId,
+        capabilityKey: "CUSTOMER_PORTAL",
+        status: "DISABLED",
+        source: "OWNER_CONFIGURATION",
+        effectiveFrom: new Date(Date.now() - 60_000),
+        configuredBy: "test",
+      },
+    });
+
+    const report = await integrity.build(tenantId);
+
+    expect(report.issues.some((i) => i.type === "CUSTOMER_PORTAL_POLICY_MODULE_CONTRADICTION")).toBe(false);
+  });
+
+  it("reports one row for the workshop, not one per stranded job", async () => {
+    await prisma.tenantCapability.create({
+      data: {
+        tenantId,
+        capabilityKey: "CUSTOMER_PORTAL",
+        status: "DISABLED",
+        source: "OWNER_CONFIGURATION",
+        effectiveFrom: new Date(Date.now() - 60_000),
+        configuredBy: "test",
+      },
+    });
+    await policies.set(tenantId, "PORTAL_COUNTER_APPROVAL", "PORTAL_ONLY", ACTOR, "PLATFORM", "Portal answers only");
+
+    const report = await integrity.build(tenantId);
+
+    // One setting, one click to fix. Listing every affected job would bury it.
+    expect(report.issues.filter((i) => i.type === "CUSTOMER_PORTAL_POLICY_MODULE_CONTRADICTION")).toHaveLength(1);
+  });
+
+  it("no longer reports any check as impossible to compute", async () => {
+    const report = await integrity.build(tenantId);
+
+    expect(report.notComputable).toEqual([]);
   });
 });

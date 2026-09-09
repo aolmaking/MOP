@@ -71,10 +71,7 @@ describe("AuthController (integration, real HTTP)", () => {
       data: {
         tenantId,
         theme: {},
-        pageLayouts: {},
         roleExperience: {},
-        workflowPolicy: {},
-        featureFlags: {},
         enabledFeatures: [],
         forms: {},
         messageTemplates: {},

@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
-import { DEFAULT_ROLE_PERMISSIONS } from "@mop/shared";
+import { DEFAULT_ROLE_PERMISSIONS, isCapabilityActive } from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
+import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
+import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 
 export type IntegrityIssueType =
   | "PART_ARRIVAL_UNCONFIRMED"
@@ -8,7 +10,8 @@ export type IntegrityIssueType =
   | "RETURN_PENDING_REVIEW"
   | "TEAM_LEADER_MISSING_REPORT_ACCESS"
   | "WORK_ORDER_TASK_STATUS_CONFLICT"
-  | "ORPHANED_STATUS_CHANGE";
+  | "ORPHANED_STATUS_CHANGE"
+  | "CUSTOMER_PORTAL_POLICY_MODULE_CONTRADICTION";
 
 export type IntegrityIssueSeverity = "INFO" | "WARNING" | "CRITICAL";
 
@@ -94,23 +97,33 @@ const RETURN_REVIEW_THRESHOLD_HOURS = 48;
  * Workflow Health -- consistency checks (docs/detailed-specs/tenant-owner.md,
  * "Workflow Health / Operations Integrity"). Each row in that spec's own
  * table is one method here, computed against the real schema -- not
- * illustrative. Two of the spec's seven checks are not run, and say so:
+ * illustrative. All seven now run.
  *
- * - The Customer-Portal-policy-vs-module contradiction needs
- *   `TenantConfiguration.workflowPolicy` to hold real, structured data.
- *   It is currently written as `{}` at tenant creation
- *   (platform.service.ts) and read by nothing anywhere in the product --
- *   there is no actual "portal enabled in workflow policy" flag to
- *   compare against the module flag. Faking a comparison against an
- *   always-empty object would silently report "no contradiction" forever,
- *   which is worse than not running the check.
+ * The seventh -- the Customer-Portal contradiction -- was the last one held
+ * back, on the grounds that `TenantConfiguration.workflowPolicy` held no real
+ * data to compare a module flag against. That framing was inherited from a
+ * time when a workshop's shape had two sources of truth; it has one now, so
+ * "the policy says the portal is on and the module says it is off" is no
+ * longer a state the product can even represent.
+ *
+ * The contradiction that IS representable, and is far worse, is the one this
+ * check now looks for: `PORTAL_COUNTER_APPROVAL = PORTAL_ONLY` in a workshop
+ * whose `CUSTOMER_PORTAL` capability is not active. The policy says only the
+ * customer, through the portal, may answer a decision -- and there is no
+ * portal. Every approval request becomes unanswerable by anyone, and the jobs
+ * behind them stop dead. It is owner-fixable in one click, which is exactly
+ * what a health check is for.
  */
 @Injectable()
 export class WorkflowIntegrityService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly policies: PolicyResolutionService,
+    private readonly capabilities: CapabilityResolutionService,
+  ) {}
 
   async build(tenantId: string, filters: IntegrityFilters = {}): Promise<IntegrityReport> {
-    const [partArrival, customerResponse, returnPending, teamLeaderAccess, statusConflict, orphaned] =
+    const [partArrival, customerResponse, returnPending, teamLeaderAccess, statusConflict, orphaned, portalPolicy] =
       await Promise.all([
         this.partArrivalUnconfirmed(tenantId),
         this.customerResponseNotReflected(tenantId),
@@ -118,6 +131,7 @@ export class WorkflowIntegrityService {
         this.teamLeaderMissingReportAccess(tenantId),
         this.workOrderTaskStatusConflict(tenantId),
         this.orphanedStatusChange(tenantId),
+        this.portalPolicyContradiction(tenantId),
       ]);
 
     const detected = [
@@ -127,6 +141,7 @@ export class WorkflowIntegrityService {
       ...teamLeaderAccess,
       ...statusConflict,
       ...orphaned,
+      ...portalPolicy,
     ];
 
     // What a person decided is the only part that cannot be recomputed, so
@@ -183,13 +198,10 @@ export class WorkflowIntegrityService {
       groups,
       totals,
       scannedAt: new Date().toISOString(),
-      notComputable: [
-        {
-          issueType: "CUSTOMER_PORTAL_POLICY_MODULE_CONTRADICTION",
-          reason:
-            "TenantConfiguration.workflowPolicy carries no real schema yet -- it is written empty at tenant creation and read by nothing. There is no stored 'portal enabled in workflow policy' flag to compare against the module flag.",
-        },
-      ],
+      // Empty, and kept rather than removed: the field is the page's promise
+      // that it will say so when a check cannot be computed honestly, and that
+      // promise outlives the one entry that used to be in it.
+      notComputable: [],
     };
   }
 
@@ -244,6 +256,50 @@ export class WorkflowIntegrityService {
   }
 
   /**
+   * A policy that can only be satisfied by a capability the workshop does not
+   * have.
+   *
+   * `PORTAL_COUNTER_APPROVAL = PORTAL_ONLY` means only the customer, through
+   * the portal, may answer a decision request. With `CUSTOMER_PORTAL`
+   * inactive there is no portal for them to answer through, and
+   * `CustomerDecisionService.recordOnBehalf` refuses every staff attempt --
+   * correctly, because that is what the policy says. The result is a workshop
+   * where no approval can be given by anyone and every job that needs one
+   * stops.
+   *
+   * CAPABILITY_MODEL.md Rule 3 is explicit that removing the portal moves
+   * approval to the counter rather than deleting consent, so this combination
+   * is a misconfiguration rather than a legitimate shape -- and the policy
+   * registry's own default reason says the same thing. One row, tenant-wide:
+   * it is one setting, not one problem per job, and listing every stranded job
+   * separately would bury the single click that fixes them all.
+   */
+  private async portalPolicyContradiction(tenantId: string): Promise<DetectedIssue[]> {
+    const [profile, approval] = await Promise.all([
+      this.capabilities.resolveCurrent(tenantId),
+      this.policies.resolveValue(tenantId, "PORTAL_COUNTER_APPROVAL"),
+    ]);
+
+    if (approval !== "PORTAL_ONLY") return [];
+    if (isCapabilityActive(profile, "CUSTOMER_PORTAL")) return [];
+
+    return [
+      {
+        id: `CUSTOMER_PORTAL_POLICY_MODULE_CONTRADICTION:Tenant:${tenantId}`,
+        type: "CUSTOMER_PORTAL_POLICY_MODULE_CONTRADICTION" as const,
+        severity: "CRITICAL" as const,
+        description:
+          "Decisions may only be answered through the customer portal, and this workshop has no customer portal -- so no approval can be recorded by anyone.",
+        entityType: "Tenant",
+        entityId: tenantId,
+        link: "/owner/organization",
+        ownerFixable: true,
+        detectedAt: new Date().toISOString(),
+      },
+    ];
+  }
+
+  /**
    * Plain-language meaning for each fault class.
    *
    * The detector's own description says what is wrong with one record.
@@ -287,6 +343,14 @@ export class WorkflowIntegrityService {
             "A returned part has been waiting for a decision long enough that its value is effectively frozen.",
           recommendedAction: "Review the return and either restock it or write it off.",
           fixableBy: "Inventory Manager",
+        };
+      case "CUSTOMER_PORTAL_POLICY_MODULE_CONTRADICTION":
+        return {
+          whatItMeans:
+            "This workshop only accepts customer decisions through the portal, and it does not have a portal -- so every job waiting on an approval is stuck with no way for anyone to answer.",
+          recommendedAction:
+            "Either turn the customer portal back on, or change the approval policy so staff can record a decision the customer gave at the counter or on the phone.",
+          fixableBy: "Owner",
         };
       case "TEAM_LEADER_MISSING_REPORT_ACCESS":
         return {

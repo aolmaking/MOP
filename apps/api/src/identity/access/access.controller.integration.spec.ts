@@ -68,10 +68,7 @@ describe("AccessController (integration, real HTTP)", () => {
       data: {
         tenantId,
         theme: {},
-        pageLayouts: {},
         roleExperience: {},
-        workflowPolicy: {},
-        featureFlags: {},
         // Both keys used below belong to modules that must be enabled here,
         // or ModuleEnabledLayer (layer 4) denies+locks before the role
         // template (layer 7) is ever reached -- this test wants the

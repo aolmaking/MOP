@@ -29,6 +29,16 @@ export interface PermissionContext {
   readonly planAllowedModules: readonly string[];
   /** Empty means exports are not included in the plan. */
   readonly planAllowedExports: readonly string[];
+  /**
+   * Which individual reports this plan includes, by permission key.
+   *
+   * Empty means no restriction, matching `planAllowedModules` and NOT
+   * `planAllowedExports`. The asymmetry is deliberate and load-bearing: every
+   * plan in existence carries an empty list here, so reading empty as "no
+   * reports" would take the reports away from every workshop already running.
+   * A plan that means to sell a subset says so by listing it.
+   */
+  readonly planAllowedReports: readonly string[];
   readonly capabilities: CapabilityProfile;
   /** permissionKey -> allowed, for this session's role. */
   readonly roleTemplate: ReadonlyMap<string, boolean>;
@@ -47,6 +57,7 @@ const EMPTY_CONTEXT: PermissionContext = {
   platformLocks: new Map(),
   planAllowedModules: [],
   planAllowedExports: [],
+  planAllowedReports: [],
   capabilities: {},
   roleTemplate: new Map(),
   userOverrides: new Map(),
@@ -106,7 +117,7 @@ export class PermissionContextService {
       }),
       tx.tenant.findUnique({
         where: { id: tenantId },
-        select: { plan: { select: { allowedModules: true, allowedExports: true } } },
+        select: { plan: { select: { allowedModules: true, allowedExports: true, allowedReports: true } } },
       }),
       this.capabilities.resolveCurrent(tenantId, tx),
       // Role rows are only meaningful for tenant staff; a customer session
@@ -140,6 +151,7 @@ export class PermissionContextService {
       ),
       planAllowedModules: tenant?.plan.allowedModules ?? [],
       planAllowedExports: tenant?.plan.allowedExports ?? [],
+      planAllowedReports: tenant?.plan.allowedReports ?? [],
       capabilities,
       roleTemplate: new Map(roleRows.map((row) => [row.permissionKey, row.allowed])),
       userOverrides: new Map(

@@ -2329,10 +2329,7 @@ model SafeTechnicalHistory {
 model TenantConfiguration {
   tenantId         String   @id
   theme            Json
-  pageLayouts      Json
   roleExperience   Json
-  workflowPolicy   Json
-  featureFlags     Json
   enabledFeatures  String[]
   forms            Json
   messageTemplates Json

@@ -94,10 +94,7 @@ describe("AnalyticsController export endpoint (integration, real HTTP)", () => {
       data: {
         tenantId,
         theme: {},
-        pageLayouts: {},
         roleExperience: {},
-        workflowPolicy: {},
-        featureFlags: {},
         enabledFeatures: [],
         forms: {},
         messageTemplates: {},
@@ -257,10 +254,7 @@ describe("AnalyticsController export endpoint (integration, real HTTP)", () => {
       data: {
         tenantId: lockedTenant.id,
         theme: {},
-        pageLayouts: {},
         roleExperience: {},
-        workflowPolicy: {},
-        featureFlags: {},
         enabledFeatures: [],
         forms: {},
         messageTemplates: {},

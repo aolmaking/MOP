@@ -65,10 +65,7 @@ describe("AuthService (integration)", () => {
       data: {
         tenantId,
         theme: {},
-        pageLayouts: {},
         roleExperience: {},
-        workflowPolicy: {},
-        featureFlags: {},
         enabledFeatures: ["QUICK_INSPECTION"],
         forms: {},
         messageTemplates: {},

@@ -87,10 +87,7 @@ export class OwnerBrandingController {
         create: {
           tenantId,
           theme: updatedTheme,
-          pageLayouts: {},
           roleExperience: {},
-          workflowPolicy: {},
-          featureFlags: {},
           enabledFeatures: [],
           forms: {},
           messageTemplates: {},
