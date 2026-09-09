@@ -153,6 +153,66 @@ describe("ReportsCustomersService", () => {
     expect(report.topCustomersByValue[0]!.totalInvoiced).toBe(5000);
   });
 
+  /**
+   * The branch filter reached these two reports from the controller and was
+   * dropped on the floor, so a manager scoped to one branch was shown the
+   * whole workshop's customers and the whole workshop's money.
+   */
+  describe("the branch filter is honoured", () => {
+    it("counts only the visits made at the selected branch", async () => {
+      const other = await prisma.branch.create({ data: { tenantId, name: "Second", code: `SEC-${SUFFIX}` } });
+      const at = new Date("2026-05-10T00:00:00Z");
+      const from = "2026-05-01T00:00:00Z";
+      const to = "2026-05-31T00:00:00Z";
+
+      const here = await prisma.customer.create({ data: { tenantId, fullName: "Main Branch Customer", phone: "0166666666" } });
+      const there = await prisma.customer.create({ data: { tenantId, fullName: "Other Branch Customer", phone: "0177777777" } });
+      await makeWorkOrderAt(here.id, at);
+      await prisma.workOrder.create({
+        data: { tenantId, branchId: other.id, assetId, customerId: there.id, status: "DRAFT", createdAt: at },
+      });
+
+      const main = await customersReport.build(tenantId, { from, to, branchId });
+      const second = await customersReport.build(tenantId, { from, to, branchId: other.id });
+      const both = await customersReport.build(tenantId, { from, to });
+
+      expect(second.activeCustomers).toBe(1);
+      expect(main.activeCustomers).toBeGreaterThanOrEqual(1);
+      expect(both.activeCustomers).toBe(main.activeCustomers + second.activeCustomers);
+    });
+
+    it("attributes an invoice to the branch that earned it", async () => {
+      const other = await prisma.branch.create({ data: { tenantId, name: "Third", code: `THR-${SUFFIX}` } });
+      const at = new Date("2026-06-10T00:00:00Z");
+      const from = "2026-06-01T00:00:00Z";
+      const to = "2026-06-30T00:00:00Z";
+
+      const customer = await prisma.customer.create({ data: { tenantId, fullName: "Third Branch Spender", phone: "0188888888" } });
+      const wo = await prisma.workOrder.create({
+        data: { tenantId, branchId: other.id, assetId, customerId: customer.id, status: "DRAFT", createdAt: at },
+      });
+      await prisma.invoice.create({
+        data: {
+          tenantId,
+          workOrderId: wo.id,
+          invoiceNumber: `INV-${SUFFIX}-branch`,
+          subtotal: 900,
+          total: 900,
+          paid: 0,
+          balance: 900,
+          issuedById: "staff-1",
+          issuedAt: at,
+        },
+      });
+
+      const third = await customersReport.build(tenantId, { from, to, branchId: other.id });
+      const main = await customersReport.build(tenantId, { from, to, branchId });
+
+      expect(third.topCustomersByValue.map((row) => row.customerId)).toContain(customer.id);
+      expect(main.topCustomersByValue.map((row) => row.customerId)).not.toContain(customer.id);
+    });
+  });
+
   it("handles a workshop with no customers at all", async () => {
     const emptyTenant = await prisma.tenant.create({
       data: {

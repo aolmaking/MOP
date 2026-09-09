@@ -3,6 +3,13 @@ import { PrismaService } from "../../runtime/database/prisma.service";
 import { InventoryReportsService, type InventoryReports } from "../../systems/inventory/inventory-reports.service";
 import { resolveDateRange, toDecimalNumber, type ReportQueryParams } from "./date-range.util";
 
+/**
+ * A sentinel warehouse id, used when a branch serves no warehouse at all: an
+ * empty scope means "every warehouse" downstream, so the empty case needs an
+ * id that matches nothing rather than no id.
+ */
+const NO_WAREHOUSE = "__no_warehouse__";
+
 export interface PartProfitabilityRow {
   readonly inventoryItemId: string;
   readonly name: string;
@@ -24,7 +31,7 @@ export interface DeadStockRow {
 
 export interface InventoryAnalyticsReport {
   readonly range: { from: string; to: string };
-  /** Reuses InventoryReportsService.build (unscoped -- every warehouse) for usage, velocity-based stock risk, and returns. */
+  /** Reuses InventoryReportsService.build for usage, velocity-based stock risk, and returns -- scoped to the warehouses the selected branch draws from, or every warehouse when no branch is selected. */
   readonly operational: InventoryReports;
   readonly totalInventoryValue: number;
   readonly partProfitability: readonly PartProfitabilityRow[];
@@ -49,12 +56,13 @@ export class ReportsInventoryService {
 
   async build(tenantId: string, params: ReportQueryParams): Promise<InventoryAnalyticsReport> {
     const range = resolveDateRange(params);
+    const warehouseScope = await this.warehousesServing(tenantId, params.branchId);
 
     const [operational, totalInventoryValue, partProfitability, deadStock] = await Promise.all([
-      this.inventoryReports.build(tenantId, []),
-      this.totalInventoryValue(tenantId),
-      this.partProfitability(tenantId, range),
-      this.deadStock(tenantId),
+      this.inventoryReports.build(tenantId, warehouseScope),
+      this.totalInventoryValue(tenantId, warehouseScope),
+      this.partProfitability(tenantId, range, params.branchId),
+      this.deadStock(tenantId, warehouseScope),
     ]);
 
     return {
@@ -66,9 +74,26 @@ export class ReportsInventoryService {
     };
   }
 
-  private async totalInventoryValue(tenantId: string): Promise<number> {
+  /**
+   * A branch does not own stock; a warehouse does, and `BranchWarehouseAccess`
+   * says which warehouses a branch may draw from. An empty array means "every
+   * warehouse", which is both what `InventoryReportsService` already expects
+   * and the right answer when no branch was selected. A branch with no serving
+   * warehouse is a real configuration, and its inventory page is genuinely
+   * empty rather than quietly showing the whole workshop's stock.
+   */
+  private async warehousesServing(tenantId: string, branchId: string | undefined): Promise<string[]> {
+    if (!branchId) return [];
+    const access = await this.prisma.branchWarehouseAccess.findMany({
+      where: { tenantId, branchId },
+      select: { warehouseId: true },
+    });
+    return access.length > 0 ? access.map((row) => row.warehouseId) : [NO_WAREHOUSE];
+  }
+
+  private async totalInventoryValue(tenantId: string, warehouseScope: readonly string[]): Promise<number> {
     const balances = await this.prisma.warehouseStockBalance.findMany({
-      where: { tenantId },
+      where: { tenantId, ...(warehouseScope.length > 0 ? { warehouseId: { in: [...warehouseScope] } } : {}) },
       select: { availableQty: true, inventoryItem: { select: { sellingPrice: true } } },
     });
     return balances.reduce((sum, b) => sum + b.availableQty * toDecimalNumber(b.inventoryItem.sellingPrice), 0);
@@ -80,10 +105,17 @@ export class ReportsInventoryService {
    * `inventoryItemId`), this table keeps the actual catalog reference,
    * which is what makes per-part profitability derivable at all.
    */
-  private async partProfitability(tenantId: string, range: { from: Date; to: Date }): Promise<PartProfitabilityRow[]> {
+  private async partProfitability(
+    tenantId: string,
+    range: { from: Date; to: Date },
+    branchId: string | undefined,
+  ): Promise<PartProfitabilityRow[]> {
     const lines = await this.prisma.workOrderPartLine.findMany({
       where: {
         tenantId,
+        // Profit is earned by the job that sold the part, so this follows the
+        // work order's branch rather than the warehouse it was drawn from.
+        ...(branchId ? { workOrder: { branchId } } : {}),
         inventoryItemId: { not: null },
         createdAt: { gte: range.from, lte: range.to },
       },
@@ -104,7 +136,7 @@ export class ReportsInventoryService {
     }
 
     const items = await this.prisma.inventoryItem.findMany({
-      where: { id: { in: [...byItem.keys()] } },
+      where: { tenantId, id: { in: [...byItem.keys()] } },
       select: { id: true, name: true, sku: true },
     });
     const itemById = new Map(items.map((i) => [i.id, i]));
@@ -127,9 +159,13 @@ export class ReportsInventoryService {
    * InventoryReportsService's "slow-moving" (which is still moving, just
    * slowly); this is genuinely not moving at all.
    */
-  private async deadStock(tenantId: string): Promise<DeadStockRow[]> {
+  private async deadStock(tenantId: string, warehouseScope: readonly string[]): Promise<DeadStockRow[]> {
     const balances = await this.prisma.warehouseStockBalance.findMany({
-      where: { tenantId, availableQty: { gt: 0 } },
+      where: {
+        tenantId,
+        availableQty: { gt: 0 },
+        ...(warehouseScope.length > 0 ? { warehouseId: { in: [...warehouseScope] } } : {}),
+      },
       select: {
         availableQty: true,
         inventoryItemId: true,
@@ -143,7 +179,12 @@ export class ReportsInventoryService {
     }
 
     const moved = await this.prisma.stockMovement.findMany({
-      where: { tenantId, inventoryItemId: { in: [...byItem.keys()] }, type: { in: ["ISSUE", "TRANSFER_OUT"] } },
+      where: {
+        tenantId,
+        inventoryItemId: { in: [...byItem.keys()] },
+        ...(warehouseScope.length > 0 ? { warehouseId: { in: [...warehouseScope] } } : {}),
+        type: { in: ["ISSUE", "TRANSFER_OUT"] },
+      },
       select: { inventoryItemId: true },
       distinct: ["inventoryItemId"],
     });

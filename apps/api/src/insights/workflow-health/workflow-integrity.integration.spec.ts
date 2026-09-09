@@ -263,6 +263,55 @@ describe("WorkflowIntegrityService", () => {
     expect(report.issues.some((i) => i.type === "ORPHANED_STATUS_CHANGE" && i.entityId === wo.id)).toBe(true);
   });
 
+  it("flags a work order whose history stops short of the status it is actually in", async () => {
+    // The case the check exists for, and the one it used to miss: the job has
+    // real history from intake, and then something wrote the column directly.
+    // Asking only "does it have any history" answered yes and moved on.
+    const wo = await prisma.workOrder.create({ data: { tenantId, branchId, assetId, customerId, status: "CLOSED" } });
+    await prisma.operationEvent.create({
+      data: {
+        tenantId,
+        eventKey: "work_order.status_changed",
+        payload: { workOrderId: wo.id, from: "DRAFT", to: "REGISTERED" },
+        actorId: "staff-1",
+        actorType: "TENANT_STAFF",
+      },
+    });
+
+    const report = await integrity.build(tenantId);
+    const issue = report.issues.find((i) => i.type === "ORPHANED_STATUS_CHANGE" && i.entityId === wo.id);
+    expect(issue).toBeDefined();
+    expect(issue!.description).toContain("REGISTERED");
+  });
+
+  it("follows the history to its end rather than its start", async () => {
+    // Two events, in order: the job is where the last one says it is, so
+    // nothing is wrong here and nothing may be reported.
+    const wo = await prisma.workOrder.create({ data: { tenantId, branchId, assetId, customerId, status: "CLOSED" } });
+    await prisma.operationEvent.create({
+      data: {
+        tenantId,
+        eventKey: "work_order.status_changed",
+        payload: { workOrderId: wo.id, from: "DRAFT", to: "REGISTERED" },
+        actorId: "staff-1",
+        actorType: "TENANT_STAFF",
+        createdAt: new Date(Date.now() - 60_000),
+      },
+    });
+    await prisma.operationEvent.create({
+      data: {
+        tenantId,
+        eventKey: "work_order.status_changed",
+        payload: { workOrderId: wo.id, from: "REGISTERED", to: "CLOSED" },
+        actorId: "staff-1",
+        actorType: "TENANT_STAFF",
+      },
+    });
+
+    const report = await integrity.build(tenantId);
+    expect(report.issues.some((i) => i.type === "ORPHANED_STATUS_CHANGE" && i.entityId === wo.id)).toBe(false);
+  });
+
   it("does not flag a work order whose status change is properly recorded", async () => {
     const wo = await prisma.workOrder.create({ data: { tenantId, branchId, assetId, customerId, status: "CLOSED" } });
     await prisma.operationEvent.create({

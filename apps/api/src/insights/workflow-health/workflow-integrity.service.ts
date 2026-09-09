@@ -470,10 +470,20 @@ export class WorkflowIntegrityService {
   }
 
   /**
-   * A work order past DRAFT with zero `work_order.status_changed` events
-   * -- WorkOrderLifecycleService is the only thing that may change
-   * status, and it always emits one in the same transaction. A work
-   * order in this state moved through a path that bypassed it entirely.
+   * A work order whose current status is not the one its history ends on.
+   *
+   * `WorkOrderLifecycleService` is the only thing permitted to write
+   * `WorkOrder.status`, and it emits a `work_order.status_changed` event in
+   * the same transaction. So the last such event's `to` must equal the row's
+   * status, and any disagreement means something wrote the column directly.
+   *
+   * This used to ask only whether the work order had *any* status history,
+   * which made it unable to fire on precisely the jobs it was written for.
+   * An operator-created job gets one event at intake, so it satisfied
+   * "has history" from its first minute and every later bypassing write --
+   * the ones that stranded jobs in states their own graph could not leave --
+   * was invisible to it forever. Only a job that had never been touched by
+   * the lifecycle service at all could trip it.
    */
   private async orphanedStatusChange(tenantId: string): Promise<DetectedIssue[]> {
     const movedWorkOrders = await this.prisma.workOrder.findMany({
@@ -484,19 +494,28 @@ export class WorkflowIntegrityService {
 
     const events = await this.prisma.operationEvent.findMany({
       where: { tenantId, eventKey: "work_order.status_changed" },
-      select: { payload: true },
+      select: { payload: true, workOrderId: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
     });
-    const withHistory = new Set(
-      events.map((e) => (e.payload as { workOrderId?: string }).workOrderId).filter((id): id is string => Boolean(id)),
-    );
+
+    // Ascending, so the last write per work order wins.
+    const latestStatus = new Map<string, string>();
+    for (const event of events) {
+      const payload = event.payload as { workOrderId?: string; to?: string };
+      const id = event.workOrderId ?? payload.workOrderId;
+      if (!id || !payload.to) continue;
+      latestStatus.set(id, payload.to);
+    }
 
     return movedWorkOrders
-      .filter((wo) => !withHistory.has(wo.id))
+      .filter((wo) => latestStatus.get(wo.id) !== wo.status)
       .map((wo) => ({
         id: `ORPHANED_STATUS_CHANGE:WorkOrder:${wo.id}`,
       type: "ORPHANED_STATUS_CHANGE" as const,
         severity: "CRITICAL" as const,
-        description: `This work order is "${wo.status}" but has no recorded status-change history -- it was moved by something other than the lifecycle service.`,
+        description: latestStatus.has(wo.id)
+          ? `This work order is "${wo.status}" but its history ends at "${latestStatus.get(wo.id)}" -- the difference was written by something other than the lifecycle service.`
+          : `This work order is "${wo.status}" but has no recorded status-change history -- it was moved by something other than the lifecycle service.`,
         entityType: "WorkOrder",
         entityId: wo.id,
         link: `/branch/work-orders/${wo.id}`,

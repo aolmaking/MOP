@@ -69,6 +69,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prisma.workOrderPartLine.deleteMany({ where: { tenantId } });
+  await prisma.branchWarehouseAccess.deleteMany({ where: { tenantId } });
   await prisma.stockMovement.deleteMany({ where: { tenantId } });
   await prisma.warehouseStockBalance.deleteMany({ where: { tenantId } });
   await prisma.inventoryItem.deleteMany({ where: { tenantId } });
@@ -173,5 +174,77 @@ describe("ReportsInventoryService", () => {
 
     const report = await inventory.build(tenantId, {});
     expect(report.deadStock.find((r) => r.inventoryItemId === item.id)).toBeUndefined();
+  });
+});
+
+/**
+ * The controller resolved a branch and passed it in; this report ignored it,
+ * so a branch manager saw the whole workshop's stock and the whole workshop's
+ * part profit. A branch does not own stock -- the warehouses it is allowed to
+ * draw from do, which is what BranchWarehouseAccess records.
+ */
+describe("the branch filter is honoured", () => {
+  it("values only the stock in the warehouses that serve the branch", async () => {
+    const served = await prisma.warehouse.create({ data: { tenantId, name: "Served", code: `SRV-${SUFFIX}` } });
+    const unserved = await prisma.warehouse.create({ data: { tenantId, name: "Unserved", code: `UNS-${SUFFIX}` } });
+    const branch = await prisma.branch.create({ data: { tenantId, name: "Scoped", code: `SCP-${SUFFIX}` } });
+    await prisma.branchWarehouseAccess.create({ data: { tenantId, branchId: branch.id, warehouseId: served.id } });
+
+    const item = await prisma.inventoryItem.create({
+      data: { tenantId, sku: `SKU-${SUFFIX}-scope`, name: "Scoped Filter", itemType: "PART", sellingPrice: 10, cost: 4 },
+    });
+    await prisma.warehouseStockBalance.create({
+      data: { tenantId, warehouseId: served.id, inventoryItemId: item.id, availableQty: 3 },
+    });
+    await prisma.warehouseStockBalance.create({
+      data: { tenantId, warehouseId: unserved.id, inventoryItemId: item.id, availableQty: 7 },
+    });
+
+    const scoped = await inventory.build(tenantId, { branchId: branch.id });
+    const whole = await inventory.build(tenantId, {});
+
+    // 3 units at 10, not 10 units at 10.
+    expect(scoped.totalInventoryValue).toBe(30);
+    expect(whole.totalInventoryValue).toBeGreaterThanOrEqual(100);
+  });
+
+  it("shows an empty inventory page for a branch with no serving warehouse, rather than the whole workshop's", async () => {
+    // A branch nobody has connected to a warehouse is a real configuration,
+    // and the honest answer is nothing -- not everything.
+    const orphan = await prisma.branch.create({ data: { tenantId, name: "Orphan", code: `ORP-${SUFFIX}` } });
+
+    const report = await inventory.build(tenantId, { branchId: orphan.id });
+
+    expect(report.totalInventoryValue).toBe(0);
+    expect(report.deadStock).toEqual([]);
+  });
+
+  it("attributes part profit to the branch whose job sold the part", async () => {
+    const other = await prisma.branch.create({ data: { tenantId, name: "Selling", code: `SEL-${SUFFIX}` } });
+    const wo = await prisma.workOrder.create({
+      data: { tenantId, branchId: other.id, assetId, customerId, status: "DRAFT" },
+    });
+    const item = await prisma.inventoryItem.create({
+      data: { tenantId, sku: `SKU-${SUFFIX}-sold`, name: "Sold Elsewhere", itemType: "PART", sellingPrice: 50, cost: 20 },
+    });
+    await prisma.workOrderPartLine.create({
+      data: {
+        tenantId,
+        workOrderId: wo.id,
+        inventoryItemId: item.id,
+        name: "Sold Elsewhere",
+        quantity: 2,
+        sellingPrice: 50,
+        cost: 20,
+        provenance: "INVENTORY",
+        addedById: "staff-1",
+      },
+    });
+
+    const selling = await inventory.build(tenantId, { branchId: other.id });
+    const main = await inventory.build(tenantId, { branchId });
+
+    expect(selling.partProfitability.find((row) => row.inventoryItemId === item.id)?.profit).toBe(60);
+    expect(main.partProfitability.map((row) => row.inventoryItemId)).not.toContain(item.id);
   });
 });
