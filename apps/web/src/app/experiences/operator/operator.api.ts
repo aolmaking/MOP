@@ -54,6 +54,21 @@ export interface OperatorIntakeResult {
   assetId: string;
 }
 
+/**
+ * The till reads the SAME catalogue contract the technician's parts page does.
+ *
+ * Re-declaring it here would be a second definition of one wire shape, which
+ * is how the operator page came to read `item.price`, `item.nameEn` and
+ * `item.partNumber` -- three fields the server has never sent. The call was
+ * typed `Observable<any>`, so nothing objected, and every price fell through
+ * to a literal: the tile advertised a fabricated 45 and adding the part to a
+ * quote charged the customer a fabricated 50.
+ */
+import type { PartCard, PartsCatalogPage } from '../technician/technician.api';
+
+export type OperatorCatalogItem = PartCard;
+export type OperatorCatalogPage = PartsCatalogPage;
+
 export interface OperatorPosOrderResult {
   workOrderId: string;
   invoiceId: string;
@@ -158,13 +173,27 @@ export class OperatorApi {
     return this.http.post<OperatorIntakeResult>(`${this.base}/intake`, payload);
   }
 
-  posCatalog(query: { q?: string; categoryId?: string; inStockOnly?: boolean; page?: number }): Observable<any> {
+  /**
+   * The workshop's own catalogue, as the till sees it.
+   *
+   * Typed, because `Observable<any>` is what let the page read
+   * `item.price || item.unitPrice || 45` for a field the server has never
+   * sent: every tile showed a fabricated $45, and adding one to a quote
+   * charged the customer a fabricated 50. The server's own contract says
+   * `sellingPrice`, and says it is a string.
+   */
+  posCatalog(query: {
+    q?: string;
+    categoryId?: string;
+    inStockOnly?: boolean;
+    page?: number;
+  }): Observable<OperatorCatalogPage> {
     let params = new HttpParams();
     if (query.q) params = params.set('q', query.q);
     if (query.categoryId) params = params.set('categoryId', query.categoryId);
     if (query.inStockOnly) params = params.set('inStockOnly', 'true');
     if (query.page) params = params.set('page', query.page.toString());
-    return this.http.get(`${this.base}/pos/catalog`, { params });
+    return this.http.get<OperatorCatalogPage>(`${this.base}/pos/catalog`, { params });
   }
 
   submitPosOrder(payload: { lines: Array<{ inventoryItemId: string; quantity: number }>; customerId?: string }): Observable<OperatorPosOrderResult> {

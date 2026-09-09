@@ -22,6 +22,8 @@ import {
   type ResolvedFitmentItemView,
   type GroupedFitmentResponseView,
 } from './technician.api';
+import { WorkshopBrandingService } from '../../ui/workshop-branding.service';
+import { formatMoney } from '../../ui/money';
 import { Car3dViewerComponent } from '../../shared/components/car-3d/car-3d-viewer.component';
 import { AnimatedPartIconComponent } from '../../shared/components/animated-part/animated-part-icon.component';
 import { MECHANIC_HERO_IMG } from '../../shared/components/car-3d/car-studio-assets';
@@ -50,6 +52,35 @@ const BLOCKER_REASONS = [
 })
 export class TechWorkCard {
   private readonly api = inject(TechnicianApi);
+  private readonly branding = inject(WorkshopBrandingService);
+
+  /**
+   * A money value printed in the workshop's currency.
+   *
+   * This card wrote a literal dollar sign in front of every part price,
+   * labour price and quote total, so an Egyptian workshop showed its
+   * technician a quote in dollars.
+   */
+  protected money(amount: string | number | null | undefined): string {
+    return formatMoney(amount == null ? null : String(amount), this.branding.activeWorkshop().currency);
+  }
+
+  /**
+   * A line's total, computed once here rather than in the template.
+   *
+   * The template multiplied `unitPrice * quantity` inline. Arithmetic on
+   * money in a view is the same defect `lint-money` refuses on the server --
+   * and it cannot be linted at all inside an HTML expression, which is why it
+   * survived here. Kept as a string in and a string out, so the value that
+   * reaches the screen has been through exactly one conversion.
+   */
+  protected lineTotal(unitPrice: string | number | null | undefined, quantity: number | null | undefined): string {
+    const unit = Number(unitPrice ?? 0);
+    const count = Math.max(1, Number(quantity ?? 1));
+    if (!Number.isFinite(unit) || !Number.isFinite(count)) return '';
+    return (unit * count).toFixed(2);
+  }
+
   private readonly destroyRef = inject(DestroyRef);
 
   readonly id = input.required<string>();

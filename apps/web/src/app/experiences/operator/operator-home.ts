@@ -6,10 +6,12 @@ import { ButtonDirective } from '../../ui/button/button.directive';
 import { AuthStore } from '../../identity/auth.store';
 import { AccessApi } from '../../identity/access.api';
 import { WorkshopBrandingService } from '../../ui/workshop-branding.service';
+import { formatMoney } from '../../ui/money';
 import { AnimatedPartIconComponent } from '../../shared/components/animated-part/animated-part-icon.component';
 import { CAR_SUBSYSTEMS, type CarSubsystemConfig } from '../../shared/components/car-3d/car-subsystems';
 import {
   OperatorApi,
+  type OperatorCatalogItem,
   type OperatorInspectionFinding,
   type OperatorInspectionPart,
   type OperatorInspectionReportDetail,
@@ -48,6 +50,34 @@ export class OperatorHome {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly branding = inject(WorkshopBrandingService);
+
+  /**
+   * A money value printed in the workshop's currency.
+   *
+   * Every price on this page was written as `${{ value }}` -- a literal
+   * dollar sign -- so an Egyptian workshop quoted its customers in dollars at
+   * the counter and on the quote builder.
+   */
+  protected money(amount: string | number | null | undefined): string {
+    return formatMoney(amount == null ? null : String(amount), this.branding.activeWorkshop().currency);
+  }
+
+  /**
+   * A line's total, computed once here rather than in the template.
+   *
+   * The template multiplied `unitPrice * quantity` inline. Arithmetic on
+   * money in a view is the same defect `lint-money` refuses on the server --
+   * and it cannot be linted at all inside an HTML expression, which is why it
+   * survived here. Kept as a string in and a string out, so the value that
+   * reaches the screen has been through exactly one conversion.
+   */
+  protected lineTotal(unitPrice: string | number | null | undefined, quantity: number | null | undefined): string {
+    const unit = Number(unitPrice ?? 0);
+    const count = Math.max(1, Number(quantity ?? 1));
+    if (!Number.isFinite(unit) || !Number.isFinite(count)) return '';
+    return (unit * count).toFixed(2);
+  }
+
 
   protected readonly session = this.authStore.session;
   protected readonly state = signal<State>('loading');
@@ -119,7 +149,7 @@ export class OperatorHome {
   // POS Picker modal state
   protected readonly isPosPickerOpen = signal<boolean>(false);
   protected readonly posSearch = signal<string>('');
-  protected readonly posCatalogItems = signal<any[]>([]);
+  protected readonly posCatalogItems = signal<readonly OperatorCatalogItem[]>([]);
   protected readonly isSearchingPos = signal<boolean>(false);
   protected readonly posSelectedQty = signal<number>(1);
 
@@ -652,8 +682,7 @@ export class OperatorHome {
       .subscribe({
         next: (res) => {
           this.isSearchingPos.set(false);
-          const items = res?.items ?? res ?? [];
-          this.posCatalogItems.set(items);
+          this.posCatalogItems.set(res?.items ?? []);
         },
         error: () => {
           this.isSearchingPos.set(false);
@@ -662,10 +691,25 @@ export class OperatorHome {
       });
   }
 
-  protected addPartFromPos(item: any): void {
-    const sku = item.sku || item.partNumber || `SKU-${Date.now().toString().slice(-4)}`;
-    const name = item.name || item.nameEn || item.description || 'Inventory Part';
-    const unitPrice = Number(item.price || item.unitPrice || item.retailPrice || 50);
+  /**
+   * Put a catalogued part on the quote, at the price the workshop set.
+   *
+   * Every field here used to be read from a name the server has never sent.
+   * `item.price || item.unitPrice || item.retailPrice || 50` therefore always
+   * fell through to the literal, so an operator adding any part to any
+   * customer's quote charged them 50 -- a number nobody in the workshop had
+   * ever entered -- while the tile beside it advertised a different invented
+   * figure, 45. The SKU fell through to a timestamp, so the line could not be
+   * matched back to the shelf it came from either.
+   *
+   * The server's contract has always said `sku`, `name` and `sellingPrice`,
+   * and has always said the price is a string. The read was untyped
+   * (`Observable<any>`), which is the only reason this could compile.
+   */
+  protected addPartFromPos(item: OperatorCatalogItem): void {
+    const sku = item.sku;
+    const name = item.name;
+    const unitPrice = Number(item.sellingPrice);
     const quantity = Math.max(1, Number(this.posSelectedQty()) || 1);
 
     // If already in list, increase quantity

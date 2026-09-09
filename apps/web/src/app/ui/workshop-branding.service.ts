@@ -15,6 +15,8 @@ export interface WorkshopBranding {
   navigationLayout?: NavigationLayoutType;
   city?: string | null;
   address?: string | null;
+  /** ISO code, e.g. 'EGP'. Never a symbol -- see ui/money.ts. */
+  currency?: string | null;
 }
 
 const DEFAULT_BRANDING: WorkshopBranding = {
@@ -26,6 +28,7 @@ const DEFAULT_BRANDING: WorkshopBranding = {
   navigationLayout: 'SIDEBAR',
   city: 'Cairo',
   address: 'Main Operations Hub',
+  currency: 'EGP',
 };
 
 @Injectable({

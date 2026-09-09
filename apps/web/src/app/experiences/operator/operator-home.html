@@ -315,7 +315,7 @@
 
                     <div class="report-price-summary">
                       <span class="price-label">Estimated Total:</span>
-                      <strong class="price-value">${{ rep.totalEstimate.toFixed(2) }}</strong>
+                      <strong class="price-value">{{ money(rep.totalEstimate) }}</strong>
                     </div>
                   </div>
 
@@ -893,8 +893,8 @@
                                 <button type="button" (click)="updatePartQty(pi, p.quantity + 1)">+</button>
                               </div>
                             </td>
-                            <td class="col-right">${{ (p.unitPrice || 0).toFixed(2) }}</td>
-                            <td class="col-right font-semibold">${{ ((p.unitPrice || 0) * (p.quantity || 1)).toFixed(2) }}</td>
+                            <td class="col-right">{{ money(p.unitPrice) }}</td>
+                            <td class="col-right font-semibold">{{ money(lineTotal(p.unitPrice, p.quantity)) }}</td>
                             <td class="col-right">
                               <button type="button" class="btn-del-sm" (click)="removePart(pi)">✕</button>
                             </td>
@@ -998,21 +998,21 @@
                       <span class="cost-item-label">
                         <span class="cost-icon">🚗</span> Parts
                       </span>
-                      <strong class="cost-item-val">$ {{ quotePartsTotal().toFixed(2) }}</strong>
+                      <strong class="cost-item-val">{{ money(quotePartsTotal()) }}</strong>
                     </div>
 
                     <div class="cost-item-row">
                       <span class="cost-item-label">
                         <span class="cost-icon">🪙</span> Labor
                       </span>
-                      <strong class="cost-item-val">$ {{ quoteLaborTotal().toFixed(2) }}</strong>
+                      <strong class="cost-item-val">{{ money(quoteLaborTotal()) }}</strong>
                     </div>
 
                     <div class="cost-divider-line"></div>
 
                     <div class="cost-item-row cost-item-row--total">
                       <span class="cost-total-tag">Total <span class="cost-est-note">(est.)</span></span>
-                      <strong class="cost-grand-val">$ {{ quoteGrandTotal().toFixed(2) }}</strong>
+                      <strong class="cost-grand-val">{{ money(quoteGrandTotal()) }}</strong>
                     </div>
                   </div>
                 </div>
@@ -1112,11 +1112,11 @@
               @for (item of posCatalogItems(); track item.id || item.sku) {
                 <div class="pos-item-tile" (click)="addPartFromPos(item)">
                   <div class="tile-header">
-                    <strong class="tile-name">{{ item.name || item.nameEn }}</strong>
-                    <span class="tile-sku font-mono">{{ item.sku || item.partNumber }}</span>
+                    <strong class="tile-name">{{ item.name }}</strong>
+                    <span class="tile-sku font-mono">{{ item.sku }}</span>
                   </div>
                   <div class="tile-footer">
-                    <span class="tile-price font-bold">${{ (item.price || item.unitPrice || 45).toFixed ? (item.price || item.unitPrice || 45).toFixed(2) : item.price }}</span>
+                    <span class="tile-price font-bold">{{ money(item.sellingPrice) }}</span>
                     <button type="button" class="btn-select-part">+ Add</button>
                   </div>
                 </div>
@@ -1144,7 +1144,7 @@
             @for (srv of presetServices; track srv.name) {
               <div class="service-preset-tile" (click)="addPresetService(srv)">
                 <span class="srv-name">🔧 {{ srv.name }}</span>
-                <span class="srv-labor font-bold">${{ srv.labor.toFixed(2) }}</span>
+                <span class="srv-labor font-bold">{{ money(srv.labor) }}</span>
               </div>
             }
           </div>

@@ -27,6 +27,10 @@ export class WorkshopBrandingPublicController {
         customerRegistrationCode: true,
         slug: true,
         city: true,
+        // The workshop's own currency. Without it the operator and technician
+        // surfaces printed a hardcoded "$" beside every price, so an Egyptian
+        // workshop quoted its customers in dollars.
+        currency: true,
         configuration: {
           select: { theme: true },
         },
@@ -44,6 +48,7 @@ export class WorkshopBrandingPublicController {
       code: tenant.customerRegistrationCode,
       slug: tenant.slug,
       city: tenant.city,
+      currency: tenant.currency,
       logoUrl: themeConfig.logoUrl ?? null,
       palette: themeConfig.palette ?? "crimson",
       navigationLayout: themeConfig.navigationLayout ?? "SIDEBAR",

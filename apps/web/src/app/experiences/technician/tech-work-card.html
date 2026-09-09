@@ -165,11 +165,11 @@
 
                   <div class="quote-summary-badge">
                     <span class="quote-summary-label">Estimated Scope:</span>
-                    <span class="quote-summary-item">Parts <strong>${{ totalEstimatedQuote().partsSum }}</strong></span>
+                    <span class="quote-summary-item">Parts <strong>{{ money(totalEstimatedQuote().partsSum) }}</strong></span>
                     <span class="quote-summary-sep">+</span>
-                    <span class="quote-summary-item">Labor <strong>${{ totalEstimatedQuote().laborSum }}</strong></span>
+                    <span class="quote-summary-item">Labor <strong>{{ money(totalEstimatedQuote().laborSum) }}</strong></span>
                     <span class="quote-summary-sep">=</span>
-                    <strong class="quote-summary-total">${{ totalEstimatedQuote().grandTotal }}</strong>
+                    <strong class="quote-summary-total">{{ money(totalEstimatedQuote().grandTotal) }}</strong>
                   </div>
                 </div>
 
@@ -322,7 +322,7 @@
                                 <div class="suggestion-chip-card" [class.suggestion-chip-card--selected]="isSelected">
                                   <div class="chip-info">
                                     <strong class="chip-name">{{ sug.serviceName }}</strong>
-                                    <span class="chip-price">${{ sug.laborPrice }}</span>
+                                    <span class="chip-price">{{ money(sug.laborPrice) }}</span>
                                   </div>
                                   <button
                                     type="button"
@@ -357,8 +357,8 @@
                                     <button type="button" class="qty-btn" (click)="updateBoxPartQty(f.partKey, part.sku, 1)">+</button>
                                   </div>
                                   <div class="part-cell-pricing">
-                                    <span class="part-unit-price">${{ part.unitPrice }} / unit</span>
-                                    <strong class="part-subtotal">${{ part.unitPrice * part.quantity }}</strong>
+                                    <span class="part-unit-price">{{ money(part.unitPrice) }} / unit</span>
+                                    <strong class="part-subtotal">{{ money(lineTotal(part.unitPrice, part.quantity)) }}</strong>
                                   </div>
                                   <button type="button" class="btn-remove-item" (click)="removeBoxPart(f.partKey, part.sku)" title="Remove part">
                                     ✕
@@ -383,7 +383,7 @@
                                     <span class="service-item-tag">Standard Workshop Labor</span>
                                   </div>
                                   <div class="service-cell-pricing">
-                                    <strong class="service-price">${{ srv.laborPrice }}</strong>
+                                    <strong class="service-price">{{ money(srv.laborPrice) }}</strong>
                                   </div>
                                   <button type="button" class="btn-remove-item" (click)="removeBoxService(f.partKey, srv.serviceName)" title="Remove service">
                                     ✕
@@ -515,9 +515,9 @@
                       <h4 class="bar-title">Inspection Findings Configured?</h4>
                       <p class="bar-subtitle">
                         Estimated Scope:
-                        <strong>${{ totalEstimatedQuote().partsSum }}</strong> Parts +
-                        <strong>${{ totalEstimatedQuote().laborSum }}</strong> Labor =
-                        <strong class="highlight-total">${{ totalEstimatedQuote().grandTotal }}</strong> Total
+                        <strong>{{ money(totalEstimatedQuote().partsSum) }}</strong> Parts +
+                        <strong>{{ money(totalEstimatedQuote().laborSum) }}</strong> Labor =
+                        <strong class="highlight-total">{{ money(totalEstimatedQuote().grandTotal) }}</strong> Total
                       </p>
                     </div>
                   </div>
