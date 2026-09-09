@@ -155,7 +155,7 @@ export class PlatformService {
     // value the user themselves chose and needs to change.
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const { tenant, steps, inviteExpiresAt } = await this.attemptCreateWorkshop(dto, creator, rawInviteToken);
+        const { tenant, steps, inviteExpiresAt } = await this.attemptCreateWorkshop(dto, creator, rawInviteToken, plan.maxWarehouses);
         return {
           tenant,
           steps,
@@ -186,8 +186,11 @@ export class PlatformService {
     dto: CreateWorkshopDto,
     creator: WorkshopCreator,
     rawInviteToken: string,
+    planMaxWarehouses: number,
   ): Promise<{ tenant: Tenant; steps: ProvisioningStep[]; inviteExpiresAt: Date }> {
     const inviteExpiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    // The workshop's declared shape, read once and used by every step below.
+    const profile = (dto.capabilities ?? {}) as CapabilityProfile;
 
     return this.prisma.$transaction(async (tx) => {
       const steps: ProvisioningStep[] = [];
@@ -422,7 +425,7 @@ export class PlatformService {
               : this.responsibilityDetail(dto, grants.length),
         });
 
-        const structure = await this.seedStructure(tx, tenant.id, dto);
+        const structure = await this.seedStructure(tx, tenant.id, dto, planMaxWarehouses);
         steps.push({
           key: "STRUCTURE",
           label: "Building the structure",
@@ -430,12 +433,21 @@ export class PlatformService {
           detail: `${structure.branches} branch(es), ${structure.warehouses} store(s), ${structure.grants} branch-to-store grant(s).`,
         });
 
-        if (this.catalogProvisioning) {
+        // A workshop that does not hold stock is not given any.
+        //
+        // This used to run unconditionally, so a workshop created with
+        // INVENTORY disabled was provisioned 42 catalogue items, 42 stock
+        // balances and 38 stock movements it could never touch -- and the
+        // capability layer then refused every route that would have shown
+        // them. The rows inflated inventory-value reporting for a workshop
+        // that holds nothing, and contradicted the one promise the capability
+        // model makes: a removed capability is removed, not hidden.
+        if (this.catalogProvisioning && isCapabilityActive(profile, "INVENTORY") && structure.firstWarehouseId) {
           const catalogResult = await this.catalogProvisioning.provisionCatalog(
             tx,
             tenant.id,
             dto.primaryCategory,
-            structure.firstWarehouseId ?? undefined,
+            structure.firstWarehouseId,
             creator.accountId,
           );
           steps.push({
@@ -622,6 +634,7 @@ export class PlatformService {
     tx: Prisma.TransactionClient,
     tenantId: string,
     dto: CreateWorkshopDto,
+    planMaxWarehouses: number,
   ): Promise<{ branches: number; warehouses: number; grants: number; firstWarehouseId?: string | null }> {
     // A workshop with no branch cannot take in a single job --
     // `WorkOrder.branchId` is required -- so one is always created. The
@@ -669,8 +682,20 @@ export class PlatformService {
       }
     }
 
-    // Ensure a default warehouse exists if none was specified so inventory & POS have a store
-    if (!firstWarehouseId && warehouses.length === 0) {
+    // A workshop that holds stock and declared no store still needs one --
+    // otherwise inventory and POS have nowhere to draw from. A workshop that
+    // does NOT hold stock must not be given one.
+    //
+    // Both halves of that were missing. The default store was created
+    // unconditionally, so a workshop with INVENTORY disabled was provisioned a
+    // warehouse it can never use, and a plan capped at zero warehouses was put
+    // over its own ceiling at the moment of creation -- after which
+    // PlanLimitsService correctly refused to let the owner add anything,
+    // leaving them permanently above a limit they never crossed.
+    const holdsStock = isCapabilityActive((dto.capabilities ?? {}) as CapabilityProfile, "INVENTORY");
+    const planAllowsAStore = planMaxWarehouses > 0;
+
+    if (!firstWarehouseId && warehouses.length === 0 && holdsStock && planAllowsAStore) {
       const defaultStore = await tx.warehouse.create({
         data: { tenantId, name: "Main Store", code: "MAIN-WH" },
       });
@@ -681,7 +706,11 @@ export class PlatformService {
       }
     }
 
-    return { branches: branches.length, warehouses: warehouses.length || 1, grants, firstWarehouseId };
+    // Report what was actually written, not what was asked for. The old
+    // `warehouses.length || 1` claimed a store existed whenever none was
+    // declared, which was true only while one was always created.
+    const warehouseCount = warehouses.length > 0 ? warehouses.length : firstWarehouseId ? 1 : 0;
+    return { branches: branches.length, warehouses: warehouseCount, grants, firstWarehouseId };
   }
 
   /**

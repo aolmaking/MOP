@@ -181,12 +181,8 @@ export class TechnicianWorkService {
    * a task someone has declared un-workable must not silently become
    * workable because a different button was pressed.
    */
-  async startTask(taskId: string, actor: LifecycleActor) {
-    const task = await this.prisma.task.findUnique({
-      where: { id: taskId },
-      select: { id: true, tenantId: true, workOrderId: true, status: true, serviceKey: true, startedAt: true },
-    });
-    if (!task) throw new NotFoundException({ code: "task_not_found", message: "Task not found." });
+  async startTask(taskId: string, tenantId: string, actor: LifecycleActor) {
+    const task = await this.requireTask(taskId, tenantId);
 
     if (task.status === "DONE" || task.status === "CANCELLED") {
       throw new BadRequestException({ code: "task_finished", message: "That task is already finished." });
@@ -260,14 +256,10 @@ export class TechnicianWorkService {
    * countryBillingRule are resolved before FinanceService's) so a policy
    * lookup never adds latency inside the write.
    */
-  async completeTask(taskId: string, actor: LifecycleActor, minutesSpent?: number) {
-    const task = await this.prisma.task.findUnique({
-      where: { id: taskId },
-      // serviceKey is loaded so the completion event can name the
-      // catalogued service that was performed.
-      select: { id: true, tenantId: true, workOrderId: true, status: true, serviceKey: true },
-    });
-    if (!task) throw new NotFoundException({ code: "task_not_found", message: "Task not found." });
+  async completeTask(taskId: string, tenantId: string, actor: LifecycleActor, minutesSpent?: number) {
+    // serviceKey is loaded so the completion event can name the catalogued
+    // service that was performed.
+    const task = await this.requireTask(taskId, tenantId);
 
     // Completion is the moment work becomes a charge: chargeable-items
     // reads DONE tasks. Authorization is therefore checked here too, so a
@@ -929,12 +921,8 @@ export class TechnicianWorkService {
    * the other before it decides anything -- same discipline as the
    * stock-balance lock, H6/E16.
    */
-  async reportBlocker(input: ReportBlockerInput, actor: LifecycleActor) {
-    const task = await this.prisma.task.findUnique({
-      where: { id: input.taskId },
-      select: { id: true, tenantId: true, workOrderId: true },
-    });
-    if (!task) throw new NotFoundException({ code: "task_not_found", message: "Task not found." });
+  async reportBlocker(input: ReportBlockerInput, tenantId: string, actor: LifecycleActor) {
+    const task = await this.requireTask(input.taskId, tenantId);
 
     const route = routeForBlocker(input.reason);
 
@@ -1082,5 +1070,35 @@ export class TechnicianWorkService {
       throw new NotFoundException({ code: "work_order_not_found", message: "Work order not found." });
     }
     return workOrder;
+  }
+
+  /**
+   * A task belonging to THIS workshop, or nothing.
+   *
+   * Every task mutation goes through here. Before it existed each one loaded
+   * `task.findUnique({ where: { id } })` and trusted the id, while the
+   * controller above checked only that the caller held the permission *in
+   * their own tenant*. A runtime probe confirmed what that allows: a
+   * technician signed into one workshop started, completed and blocked a task
+   * belonging to another, and the resulting TaskBlocker was written with the
+   * victim's tenantId and the attacker's account as `reportedBy`.
+   *
+   * Missing rather than forbidden, deliberately, and for the same reason the
+   * technician's work card is: a 403 on a foreign id confirms the id is real.
+   */
+  private async requireTask(taskId: string, tenantId: string) {
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, tenantId },
+      select: {
+        id: true,
+        tenantId: true,
+        workOrderId: true,
+        status: true,
+        serviceKey: true,
+        startedAt: true,
+      },
+    });
+    if (!task) throw new NotFoundException({ code: "task_not_found", message: "Task not found." });
+    return task;
   }
 }

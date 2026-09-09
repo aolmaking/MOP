@@ -321,8 +321,8 @@ export class PartRequestService {
    * and this is where it is finally read: a workshop that never opts in
    * behaves exactly as it does today.
    */
-  async approve(partRequestId: string, actor: LifecycleActor) {
-    const request = await this.load(partRequestId);
+  async approve(partRequestId: string, tenantId: string, actor: LifecycleActor) {
+    const request = await this.load(partRequestId, tenantId);
     const rule = await this.policies.resolveValue(request.tenantId, "PARTS_SEPARATION_OF_DUTIES");
 
     if (rule === "DIFFERENT_PERSON" && request.requestedById === actor.accountId) {
@@ -345,15 +345,15 @@ export class PartRequestService {
       }
     }
 
-    return this.move(partRequestId, "APPROVED", actor);
+    return this.move(partRequestId, tenantId, "APPROVED", actor);
   }
 
-  async reject(partRequestId: string, actor: LifecycleActor, reason?: string) {
-    return this.move(partRequestId, "REJECTED", actor, { reason });
+  async reject(partRequestId: string, tenantId: string, actor: LifecycleActor, reason?: string) {
+    return this.move(partRequestId, tenantId, "REJECTED", actor, { reason });
   }
 
-  async markUnavailable(partRequestId: string, actor: LifecycleActor) {
-    return this.move(partRequestId, "UNAVAILABLE", actor);
+  async markUnavailable(partRequestId: string, tenantId: string, actor: LifecycleActor) {
+    return this.move(partRequestId, tenantId, "UNAVAILABLE", actor);
   }
 
   /**
@@ -365,12 +365,12 @@ export class PartRequestService {
    * ISSUED once the request is fully covered -- a request that is half
    * filled has not been filled.
    */
-  async issue(input: IssueInput, actor: LifecycleActor): Promise<Fulfilment> {
+  async issue(input: IssueInput, tenantId: string, actor: LifecycleActor): Promise<Fulfilment> {
     if (!Number.isInteger(input.quantity) || input.quantity <= 0) {
       throw new BadRequestException({ code: "quantity_invalid", message: "Issue a whole number, at least one." });
     }
 
-    const request = await this.load(input.partRequestId);
+    const request = await this.load(input.partRequestId, tenantId);
     await this.requireInventory(request.tenantId);
     await this.requireAuthorizedWarehouseForWorkOrder(request.tenantId, request.workOrderId, input.warehouseId);
 
@@ -475,16 +475,16 @@ export class PartRequestService {
     return request.workOrderId;
   }
 
-  async markArrived(partRequestId: string, actor: LifecycleActor) {
-    return this.move(partRequestId, "ARRIVED", actor);
+  async markArrived(partRequestId: string, tenantId: string, actor: LifecycleActor) {
+    return this.move(partRequestId, tenantId, "ARRIVED", actor);
   }
 
-  async receive(partRequestId: string, actor: LifecycleActor) {
-    return this.move(partRequestId, "RECEIVED_BY_TECHNICIAN", actor);
+  async receive(partRequestId: string, tenantId: string, actor: LifecycleActor) {
+    return this.move(partRequestId, tenantId, "RECEIVED_BY_TECHNICIAN", actor);
   }
 
-  async markUsed(partRequestId: string, actor: LifecycleActor) {
-    return this.move(partRequestId, "USED", actor);
+  async markUsed(partRequestId: string, tenantId: string, actor: LifecycleActor) {
+    return this.move(partRequestId, tenantId, "USED", actor);
   }
 
   // --- returns (7.D, Returns/Movements) -------------------------------
@@ -504,12 +504,12 @@ export class PartRequestService {
    * sellable nor still "with the technician" for the whole time it is
    * in limbo between here and a decision.
    */
-  async requestReturn(partRequestId: string, quantity: number, actor: LifecycleActor, reason?: string) {
+  async requestReturn(partRequestId: string, tenantId: string, quantity: number, actor: LifecycleActor, reason?: string) {
     if (!Number.isInteger(quantity) || quantity <= 0) {
       throw new BadRequestException({ code: "quantity_invalid", message: "Return a whole number, at least one." });
     }
 
-    const request = await this.load(partRequestId);
+    const request = await this.load(partRequestId, tenantId);
     await this.requireInventory(request.tenantId);
 
     const issued = await this.fulfilment(partRequestId);
@@ -575,12 +575,12 @@ export class PartRequestService {
    * loop as it takes; asking a question is not itself a decision about
    * the part.
    */
-  async requestClarification(partRequestId: string, actor: LifecycleActor, question: string) {
+  async requestClarification(partRequestId: string, tenantId: string, actor: LifecycleActor, question: string) {
     if (!question.trim()) {
       throw new BadRequestException({ code: "question_required", message: "Say what you need to know." });
     }
 
-    const request = await this.load(partRequestId);
+    const request = await this.load(partRequestId, tenantId);
     await this.requireInventory(request.tenantId);
 
     await this.prisma.$transaction(async (tx) => {
@@ -606,12 +606,12 @@ export class PartRequestService {
    * decision as a first-time request, per the spec's explicit "this loop
    * can repeat" note.
    */
-  async respondToClarification(partRequestId: string, actor: LifecycleActor, response: string) {
+  async respondToClarification(partRequestId: string, tenantId: string, actor: LifecycleActor, response: string) {
     if (!response.trim()) {
       throw new BadRequestException({ code: "response_required", message: "Write a reply before sending it." });
     }
 
-    const request = await this.load(partRequestId);
+    const request = await this.load(partRequestId, tenantId);
     await this.requireInventory(request.tenantId);
 
     await this.prisma.$transaction(async (tx) => {
@@ -641,8 +641,8 @@ export class PartRequestService {
    * no method, and a workflow graph with no edge into RETURN_REJECTED at
    * all despite the state existing in the Prisma enum.
    */
-  async rejectReturn(partRequestId: string, actor: LifecycleActor, reason?: string) {
-    const request = await this.load(partRequestId);
+  async rejectReturn(partRequestId: string, tenantId: string, actor: LifecycleActor, reason?: string) {
+    const request = await this.load(partRequestId, tenantId);
     await this.requireInventory(request.tenantId);
 
     await this.prisma.$transaction(async (tx) => {
@@ -669,8 +669,8 @@ export class PartRequestService {
    * from `PartReturnRequest` rather than trusting a caller-supplied one,
    * for the same reason `completeReturn` now does.
    */
-  async resolveRejectedReturn(partRequestId: string, actor: LifecycleActor) {
-    const request = await this.load(partRequestId);
+  async resolveRejectedReturn(partRequestId: string, tenantId: string, actor: LifecycleActor) {
+    const request = await this.load(partRequestId, tenantId);
     await this.requireInventory(request.tenantId);
 
     const returnRequest = await this.prisma.partReturnRequest.findUnique({ where: { partRequestId } });
@@ -703,8 +703,8 @@ export class PartRequestService {
     return { id: partRequestId, status: "USED" as const };
   }
 
-  async acceptReturn(partRequestId: string, actor: LifecycleActor) {
-    return this.move(partRequestId, "RETURN_ACCEPTED", actor);
+  async acceptReturn(partRequestId: string, tenantId: string, actor: LifecycleActor) {
+    return this.move(partRequestId, tenantId, "RETURN_ACCEPTED", actor);
   }
 
   /**
@@ -732,6 +732,7 @@ export class PartRequestService {
    */
   async completeReturn(
     partRequestId: string,
+    tenantId: string,
     warehouseId: string,
     quantity: number,
     actor: LifecycleActor,
@@ -741,7 +742,7 @@ export class PartRequestService {
       throw new BadRequestException({ code: "quantity_invalid", message: "Return a whole number, at least one." });
     }
 
-    const request = await this.load(partRequestId);
+    const request = await this.load(partRequestId, tenantId);
     await this.requireInventory(request.tenantId);
 
     const issued = await this.fulfilment(partRequestId);
@@ -977,9 +978,23 @@ export class PartRequestService {
     }
   }
 
-  private async load(id: string) {
-    const request = await this.prisma.partRequest.findUnique({
-      where: { id },
+  /**
+   * A part request belonging to THIS workshop, or nothing.
+   *
+   * Every public method funnels through here. It used to take a bare id, and
+   * the controller above it checked only that the caller held the permission
+   * *in their own tenant*. A runtime probe confirmed the consequence: an
+   * inventory manager signed into one workshop approved another workshop's
+   * request and issued a part off its shelf -- the victim's stock went 18 to
+   * 17, with a StockMovement carrying the victim's tenantId and the attacker's
+   * account as actorId.
+   *
+   * Missing rather than forbidden, for the same reason as everywhere else: a
+   * 403 on a foreign id confirms the id is real.
+   */
+  private async load(id: string, tenantId: string) {
+    const request = await this.prisma.partRequest.findFirst({
+      where: { id, tenantId },
       select: {
         id: true,
         tenantId: true,
@@ -1102,11 +1117,12 @@ export class PartRequestService {
 
   private async move(
     id: string,
+    tenantId: string,
     to: PartRequestStatus,
     actor: LifecycleActor,
     payload: Record<string, unknown> = {},
   ) {
-    const request = await this.load(id);
+    const request = await this.load(id, tenantId);
     await this.requireInventory(request.tenantId);
 
     await this.prisma.$transaction(async (tx) => {

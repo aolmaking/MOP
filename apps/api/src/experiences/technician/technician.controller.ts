@@ -151,17 +151,17 @@ export class TechnicianController {
 
   @Post("tasks/:id/start")
   async startTask(@CurrentSession() session: SessionContext, @Param("id") id: string) {
-    await this.requireTechnician(session, "task.view_assigned");
+    const { tenantId } = await this.requireTechnician(session, "task.view_assigned");
     // Starting is a task-level state change, not a work-order transition,
     // so it does not go through the lifecycle service -- that owns
     // WorkOrder.status and nothing else may write it.
-    return this.work.startTask(id, this.actor(session));
+    return this.work.startTask(id, tenantId, this.actor(session));
   }
 
   @Post("tasks/:id/complete")
   async completeTask(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: CompleteTaskDto) {
-    await this.requireTechnician(session, "task.complete");
-    return this.work.completeTask(id, this.actor(session), dto.minutesSpent);
+    const { tenantId } = await this.requireTechnician(session, "task.complete");
+    return this.work.completeTask(id, tenantId, this.actor(session), dto.minutesSpent);
   }
 
   @Post("tasks/:id/blocker")
@@ -170,8 +170,8 @@ export class TechnicianController {
     @Param("id") id: string,
     @Body() dto: ReportBlockerDto,
   ) {
-    await this.requireTechnician(session, "blocker.report");
-    return this.work.reportBlocker({ taskId: id, reason: dto.reason, note: dto.note }, this.actor(session));
+    const { tenantId } = await this.requireTechnician(session, "blocker.report");
+    return this.work.reportBlocker({ taskId: id, reason: dto.reason, note: dto.note }, tenantId, this.actor(session));
   }
 
   /**
@@ -567,14 +567,14 @@ export class TechnicianController {
    */
   @Post("parts/:id/receive")
   async receivePart(@CurrentSession() session: SessionContext, @Param("id") id: string) {
-    await this.requirePartOnMyJob(session, id);
-    return this.partRequests.receive(id, this.actor(session));
+    const { tenantId } = await this.requirePartOnMyJob(session, id);
+    return this.partRequests.receive(id, tenantId, this.actor(session));
   }
 
   @Post("parts/:id/used")
   async usePart(@CurrentSession() session: SessionContext, @Param("id") id: string) {
-    await this.requirePartOnMyJob(session, id);
-    return this.partRequests.markUsed(id, this.actor(session));
+    const { tenantId } = await this.requirePartOnMyJob(session, id);
+    return this.partRequests.markUsed(id, tenantId, this.actor(session));
   }
 
   /**
@@ -587,8 +587,8 @@ export class TechnicianController {
     @Param("id") id: string,
     @Body() dto: ReturnPartDto | RequestReturnDto,
   ) {
-    await this.requirePartOnMyJob(session, id);
-    return this.partRequests.requestReturn(id, dto.quantity, this.actor(session), dto.reason);
+    const { tenantId } = await this.requirePartOnMyJob(session, id);
+    return this.partRequests.requestReturn(id, tenantId, dto.quantity, this.actor(session), dto.reason);
   }
 
   @Post("parts/:id/clarification")
@@ -597,8 +597,8 @@ export class TechnicianController {
     @Param("id") id: string,
     @Body() dto: ClarificationDto,
   ) {
-    await this.requirePartOnMyJob(session, id);
-    return this.partRequests.respondToClarification(id, this.actor(session), dto.answer);
+    const { tenantId } = await this.requirePartOnMyJob(session, id);
+    return this.partRequests.respondToClarification(id, tenantId, this.actor(session), dto.answer);
   }
 
   /**
@@ -613,8 +613,8 @@ export class TechnicianController {
     @Param("id") id: string,
     @Body() dto: RespondToClarificationDto,
   ) {
-    await this.requirePartOnMyJob(session, id);
-    return this.partRequests.respondToClarification(id, this.actor(session), dto.response);
+    const { tenantId } = await this.requirePartOnMyJob(session, id);
+    return this.partRequests.respondToClarification(id, tenantId, this.actor(session), dto.response);
   }
 
   @Post("work-orders/:id/external-parts")
@@ -667,10 +667,14 @@ export class TechnicianController {
    * the view service rather than a second hand-written query, so there
    * is exactly one definition of "this job is mine".
    */
-  private async requirePartOnMyJob(session: SessionContext, partRequestId: string): Promise<void> {
+  private async requirePartOnMyJob(session: SessionContext, partRequestId: string): Promise<{ tenantId: string }> {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.view_assigned");
+    // workOrderOf is tenant-scoped, so a request id from another workshop is
+    // already refused here -- the tenantId is returned so the service call
+    // below can scope its own load rather than trusting that this ran.
     const workOrderId = await this.partRequests.workOrderOf(partRequestId, tenantId);
     await this.view.workCard(staffUserId, tenantId, workOrderId);
+    return { tenantId };
   }
 
   private async requireTechnician(

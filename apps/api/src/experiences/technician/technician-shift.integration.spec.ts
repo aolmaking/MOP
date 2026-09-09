@@ -239,7 +239,7 @@ describe("a technician's shift", () => {
     const card = await techView.workCard(mineStaffId, tenantId, myJobId);
     myTaskId = card.tasks[0].id;
 
-    await techWork.startTask(myTaskId, ACTOR);
+    await techWork.startTask(myTaskId, tenantId, ACTOR);
     const active = await techView.activeJob(mineStaffId, tenantId);
 
     expect(active?.workOrderId).toBe(myJobId);
@@ -248,9 +248,9 @@ describe("a technician's shift", () => {
   it("refuses to start a task that somebody has declared blocked", async () => {
     // A task declared un-workable must not become workable because a
     // different button was pressed.
-    await techWork.reportBlocker({ taskId: myTaskId, reason: "TOOL_MISSING", note: "Torque wrench on loan" }, ACTOR);
+    await techWork.reportBlocker({ taskId: myTaskId, reason: "TOOL_MISSING", note: "Torque wrench on loan" }, tenantId, ACTOR);
 
-    await expect(techWork.startTask(myTaskId, ACTOR)).rejects.toMatchObject({ status: 400 });
+    await expect(techWork.startTask(myTaskId, tenantId, ACTOR)).rejects.toMatchObject({ status: 400 });
   });
 
   it("puts the blocker on the branch manager's attention queue immediately", async () => {
@@ -281,7 +281,7 @@ describe("a technician's shift", () => {
     // Routed by reason, not by a flag the technician sets. A safety
     // issue is ESCALATED the moment it is reported -- the technician
     // should not have to also know to mark it urgent.
-    await techWork.reportBlocker({ taskId: myTaskId, reason: "SAFETY_ISSUE" }, ACTOR);
+    await techWork.reportBlocker({ taskId: myTaskId, reason: "SAFETY_ISSUE" }, tenantId, ACTOR);
 
     const blocker = await prisma.taskBlocker.findFirstOrThrow({
       where: { taskId: myTaskId, status: { in: ["OPEN", "ESCALATED"] } },
@@ -290,7 +290,7 @@ describe("a technician's shift", () => {
   });
 
   it("refuses to complete a task while a blocker is still open", async () => {
-    await expect(techWork.completeTask(myTaskId, ACTOR)).rejects.toMatchObject({ status: 400 });
+    await expect(techWork.completeTask(myTaskId, tenantId, ACTOR)).rejects.toMatchObject({ status: 400 });
 
     const blocker = await prisma.taskBlocker.findFirstOrThrow({
       where: { taskId: myTaskId, status: { in: ["OPEN", "ESCALATED"] } },
@@ -328,7 +328,7 @@ describe("a technician's shift", () => {
   });
 
   it("completes the task once nothing is blocking it", async () => {
-    await techWork.completeTask(myTaskId, ACTOR);
+    await techWork.completeTask(myTaskId, tenantId, ACTOR);
 
     const card = await techView.workCard(mineStaffId, tenantId, myJobId);
     expect(card.tasks[0].status).toBe("DONE");

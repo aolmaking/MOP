@@ -29,6 +29,7 @@ import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.se
 import { AuditService } from "../../audit/audit.service";
 import type { PrismaService } from "../../runtime/database/prisma.service";
 
+
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
 
@@ -195,31 +196,31 @@ describe("a day in the store", () => {
     // good return and a damaged write-off. Nothing here is arranged to
     // come out even.
     const first = await ask(2);
-    await parts.approve(first.id, ACTOR);
-    await parts.issue({ partRequestId: first.id, warehouseId: shop.warehouseId, quantity: 2 }, ACTOR);
+    await parts.approve(first.id, shop.tenantId, ACTOR);
+    await parts.issue({ partRequestId: first.id, warehouseId: shop.warehouseId, quantity: 2 }, shop.tenantId, ACTOR);
 
     const second = await ask(3);
-    await parts.approve(second.id, ACTOR);
-    await parts.issue({ partRequestId: second.id, warehouseId: shop.warehouseId, quantity: 2 }, ACTOR);
-    await parts.issue({ partRequestId: second.id, warehouseId: shop.warehouseId, quantity: 1 }, ACTOR);
+    await parts.approve(second.id, shop.tenantId, ACTOR);
+    await parts.issue({ partRequestId: second.id, warehouseId: shop.warehouseId, quantity: 2 }, shop.tenantId, ACTOR);
+    await parts.issue({ partRequestId: second.id, warehouseId: shop.warehouseId, quantity: 1 }, shop.tenantId, ACTOR);
 
     const third = await ask(1);
-    await parts.approve(third.id, ACTOR);
-    await parts.issue({ partRequestId: third.id, warehouseId: shop.warehouseId, quantity: 1 }, ACTOR);
-    await parts.markArrived(third.id, ACTOR);
-    await parts.receive(third.id, ACTOR);
-    await parts.requestReturn(third.id, 1, ACTOR, "Wrong size");
-    await parts.acceptReturn(third.id, ACTOR);
-    await parts.completeReturn(third.id, shop.warehouseId, 1, ACTOR);
+    await parts.approve(third.id, shop.tenantId, ACTOR);
+    await parts.issue({ partRequestId: third.id, warehouseId: shop.warehouseId, quantity: 1 }, shop.tenantId, ACTOR);
+    await parts.markArrived(third.id, shop.tenantId, ACTOR);
+    await parts.receive(third.id, shop.tenantId, ACTOR);
+    await parts.requestReturn(third.id, shop.tenantId, 1, ACTOR, "Wrong size");
+    await parts.acceptReturn(third.id, shop.tenantId, ACTOR);
+    await parts.completeReturn(third.id, shop.tenantId, shop.warehouseId, 1, ACTOR);
 
     const fourth = await ask(1);
-    await parts.approve(fourth.id, ACTOR);
-    await parts.issue({ partRequestId: fourth.id, warehouseId: shop.warehouseId, quantity: 1 }, ACTOR);
-    await parts.markArrived(fourth.id, ACTOR);
-    await parts.receive(fourth.id, ACTOR);
-    await parts.requestReturn(fourth.id, 1, ACTOR, "Cracked");
-    await parts.acceptReturn(fourth.id, ACTOR);
-    await parts.completeReturn(fourth.id, shop.warehouseId, 1, ACTOR, { damaged: true });
+    await parts.approve(fourth.id, shop.tenantId, ACTOR);
+    await parts.issue({ partRequestId: fourth.id, warehouseId: shop.warehouseId, quantity: 1 }, shop.tenantId, ACTOR);
+    await parts.markArrived(fourth.id, shop.tenantId, ACTOR);
+    await parts.receive(fourth.id, shop.tenantId, ACTOR);
+    await parts.requestReturn(fourth.id, shop.tenantId, 1, ACTOR, "Cracked");
+    await parts.acceptReturn(fourth.id, shop.tenantId, ACTOR);
+    await parts.completeReturn(fourth.id, shop.tenantId, shop.warehouseId, 1, ACTOR, { damaged: true });
 
     // 12 received. Issued 2 + (2+1) + 1 + 1 = 7. One good return comes
     // back to sellable; the damaged one does NOT -- that is the whole
@@ -291,10 +292,10 @@ describe("a day in the store", () => {
 describe("SCENARIOS.md 3.6 — a received part neither used nor returned", () => {
   it("blocks the Finish Gate in a workshop that holds stock", async () => {
     const request = await ask(1);
-    await parts.approve(request.id, ACTOR);
-    await parts.issue({ partRequestId: request.id, warehouseId: shop.warehouseId, quantity: 1 }, ACTOR);
-    await parts.markArrived(request.id, ACTOR);
-    await parts.receive(request.id, ACTOR);
+    await parts.approve(request.id, shop.tenantId, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: shop.warehouseId, quantity: 1 }, shop.tenantId, ACTOR);
+    await parts.markArrived(request.id, shop.tenantId, ACTOR);
+    await parts.receive(request.id, shop.tenantId, ACTOR);
     // Deliberately left there: not used, not returned.
 
     const profile = await capabilities.resolveCurrent(shop.tenantId);

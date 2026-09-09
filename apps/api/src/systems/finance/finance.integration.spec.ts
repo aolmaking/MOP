@@ -27,6 +27,7 @@ import { PriceCatalogService } from "./price-catalog.service";
 import type { PrismaService } from "../../runtime/database/prisma.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 
+
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
 
@@ -541,7 +542,7 @@ describe("refunds: request, approve, and the credit note it produces", () => {
     const stillFull = await finance.settlement(invoiceId);
     expect(stillFull.paid).toBe("100.00");
 
-    const approval = await finance.approveRefund(refund.id, ACTOR);
+    const approval = await finance.approveRefund(refund.id, paid.tenantId, ACTOR);
     expect(approval.creditNoteNumber).toMatch(/^CN-\d{6}$/);
 
     const after = await finance.settlement(invoiceId);
@@ -572,7 +573,7 @@ describe("refunds: request, approve, and the credit note it produces", () => {
   it("writes a real CreditNote row, not just a status change", async () => {
     const invoiceId = await invoicedJobWithPayment("50.00", "50.00");
     const refund = await finance.requestRefund(paid.tenantId, invoiceId, "50.00", "Full refund, job cancelled", ACTOR);
-    await finance.approveRefund(refund.id, ACTOR);
+    await finance.approveRefund(refund.id, paid.tenantId, ACTOR);
 
     const stored = await prisma.creditNote.findFirst({ where: { invoiceId } });
     expect(stored).not.toBeNull();
@@ -593,12 +594,12 @@ describe("refunds: request, approve, and the credit note it produces", () => {
     const invoiceId = await invoicedJobWithPayment("80.00", "80.00");
     const refund = await finance.requestRefund(paid.tenantId, invoiceId, "20.00", "Reconsidering", ACTOR);
 
-    await finance.rejectRefund(refund.id, ACTOR, "Customer withdrew the complaint");
+    await finance.rejectRefund(refund.id, paid.tenantId, ACTOR, "Customer withdrew the complaint");
 
     const settlement = await finance.settlement(invoiceId);
     expect(settlement.paid).toBe("80.00");
 
-    await expect(finance.approveRefund(refund.id, ACTOR)).rejects.toMatchObject({
+    await expect(finance.approveRefund(refund.id, paid.tenantId, ACTOR)).rejects.toMatchObject({
       status: 409,
       response: { code: "refund_not_pending" },
     });
@@ -607,9 +608,9 @@ describe("refunds: request, approve, and the credit note it produces", () => {
   it("refuses to decide the same refund twice", async () => {
     const invoiceId = await invoicedJobWithPayment("60.00", "60.00");
     const refund = await finance.requestRefund(paid.tenantId, invoiceId, "10.00", "Partial dispute", ACTOR);
-    await finance.approveRefund(refund.id, ACTOR);
+    await finance.approveRefund(refund.id, paid.tenantId, ACTOR);
 
-    await expect(finance.approveRefund(refund.id, ACTOR)).rejects.toMatchObject({
+    await expect(finance.approveRefund(refund.id, paid.tenantId, ACTOR)).rejects.toMatchObject({
       status: 409,
       response: { code: "refund_not_pending" },
     });
@@ -700,7 +701,7 @@ describe("DISCOUNT_AUTHORITY governs what issueInvoice will accept", () => {
       response: { code: "discount_approval_required" },
     });
 
-    const approval = await finance.approveDiscount(request.id, ACTOR);
+    const approval = await finance.approveDiscount(request.id, paid.tenantId, ACTOR);
     expect(approval.status).toBe("APPROVED");
 
     const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR, { discountPercent: 20 });
@@ -717,7 +718,7 @@ describe("DISCOUNT_AUTHORITY governs what issueInvoice will accept", () => {
     const job = await jobWithLine();
 
     const request = await finance.requestDiscount(paid.tenantId, job, "15.00", "Approved for less", ACTOR);
-    await finance.approveDiscount(request.id, ACTOR);
+    await finance.approveDiscount(request.id, paid.tenantId, ACTOR);
 
     // Approved for 15.00; trying to invoice with a 20% (20.00) discount.
     await expect(finance.issueInvoice(paid.tenantId, job, ACTOR, { discountPercent: 20 })).rejects.toMatchObject({
@@ -749,12 +750,12 @@ describe("DISCOUNT_AUTHORITY governs what issueInvoice will accept", () => {
     const job = await jobWithLine();
 
     const request = await finance.requestDiscount(paid.tenantId, job, "20.00", "Trying my luck", ACTOR);
-    await finance.rejectDiscount(request.id, ACTOR, "Too large for this job");
+    await finance.rejectDiscount(request.id, paid.tenantId, ACTOR, "Too large for this job");
 
     await expect(finance.issueInvoice(paid.tenantId, job, ACTOR, { discountPercent: 20 })).rejects.toMatchObject({
       response: { code: "discount_approval_required" },
     });
-    await expect(finance.approveDiscount(request.id, ACTOR)).rejects.toMatchObject({
+    await expect(finance.approveDiscount(request.id, paid.tenantId, ACTOR)).rejects.toMatchObject({
       status: 409,
       response: { code: "discount_not_pending" },
     });

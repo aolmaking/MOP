@@ -750,11 +750,21 @@ export class TechnicianWorkViewService {
    */
   async activeJob(staffUserId: string, tenantId: string): Promise<TechnicianJob | null> {
     const work = await this.myWork(staffUserId, tenantId);
+
+    // Assignment is not activity, and neither is being first in a list.
+    //
+    // The last two arms of this used to be `work.find(REGISTERED) ?? work[0]`,
+    // which meant a technician with nine assigned jobs and their hands on none
+    // of them still got a car on the "on now" page -- whichever one the query
+    // happened to return first. Guessing puts the wrong car in front of them,
+    // and the page they never tap is worse than an empty one.
+    //
+    // A job is theirs *right now* only if they have a task in progress on it,
+    // or an inspection open on it. Nothing else counts, and null is the honest
+    // answer the rest of the time.
     return (
       work.find((job) => job.active) ??
       work.find((job) => job.status === "UNDER_INSPECTION") ??
-      work.find((job) => job.status === "REGISTERED") ??
-      work[0] ??
       null
     );
   }
@@ -774,6 +784,22 @@ export class TechnicianWorkViewService {
     const teamIds = staff?.teamMemberships?.map((m) => m.teamId) ?? [];
     const branchScope = staff?.branchScope ?? [];
 
+    // A work card is theirs, or free to take, and nothing else.
+    //
+    // The third arm of this used to be a branch fallback that degraded to
+    // `{ tenantId }` when a technician had no branch scope -- which is the
+    // default. `{ tenantId }` matches every job in the workshop, so the two
+    // assignment arms above it decided nothing and any technician could open
+    // any colleague's card. Worse, the auto-assign below would then write a
+    // WorkOrderAssignment for whoever looked, so reading somebody else's job
+    // quietly made it theirs.
+    //
+    // Being in the same branch is not a claim on a job. What the card offers is
+    // work already assigned to this technician, or work assigned to nobody --
+    // the same two things `myWork` lists, so the card can always open what the
+    // list showed. Anything else is absent rather than filtered: a filtered
+    // response still confirms the job exists, and anyone can open developer
+    // tools on a workshop tablet.
     const workOrder = await this.prisma.workOrder.findFirst({
       where: {
         id: workOrderId,
@@ -781,7 +807,7 @@ export class TechnicianWorkViewService {
         OR: [
           { assignments: { some: { staffUserId } } },
           { tasks: { some: { assignments: { some: { staffUserId } } } } },
-          ...(branchScope.length > 0 ? [{ branchId: { in: branchScope } }] : [{ tenantId }]),
+          { assignments: { none: {} } },
         ],
       },
       select: {

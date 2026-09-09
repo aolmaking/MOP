@@ -293,7 +293,7 @@ describe("REFUND_AUTHORITY runtime enforcement", () => {
     await policies.set(tenantId, "REFUND_AUTHORITY", "OWNER_ONLY", PLATFORM_ACTOR, "PLATFORM", "Owner must authorize cash refunds");
 
     await expect(
-      finance.approveRefund(refund.id, {
+      finance.approveRefund(refund.id, tenantId, {
         accountId: cashier1.accountId,
         displayName: cashier1.fullName,
         actorType: "TENANT_STAFF",
@@ -304,7 +304,7 @@ describe("REFUND_AUTHORITY runtime enforcement", () => {
     });
 
     // Owner approves successfully
-    const approved = await finance.approveRefund(refund.id, {
+    const approved = await finance.approveRefund(refund.id, tenantId, {
       accountId: ownerStaff.accountId,
       displayName: ownerStaff.fullName,
       actorType: "TENANT_STAFF",
@@ -331,7 +331,7 @@ describe("REFUND_AUTHORITY runtime enforcement", () => {
 
     // Requester cashier1 cannot approve their own refund
     await expect(
-      finance.approveRefund(refund2.id, {
+      finance.approveRefund(refund2.id, tenantId, {
         accountId: cashier1.accountId,
         displayName: cashier1.fullName,
         actorType: "TENANT_STAFF",
@@ -342,7 +342,7 @@ describe("REFUND_AUTHORITY runtime enforcement", () => {
     });
 
     // Second cashier approves successfully
-    const approved2 = await finance.approveRefund(refund2.id, {
+    const approved2 = await finance.approveRefund(refund2.id, tenantId, {
       accountId: cashier2.accountId,
       displayName: cashier2.fullName,
       actorType: "TENANT_STAFF",
@@ -462,7 +462,7 @@ describe("UNAPPROVED_WORK_EXECUTION runtime enforcement", () => {
     // Policy BLOCKED: Technician cannot start work on job awaiting customer
     await policies.set(tenantId, "UNAPPROVED_WORK_EXECUTION", "BLOCKED", PLATFORM_ACTOR, "PLATFORM", "Customer must approve first");
 
-    await expect(techWork.startTask(task.id, staffActor)).rejects.toMatchObject({
+    await expect(techWork.startTask(task.id, tenantId, staffActor)).rejects.toMatchObject({
       status: 409,
       response: { code: "work_not_authorized" },
     });
@@ -480,7 +480,7 @@ describe("UNAPPROVED_WORK_EXECUTION runtime enforcement", () => {
     });
 
     // Now starting task succeeds
-    await techWork.startTask(task.id, staffActor);
+    await techWork.startTask(task.id, tenantId, staffActor);
     const started = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
     expect(started.status).toBe("IN_PROGRESS");
   });

@@ -189,6 +189,13 @@ export class FinanceService {
    * add up to its printed total.
    */
   async jobTotal(tenantId: string, workOrderId: string): Promise<JobTotal> {
+    // The job has to be this workshop's before anything is read or absorbed.
+    // Without this the method took a tenantId, used it only for the capability
+    // check, and then read the running invoice by workOrderId alone -- so one
+    // workshop's manager could ask what another workshop's job cost and get an
+    // answer.
+    await this.requireOwnedWorkOrder(tenantId, workOrderId);
+
     // Parts fitted by the shop floor are folded in before the total is
     // read, so "what does this job cost" answers with the parts on it.
     await this.absorbOperationalItems(tenantId, workOrderId);
@@ -234,6 +241,13 @@ export class FinanceService {
     options: { discountPercent?: number; taxPercent?: number } = {},
   ): Promise<Settlement> {
     await this.requireFinance(tenantId);
+
+    // The job has to be this workshop's. `requireFinance` asks whether the
+    // CALLER has finance, which is a different question from whether the work
+    // order they named is theirs -- and every read below was keyed by
+    // workOrderId alone, so without this an invoice could be issued against
+    // another workshop's job.
+    await this.requireOwnedWorkOrder(tenantId, workOrderId);
 
     const existing = await this.prisma.invoice.findUnique({ where: { workOrderId }, select: { id: true } });
     if (existing) {
@@ -425,6 +439,14 @@ export class FinanceService {
   ): Promise<Settlement> {
     await this.requireFinance(tenantId);
 
+    // Ownership before anything else. This method used to load the invoice by
+    // bare id and then write `Payment.tenantId` from the CALLER's session, so a
+    // manager in one workshop could settle another workshop's invoice: the
+    // victim's balance fell, their delivery gate opened, and the payment landed
+    // in the payer's revenue. Proven at runtime -- 1000 -> 750 across a tenant
+    // boundary.
+    const owned = await this.requireOwnedInvoice(tenantId, invoiceId);
+
     const existing = await this.prisma.payment.findUnique({
       where: { idempotencyKey: input.idempotencyKey },
       select: { id: true, invoiceId: true, amount: true },
@@ -434,14 +456,9 @@ export class FinanceService {
       return this.resolveIdempotentReplay(existing, invoiceId, input.amount);
     }
 
-    // Resolved once, up front: the emit below puts "We've recorded your
-    // payment" on the customer's own timeline, and it needs the job the
-    // invoice belongs to. `recordPayment` is addressed by invoice.
-    const paidInvoice = await this.prisma.invoice.findUnique({
-      where: { id: invoiceId },
-      select: { workOrderId: true },
-    });
-    const workOrderId = paidInvoice?.workOrderId;
+    // The emit below puts "We've recorded your payment" on the customer's own
+    // timeline, and it needs the job the invoice belongs to.
+    const workOrderId = owned.workOrderId;
 
     const before = await this.settlement(invoiceId);
 
@@ -582,6 +599,54 @@ export class FinanceService {
    * its own actor. Subtracting it here keeps both facts on the record
    * instead of pretending the original payment was smaller than it was.
    */
+  /**
+   * What is owed on an invoice this workshop owns.
+   *
+   * The tenant-checked entry point, and the only one a controller may call.
+   * `settlement` below is the internal form: it takes a bare id because every
+   * one of its callers has already established ownership by loading the
+   * invoice or its work order under a tenant filter. That split exists because
+   * the controller used to call `settlement` directly, and a runtime probe
+   * confirmed what that allowed -- one workshop's manager read another
+   * workshop's total, outstanding balance and settled flag over HTTP.
+   */
+  async settlementFor(tenantId: string, invoiceId: string): Promise<Settlement> {
+    await this.requireOwnedInvoice(tenantId, invoiceId);
+    return this.settlement(invoiceId);
+  }
+
+  /**
+   * An invoice belonging to THIS workshop, or nothing.
+   *
+   * Missing rather than forbidden: a 403 on a foreign id confirms the id is
+   * real, which is itself the leak.
+   */
+  /** A work order belonging to THIS workshop, or nothing. Same rule as invoices. */
+  private async requireOwnedWorkOrder(tenantId: string, workOrderId: string): Promise<void> {
+    const job = await this.prisma.workOrder.findFirst({
+      where: { id: workOrderId, tenantId },
+      select: { id: true },
+    });
+    if (!job) throw new NotFoundException({ code: "work_order_not_found", message: "Work order not found." });
+  }
+
+  private async requireOwnedInvoice(tenantId: string, invoiceId: string): Promise<{ id: string; workOrderId: string }> {
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id: invoiceId, tenantId },
+      select: { id: true, workOrderId: true },
+    });
+    if (!invoice) throw new NotFoundException({ code: "invoice_not_found", message: "Invoice not found." });
+    return invoice;
+  }
+
+  /**
+   * Internal. Callers must already have established that the invoice belongs
+   * to the acting tenant -- use `settlementFor` from anything reachable by a
+   * caller-supplied id.
+   */
+  // tenant-scope-ok: internal helper; every caller loads the invoice or its
+  // work order under a tenant filter first, and `settlementFor` is the
+  // tenant-checked entry point for anything driven by a route parameter.
   async settlement(invoiceId: string): Promise<Settlement> {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: invoiceId },
@@ -658,8 +723,8 @@ export class FinanceService {
    * because a refund without a document is money leaving with no
    * artifact a customer or a tax authority could ever ask to see.
    */
-  async approveRefund(refundRequestId: string, actor: LifecycleActor): Promise<{ id: string; creditNoteNumber: string }> {
-    const refund = await this.prisma.refundRequest.findUnique({ where: { id: refundRequestId } });
+  async approveRefund(refundRequestId: string, tenantId: string, actor: LifecycleActor): Promise<{ id: string; creditNoteNumber: string }> {
+    const refund = await this.prisma.refundRequest.findFirst({ where: { id: refundRequestId, tenantId } });
     if (!refund) throw new NotFoundException({ code: "refund_not_found", message: "Refund request not found." });
     if (refund.status !== "PENDING") {
       throw new ConflictException({
@@ -720,8 +785,8 @@ export class FinanceService {
     return { id: refundRequestId, creditNoteNumber: creditNote.creditNoteNumber };
   }
 
-  async rejectRefund(refundRequestId: string, actor: LifecycleActor, reason?: string): Promise<{ id: string; status: "REJECTED" }> {
-    const refund = await this.prisma.refundRequest.findUnique({ where: { id: refundRequestId } });
+  async rejectRefund(refundRequestId: string, tenantId: string, actor: LifecycleActor, reason?: string): Promise<{ id: string; status: "REJECTED" }> {
+    const refund = await this.prisma.refundRequest.findFirst({ where: { id: refundRequestId, tenantId } });
     if (!refund) throw new NotFoundException({ code: "refund_not_found", message: "Refund request not found." });
     if (refund.status !== "PENDING") {
       throw new ConflictException({
@@ -785,8 +850,8 @@ export class FinanceService {
     return { id: requestId, status: "PENDING" };
   }
 
-  async approveDiscount(discountRequestId: string, actor: LifecycleActor): Promise<{ id: string; status: "APPROVED" }> {
-    const discount = await this.prisma.discountRequest.findUnique({ where: { id: discountRequestId } });
+  async approveDiscount(discountRequestId: string, tenantId: string, actor: LifecycleActor): Promise<{ id: string; status: "APPROVED" }> {
+    const discount = await this.prisma.discountRequest.findFirst({ where: { id: discountRequestId, tenantId } });
     if (!discount) throw new NotFoundException({ code: "discount_not_found", message: "Discount request not found." });
     if (discount.status !== "PENDING") {
       throw new ConflictException({
@@ -815,8 +880,8 @@ export class FinanceService {
     return { id: discountRequestId, status: "APPROVED" };
   }
 
-  async rejectDiscount(discountRequestId: string, actor: LifecycleActor, reason?: string): Promise<{ id: string; status: "REJECTED" }> {
-    const discount = await this.prisma.discountRequest.findUnique({ where: { id: discountRequestId } });
+  async rejectDiscount(discountRequestId: string, tenantId: string, actor: LifecycleActor, reason?: string): Promise<{ id: string; status: "REJECTED" }> {
+    const discount = await this.prisma.discountRequest.findFirst({ where: { id: discountRequestId, tenantId } });
     if (!discount) throw new NotFoundException({ code: "discount_not_found", message: "Discount request not found." });
     if (discount.status !== "PENDING") {
       throw new ConflictException({

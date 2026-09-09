@@ -119,6 +119,17 @@ describe("Workshop onboarding (integration, real HTTP, real Postgres)", () => {
       await prisma.auditLog.deleteMany({ where });
       await prisma.priceCatalogEntry.deleteMany({ where });
       await prisma.specializationDefinition.deleteMany({ where });
+      // The master catalogue a stock-holding workshop is provisioned with.
+      // These reference the warehouse and the item, so they have to go first
+      // or the warehouse delete below fails on a foreign key.
+      await prisma.stockMovement.deleteMany({ where });
+      await prisma.warehouseStockBalance.deleteMany({ where });
+      await prisma.inventoryItemAttributeValue.deleteMany({ where });
+      await prisma.inventoryItem.deleteMany({ where });
+      await prisma.catalogCategoryAttribute.deleteMany({ where });
+      await prisma.catalogAttributeValue.deleteMany({ where });
+      await prisma.catalogAttribute.deleteMany({ where });
+      await prisma.catalogCategory.deleteMany({ where });
       await prisma.branchWarehouseAccess.deleteMany({ where });
       await prisma.warehouse.deleteMany({ where });
       await prisma.branch.deleteMany({ where });

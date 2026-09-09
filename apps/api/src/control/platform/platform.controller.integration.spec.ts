@@ -87,10 +87,35 @@ describe("PlatformController (integration, real HTTP)", () => {
   afterAll(async () => {
     await app.close();
     if (tenantIdsToClean.length > 0) {
-      await prisma.auditLog.deleteMany({ where: { tenantId: { in: tenantIdsToClean } } });
-      await prisma.tenantConfiguration.deleteMany({ where: { tenantId: { in: tenantIdsToClean } } });
-      await prisma.staffUser.deleteMany({ where: { tenantId: { in: tenantIdsToClean } } });
-      await prisma.account.deleteMany({ where: { tenantId: { in: tenantIdsToClean } } });
+      // Everything workshop creation actually provisions, deepest first.
+      // This list used to stop at the tenant's own configuration, which was
+      // enough while creating a workshop wrote little more than that; it now
+      // provisions structure, a master catalogue and stock, and the tenant
+      // delete fails on a foreign key without them.
+      const where = { tenantId: { in: tenantIdsToClean } };
+      await prisma.auditLog.deleteMany({ where });
+      await prisma.stockMovement.deleteMany({ where });
+      await prisma.warehouseStockBalance.deleteMany({ where });
+      await prisma.inventoryItemAttributeValue.deleteMany({ where });
+      await prisma.inventoryItem.deleteMany({ where });
+      await prisma.catalogCategoryAttribute.deleteMany({ where });
+      await prisma.catalogAttributeValue.deleteMany({ where });
+      await prisma.catalogAttribute.deleteMany({ where });
+      await prisma.catalogCategory.deleteMany({ where });
+      await prisma.priceCatalogEntry.deleteMany({ where });
+      await prisma.specializationDefinition.deleteMany({ where });
+      await prisma.branchWarehouseAccess.deleteMany({ where });
+      await prisma.warehouse.deleteMany({ where });
+      await prisma.branch.deleteMany({ where });
+      await prisma.tenantConfigurationVersion.deleteMany({ where });
+      await prisma.workshopPolicy.deleteMany({ where });
+      await prisma.tenantCapability.deleteMany({ where });
+      await prisma.financeConfiguration.deleteMany({ where });
+      await prisma.rolePage.deleteMany({ where });
+      await prisma.rolePermission.deleteMany({ where });
+      await prisma.tenantConfiguration.deleteMany({ where });
+      await prisma.staffUser.deleteMany({ where });
+      await prisma.account.deleteMany({ where });
       await prisma.tenant.deleteMany({ where: { id: { in: tenantIdsToClean } } });
     }
     await prisma.account.deleteMany({ where: { accountType: "PLATFORM", email: { contains: "platform-http-" } } });

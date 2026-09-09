@@ -336,28 +336,29 @@ export class InventoryController {
 
   @Post("requests/:id/approve")
   async approve(@CurrentSession() session: SessionContext, @Param("id") id: string) {
-    await this.require(session, "inventory.request.approve");
-    return this.parts.approve(id, this.actor(session));
+    const tenantId = await this.require(session, "inventory.request.approve");
+    return this.parts.approve(id, tenantId, this.actor(session));
   }
 
   @Post("requests/:id/reject")
   async reject(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() body: { reason?: string }) {
-    await this.require(session, "inventory.request.reject");
-    return this.parts.reject(id, this.actor(session), body?.reason);
+    const tenantId = await this.require(session, "inventory.request.reject");
+    return this.parts.reject(id, tenantId, this.actor(session), body?.reason);
   }
 
   @Post("requests/:id/unavailable")
   async unavailable(@CurrentSession() session: SessionContext, @Param("id") id: string) {
-    await this.require(session, "inventory.request.mark_unavailable");
-    return this.parts.markUnavailable(id, this.actor(session));
+    const tenantId = await this.require(session, "inventory.request.mark_unavailable");
+    return this.parts.markUnavailable(id, tenantId, this.actor(session));
   }
 
   /** Hand a part over. May be partial -- see PHASE_7.md section 2. */
   @Post("requests/:id/issue")
   async issue(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: IssueDto) {
-    await this.require(session, "inventory.request.issue");
+    const tenantId = await this.require(session, "inventory.request.issue");
     return this.parts.issue(
       { partRequestId: id, warehouseId: dto.warehouseId, quantity: dto.quantity },
+      tenantId,
       this.actor(session),
     );
   }
@@ -404,17 +405,17 @@ export class InventoryController {
    */
   @Post("returns/:id/accept")
   async acceptReturn(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: ReturnDto) {
-    await this.require(session, "inventory.stock.return.accept");
+    const tenantId = await this.require(session, "inventory.stock.return.accept");
     const actor = this.actor(session);
-    await this.parts.acceptReturn(id, actor);
-    await this.parts.completeReturn(id, dto.warehouseId, dto.quantity, actor, { damaged: dto.damaged ?? false });
+    await this.parts.acceptReturn(id, tenantId, actor);
+    await this.parts.completeReturn(id, tenantId, dto.warehouseId, dto.quantity, actor, { damaged: dto.damaged ?? false });
     return { ok: true as const };
   }
 
   @Post("returns/:id/reject")
   async rejectReturn(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: RejectReturnDto) {
-    await this.require(session, "inventory.stock.return.reject");
-    return this.parts.rejectReturn(id, this.actor(session), dto.reason);
+    const tenantId = await this.require(session, "inventory.stock.return.reject");
+    return this.parts.rejectReturn(id, tenantId, this.actor(session), dto.reason);
   }
 
   @Post("returns/:id/clarify")
@@ -423,8 +424,8 @@ export class InventoryController {
     @Param("id") id: string,
     @Body() dto: RequestClarificationDto,
   ) {
-    await this.require(session, "inventory.stock.return.clarify");
-    return this.parts.requestClarification(id, this.actor(session), dto.question);
+    const tenantId = await this.require(session, "inventory.stock.return.clarify");
+    return this.parts.requestClarification(id, tenantId, this.actor(session), dto.question);
   }
 
   /** H7/P-32: refuses while any item still holds stock in this warehouse. */

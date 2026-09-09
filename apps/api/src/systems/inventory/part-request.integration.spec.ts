@@ -24,6 +24,7 @@ import { AssetHistoryService } from "../operations/vehicle-history/asset-history
 import { WorkshopHistoryService } from "../operations/history/workshop-history.service";
 import type { PrismaService } from "../../runtime/database/prisma.service";
 
+
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
 
@@ -210,13 +211,13 @@ describe("SCENARIOS.md 3.1 — the normal flow", () => {
     const request = await ask(full, 2);
     expect(request.status).toBe("REQUESTED");
 
-    await parts.approve(request.id, ACTOR);
-    const fulfilment = await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 2 }, ACTOR);
+    await parts.approve(request.id, full.tenantId, ACTOR);
+    const fulfilment = await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 2 }, full.tenantId, ACTOR);
     expect(fulfilment).toEqual({ requested: 2, issued: 2, outstanding: 0 });
 
-    await parts.markArrived(request.id, ACTOR);
-    await parts.receive(request.id, ACTOR);
-    await parts.markUsed(request.id, ACTOR);
+    await parts.markArrived(request.id, full.tenantId, ACTOR);
+    await parts.receive(request.id, full.tenantId, ACTOR);
+    await parts.markUsed(request.id, full.tenantId, ACTOR);
 
     const after = (await stock.balanceOf(full.itemId, full.warehouseId)).availableQty;
     // Exactly one deduction, at issue. Later steps are custody, not stock.
@@ -235,7 +236,7 @@ describe("H2 — concurrent decisions on one request cannot both win", () => {
     // graph having any say. docs/scenarios3/EDGE_CASE_REGISTER.md's H2.
     const request = await ask(full, 1);
 
-    const results = await Promise.allSettled([parts.approve(request.id, ACTOR), parts.reject(request.id, ACTOR, "duplicate")]);
+    const results = await Promise.allSettled([parts.approve(request.id, full.tenantId, ACTOR), parts.reject(request.id, full.tenantId, ACTOR, "duplicate")]);
 
     const fulfilled = results.filter((r) => r.status === "fulfilled");
     const rejected = results.filter((r) => r.status === "rejected");
@@ -258,7 +259,7 @@ describe("H2 — concurrent decisions on one request cannot both win", () => {
 describe("Phase 19.A — approval is attributed, even though enforcement is deferred", () => {
   it("records who approved a request, readable later for a future separation-of-duties policy", async () => {
     const request = await ask(full, 1);
-    await parts.approve(request.id, ACTOR);
+    await parts.approve(request.id, full.tenantId, ACTOR);
 
     const stored = await prisma.partRequest.findUniqueOrThrow({ where: { id: request.id } });
     expect(stored.approvedById).toBe(ACTOR.accountId);
@@ -268,11 +269,9 @@ describe("Phase 19.A — approval is attributed, even though enforcement is defe
 describe("SCENARIOS.md 3.5 — partial fulfilment through the service", () => {
   it("stays un-issued until fully covered, then advances", async () => {
     const request = await ask(full, 3);
-    await parts.approve(request.id, ACTOR);
+    await parts.approve(request.id, full.tenantId, ACTOR);
 
-    const afterFirst = await parts.issue(
-      { partRequestId: request.id, warehouseId: full.warehouseId, quantity: 2 },
-      ACTOR,
+    const afterFirst = await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 2 }, full.tenantId, ACTOR,
     );
     expect(afterFirst).toEqual({ requested: 3, issued: 2, outstanding: 1 });
 
@@ -280,9 +279,7 @@ describe("SCENARIOS.md 3.5 — partial fulfilment through the service", () => {
     let stored = await prisma.partRequest.findUniqueOrThrow({ where: { id: request.id } });
     expect(stored.status).toBe("APPROVED");
 
-    const afterSecond = await parts.issue(
-      { partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 },
-      ACTOR,
+    const afterSecond = await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, full.tenantId, ACTOR,
     );
     expect(afterSecond).toEqual({ requested: 3, issued: 3, outstanding: 0 });
 
@@ -294,10 +291,10 @@ describe("SCENARIOS.md 3.5 — partial fulfilment through the service", () => {
     // Issuing four against a request for three means somebody miscounted.
     // Trimming to three hides it while the fourth walks out of the store.
     const request = await ask(full, 1);
-    await parts.approve(request.id, ACTOR);
+    await parts.approve(request.id, full.tenantId, ACTOR);
 
     await expect(
-      parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 2 }, ACTOR),
+      parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 2 }, full.tenantId, ACTOR),
     ).rejects.toMatchObject({ status: 400 });
   });
 
@@ -305,10 +302,10 @@ describe("SCENARIOS.md 3.5 — partial fulfilment through the service", () => {
     // If the two could split, a store ends up with paperwork saying a part
     // left and a shelf that still has it.
     const request = await ask(full, 1);
-    await parts.approve(request.id, ACTOR);
+    await parts.approve(request.id, full.tenantId, ACTOR);
 
     const before = (await stock.balanceOf(full.itemId, full.warehouseId)).availableQty;
-    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, full.tenantId, ACTOR);
     const after = (await stock.balanceOf(full.itemId, full.warehouseId)).availableQty;
 
     expect(after).toBe(before - 1);
@@ -323,15 +320,15 @@ describe("SCENARIOS.md 3.5 — partial fulfilment through the service", () => {
 describe("SCENARIOS.md 3.3 — a part comes back damaged", () => {
   it("puts it in the damaged bucket and never back into sellable stock", async () => {
     const request = await ask(full, 1);
-    await parts.approve(request.id, ACTOR);
-    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, ACTOR);
-    await parts.markArrived(request.id, ACTOR);
-    await parts.receive(request.id, ACTOR);
-    await parts.requestReturn(request.id, 1, ACTOR, "Arrived cracked");
-    await parts.acceptReturn(request.id, ACTOR);
+    await parts.approve(request.id, full.tenantId, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, full.tenantId, ACTOR);
+    await parts.markArrived(request.id, full.tenantId, ACTOR);
+    await parts.receive(request.id, full.tenantId, ACTOR);
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR, "Arrived cracked");
+    await parts.acceptReturn(request.id, full.tenantId, ACTOR);
 
     const before = await stock.balanceOf(full.itemId, full.warehouseId);
-    await parts.completeReturn(request.id, full.warehouseId, 1, ACTOR, { damaged: true });
+    await parts.completeReturn(request.id, full.tenantId, full.warehouseId, 1, ACTOR, { damaged: true });
     const after = await stock.balanceOf(full.itemId, full.warehouseId);
 
     expect(after.damagedQty).toBe(before.damagedQty + 1);
@@ -340,15 +337,15 @@ describe("SCENARIOS.md 3.3 — a part comes back damaged", () => {
 
   it("puts an undamaged return back into sellable stock", async () => {
     const request = await ask(full, 1);
-    await parts.approve(request.id, ACTOR);
-    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, ACTOR);
-    await parts.markArrived(request.id, ACTOR);
-    await parts.receive(request.id, ACTOR);
-    await parts.requestReturn(request.id, 1, ACTOR, "Not needed");
-    await parts.acceptReturn(request.id, ACTOR);
+    await parts.approve(request.id, full.tenantId, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, full.tenantId, ACTOR);
+    await parts.markArrived(request.id, full.tenantId, ACTOR);
+    await parts.receive(request.id, full.tenantId, ACTOR);
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR, "Not needed");
+    await parts.acceptReturn(request.id, full.tenantId, ACTOR);
 
     const before = await stock.balanceOf(full.itemId, full.warehouseId);
-    await parts.completeReturn(request.id, full.warehouseId, 1, ACTOR);
+    await parts.completeReturn(request.id, full.tenantId, full.warehouseId, 1, ACTOR);
     const after = await stock.balanceOf(full.itemId, full.warehouseId);
 
     expect(after.availableQty).toBe(before.availableQty + 1);
@@ -368,18 +365,18 @@ describe("the capability profile decides, not an if-statement", () => {
 
   it("a workshop without PART_RETURNS can still issue and use, but cannot return", async () => {
     const request = await ask(noReturns, 1);
-    await parts.approve(request.id, ACTOR);
-    await parts.issue({ partRequestId: request.id, warehouseId: noReturns.warehouseId, quantity: 1 }, ACTOR);
-    await parts.markArrived(request.id, ACTOR);
-    await parts.receive(request.id, ACTOR);
+    await parts.approve(request.id, noReturns.tenantId, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: noReturns.warehouseId, quantity: 1 }, noReturns.tenantId, ACTOR);
+    await parts.markArrived(request.id, noReturns.tenantId, ACTOR);
+    await parts.receive(request.id, noReturns.tenantId, ACTOR);
 
     // The return edge does not exist in this profile -- refused by the
     // router, not by a hidden button.
-    await expect(parts.requestReturn(request.id, 1, ACTOR)).rejects.toMatchObject({ status: 409 });
+    await expect(parts.requestReturn(request.id, noReturns.tenantId, 1, ACTOR)).rejects.toMatchObject({ status: 409 });
 
     // And the part can still be used, which is the point: removing
     // returns must not strand a part in the technician's hands.
-    await parts.markUsed(request.id, ACTOR);
+    await parts.markUsed(request.id, noReturns.tenantId, ACTOR);
     const stored = await prisma.partRequest.findUniqueOrThrow({ where: { id: request.id } });
     expect(stored.status).toBe("USED");
   });
@@ -388,7 +385,7 @@ describe("the capability profile decides, not an if-statement", () => {
     const request = await ask(full, 1);
 
     // REQUESTED cannot jump straight to USED.
-    await expect(parts.markUsed(request.id, ACTOR)).rejects.toMatchObject({
+    await expect(parts.markUsed(request.id, full.tenantId, ACTOR)).rejects.toMatchObject({
       status: 409,
       response: { code: "transition_not_allowed" },
     });
@@ -403,10 +400,10 @@ describe("the capability profile decides, not an if-statement", () => {
  */
 async function receivedRequest(shop: Workshop, quantity: number) {
   const request = await ask(shop, quantity);
-  await parts.approve(request.id, ACTOR);
-  await parts.issue({ partRequestId: request.id, warehouseId: shop.warehouseId, quantity }, ACTOR);
-  await parts.markArrived(request.id, ACTOR);
-  await parts.receive(request.id, ACTOR);
+  await parts.approve(request.id, shop.tenantId, ACTOR);
+  await parts.issue({ partRequestId: request.id, warehouseId: shop.warehouseId, quantity }, shop.tenantId, ACTOR);
+  await parts.markArrived(request.id, shop.tenantId, ACTOR);
+  await parts.receive(request.id, shop.tenantId, ACTOR);
   return request;
 }
 
@@ -415,7 +412,7 @@ describe("Returns/Movements: requesting a return opens RETURN_PENDING", () => {
     const request = await receivedRequest(full, 1);
     const before = await stock.balanceOf(full.itemId, full.warehouseId);
 
-    await parts.requestReturn(request.id, 1, ACTOR, "Wrong size");
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR, "Wrong size");
 
     const after = await stock.balanceOf(full.itemId, full.warehouseId);
     expect(after.returnPendingQty).toBe(before.returnPendingQty + 1);
@@ -426,7 +423,7 @@ describe("Returns/Movements: requesting a return opens RETURN_PENDING", () => {
 
   it("writes a PartReturnRequest row the queue can read -- previously nothing did", async () => {
     const request = await receivedRequest(full, 1);
-    await parts.requestReturn(request.id, 1, ACTOR, "Doesn't fit");
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR, "Doesn't fit");
 
     const row = await prisma.partReturnRequest.findUnique({ where: { partRequestId: request.id } });
     expect(row).toMatchObject({ quantity: 1, reason: "Doesn't fit", resolvedAt: null });
@@ -437,7 +434,7 @@ describe("Returns/Movements: requesting a return opens RETURN_PENDING", () => {
 
   it("refuses to return more than was issued", async () => {
     const request = await receivedRequest(full, 1);
-    await expect(parts.requestReturn(request.id, 2, ACTOR)).rejects.toMatchObject({
+    await expect(parts.requestReturn(request.id, full.tenantId, 2, ACTOR)).rejects.toMatchObject({
       status: 400,
       response: { code: "over_return" },
     });
@@ -447,9 +444,9 @@ describe("Returns/Movements: requesting a return opens RETURN_PENDING", () => {
 describe("Returns/Movements: Request Clarification", () => {
   it("asks a question without deciding, and it shows up on the queue row", async () => {
     const request = await receivedRequest(full, 1);
-    await parts.requestReturn(request.id, 1, ACTOR, "Cracked casing");
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR, "Cracked casing");
 
-    await parts.requestClarification(request.id, ACTOR, "Is this the correct part number?");
+    await parts.requestClarification(request.id, full.tenantId, ACTOR, "Is this the correct part number?");
 
     const stored = await prisma.partRequest.findUniqueOrThrow({ where: { id: request.id } });
     expect(stored.status).toBe("RETURN_CLARIFICATION_REQUESTED");
@@ -460,10 +457,10 @@ describe("Returns/Movements: Request Clarification", () => {
 
   it("does not touch stock -- asking a question is not a decision about the part", async () => {
     const request = await receivedRequest(full, 1);
-    await parts.requestReturn(request.id, 1, ACTOR, "Cracked casing");
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR, "Cracked casing");
     const before = await stock.balanceOf(full.itemId, full.warehouseId);
 
-    await parts.requestClarification(request.id, ACTOR, "Which SKU is this?");
+    await parts.requestClarification(request.id, full.tenantId, ACTOR, "Which SKU is this?");
 
     const after = await stock.balanceOf(full.itemId, full.warehouseId);
     expect(after).toEqual(before);
@@ -471,10 +468,10 @@ describe("Returns/Movements: Request Clarification", () => {
 
   it("the technician's reply loops back to RETURN_REQUESTED and clears the question", async () => {
     const request = await receivedRequest(full, 1);
-    await parts.requestReturn(request.id, 1, ACTOR, "Cracked casing");
-    await parts.requestClarification(request.id, ACTOR, "Which SKU is this?");
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR, "Cracked casing");
+    await parts.requestClarification(request.id, full.tenantId, ACTOR, "Which SKU is this?");
 
-    await parts.respondToClarification(request.id, ACTOR, "BRK-4471, confirmed against the box");
+    await parts.respondToClarification(request.id, full.tenantId, ACTOR, "BRK-4471, confirmed against the box");
 
     const stored = await prisma.partRequest.findUniqueOrThrow({ where: { id: request.id } });
     expect(stored.status).toBe("RETURN_REQUESTED");
@@ -486,11 +483,11 @@ describe("Returns/Movements: Request Clarification", () => {
 
   it("can repeat: clarify, reply, clarify again", async () => {
     const request = await receivedRequest(full, 1);
-    await parts.requestReturn(request.id, 1, ACTOR, "Cracked casing");
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR, "Cracked casing");
 
-    await parts.requestClarification(request.id, ACTOR, "First question");
-    await parts.respondToClarification(request.id, ACTOR, "First answer");
-    await parts.requestClarification(request.id, ACTOR, "Second question");
+    await parts.requestClarification(request.id, full.tenantId, ACTOR, "First question");
+    await parts.respondToClarification(request.id, full.tenantId, ACTOR, "First answer");
+    await parts.requestClarification(request.id, full.tenantId, ACTOR, "Second question");
 
     const stored = await prisma.partRequest.findUniqueOrThrow({ where: { id: request.id } });
     expect(stored.status).toBe("RETURN_CLARIFICATION_REQUESTED");
@@ -503,9 +500,9 @@ describe("Returns/Movements: Request Clarification", () => {
 describe("Returns/Movements: Reject Return", () => {
   it("moves to RETURN_REJECTED, not the top-level REJECTED -- the part already left the shelf", async () => {
     const request = await receivedRequest(full, 1);
-    await parts.requestReturn(request.id, 1, ACTOR, "Doesn't fit");
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR, "Doesn't fit");
 
-    await parts.rejectReturn(request.id, ACTOR, "Shows clear signs of use");
+    await parts.rejectReturn(request.id, full.tenantId, ACTOR, "Shows clear signs of use");
 
     const stored = await prisma.partRequest.findUniqueOrThrow({ where: { id: request.id } });
     expect(stored.status).toBe("RETURN_REJECTED");
@@ -513,11 +510,11 @@ describe("Returns/Movements: Reject Return", () => {
 
   it("does not silently drop the part from tracking -- it must be resolved", async () => {
     const request = await receivedRequest(full, 1);
-    await parts.requestReturn(request.id, 1, ACTOR);
-    await parts.rejectReturn(request.id, ACTOR, "Used, not defective");
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR);
+    await parts.rejectReturn(request.id, full.tenantId, ACTOR, "Used, not defective");
 
     // The exact resolution the spec names: mark it Used after all.
-    await parts.resolveRejectedReturn(request.id, ACTOR);
+    await parts.resolveRejectedReturn(request.id, full.tenantId, ACTOR);
 
     const stored = await prisma.partRequest.findUniqueOrThrow({ where: { id: request.id } });
     expect(stored.status).toBe("USED");
@@ -525,8 +522,8 @@ describe("Returns/Movements: Reject Return", () => {
 
   it("marks the PartReturnRequest resolved, so it drops off the open queue", async () => {
     const request = await receivedRequest(full, 1);
-    await parts.requestReturn(request.id, 1, ACTOR);
-    await parts.rejectReturn(request.id, ACTOR, "Used, not defective");
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR);
+    await parts.rejectReturn(request.id, full.tenantId, ACTOR, "Used, not defective");
 
     const queue = await parts.openReturns(full.tenantId);
     expect(queue.map((entry) => entry.partRequestId)).not.toContain(request.id);
@@ -562,17 +559,17 @@ describe("Returns/Movements: accepting into a different warehouse than it was is
     ).id;
 
     const request = await receivedRequest(full, 1);
-    await parts.requestReturn(request.id, 1, ACTOR); // opens RETURN_PENDING against full.warehouseId
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR); // opens RETURN_PENDING against full.warehouseId
 
     const originalBefore = await stock.balanceOf(full.itemId, full.warehouseId);
     const otherBefore = await stock.balanceOf(full.itemId, otherWarehouseId);
     expect(originalBefore.returnPendingQty).toBeGreaterThan(0);
     expect(otherBefore.returnPendingQty).toBe(0);
 
-    await parts.acceptReturn(request.id, ACTOR);
+    await parts.acceptReturn(request.id, full.tenantId, ACTOR);
     // The manager is physically standing at the annexe and accepts the
     // part back there -- a legitimate, different warehouse.
-    await parts.completeReturn(request.id, otherWarehouseId, 1, ACTOR);
+    await parts.completeReturn(request.id, full.tenantId, otherWarehouseId, 1, ACTOR);
 
     const originalAfter = await stock.balanceOf(full.itemId, full.warehouseId);
     const otherAfter = await stock.balanceOf(full.itemId, otherWarehouseId);
@@ -591,13 +588,13 @@ describe("Returns/Movements: accepting into a different warehouse than it was is
 
   it("resolving a rejected return also clears RETURN_PENDING on the original warehouse", async () => {
     const request = await receivedRequest(full, 1);
-    await parts.requestReturn(request.id, 1, ACTOR);
-    await parts.rejectReturn(request.id, ACTOR, "Used, not defective");
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR);
+    await parts.rejectReturn(request.id, full.tenantId, ACTOR, "Used, not defective");
 
     const pending = await stock.balanceOf(full.itemId, full.warehouseId);
     expect(pending.returnPendingQty).toBeGreaterThan(0);
 
-    await parts.resolveRejectedReturn(request.id, ACTOR);
+    await parts.resolveRejectedReturn(request.id, full.tenantId, ACTOR);
 
     const after = await stock.balanceOf(full.itemId, full.warehouseId);
     expect(after.returnPendingQty).toBe(pending.returnPendingQty - 1);
@@ -607,12 +604,12 @@ describe("Returns/Movements: accepting into a different warehouse than it was is
 describe("Returns/Movements: Accept Return to Stock reverses RETURN_PENDING", () => {
   it("the pending quantity returns to zero and availableQty gains it, in one transaction", async () => {
     const request = await receivedRequest(full, 1);
-    await parts.requestReturn(request.id, 1, ACTOR);
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR);
     const pending = await stock.balanceOf(full.itemId, full.warehouseId);
     expect(pending.returnPendingQty).toBeGreaterThan(0);
 
-    await parts.acceptReturn(request.id, ACTOR);
-    await parts.completeReturn(request.id, full.warehouseId, 1, ACTOR);
+    await parts.acceptReturn(request.id, full.tenantId, ACTOR);
+    await parts.completeReturn(request.id, full.tenantId, full.warehouseId, 1, ACTOR);
 
     const after = await stock.balanceOf(full.itemId, full.warehouseId);
     expect(after.returnPendingQty).toBe(pending.returnPendingQty - 1);
@@ -621,11 +618,11 @@ describe("Returns/Movements: Accept Return to Stock reverses RETURN_PENDING", ()
 
   it("accepting as damaged reverses the same pending quantity but credits damagedQty instead", async () => {
     const request = await receivedRequest(full, 1);
-    await parts.requestReturn(request.id, 1, ACTOR);
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR);
     const pending = await stock.balanceOf(full.itemId, full.warehouseId);
 
-    await parts.acceptReturn(request.id, ACTOR);
-    await parts.completeReturn(request.id, full.warehouseId, 1, ACTOR, { damaged: true });
+    await parts.acceptReturn(request.id, full.tenantId, ACTOR);
+    await parts.completeReturn(request.id, full.tenantId, full.warehouseId, 1, ACTOR, { damaged: true });
 
     const after = await stock.balanceOf(full.itemId, full.warehouseId);
     expect(after.returnPendingQty).toBe(pending.returnPendingQty - 1);
@@ -635,9 +632,9 @@ describe("Returns/Movements: Accept Return to Stock reverses RETURN_PENDING", ()
 
   it("removes the request from the open-returns queue once resolved", async () => {
     const request = await receivedRequest(full, 1);
-    await parts.requestReturn(request.id, 1, ACTOR);
-    await parts.acceptReturn(request.id, ACTOR);
-    await parts.completeReturn(request.id, full.warehouseId, 1, ACTOR);
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR);
+    await parts.acceptReturn(request.id, full.tenantId, ACTOR);
+    await parts.completeReturn(request.id, full.tenantId, full.warehouseId, 1, ACTOR);
 
     const queue = await parts.openReturns(full.tenantId);
     expect(queue.map((entry) => entry.partRequestId)).not.toContain(request.id);
@@ -690,14 +687,14 @@ describe("part requests move the work order they belong to", () => {
       { tenantId: full.tenantId, workOrderId, inventoryItemId: full.itemId, quantity: 2 },
       ACTOR,
     );
-    await parts.approve(request.id, ACTOR);
+    await parts.approve(request.id, full.tenantId, ACTOR);
 
     // A partial hand-over is not a hand-over: the job stays waiting.
-    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, full.tenantId, ACTOR);
     const midway = await prisma.workOrder.findUnique({ where: { id: workOrderId }, select: { status: true } });
     expect(midway?.status).toBe("WAITING_PARTS");
 
-    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, full.tenantId, ACTOR);
     const after = await prisma.workOrder.findUnique({ where: { id: workOrderId }, select: { status: true } });
     expect(after?.status).toBe("IN_PROGRESS");
   });
@@ -766,8 +763,8 @@ describe("issuing a part puts it on the bill", () => {
       { tenantId: full.tenantId, workOrderId, inventoryItemId: full.itemId, quantity: 2 },
       ACTOR,
     );
-    await parts.approve(request.id, ACTOR);
-    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 2 }, ACTOR);
+    await parts.approve(request.id, full.tenantId, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 2 }, full.tenantId, ACTOR);
 
     const line = await prisma.workOrderPartLine.findUnique({ where: { partRequestId: request.id } });
     expect(line).not.toBeNull();
@@ -785,10 +782,10 @@ describe("issuing a part puts it on the bill", () => {
       { tenantId: full.tenantId, workOrderId, inventoryItemId: full.itemId, quantity: 3 },
       ACTOR,
     );
-    await parts.approve(request.id, ACTOR);
+    await parts.approve(request.id, full.tenantId, ACTOR);
 
-    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, ACTOR);
-    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 2 }, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, full.tenantId, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 2 }, full.tenantId, ACTOR);
 
     const lines = await prisma.workOrderPartLine.findMany({ where: { workOrderId } });
     expect(lines).toHaveLength(1);
@@ -801,8 +798,8 @@ describe("issuing a part puts it on the bill", () => {
       { tenantId: full.tenantId, workOrderId, inventoryItemId: full.itemId, quantity: 1 },
       ACTOR,
     );
-    await parts.approve(request.id, ACTOR);
-    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, ACTOR);
+    await parts.approve(request.id, full.tenantId, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, full.tenantId, ACTOR);
 
     // The Owner puts the price up. An agreed bill may not move under a
     // customer who already had the work done.
@@ -820,14 +817,14 @@ describe("issuing a part puts it on the bill", () => {
       { tenantId: full.tenantId, workOrderId, inventoryItemId: full.itemId, quantity: 2 },
       ACTOR,
     );
-    await parts.approve(request.id, ACTOR);
-    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 2 }, ACTOR);
-    await parts.receive(request.id, ACTOR);
+    await parts.approve(request.id, full.tenantId, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 2 }, full.tenantId, ACTOR);
+    await parts.receive(request.id, full.tenantId, ACTOR);
 
     // One of the two comes back.
-    await parts.requestReturn(request.id, 1, ACTOR);
-    await parts.acceptReturn(request.id, ACTOR);
-    await parts.completeReturn(request.id, full.warehouseId, 1, ACTOR);
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR);
+    await parts.acceptReturn(request.id, full.tenantId, ACTOR);
+    await parts.completeReturn(request.id, full.tenantId, full.warehouseId, 1, ACTOR);
 
     const line = await prisma.workOrderPartLine.findUnique({ where: { partRequestId: request.id } });
     expect(line!.quantity).toBe(1);
@@ -839,13 +836,13 @@ describe("issuing a part puts it on the bill", () => {
       { tenantId: full.tenantId, workOrderId, inventoryItemId: full.itemId, quantity: 1 },
       ACTOR,
     );
-    await parts.approve(request.id, ACTOR);
-    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, ACTOR);
-    await parts.receive(request.id, ACTOR);
+    await parts.approve(request.id, full.tenantId, ACTOR);
+    await parts.issue({ partRequestId: request.id, warehouseId: full.warehouseId, quantity: 1 }, full.tenantId, ACTOR);
+    await parts.receive(request.id, full.tenantId, ACTOR);
 
-    await parts.requestReturn(request.id, 1, ACTOR);
-    await parts.acceptReturn(request.id, ACTOR);
-    await parts.completeReturn(request.id, full.warehouseId, 1, ACTOR);
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR);
+    await parts.acceptReturn(request.id, full.tenantId, ACTOR);
+    await parts.completeReturn(request.id, full.tenantId, full.warehouseId, 1, ACTOR);
 
     const line = await prisma.workOrderPartLine.findUnique({ where: { partRequestId: request.id } });
     expect(line).toBeNull();
@@ -891,8 +888,8 @@ describe("the technician's own view of a part in the returns loop", () => {
 
   it("offers only RESPOND_CLARIFICATION while a question is open, and surfaces the question text", async () => {
     const request = await receivedRequest(full, 1);
-    await parts.requestReturn(request.id, 1, ACTOR, "Cracked casing");
-    await parts.requestClarification(request.id, ACTOR, "Is this the correct part number?");
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR, "Cracked casing");
+    await parts.requestClarification(request.id, full.tenantId, ACTOR, "Is this the correct part number?");
 
     const card = await techView.workCard(fullTechnicianStaffId, full.tenantId, full.workOrderId);
     const part = myPart(card, request.id);
@@ -902,9 +899,9 @@ describe("the technician's own view of a part in the returns loop", () => {
 
   it("clears the question and offers nothing once answered, back at RETURN_REQUESTED", async () => {
     const request = await receivedRequest(full, 1);
-    await parts.requestReturn(request.id, 1, ACTOR, "Cracked casing");
-    await parts.requestClarification(request.id, ACTOR, "Which SKU is this?");
-    await parts.respondToClarification(request.id, ACTOR, "BRK-4471, confirmed against the box");
+    await parts.requestReturn(request.id, full.tenantId, 1, ACTOR, "Cracked casing");
+    await parts.requestClarification(request.id, full.tenantId, ACTOR, "Which SKU is this?");
+    await parts.respondToClarification(request.id, full.tenantId, ACTOR, "BRK-4471, confirmed against the box");
 
     const card = await techView.workCard(fullTechnicianStaffId, full.tenantId, full.workOrderId);
     const part = myPart(card, request.id);
@@ -982,15 +979,15 @@ describe("branch-warehouse topology enforcement during part issuing", () => {
       { tenantId: topoTenant.id, workOrderId: woA.id, inventoryItemId: item.id, quantity: 2 },
       ACTOR,
     );
-    await parts.approve(req.id, ACTOR);
+    await parts.approve(req.id, topoTenant.id, ACTOR);
 
     // Attempt to issue from Store B (which only serves Branch B) -> MUST FAIL with warehouse_not_authorized_for_branch
     await expect(
-      parts.issue({ partRequestId: req.id, warehouseId: whB.id, quantity: 2 }, ACTOR),
+      parts.issue({ partRequestId: req.id, warehouseId: whB.id, quantity: 2 }, topoTenant.id, ACTOR),
     ).rejects.toThrow("This store does not serve the branch where this work order is being serviced");
 
     // Issue from Store A (which serves Branch A) -> MUST SUCCEED
-    const fulfilled = await parts.issue({ partRequestId: req.id, warehouseId: whA.id, quantity: 2 }, ACTOR);
+    const fulfilled = await parts.issue({ partRequestId: req.id, warehouseId: whA.id, quantity: 2 }, topoTenant.id, ACTOR);
     expect(fulfilled.issued).toBe(2);
     expect(fulfilled.outstanding).toBe(0);
 

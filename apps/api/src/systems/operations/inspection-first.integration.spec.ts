@@ -232,7 +232,7 @@ describe("repair work is refused before the workflow authorizes it", () => {
     await authorize(job.id);
 
     const task = await techWork.createTask(job.id, "Replace pads", ACTOR);
-    await techWork.startTask(task.id, ACTOR);
+    await techWork.startTask(task.id, tenantId, ACTOR);
 
     const stored = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
     expect(stored.status).toBe("IN_PROGRESS");
@@ -250,7 +250,7 @@ describe("repair work is refused before the workflow authorizes it", () => {
     await lifecycle.apply(job.id, "ASK_CUSTOMER", ACTOR);
     await prisma.workOrder.update({ where: { id: job.id }, data: { status: "AWAITING_CUSTOMER_APPROVAL" } });
 
-    await expect(techWork.startTask(task.id, ACTOR)).rejects.toMatchObject({
+    await expect(techWork.startTask(task.id, tenantId, ACTOR)).rejects.toMatchObject({
       response: { code: "work_not_authorized" },
     });
   });
@@ -355,7 +355,7 @@ describe("a late inspection cannot legitimize work that already happened", () =>
     const job = await newWorkOrder();
     await authorize(job.id);
     const task = await techWork.createTask(job.id, "Replace pads", ACTOR);
-    await techWork.startTask(task.id, ACTOR);
+    await techWork.startTask(task.id, tenantId, ACTOR);
 
     // Rewrite history the way a backfill would: the only inspection on
     // this job now finished an hour AFTER the repair began.
@@ -378,7 +378,7 @@ describe("a late inspection cannot legitimize work that already happened", () =>
     const job = await newWorkOrder();
     await authorize(job.id);
     const task = await techWork.createTask(job.id, "Replace pads", ACTOR);
-    await techWork.startTask(task.id, ACTOR);
+    await techWork.startTask(task.id, tenantId, ACTOR);
 
     const result = await gates.evaluate(
       job.id,
