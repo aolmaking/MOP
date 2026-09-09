@@ -65,6 +65,11 @@ async function render(
     addExternalPart: vi.fn(() => of({})),
     raiseDecision: vi.fn(() => of({ requestId: 'r1', secureToken: 't1' })),
     vehicleHistory: vi.fn(() => of(options.history ?? brief())),
+    // The card loads the inspection aggregate as well as the card itself.
+    // Absent from this mock, the call threw synchronously rather than
+    // erroring into the subscriber, so the whole file failed on a method
+    // name instead of on anything it was testing.
+    getInspectionAggregate: vi.fn(() => of(null)),
   };
   TestBed.configureTestingModule({
     providers: [provideRouter([]), { provide: TechnicianApi, useValue: api }],

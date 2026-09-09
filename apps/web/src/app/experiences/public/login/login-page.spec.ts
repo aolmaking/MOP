@@ -96,6 +96,11 @@ describe('LoginPage', () => {
     fixture.detectChanges();
     const navigateSpy = vi.spyOn(TestBed.inject(Router), 'navigateByUrl');
 
+    // Sign-in became two stages -- workshop code, then credentials -- and the
+    // error banner lives on the second one. Submitting works from either,
+    // because this test calls the method directly, but nothing renders the
+    // banner until the page is actually showing that stage.
+    fixture.componentInstance.skipToCredentials();
     fixture.componentInstance['form'].setValue({ email: 'owner@example.com', password: 'wrong' });
     await fixture.componentInstance.submit();
     fixture.detectChanges();

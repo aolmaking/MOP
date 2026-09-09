@@ -39,6 +39,11 @@ async function render(result: WorkOrderDetail | { error: unknown }, options: { j
   const api = {
     detail: () => ('error' in result ? throwError(() => result.error) : of(result)),
     journey: () => of(options.journey ?? journeyFixture()),
+    // The workspace asks for the branch's technicians in its constructor, so
+    // a mock without this method throws before `setInput('id', ...)` can run.
+    // That is why the whole file failed with NG0950 rather than with the
+    // missing method: one absent mock, twenty-six unrelated-looking failures.
+    technicians: vi.fn(() => of({ technicians: [] })),
     createTask: vi.fn(() => of({ id: 't9', title: 'Wiper blades', status: 'ASSIGNED', updatedAt: new Date().toISOString(), blockers: [] })),
     requestApproval: vi.fn(() => of({ workOrderId: 'wo1', status: 'AWAITING_CUSTOMER_APPROVAL' })),
     advance: vi.fn(() => of({})),

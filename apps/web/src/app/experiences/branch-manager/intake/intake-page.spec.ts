@@ -18,6 +18,10 @@ function render(overrides: Partial<Record<'branches' | 'search' | 'create', unkn
     branches: () => overrides.branches ?? of({ branches: [{ id: 'b1', name: 'Giza', code: 'GZ' }] }),
     search: () => overrides.search ?? of({ customers: [customer], vehicles: [] }),
     create: vi.fn(() => overrides.create ?? of({ workOrderId: 'wo1', customerId: 'c1', assetId: 'a1', status: 'RECEIVED', ownershipTransferred: false })),
+    // Asked for in the constructor, so a mock without it throws while the
+    // component is being built -- every test in the file failed on the
+    // method name rather than on anything it was checking.
+    technicians: vi.fn(() => of({ technicians: [] })),
   };
 
   TestBed.configureTestingModule({

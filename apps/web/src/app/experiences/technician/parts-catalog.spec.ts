@@ -141,8 +141,12 @@ describe('PartsCatalog (Tech Mode & Customer POS)', () => {
       const title = element.querySelector('.catalog-title');
       expect(title?.textContent).toContain('Point of Sale');
 
+      // Both, and separately. `href ?? textContent` could never reach the
+      // label, because an anchor that renders at all has an href -- so this
+      // was only ever checking the URL while claiming to check the words.
       const backLink = element.querySelector('.card-back');
-      expect(backLink?.getAttribute('href') ?? backLink?.textContent).toContain('Customer Portal');
+      expect(backLink?.getAttribute('href')).toBe('/customer');
+      expect(backLink?.textContent).toContain('Customer Portal');
     });
 
     it('submits basket as over-the-counter POS order via CustomerPortalApi and renders receipt', async () => {

@@ -38,8 +38,24 @@ describe('rootRedirectGuard', () => {
     expect(result).toEqual(router.parseUrl('/branch/attention'));
   });
 
-  it('allows fallthrough when no session exists or role has no built landing page', async () => {
+  /**
+   * These were one test asserting fallthrough for both cases, which stopped
+   * being true when sign-in became a real two-step page: an anonymous visitor
+   * at '/' now goes to the login screen rather than falling through into the
+   * shell. They are two different answers to two different situations, and
+   * conflating them is what let the test go stale rather than fail usefully.
+   */
+  it('sends someone with no session to the login page', async () => {
     configure(null);
+
+    const result = await TestBed.runInInjectionContext(() => rootRedirectGuard({} as never, {} as never));
+    const router = TestBed.inject(Router);
+
+    expect(result).toEqual(router.parseUrl('/login'));
+  });
+
+  it('allows fallthrough when the role has no built landing page', async () => {
+    configure({ role: 'DATA_ANALYST' } as SessionContext);
 
     const result = await TestBed.runInInjectionContext(() => rootRedirectGuard({} as never, {} as never));
 

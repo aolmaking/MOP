@@ -70,8 +70,17 @@
                   <!-- Sub Row: Customer & Vehicle Model -->
                   <div class="vehicle-details-row">
                     <span class="vehicle-customer">👤 {{ item.customerName }}</span>
-                    <span class="vehicle-meta-dot">·</span>
-                    <span class="vehicle-model">🚗 {{ item.vehicleModel || 'Toyota Corolla 2021' }}</span>
+                    <!--
+                      Shown only when the server actually sent one. This read
+                      `item.vehicleModel || 'Toyota Corolla 2021'`, so a car
+                      with no model on file was described to the technician as
+                      a Corolla -- a fabricated fact on the screen someone uses
+                      to confirm they are working on the right vehicle.
+                    -->
+                    @if (item.vehicleModel) {
+                      <span class="vehicle-meta-dot">·</span>
+                      <span class="vehicle-model">🚗 {{ item.vehicleModel }}</span>
+                    }
                   </div>
 
                   <!-- Complaint Text -->
