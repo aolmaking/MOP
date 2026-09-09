@@ -6,7 +6,6 @@ import type {
   DrillDownQuery,
   DrillDownResult,
   EvidenceEntityType,
-  EvidenceReference,
 } from "./drill-down.types";
 import { getMetricDefinition } from "./metric-catalog.registry";
 import { QualityDrillDownResolver } from "./resolvers/quality-drill-down.resolver";
@@ -33,7 +32,7 @@ export class UniversalDrillDownService {
     query: DrillDownQuery,
   ): Promise<DrillDownResult> {
     // 1. Validate metric registration
-    const metricDef = getMetricDefinition(query.metric);
+    getMetricDefinition(query.metric);
 
     // 2. Validate date range
     const range = resolveDateRange(query);

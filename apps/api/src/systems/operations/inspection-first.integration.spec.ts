@@ -71,7 +71,7 @@ async function newWorkOrder(inspectionDeclined = false) {
 /** Records a completed inspection, the way the technician's endpoint does. */
 async function inspect(workOrderId: string) {
   return techWork.recordInspection(
-    { workOrderId, technicianId: "tech-1", type: "QUICK", fields: {}, note: "Checked." },
+    { workOrderId, technicianId: "tech-1", type: "QUICK", fields: {}, note: "Checked." }, tenantId,
     ACTOR,
   );
 }
@@ -85,12 +85,12 @@ async function inspect(workOrderId: string) {
  * work inside what was already agreed needs no separate decision.
  */
 async function authorize(workOrderId: string) {
-  await lifecycle.apply(workOrderId, "REGISTER", ACTOR);
-  await lifecycle.apply(workOrderId, "START_INSPECTION", ACTOR);
+  await lifecycle.apply(workOrderId, tenantId, "REGISTER", ACTOR);
+  await lifecycle.apply(workOrderId, tenantId, "START_INSPECTION", ACTOR);
   await inspect(workOrderId);
   const order = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrderId }, select: { status: true } });
   if (order.status !== "APPROVED_FOR_WORK") {
-    await lifecycle.apply(workOrderId, "APPROVE", ACTOR);
+    await lifecycle.apply(workOrderId, tenantId, "APPROVE", ACTOR);
   }
 }
 
@@ -169,9 +169,9 @@ afterAll(async () => {
 describe("repair work is refused before the workflow authorizes it", () => {
   it("refuses to plan a task on a job that is only registered", async () => {
     const job = await newWorkOrder();
-    await lifecycle.apply(job.id, "REGISTER", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "REGISTER", ACTOR);
 
-    await expect(techWork.createTask(job.id, "Replace pads", ACTOR)).rejects.toMatchObject({
+    await expect(techWork.createTask(job.id, tenantId, "Replace pads", ACTOR)).rejects.toMatchObject({
       response: { code: "work_not_authorized" },
     });
 
@@ -182,10 +182,10 @@ describe("repair work is refused before the workflow authorizes it", () => {
 
   it("refuses to plan a task while the inspection is still under way", async () => {
     const job = await newWorkOrder();
-    await lifecycle.apply(job.id, "REGISTER", ACTOR);
-    await lifecycle.apply(job.id, "START_INSPECTION", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "REGISTER", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "START_INSPECTION", ACTOR);
 
-    await expect(techWork.createTask(job.id, "Replace pads", ACTOR)).rejects.toMatchObject({
+    await expect(techWork.createTask(job.id, tenantId, "Replace pads", ACTOR)).rejects.toMatchObject({
       response: { code: "work_not_authorized" },
     });
   });
@@ -205,14 +205,14 @@ describe("repair work is refused before the workflow authorizes it", () => {
 
     try {
       const job = await newWorkOrder();
-      await lifecycle.apply(job.id, "REGISTER", ACTOR);
-      await lifecycle.apply(job.id, "START_INSPECTION", ACTOR);
+      await lifecycle.apply(job.id, tenantId, "REGISTER", ACTOR);
+      await lifecycle.apply(job.id, tenantId, "START_INSPECTION", ACTOR);
       await inspect(job.id);
-      await lifecycle.apply(job.id, "REQUEST_APPROVAL", ACTOR);
+      await lifecycle.apply(job.id, tenantId, "REQUEST_APPROVAL", ACTOR);
 
       // Inspected, findings in, customer asked -- and still not authorized,
       // because under ALL_WORK the customer has not answered.
-      await expect(techWork.createTask(job.id, "Replace pads", ACTOR)).rejects.toMatchObject({
+      await expect(techWork.createTask(job.id, tenantId, "Replace pads", ACTOR)).rejects.toMatchObject({
         response: { code: "work_not_authorized" },
       });
     } finally {
@@ -231,7 +231,7 @@ describe("repair work is refused before the workflow authorizes it", () => {
     const job = await newWorkOrder();
     await authorize(job.id);
 
-    const task = await techWork.createTask(job.id, "Replace pads", ACTOR);
+    const task = await techWork.createTask(job.id, tenantId, "Replace pads", ACTOR);
     await techWork.startTask(task.id, tenantId, ACTOR);
 
     const stored = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
@@ -242,12 +242,12 @@ describe("repair work is refused before the workflow authorizes it", () => {
   it("refuses to start a task whose job fell back behind the boundary", async () => {
     const job = await newWorkOrder();
     await authorize(job.id);
-    const task = await techWork.createTask(job.id, "Replace pads", ACTOR);
+    const task = await techWork.createTask(job.id, tenantId, "Replace pads", ACTOR);
 
     // The job goes back to the customer mid-flight. The task was planned
     // while it was legal; starting it now is not.
-    await lifecycle.apply(job.id, "START_WORK", ACTOR);
-    await lifecycle.apply(job.id, "ASK_CUSTOMER", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "START_WORK", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "ASK_CUSTOMER", ACTOR);
     await prisma.workOrder.update({ where: { id: job.id }, data: { status: "AWAITING_CUSTOMER_APPROVAL" } });
 
     await expect(techWork.startTask(task.id, tenantId, ACTOR)).rejects.toMatchObject({
@@ -259,7 +259,7 @@ describe("repair work is refused before the workflow authorizes it", () => {
 describe("the inventory and billing doors are the same door", () => {
   it("refuses a part request on an unauthorized job", async () => {
     const job = await newWorkOrder();
-    await lifecycle.apply(job.id, "REGISTER", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "REGISTER", ACTOR);
 
     await expect(
       partRequests.request({ tenantId, workOrderId: job.id, inventoryItemId, quantity: 1 }, ACTOR),
@@ -270,7 +270,7 @@ describe("the inventory and billing doors are the same door", () => {
 
   it("refuses a whole cart on an unauthorized job, on every submit and not just the first", async () => {
     const job = await newWorkOrder();
-    await lifecycle.apply(job.id, "REGISTER", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "REGISTER", ACTOR);
     const cartKey = `cart-${job.id}`;
 
     for (const attempt of [1, 2]) {
@@ -290,8 +290,8 @@ describe("the inventory and billing doors are the same door", () => {
     // The case the boundary must not break: a diagnosis legitimately uses
     // stock before any repair is agreed.
     const job = await newWorkOrder();
-    await lifecycle.apply(job.id, "REGISTER", ACTOR);
-    await lifecycle.apply(job.id, "START_INSPECTION", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "REGISTER", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "START_INSPECTION", ACTOR);
     const inspection = await inspect(job.id);
 
     const created = await partRequests.request(
@@ -307,12 +307,12 @@ describe("the inventory and billing doors are the same door", () => {
     // Otherwise `inspectionId` would be the bypass it exists to prevent:
     // quote any inspection and walk the store empty.
     const diagnosed = await newWorkOrder();
-    await lifecycle.apply(diagnosed.id, "REGISTER", ACTOR);
-    await lifecycle.apply(diagnosed.id, "START_INSPECTION", ACTOR);
+    await lifecycle.apply(diagnosed.id, tenantId, "REGISTER", ACTOR);
+    await lifecycle.apply(diagnosed.id, tenantId, "START_INSPECTION", ACTOR);
     const inspection = await inspect(diagnosed.id);
 
     const other = await newWorkOrder();
-    await lifecycle.apply(other.id, "REGISTER", ACTOR);
+    await lifecycle.apply(other.id, tenantId, "REGISTER", ACTOR);
 
     await expect(
       partRequests.request(
@@ -327,10 +327,10 @@ describe("the inventory and billing doors are the same door", () => {
     // line: WorkOrderPartLine is billable on creation and never passes
     // through inventory at all.
     const job = await newWorkOrder();
-    await lifecycle.apply(job.id, "REGISTER", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "REGISTER", ACTOR);
 
     await expect(
-      techWork.addExternalPartLine(job.id, { name: "Customer's own filter", provenance: "CUSTOMER_SUPPLIED" }, ACTOR),
+      techWork.addExternalPartLine(job.id, tenantId, { name: "Customer's own filter", provenance: "CUSTOMER_SUPPLIED" }, ACTOR),
     ).rejects.toMatchObject({ response: { code: "work_not_authorized" } });
 
     expect(await prisma.workOrderPartLine.count({ where: { workOrderId: job.id } })).toBe(0);
@@ -340,13 +340,13 @@ describe("the inventory and billing doors are the same door", () => {
 describe("a late inspection cannot legitimize work that already happened", () => {
   it("refuses to approve a job for work with no inspection recorded", async () => {
     const job = await newWorkOrder();
-    await lifecycle.apply(job.id, "REGISTER", ACTOR);
-    await lifecycle.apply(job.id, "START_INSPECTION", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "REGISTER", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "START_INSPECTION", ACTOR);
 
     // Walking UNDER_INSPECTION -> APPROVED_FOR_WORK without recording
     // anything was how a job could reach "authorized" having been
     // inspected only in name.
-    await expect(lifecycle.apply(job.id, "APPROVE", ACTOR)).rejects.toMatchObject({
+    await expect(lifecycle.apply(job.id, tenantId, "APPROVE", ACTOR)).rejects.toMatchObject({
       response: { code: "gate_blocked" },
     });
   });
@@ -354,7 +354,7 @@ describe("a late inspection cannot legitimize work that already happened", () =>
   it("does not accept an inspection completed after the first task started", async () => {
     const job = await newWorkOrder();
     await authorize(job.id);
-    const task = await techWork.createTask(job.id, "Replace pads", ACTOR);
+    const task = await techWork.createTask(job.id, tenantId, "Replace pads", ACTOR);
     await techWork.startTask(task.id, tenantId, ACTOR);
 
     // Rewrite history the way a backfill would: the only inspection on
@@ -367,6 +367,7 @@ describe("a late inspection cannot legitimize work that already happened", () =>
 
     const result = await gates.evaluate(
       job.id,
+      tenantId,
       ["inspection_completed"],
       await capabilities.resolveCurrent(tenantId),
       "FINISH",
@@ -377,11 +378,12 @@ describe("a late inspection cannot legitimize work that already happened", () =>
   it("accepts an inspection completed before the first task started", async () => {
     const job = await newWorkOrder();
     await authorize(job.id);
-    const task = await techWork.createTask(job.id, "Replace pads", ACTOR);
+    const task = await techWork.createTask(job.id, tenantId, "Replace pads", ACTOR);
     await techWork.startTask(task.id, tenantId, ACTOR);
 
     const result = await gates.evaluate(
       job.id,
+      tenantId,
       ["inspection_completed"],
       await capabilities.resolveCurrent(tenantId),
       "FINISH",
@@ -396,11 +398,11 @@ describe("the policy branches the boundary must not break", () => {
     // one service and refuses a diagnostic must not be blocked by the step
     // they refused -- the same rule the finish gate has always honoured.
     const job = await newWorkOrder(true);
-    await lifecycle.apply(job.id, "REGISTER", ACTOR);
-    await lifecycle.apply(job.id, "REQUEST_APPROVAL", ACTOR);
-    await lifecycle.apply(job.id, "APPROVE", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "REGISTER", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "REQUEST_APPROVAL", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "APPROVE", ACTOR);
 
-    const task = await techWork.createTask(job.id, "Oil change, as asked for", ACTOR);
+    const task = await techWork.createTask(job.id, tenantId, "Oil change, as asked for", ACTOR);
     expect(task.id).toBeTruthy();
 
     expect(await prisma.inspection.count({ where: { workOrderId: job.id } })).toBe(0);
@@ -420,12 +422,12 @@ describe("the policy branches the boundary must not break", () => {
       // Declared declined at intake, but this workshop does not offer that
       // route -- the edge is dark, so the refusal comes from the graph.
       const job = await newWorkOrder(true);
-      await lifecycle.apply(job.id, "REGISTER", ACTOR);
+      await lifecycle.apply(job.id, tenantId, "REGISTER", ACTOR);
 
-      await expect(lifecycle.apply(job.id, "REQUEST_APPROVAL", ACTOR)).rejects.toMatchObject({
+      await expect(lifecycle.apply(job.id, tenantId, "REQUEST_APPROVAL", ACTOR)).rejects.toMatchObject({
         response: { code: "transition_not_allowed" },
       });
-      await expect(techWork.createTask(job.id, "Oil change", ACTOR)).rejects.toMatchObject({
+      await expect(techWork.createTask(job.id, tenantId, "Oil change", ACTOR)).rejects.toMatchObject({
         response: { code: "work_not_authorized" },
       });
     } finally {
@@ -448,7 +450,7 @@ describe("the policy branches the boundary must not break", () => {
     const job = await newWorkOrder();
     await authorize(job.id);
 
-    const task = await techWork.createTask(job.id, "Ad-hoc work nobody quoted", ACTOR);
+    const task = await techWork.createTask(job.id, tenantId, "Ad-hoc work nobody quoted", ACTOR);
 
     expect(task.decisionItemId).toBeNull();
     expect(await prisma.customerDecisionItem.count({ where: { decisionRequest: { workOrderId: job.id } } })).toBe(0);

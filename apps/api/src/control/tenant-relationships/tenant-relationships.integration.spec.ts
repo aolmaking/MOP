@@ -98,7 +98,7 @@ describe("18.A -- tenant stakeholder", () => {
 
   it("a revoked grant no longer appears as active", async () => {
     const grant = await stakeholders.grant(tenantAId, stakeholderAccountId, "Temp Investor", ["finance.summary.view_only"], "owner-1");
-    await stakeholders.revoke(grant.id);
+    await stakeholders.revoke(grant.id, tenantAId);
 
     const active = await stakeholders.activeGrantsFor(stakeholderAccountId);
     expect(active.map((g) => g.id)).not.toContain(grant.id);

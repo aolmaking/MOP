@@ -16,7 +16,7 @@ import { RaiseDecisionDto } from "../../systems/customer/decision.dto";
 import { RecordDecisionDto } from "./record-decision.dto";
 import { AdvanceWorkOrderDto } from "./advance-work-order.dto";
 import { AddNoteDto } from "./add-note.dto";
-import { CreateBranchTaskDto, CreateTaskDto } from "./create-task.dto";
+import { CreateBranchTaskDto } from "./create-task.dto";
 import { WorkOrderDossierService } from "../../systems/operations/work-order-dossier.service";
 import { WorkflowJourneyService } from "../../systems/operations/workflow-journey.service";
 import { WorkOrderLifecycleService } from "../../systems/operations/work-order-lifecycle.service";
@@ -395,7 +395,7 @@ export class BranchManagerController {
       id,
     );
 
-    return this.lifecycle.apply(id, "DELIVER", {
+    return this.lifecycle.apply(id, session.tenantId as string, "DELIVER", {
       accountId: session.accountId,
       displayName: session.displayName,
       actorType: "TENANT_STAFF",
@@ -449,7 +449,7 @@ export class BranchManagerController {
           ? ("QC_PASSED" as const)
           : ("QC_FAILED" as const);
 
-    return this.lifecycle.apply(id, intent, {
+    return this.lifecycle.apply(id, session.tenantId as string, intent, {
       accountId: session.accountId,
       displayName: session.displayName,
       actorType: "TENANT_STAFF",
@@ -482,7 +482,7 @@ export class BranchManagerController {
       id,
     );
 
-    const result = await this.lifecycle.apply(id, "REQUEST_APPROVAL", {
+    const result = await this.lifecycle.apply(id, session.tenantId as string, "REQUEST_APPROVAL", {
       accountId: session.accountId,
       displayName: session.displayName,
       actorType: "TENANT_STAFF",
@@ -507,6 +507,7 @@ export class BranchManagerController {
     );
     return this.techWork.createTask(
       id,
+      session.tenantId as string,
       dto.title,
       { accountId: session.accountId, displayName: session.displayName, actorType: "TENANT_STAFF" },
       dto.assignToStaffUserId,

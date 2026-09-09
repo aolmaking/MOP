@@ -1,4 +1,4 @@
-import { ConflictException, BadRequestException, NotFoundException } from "@nestjs/common";
+import { ConflictException, BadRequestException } from "@nestjs/common";
 import { TechnicianInspectionService } from "./technician-inspection.service";
 import { InspectionRepository } from "../../systems/operations/inspection/inspection.repository";
 import { RuleEvaluatorService } from "../../systems/operations/inspection/recommendations/rule-evaluator.service";

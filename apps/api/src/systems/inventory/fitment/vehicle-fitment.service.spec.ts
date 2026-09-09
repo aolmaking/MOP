@@ -282,7 +282,7 @@ describe("VehicleFitmentService (Phase D & E Vehicle Fitment & POS Stock Integra
 
       const item = res.exactMatches[0];
       expect(item.inventoryItemId).toBe("item-toy-pad-fr");
-      expect(item.sellingPrice).toBe(68);
+      expect(item.sellingPrice).toBe("68.00");
       expect(item.inStock).toBe(true);
       expect(item.availableStock).toBe(15); // 18 onHand - 3 allocated
     });

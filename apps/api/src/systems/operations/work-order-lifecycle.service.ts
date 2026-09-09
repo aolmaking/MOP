@@ -91,12 +91,24 @@ export class WorkOrderLifecycleService {
    */
   async apply(
     workOrderId: string,
+    tenantId: string,
     intent: WorkflowIntent,
     actor: LifecycleActor,
     options: { readonly reason?: string; readonly failureReason?: QcFailureReason; readonly tx?: Prisma.TransactionClient } = {},
   ): Promise<TransitionResult> {
-    const workOrder = await this.prisma.workOrder.findUnique({
-      where: { id: workOrderId },
+    // Scoped here, not trusted from the caller.
+    //
+    // This is the only writer of WorkOrder.status, and it used to load the row
+    // by bare id and take the tenant off whatever came back. That made every
+    // one of its twenty-two callers individually responsible for having proved
+    // ownership first -- and a twenty-third that forgot would have moved
+    // another workshop's job through its own workshop's rules, with the
+    // OperationEvent filed under the victim.
+    //
+    // Missing rather than forbidden, for the reason the rest of the codebase
+    // gives: a 403 on a foreign id confirms the id is real.
+    const workOrder = await this.prisma.workOrder.findFirst({
+      where: { id: workOrderId, tenantId },
       select: { id: true, tenantId: true, status: true },
     });
     if (!workOrder) {
@@ -121,6 +133,7 @@ export class WorkOrderLifecycleService {
     if (routed.transition.gates?.length) {
       gateResult = await this.gates.evaluate(
         workOrderId,
+        tenantId,
         routed.transition.gates,
         profile,
         target === "CLOSED" ? "DELIVERY" : target === "APPROVED_FOR_WORK" ? "AUTHORIZATION" : "FINISH",
@@ -290,9 +303,9 @@ export class WorkOrderLifecycleService {
    * shipped approval scopes. Neither can express "this workshop's own
    * rule", and that is the only thing worth enforcing.
    */
-  async assertOperationalWorkAuthorized(workOrderId: string): Promise<void> {
-    const workOrder = await this.prisma.workOrder.findUnique({
-      where: { id: workOrderId },
+  async assertOperationalWorkAuthorized(workOrderId: string, tenantId: string): Promise<void> {
+    const workOrder = await this.prisma.workOrder.findFirst({
+      where: { id: workOrderId, tenantId },
       select: { id: true, tenantId: true, status: true },
     });
     if (!workOrder) {
@@ -332,7 +345,7 @@ export class WorkOrderLifecycleService {
     // Naming the move that would unblock them, rather than the state they
     // are in. A technician holding a tablet needs the next action, and the
     // set of next actions is already something the graph can answer.
-    const intents = new Set(await this.availableIntents(workOrderId));
+    const intents = new Set(await this.availableIntents(workOrderId, tenantId));
     const step = (Object.keys(NEXT_STEP) as (keyof typeof NEXT_STEP)[]).find((intent) => intents.has(intent));
 
     throw new ConflictException({
@@ -341,14 +354,14 @@ export class WorkOrderLifecycleService {
     });
   }
 
-  async availableIntents(workOrderId: string): Promise<readonly WorkflowIntent[]> {
-    const workOrder = await this.prisma.workOrder.findUnique({
-      where: { id: workOrderId },
-      select: { tenantId: true, status: true },
+  async availableIntents(workOrderId: string, tenantId: string): Promise<readonly WorkflowIntent[]> {
+    const workOrder = await this.prisma.workOrder.findFirst({
+      where: { id: workOrderId, tenantId },
+      select: { status: true },
     });
     if (!workOrder) return [];
 
-    const { profile, policies, facts } = await this.routingContext(workOrder.tenantId, workOrderId);
+    const { profile, policies, facts } = await this.routingContext(tenantId, workOrderId);
     const intents = new Set<WorkflowIntent>();
 
     for (const transition of WORK_ORDER_GRAPH.transitions) {
@@ -365,19 +378,20 @@ export class WorkOrderLifecycleService {
    * it -- the technician's finish checklist, which must show why it is
    * blocked before they press anything.
    */
-  async previewGates(workOrderId: string, intent: WorkflowIntent): Promise<GateResult | null> {
-    const workOrder = await this.prisma.workOrder.findUnique({
-      where: { id: workOrderId },
-      select: { tenantId: true, status: true },
+  async previewGates(workOrderId: string, tenantId: string, intent: WorkflowIntent): Promise<GateResult | null> {
+    const workOrder = await this.prisma.workOrder.findFirst({
+      where: { id: workOrderId, tenantId },
+      select: { status: true },
     });
     if (!workOrder) return null;
 
-    const { profile, policies, facts } = await this.routingContext(workOrder.tenantId, workOrderId);
+    const { profile, policies, facts } = await this.routingContext(tenantId, workOrderId);
     const routed = resolveIntent(WORK_ORDER_GRAPH, profile, workOrder.status, intent, policies, facts);
     if (!routed.ok || !routed.transition.gates?.length) return null;
 
     return this.gates.evaluate(
       workOrderId,
+      tenantId,
       routed.transition.gates,
       profile,
       routed.transition.to === "CLOSED"

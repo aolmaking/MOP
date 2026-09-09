@@ -369,11 +369,11 @@ export class CustomerDecisionService {
     },
     actor: StaffActor,
   ): Promise<{ readonly requestId: string; readonly secureToken: string }> {
-    const workOrder = await this.prisma.workOrder.findUnique({
-      where: { id: workOrderId },
-      select: { id: true, tenantId: true, customerId: true, status: true },
+    const workOrder = await this.prisma.workOrder.findFirst({
+      where: { id: workOrderId, tenantId },
+      select: { id: true, customerId: true, status: true },
     });
-    if (!workOrder || workOrder.tenantId !== tenantId) {
+    if (!workOrder) {
       throw new NotFoundException({ code: "work_order_not_found", message: "Work order not found." });
     }
     if (WORK_ORDER_GRAPH.terminal.includes(workOrder.status)) {
@@ -460,7 +460,7 @@ export class CustomerDecisionService {
     // first ask on a job (REGISTERED or UNDER_INSPECTION). Per F-008,
     // mid-job questions leave the job IN_PROGRESS because WAITING_CUSTOMER
     // would strand the work order.
-    await this.moveIfPossible(workOrderId, ["REQUEST_APPROVAL"], {
+    await this.moveIfPossible(workOrderId, tenantId, ["REQUEST_APPROVAL"], {
       accountId: actor.accountId,
       displayName: actor.displayName,
       actorType: "TENANT_STAFF",
@@ -480,12 +480,13 @@ export class CustomerDecisionService {
    */
   private async moveIfPossible(
     workOrderId: string,
+    tenantId: string,
     intents: readonly ("REQUEST_APPROVAL" | "ASK_CUSTOMER" | "APPROVE" | "CUSTOMER_RESPONDED")[],
     actor: LifecycleActor,
   ): Promise<void> {
     for (const intent of intents) {
       try {
-        await this.lifecycle.apply(workOrderId, intent, actor);
+        await this.lifecycle.apply(workOrderId, tenantId, intent, actor);
         return;
       } catch (error) {
         if (!(error instanceof ConflictException)) throw error;
@@ -576,6 +577,8 @@ export class CustomerDecisionService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      // tenant-scope-ok: `request` was loaded by tenantId and branch scope
+      // above, and this is that same row.
       await tx.customerDecisionRequest.update({
         where: { id: requestId },
         data: { status: "CANCELLED" },
@@ -698,6 +701,8 @@ export class CustomerDecisionService {
 
     const { remaining } = await this.prisma.$transaction(async (tx) => {
       for (const answer of answers) {
+        // tenant-scope-ok: every `answer.itemId` was matched against
+        // `request.items` above and refused when it is not on this request.
         await tx.customerDecisionItem.update({
           where: { id: answer.itemId },
           data: {
@@ -715,6 +720,8 @@ export class CustomerDecisionService {
         where: { decisionRequestId: request.id, decision: "PENDING" },
       });
 
+      // tenant-scope-ok: `request` is the row this whole method was
+      // entered on, loaded by its secure token.
       await tx.customerDecisionRequest.update({
         where: { id: request.id },
         data: {
@@ -794,6 +801,7 @@ export class CustomerDecisionService {
       // rejections must not read as the customer having approved the job.
       await this.moveIfPossible(
         request.workOrderId,
+        request.tenantId,
         approvedCount > 0 ? ["APPROVE", "CUSTOMER_RESPONDED"] : ["CUSTOMER_RESPONDED"],
         lifecycleActor,
       );

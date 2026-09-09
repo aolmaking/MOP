@@ -60,8 +60,8 @@ export class OperationEventsService {
     let branchId = (payloadObj.branchId as string | undefined) ?? null;
 
     if (!branchId && workOrderId) {
-      const wo = await tx.workOrder.findUnique({
-        where: { id: workOrderId },
+      const wo = await tx.workOrder.findFirst({
+        where: { id: workOrderId, tenantId: input.tenantId },
         select: { branchId: true },
       });
       if (wo) branchId = wo.branchId;

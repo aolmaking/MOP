@@ -42,10 +42,11 @@ export class TenantStakeholderService {
     return this.toSummary(created);
   }
 
-  async revoke(stakeholderId: string): Promise<StakeholderSummary> {
-    const existing = await this.prisma.tenantStakeholder.findUnique({ where: { id: stakeholderId } });
+  async revoke(stakeholderId: string, tenantId: string): Promise<StakeholderSummary> {
+    const existing = await this.prisma.tenantStakeholder.findFirst({ where: { id: stakeholderId, tenantId } });
     if (!existing) throw new NotFoundException({ code: "stakeholder_not_found", message: "No such stakeholder grant." });
 
+    // tenant-scope-ok: `existing` was loaded with this tenantId immediately above.
     const updated = await this.prisma.tenantStakeholder.update({
       where: { id: stakeholderId },
       data: { revokedAt: new Date() },

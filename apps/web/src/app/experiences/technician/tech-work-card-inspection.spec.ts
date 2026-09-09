@@ -170,6 +170,29 @@ describe('what the inspection stage tells the technician about the car', () => {
 
     expect(element.querySelector('.card-note')).toBeNull();
   });
+
+  it('shows the customer’s own words when there are any', async () => {
+    // The complaint is the one thing on this screen the customer wrote. It
+    // lives in the expandable header the repair stage carries, so the header
+    // has to be opened first.
+    const { fixture, element } = await render(card({ status: 'IN_PROGRESS', complaint: 'Grinding noise when braking downhill' }));
+    (element.querySelector('#btn-toggle-live-header') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const box = element.querySelector('.expanded-complaint-box');
+    expect(box).not.toBeNull();
+    expect(box!.textContent).toContain('Grinding noise when braking downhill');
+  });
+
+  it('shows no complaint box at all when nothing was recorded', async () => {
+    // Not an empty box with a heading: a labelled empty box reads as "the
+    // customer said nothing", which is a different claim from "nobody asked".
+    const { fixture, element } = await render(card({ status: 'IN_PROGRESS', complaint: '   ' }));
+    (element.querySelector('#btn-toggle-live-header') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(element.querySelector('.expanded-complaint-box')).toBeNull();
+  });
 });
 
 describe('recording findings', () => {
@@ -322,5 +345,40 @@ describe('the repair side stays honest about what is holding the job', () => {
 
     const labels = [...element.querySelectorAll('button')].map((b) => b.textContent ?? '');
     expect(labels.some((l) => l.includes('Record inspection'))).toBe(false);
+  });
+});
+
+describe('a finished inspection is a record, not a form', () => {
+  const done = (overrides: Partial<WorkCard> = {}) =>
+    card({
+      status: 'AWAITING_CUSTOMER_APPROVAL',
+      inspection: { id: 'insp1', state: 'COMPLETED', completedAt: '2026-09-04T08:00:00.000Z', actualMinutes: 20, faultCount: 2 },
+      inspectionReport: 'Front pads at 2mm, offside drop link worn.',
+      ...overrides,
+    });
+
+  it('keeps the recorded findings readable after the inspection is completed', async () => {
+    const { fixture, element } = await render(done());
+    (element.querySelector('#btn-toggle-live-header') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const report = element.querySelector('.expanded-report-box');
+    expect(report).not.toBeNull();
+    expect(report!.textContent).toContain('Front pads at 2mm');
+  });
+
+  it('offers no way to log a new finding once the inspection is completed', async () => {
+    const { element } = await render(done());
+
+    expect(element.querySelector('.btn-add-finding-row')).toBeNull();
+    expect(element.querySelector('.add-finding-inline-form')).toBeNull();
+  });
+
+  it('offers no way to log a finding on an inspection the customer declined', async () => {
+    // A declined inspection is not an unfinished one. Leaving the controls up
+    // invites a technician to record findings against a step that was refused.
+    const { element } = await render(done({ inspectionDeclined: true, inspection: undefined }));
+
+    expect(element.querySelector('.btn-add-finding-row')).toBeNull();
   });
 });

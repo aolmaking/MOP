@@ -44,7 +44,6 @@ let otherTenantId: string;
 let planId: string;
 let branchAId: string;
 let branchBId: string;
-let otherBranchId: string;
 let customerId: string;
 let asset1Id: string;
 let asset2Id: string;
@@ -127,8 +126,7 @@ beforeAll(async () => {
   branchAId = branchA.id;
   const branchB = await prisma.branch.create({ data: { tenantId, name: "Branch Beta", code: `BB-${SUFFIX}` } });
   branchBId = branchB.id;
-  const otherBranch = await prisma.branch.create({ data: { tenantId: otherTenantId, name: "Other Branch", code: `OB-${SUFFIX}` } });
-  otherBranchId = otherBranch.id;
+  await prisma.branch.create({ data: { tenantId: otherTenantId, name: "Other Branch", code: `OB-${SUFFIX}` } });
 
   const customer = await prisma.customer.create({ data: { tenantId, fullName: "UDD Customer", phone: "0107777777" } });
   customerId = customer.id;

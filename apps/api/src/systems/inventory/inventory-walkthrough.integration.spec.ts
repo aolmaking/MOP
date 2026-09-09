@@ -301,6 +301,7 @@ describe("SCENARIOS.md 3.6 — a received part neither used nor returned", () =>
     const profile = await capabilities.resolveCurrent(shop.tenantId);
     const result = await gates.evaluate(
       shop.workOrderId,
+      shop.tenantId,
       ["parts.received_used_or_returned"],
       profile,
       "FINISH",
@@ -316,6 +317,7 @@ describe("SCENARIOS.md 3.6 — a received part neither used nor returned", () =>
     const profile = await capabilities.resolveCurrent(bare.tenantId);
     const result = await gates.evaluate(
       bare.workOrderId,
+      bare.tenantId,
       ["parts.received_used_or_returned"],
       profile,
       "FINISH",

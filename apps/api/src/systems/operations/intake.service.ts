@@ -150,7 +150,7 @@ export class IntakeService {
     // Outside the transaction on purpose: the lifecycle service owns
     // status changes and runs its own transaction. Intake's job is to
     // create the records; moving the work order is the lifecycle's.
-    const registered = await this.lifecycle.apply(workOrderId, "REGISTER", actor, { reason: input.complaint });
+    const registered = await this.lifecycle.apply(workOrderId, input.tenantId, "REGISTER", actor, { reason: input.complaint });
 
     return { workOrderId, customerId, assetId, status: registered.to, ownershipTransferred };
   }
@@ -281,11 +281,11 @@ export class IntakeService {
     newOwnerId: string,
   ): Promise<void> {
     await tx.assetOwnershipHistory.updateMany({
-      where: { assetId, endedAt: null },
+      where: { assetId, tenantId, endedAt: null },
       data: { endedAt: new Date() },
     });
     await this.openOwnership(tx, tenantId, assetId, newOwnerId);
-    await tx.asset.update({ where: { id: assetId }, data: { currentOwnerCustomerId: newOwnerId } });
+    await tx.asset.updateMany({ where: { id: assetId, tenantId }, data: { currentOwnerCustomerId: newOwnerId } });
   }
 
   private async openOwnership(

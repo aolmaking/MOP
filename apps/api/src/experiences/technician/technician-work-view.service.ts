@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
   PART_REQUEST_GRAPH,
   canTransition,
@@ -14,7 +14,7 @@ import { AssetHistoryService } from "../../systems/operations/vehicle-history/as
 import { WorkshopHistoryService } from "../../systems/operations/history/workshop-history.service";
 import type { TechnicianHistoryBrief } from "../../systems/operations/history/workshop-history.types";
 import { SpecializationService, type DefinitionSummary, type EntrySummary } from "../../systems/people/specialization/specialization.service";
-import { InspectionRepository } from "../../systems/operations/inspection/inspection.repository";
+import { ConcurrentModificationError, InspectionRepository } from "../../systems/operations/inspection/inspection.repository";
 import { InspectionAggregate } from "../../systems/operations/inspection/domain/inspection.aggregate";
 
 export interface TechnicianJob {
@@ -661,6 +661,8 @@ export const DEFAULT_SUBSYSTEMS: readonly {
  */
 @Injectable()
 export class TechnicianWorkViewService {
+  private readonly logger = new Logger(TechnicianWorkViewService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly lifecycle: WorkOrderLifecycleService,
@@ -674,8 +676,8 @@ export class TechnicianWorkViewService {
 
   async myWork(staffUserId: string, tenantId: string): Promise<readonly TechnicianJob[]> {
     const staff = this.prisma.staffUser
-      ? await this.prisma.staffUser.findUnique({
-          where: { id: staffUserId },
+      ? await this.prisma.staffUser.findFirst({
+          where: { id: staffUserId, tenantId },
           select: {
             id: true,
             branchScope: true,
@@ -684,7 +686,6 @@ export class TechnicianWorkViewService {
         })
       : null;
 
-    const teamIds = staff?.teamMemberships?.map((m) => m.teamId) ?? [];
     const branchScope = staff?.branchScope ?? [];
 
     const rows = await this.prisma.workOrder.findMany({
@@ -770,20 +771,6 @@ export class TechnicianWorkViewService {
   }
 
   async workCard(staffUserId: string, tenantId: string, workOrderId: string): Promise<WorkCard> {
-    const staff = this.prisma.staffUser
-      ? await this.prisma.staffUser.findUnique({
-          where: { id: staffUserId },
-          select: {
-            id: true,
-            branchScope: true,
-            teamMemberships: { select: { teamId: true } },
-          },
-        })
-      : null;
-
-    const teamIds = staff?.teamMemberships?.map((m) => m.teamId) ?? [];
-    const branchScope = staff?.branchScope ?? [];
-
     // A work card is theirs, or free to take, and nothing else.
     //
     // The third arm of this used to be a branch fallback that degraded to
@@ -855,12 +842,12 @@ export class TechnicianWorkViewService {
       this.assetHistory.complaintText(tenantId, [workOrder.id]),
       this.policies.resolveValue(tenantId, "TIME_TRACKING") as Promise<"OFF" | "OPTIONAL" | "REQUIRED">,
       this.capabilities.resolveCurrent(tenantId),
-      this.lifecycle.availableIntents(workOrder.id),
+      this.lifecycle.availableIntents(workOrder.id, tenantId),
       this.inspectionState(workOrder.id, workOrder.status, workOrder.inspectionDeclined),
       // Asked of the authority itself rather than inferred from status.
       // The card must say exactly what the write paths will do, or the
       // technician is told one thing and refused another.
-      this.repairLockReason(workOrder.id),
+      this.repairLockReason(workOrder.id, tenantId),
       this.prisma.fault.findMany({
         where: { workOrderId: workOrder.id, tenantId },
         select: {
@@ -1043,7 +1030,7 @@ export class TechnicianWorkViewService {
       }),
       specializationForms,
       specializationEntries,
-      finish: await this.finishCheck(workOrderId),
+      finish: await this.finishCheck(workOrderId, tenantId),
       primaryAction: primaryActionFor(intents),
       inspectionBoxes,
       inspectionReport:
@@ -1067,7 +1054,7 @@ export class TechnicianWorkViewService {
   ): Promise<{ success: boolean; partKey: string; isDone: boolean; completedAt: string }> {
     await this.workCard(staffUserId, tenantId, workOrderId);
 
-    let inspection = await this.prisma.inspection.findFirst({
+    const inspection = await this.prisma.inspection.findFirst({
       where: { workOrderId, tenantId },
       orderBy: { startedAt: "desc" },
     });
@@ -1143,7 +1130,7 @@ export class TechnicianWorkViewService {
   ) {
     await this.workCard(staffUserId, tenantId, workOrderId);
 
-    let inspection = await this.prisma.inspection.findFirst({
+    const inspection = await this.prisma.inspection.findFirst({
       where: { workOrderId, tenantId },
       orderBy: { startedAt: "desc" },
     });
@@ -1259,11 +1246,29 @@ export class TechnicianWorkViewService {
       }
     }
 
-    // Persist aggregate & quote fields with OCC and idempotent Fault projection
+    // Persist aggregate & quote fields with OCC and idempotent Fault projection.
+    //
+    // The one failure here that must NOT be swallowed is the optimistic
+    // concurrency check. `InspectionRepository.save` throws
+    // ConcurrentModificationError when another device has already written this
+    // inspection, and this used to catch it into a comment reading "handled" --
+    // so a technician whose colleague submitted first was told their report was
+    // saved while their findings were dropped on the floor. That is precisely
+    // the defect OCC exists to surface.
+    //
+    // Anything else genuinely is non-fatal here: the quote fields are a
+    // projection of what the caller just sent, the caller keeps their copy, and
+    // the fault projection below runs regardless.
     try {
       await repo.save(aggregate, updatedFields);
-    } catch (saveErr) {
-      // handled
+    } catch (error) {
+      if (error instanceof ConcurrentModificationError) {
+        throw new ConflictException({
+          code: "inspection_conflict",
+          message: "Someone else updated this inspection while you were working. Reload and try again.",
+        });
+      }
+      this.logger.warn(`Inspection aggregate not persisted for ${workOrderId}: ${(error as Error).message}`);
     }
 
     // The repository projects findings into Faults idempotently, but only once
@@ -1437,9 +1442,9 @@ export class TechnicianWorkViewService {
    * server then refuses -- and this way the sentence the technician reads
    * is literally the sentence the write path would have produced.
    */
-  private async repairLockReason(workOrderId: string): Promise<string | null> {
+  private async repairLockReason(workOrderId: string, tenantId: string): Promise<string | null> {
     try {
-      await this.lifecycle.assertOperationalWorkAuthorized(workOrderId);
+      await this.lifecycle.assertOperationalWorkAuthorized(workOrderId, tenantId);
       return null;
     } catch (error) {
       const response = (error as { response?: { code?: string; message?: string } }).response;
@@ -1458,13 +1463,13 @@ export class TechnicianWorkViewService {
    * A technician who presses finish and is refused has already put the
    * tablet down and picked a tool back up.
    */
-  async finishCheck(workOrderId: string): Promise<FinishCheck> {
-    const intents = await this.lifecycle.availableIntents(workOrderId);
+  async finishCheck(workOrderId: string, tenantId: string): Promise<FinishCheck> {
+    const intents = await this.lifecycle.availableIntents(workOrderId, tenantId);
     if (!intents.includes("FINISH")) {
       return { available: false, passed: false, conditions: [] };
     }
 
-    const result = await this.lifecycle.previewGates(workOrderId, "FINISH");
+    const result = await this.lifecycle.previewGates(workOrderId, tenantId, "FINISH");
 
     // No gates is a genuine pass. A workshop with the optional
     // capabilities removed has fewer conditions, not a missing answer.

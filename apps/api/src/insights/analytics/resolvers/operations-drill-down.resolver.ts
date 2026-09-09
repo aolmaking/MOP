@@ -5,7 +5,6 @@ import type {
   DrillDownQuery,
   DrillDownResult,
   DrillDownRecord,
-  DrillDownDimensionBreakdown,
   DrillDownTimelineEvent,
   EvidenceReference,
 } from "../drill-down.types";
@@ -278,8 +277,8 @@ export class OperationsDrillDownResolver implements DrillDownResolver {
       const woEvents = eventsByWo.get(wo.id) ?? [];
       const durations = durationsByWo.get(wo.id);
 
-      let waitingDwellMs = durations?.waitingMs ?? 0;
-      let primaryWaitingStatus = durations?.bottleneckStatus ?? "NONE";
+      const waitingDwellMs = durations?.waitingMs ?? 0;
+      const primaryWaitingStatus = durations?.bottleneckStatus ?? "NONE";
 
       const totalLifecycleMs = durations?.totalMs ?? Math.max(1, (wo.closedAt ?? range.to).getTime() - wo.createdAt.getTime());
       const waitingShare = totalLifecycleMs > 0 ? waitingDwellMs / totalLifecycleMs : 0;

@@ -452,7 +452,7 @@ describe("Operational Intelligence Regression Suite", () => {
     const wo1 = await prisma.workOrder.create({
       data: { tenantId, branchId: branchAId, assetId, customerId, status: "IN_PROGRESS" },
     });
-    const wo2 = await prisma.workOrder.create({
+    await prisma.workOrder.create({
       data: { tenantId, branchId: branchAId, assetId, customerId, status: "IN_PROGRESS" },
     });
 
@@ -566,7 +566,7 @@ describe("Operational Intelligence Regression Suite", () => {
   });
 
   it("enforces branch isolation for branch-scoped operational queries", async () => {
-    const woA = await prisma.workOrder.create({
+    await prisma.workOrder.create({
       data: {
         tenantId,
         branchId: branchAId,
@@ -576,7 +576,7 @@ describe("Operational Intelligence Regression Suite", () => {
         createdAt: new Date("2026-06-01T10:00:00.000Z"),
       },
     });
-    const woB = await prisma.workOrder.create({
+    await prisma.workOrder.create({
       data: {
         tenantId,
         branchId: branchBId,
@@ -606,7 +606,7 @@ describe("Operational Intelligence Regression Suite", () => {
 
   it("evaluates historical aging and SLA risk against range.to rather than live date", async () => {
     // Work order promised for Jan 10
-    const wo = await prisma.workOrder.create({
+    await prisma.workOrder.create({
       data: {
         tenantId,
         branchId: branchAId,

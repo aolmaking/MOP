@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, Optional } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { Prisma } from "@mop/database";
 import type {
   BillingCountryAdapter,
@@ -177,10 +177,13 @@ export class BillingService {
       where: { invoiceId: input.invoiceId },
     });
 
-    const invoice = await client.invoice.findUniqueOrThrow({
-      where: { id: input.invoiceId },
+    const invoice = await client.invoice.findFirst({
+      where: { id: input.invoiceId, tenantId: input.tenantId },
       include: { lines: true },
     });
+    if (!invoice) {
+      throw new NotFoundException({ code: "invoice_not_found", message: "Invoice not found." });
+    }
 
     const snapshot: InvoiceSnapshot = document
       ? (document.snapshot as unknown as InvoiceSnapshot)

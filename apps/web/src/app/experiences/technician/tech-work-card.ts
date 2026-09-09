@@ -750,7 +750,7 @@ export class TechWorkCard {
           if (existing) {
             return list.map((p) => (p.sku === part.sku ? { ...p, quantity: p.quantity + 1 } : p));
           }
-          return [...list, { sku: part.sku, name: part.partName, quantity: 1, unitPrice: part.sellingPrice }];
+          return [...list, { sku: part.sku, name: part.partName, quantity: 1, unitPrice: Number(part.sellingPrice) || 0 }];
         });
       },
       error: (err: PresentedError) => {

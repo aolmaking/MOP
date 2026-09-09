@@ -156,8 +156,8 @@ export class VehicleFitmentService {
         fitmentNotes: fitmentMeta.fitmentNotes,
         inventoryItemId: dbItem?.id,
         barcode: dbItem?.barcode ?? undefined,
-        sellingPrice: dbItem ? Number(dbItem.sellingPrice) : 0,
-        cost: dbItem?.cost ? Number(dbItem.cost) : undefined,
+        sellingPrice: dbItem ? dbItem.sellingPrice.toString() : "0.00",
+        cost: dbItem?.cost ? dbItem.cost.toString() : undefined,
         inStock: availableStock > 0,
         availableStock,
       });
@@ -281,7 +281,7 @@ export class VehicleFitmentService {
     // Default to common workshop vehicle if unspecified
     let make = "toyota";
     let model = "corolla";
-    let year = 2021;
+    const year = 2021;
 
     // Check if plateNumber or vin provides clues
     const rawAsset = asset?.plateNumber || asset?.vinOrChassisNumber || "";

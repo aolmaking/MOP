@@ -188,6 +188,8 @@ export class CatalogService {
           })),
         });
       }
+      // tenant-scope-ok: `created` was written with this tenantId three
+      // lines above, inside the same transaction.
       return tx.inventoryItem.findUniqueOrThrow({
         where: { id: created.id },
         include: {

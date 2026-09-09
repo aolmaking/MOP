@@ -178,6 +178,8 @@ export class RegisterCustomerService {
               status: "ACTIVE",
             },
           });
+          // tenant-scope-ok: `customerId` is `phoneMatch.id`, and `phoneMatch`
+          // was found with `tenantId: workshop.tenantId`.
           await tx.customer.update({
             where: { id: customerId },
             data: {

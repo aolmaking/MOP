@@ -184,7 +184,7 @@ export class TechnicianController {
   async startInspection(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.start_inspection");
     await this.view.workCard(staffUserId, tenantId, id);
-    const result = await this.work.startInspection(id, this.actor(session));
+    const result = await this.work.startInspection(id, tenantId, this.actor(session));
     return { workOrderId: result.workOrderId, status: result.to };
   }
 
@@ -197,7 +197,7 @@ export class TechnicianController {
   async startWork(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.start_work");
     await this.view.workCard(staffUserId, tenantId, id);
-    const result = await this.work.startWork(id, this.actor(session));
+    const result = await this.work.startWork(id, tenantId, this.actor(session));
     return { workOrderId: result.workOrderId, status: result.to };
   }
 
@@ -238,6 +238,7 @@ export class TechnicianController {
         note: dto.note,
         actualMinutes: dto.actualMinutes,
       },
+      tenantId,
       this.actor(session),
     );
   }
@@ -412,7 +413,7 @@ export class TechnicianController {
     @Param("id") id: string,
     @Body() dto: CreateFaultDto,
   ) {
-    await this.requireTechnician(session, "inspection.full.create");
+    const { tenantId } = await this.requireTechnician(session, "inspection.full.create");
     return this.work.createFault(
       {
         workOrderId: id,
@@ -422,6 +423,7 @@ export class TechnicianController {
         recommendedService: dto.recommendedService,
         inspectionId: dto.inspectionId,
       },
+      tenantId,
       this.actor(session),
     );
   }
@@ -625,7 +627,7 @@ export class TechnicianController {
   ) {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "inventory.request.create");
     await this.view.workCard(staffUserId, tenantId, id);
-    return this.work.addExternalPartLine(id, dto, this.actor(session));
+    return this.work.addExternalPartLine(id, tenantId, dto, this.actor(session));
   }
 
   /** What the Finish Gate would say, asked before anything is pressed. */
@@ -635,7 +637,7 @@ export class TechnicianController {
     // Runs the ownership check first, so this cannot be used to probe
     // gate state on somebody else's job.
     await this.view.workCard(staffUserId, tenantId, id);
-    return this.view.finishCheck(id);
+    return this.view.finishCheck(id, tenantId);
   }
 
   /**
@@ -649,7 +651,7 @@ export class TechnicianController {
   async finish(@CurrentSession() session: SessionContext, @Param("id") id: string) {
     const { staffUserId, tenantId } = await this.requireTechnician(session, "task.finish_attempt");
     await this.view.workCard(staffUserId, tenantId, id);
-    return this.work.finishWorkOrder(id, this.actor(session));
+    return this.work.finishWorkOrder(id, tenantId, this.actor(session));
   }
 
 

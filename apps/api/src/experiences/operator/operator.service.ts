@@ -458,8 +458,8 @@ export class OperatorService {
       });
     }
 
-    const asset = await this.prisma.asset.findUnique({
-      where: { id: dto.assetId },
+    const asset = await this.prisma.asset.findFirst({
+      where: { id: dto.assetId, tenantId },
       include: {
         ownershipHistory: {
           where: { endedAt: null },
@@ -539,7 +539,7 @@ export class OperatorService {
       // database never reached, and the transition produced no OperationEvent,
       // no audit row and no gate check. A workshop that has inspection turned
       // off would still have been forced into UNDER_INSPECTION here.
-      const transition = await this.lifecycle.apply(result.workOrderId, "START_INSPECTION", actor);
+      const transition = await this.lifecycle.apply(result.workOrderId, tenantId, "START_INSPECTION", actor);
       finalStatus = transition.to;
 
       await this.prisma.inspection.create({
@@ -675,7 +675,7 @@ export class OperatorService {
       },
     });
 
-    await this.lifecycle.apply(workOrder.id, "ISSUE_INVOICE", {
+    await this.lifecycle.apply(workOrder.id, tenantId, "ISSUE_INVOICE", {
       accountId: session.accountId,
       displayName: session.displayName || "Operator",
       actorType: "TENANT_STAFF",
@@ -882,7 +882,7 @@ export class OperatorService {
    */
   async updateQuote(tenantId: string, workOrderId: string, dto: OperatorUpdateQuoteDto, branchScope: readonly string[] = []) {
     await this.requireWorkOrderInScope(tenantId, workOrderId, branchScope);
-    let inspection = await this.prisma.inspection.findFirst({
+    const inspection = await this.prisma.inspection.findFirst({
       where: { workOrderId, tenantId },
       orderBy: { startedAt: "desc" },
     });
@@ -981,7 +981,7 @@ export class OperatorService {
           }));
 
     // 1. Resolve approved findings
-    let approvedFindings: any[] = [];
+    let approvedFindings: any[];
     if (dto.approvedFindingIds && dto.approvedFindingIds.length > 0) {
       const allowedFindingIds = new Set(dto.approvedFindingIds.map(String));
       approvedFindings = allFindings.filter(
@@ -997,7 +997,7 @@ export class OperatorService {
     }
 
     // 2. Resolve approved services
-    let approvedServices: any[] = [];
+    let approvedServices: any[];
     if (dto.approvedServiceIds && dto.approvedServiceIds.length > 0) {
       const allowedServiceIds = new Set(dto.approvedServiceIds.map(String));
       approvedServices = allServices.filter(
@@ -1025,7 +1025,7 @@ export class OperatorService {
     }
 
     // 3. Resolve approved parts (CRITICAL: unapproved parts have ZERO inventory impact)
-    let approvedParts: any[] = [];
+    let approvedParts: any[];
     if (dto.approvedPartIds && dto.approvedPartIds.length > 0) {
       const allowedPartIds = new Set(dto.approvedPartIds.map(String));
       approvedParts = allParts.filter(
@@ -1081,6 +1081,8 @@ export class OperatorService {
 
     // 6. Mark inspection completed and persist approval record
     if (insp) {
+      // tenant-scope-ok: `insp` came off `order`, which was loaded by
+      // tenantId and branch scope above.
       await this.prisma.inspection.update({
         where: { id: insp.id },
         data: {
@@ -1112,7 +1114,7 @@ export class OperatorService {
     // an operator pressed Dispatch. Where the graph routes an APPROVE from
     // UNDER_INSPECTION depends on that policy, which is exactly why this
     // service must not name the destination.
-    const authorized = await this.lifecycle.apply(workOrderId, "APPROVE", {
+    const authorized = await this.lifecycle.apply(workOrderId, tenantId, "APPROVE", {
       accountId: session.accountId,
       displayName: session.displayName || "Operator",
       actorType: "TENANT_STAFF",

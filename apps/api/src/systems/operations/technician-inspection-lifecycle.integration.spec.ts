@@ -65,15 +65,15 @@ async function newWorkOrder() {
 
 /** Bring a work order to UNDER_INSPECTION via the canonical path. */
 async function toUnderInspection(workOrderId: string) {
-  await lifecycle.apply(workOrderId, "REGISTER", ACTOR);
-  return techWork.startInspection(workOrderId, ACTOR);
+  await lifecycle.apply(workOrderId, tenantId, "REGISTER", ACTOR);
+  return techWork.startInspection(workOrderId, tenantId, ACTOR);
 }
 
 /** Full authorize path -- used by tests that need a job past the boundary. */
 async function fullAuthorize(workOrderId: string) {
   await toUnderInspection(workOrderId);
   return techWork.recordInspection(
-    { workOrderId, technicianId: ACTOR.accountId, type: "QUICK", fields: {}, note: "OK" },
+    { workOrderId, technicianId: ACTOR.accountId, type: "QUICK", fields: {}, note: "OK" }, tenantId,
     ACTOR,
   );
 }
@@ -159,7 +159,7 @@ describe("startInspection() -- atomicity", () => {
   it("is idempotent: double-tap returns the same inspectionId and no duplicate row", async () => {
     const job = await newWorkOrder();
     const first = (await toUnderInspection(job.id)) as { inspectionId: string };
-    const second = (await techWork.startInspection(job.id, ACTOR)) as { inspectionId: string };
+    const second = (await techWork.startInspection(job.id, tenantId, ACTOR)) as { inspectionId: string };
 
     expect(second.inspectionId).toBe(first.inspectionId);
 
@@ -169,7 +169,7 @@ describe("startInspection() -- atomicity", () => {
 
   it("refuses to start inspection from DRAFT (graph does not allow it)", async () => {
     const job = await newWorkOrder();
-    await expect(techWork.startInspection(job.id, ACTOR)).rejects.toMatchObject({
+    await expect(techWork.startInspection(job.id, tenantId, ACTOR)).rejects.toMatchObject({
       response: { code: "transition_not_allowed" },
     });
     expect(await prisma.inspection.count({ where: { workOrderId: job.id } })).toBe(0);
@@ -183,11 +183,11 @@ describe("startInspection() -- concurrency safety", () => {
     "concurrent calls produce exactly one Inspection row and resolve to the same inspectionId",
     async () => {
       const job = await newWorkOrder();
-      await lifecycle.apply(job.id, "REGISTER", ACTOR);
+      await lifecycle.apply(job.id, tenantId, "REGISTER", ACTOR);
 
       const [r1, r2] = await Promise.allSettled([
-        techWork.startInspection(job.id, ACTOR),
-        techWork.startInspection(job.id, ACTOR),
+        techWork.startInspection(job.id, tenantId, ACTOR),
+        techWork.startInspection(job.id, tenantId, ACTOR),
       ]);
 
       const successes = [r1, r2].filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<{ inspectionId: string }>[];
@@ -217,7 +217,7 @@ describe("recordInspection() -- open-row completion", () => {
     const { inspectionId } = await toUnderInspection(job.id) as { inspectionId: string };
 
     await techWork.recordInspection(
-      { workOrderId: job.id, technicianId: ACTOR.accountId, type: "FULL", fields: { mileage: 42000 }, note: "All good" },
+      { workOrderId: job.id, technicianId: ACTOR.accountId, type: "FULL", fields: { mileage: 42000 }, note: "All good" }, tenantId,
       ACTOR,
     );
 
@@ -231,13 +231,13 @@ describe("recordInspection() -- open-row completion", () => {
   it("backward-compat: creates a completed row if no open row exists (pre-T0 job)", async () => {
     const job = await newWorkOrder();
     // Reach UNDER_INSPECTION via lifecycle directly -- no open row (old path).
-    await lifecycle.apply(job.id, "REGISTER", ACTOR);
-    await lifecycle.apply(job.id, "START_INSPECTION", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "REGISTER", ACTOR);
+    await lifecycle.apply(job.id, tenantId, "START_INSPECTION", ACTOR);
 
     expect(await prisma.inspection.count({ where: { workOrderId: job.id } })).toBe(0);
 
     await techWork.recordInspection(
-      { workOrderId: job.id, technicianId: ACTOR.accountId, type: "QUICK", fields: {} },
+      { workOrderId: job.id, technicianId: ACTOR.accountId, type: "QUICK", fields: {} }, tenantId,
       ACTOR,
     );
 
@@ -284,10 +284,10 @@ describe("CRITICAL_ONLY -- no CRITICAL faults -> auto-approved", () => {
       const job = await newWorkOrder();
       await toUnderInspection(job.id);
 
-      await techWork.createFault({ workOrderId: job.id, description: "Worn pads", severity: "HIGH" }, ACTOR);
+      await techWork.createFault({ workOrderId: job.id, description: "Worn pads", severity: "HIGH" }, tenantId, ACTOR);
 
       const result = await techWork.recordInspection(
-        { workOrderId: job.id, technicianId: ACTOR.accountId, type: "QUICK", fields: {} },
+        { workOrderId: job.id, technicianId: ACTOR.accountId, type: "QUICK", fields: {} }, tenantId,
         ACTOR,
       ) as { pendingCriticalDecisions: boolean };
 
@@ -308,12 +308,12 @@ describe("CRITICAL_ONLY -- CRITICAL fault without CustomerDecisionItem -> remain
       const { inspectionId } = await toUnderInspection(job.id) as { inspectionId: string };
 
       await techWork.createFault(
-        { workOrderId: job.id, inspectionId, description: "Brake failure", severity: "CRITICAL" },
+        { workOrderId: job.id, inspectionId, description: "Brake failure", severity: "CRITICAL" }, tenantId,
         ACTOR,
       );
 
       const result = await techWork.recordInspection(
-        { workOrderId: job.id, technicianId: ACTOR.accountId, type: "QUICK", fields: {} },
+        { workOrderId: job.id, technicianId: ACTOR.accountId, type: "QUICK", fields: {} }, tenantId,
         ACTOR,
       ) as { pendingCriticalDecisions: boolean };
 
@@ -334,7 +334,7 @@ describe("CRITICAL_ONLY -- CRITICAL fault with CustomerDecisionItem -> CustomerD
       const { inspectionId } = await toUnderInspection(job.id) as { inspectionId: string };
 
       const fault = await techWork.createFault(
-        { workOrderId: job.id, inspectionId, description: "Structural crack", severity: "CRITICAL" },
+        { workOrderId: job.id, inspectionId, description: "Structural crack", severity: "CRITICAL" }, tenantId,
         ACTOR,
       );
 
@@ -347,7 +347,7 @@ describe("CRITICAL_ONLY -- CRITICAL fault with CustomerDecisionItem -> CustomerD
       });
 
       const result = await techWork.recordInspection(
-        { workOrderId: job.id, technicianId: ACTOR.accountId, type: "QUICK", fields: {} },
+        { workOrderId: job.id, technicianId: ACTOR.accountId, type: "QUICK", fields: {} }, tenantId,
         ACTOR,
       ) as { pendingCriticalDecisions: boolean };
 
@@ -369,7 +369,7 @@ describe("CRITICAL_ONLY -- mixed faults: non-CRITICAL without item does NOT bloc
 
       // CRITICAL with a linked item.
       const criticalFault = await techWork.createFault(
-        { workOrderId: job.id, inspectionId, description: "Seized caliper", severity: "CRITICAL" },
+        { workOrderId: job.id, inspectionId, description: "Seized caliper", severity: "CRITICAL" }, tenantId,
         ACTOR,
       );
       const req = await prisma.customerDecisionRequest.create({
@@ -380,10 +380,10 @@ describe("CRITICAL_ONLY -- mixed faults: non-CRITICAL without item does NOT bloc
       });
 
       // LOW with NO linked item -- must not block.
-      await techWork.createFault({ workOrderId: job.id, inspectionId, description: "Minor scratch", severity: "LOW" }, ACTOR);
+      await techWork.createFault({ workOrderId: job.id, inspectionId, description: "Minor scratch", severity: "LOW" }, tenantId, ACTOR);
 
       const result = await techWork.recordInspection(
-        { workOrderId: job.id, technicianId: ACTOR.accountId, type: "QUICK", fields: {} },
+        { workOrderId: job.id, technicianId: ACTOR.accountId, type: "QUICK", fields: {} }, tenantId,
         ACTOR,
       ) as { pendingCriticalDecisions: boolean };
 
@@ -404,11 +404,11 @@ describe("createFault() -- inspectionId ownership", () => {
     const { inspectionId: idFromA } = await toUnderInspection(jobA.id) as { inspectionId: string };
 
     const jobB = await newWorkOrder();
-    await lifecycle.apply(jobB.id, "REGISTER", ACTOR);
+    await lifecycle.apply(jobB.id, tenantId, "REGISTER", ACTOR);
 
     await expect(
       techWork.createFault(
-        { workOrderId: jobB.id, inspectionId: idFromA, description: "Wrong vehicle", severity: "LOW" },
+        { workOrderId: jobB.id, inspectionId: idFromA, description: "Wrong vehicle", severity: "LOW" }, tenantId,
         ACTOR,
       ),
     ).rejects.toMatchObject({ response: { code: "inspection_not_on_this_job" } });
@@ -421,7 +421,7 @@ describe("createFault() -- inspectionId ownership", () => {
     const { inspectionId } = await toUnderInspection(job.id) as { inspectionId: string };
 
     const fault = await techWork.createFault(
-      { workOrderId: job.id, inspectionId, description: "Oil leak", severity: "MEDIUM" },
+      { workOrderId: job.id, inspectionId, description: "Oil leak", severity: "MEDIUM" }, tenantId,
       ACTOR,
     );
 
@@ -433,7 +433,7 @@ describe("createFault() -- inspectionId ownership", () => {
     await toUnderInspection(job.id);
 
     const fault = await techWork.createFault(
-      { workOrderId: job.id, description: "Customer complaint: noise", severity: "LOW" },
+      { workOrderId: job.id, description: "Customer complaint: noise", severity: "LOW" }, tenantId,
       ACTOR,
     );
 

@@ -169,10 +169,10 @@ async function inspect(tenantId: string, workOrderId: string) {
   });
 }
 
-async function drive(workOrderId: string, intents: readonly WorkflowIntent[]) {
+async function drive(workOrderId: string, tenantId: string, intents: readonly WorkflowIntent[]) {
   const path: string[] = [];
   for (const intent of intents) {
-    const result = await lifecycle.apply(workOrderId, intent, ACTOR);
+    const result = await lifecycle.apply(workOrderId, tenantId, intent, ACTOR);
     path.push(result.to);
   }
   return path;
@@ -215,10 +215,10 @@ describe("a work order reaches CLOSED under three different capability profiles"
 
     // Recorded while the job is UNDER_INSPECTION, which is when it really
     // happens -- APPROVE will not pass its gate without it.
-    await drive(workOrder.id, ["REGISTER", "START_INSPECTION"]);
+    await drive(workOrder.id, fixture.tenantId, ["REGISTER", "START_INSPECTION"]);
     await inspect(fixture.tenantId, workOrder.id);
 
-    const toWork = ["REGISTERED", "UNDER_INSPECTION", ...(await drive(workOrder.id, ["REQUEST_APPROVAL", "APPROVE", "START_WORK"]))];
+    const toWork = ["REGISTERED", "UNDER_INSPECTION", ...(await drive(workOrder.id, fixture.tenantId, ["REQUEST_APPROVAL", "APPROVE", "START_WORK"]))];
     expect(toWork).toEqual([
       "REGISTERED",
       "UNDER_INSPECTION",
@@ -229,11 +229,11 @@ describe("a work order reaches CLOSED under three different capability profiles"
 
     // No tasks, no decisions, no blockers -- the finish gates pass on
     // their own merits, not because they were skipped.
-    const rest = await drive(workOrder.id, ["FINISH", "REVIEW_PASSED", "QC_PASSED"]);
+    const rest = await drive(workOrder.id, fixture.tenantId, ["FINISH", "REVIEW_PASSED", "QC_PASSED"]);
     expect(rest).toEqual(["READY_FOR_TEAM_REVIEW", "READY_FOR_QC", "PAYMENT_PENDING"]);
 
     await settleInvoice(fixture, workOrder.id);
-    const end = await drive(workOrder.id, ["SETTLE_PAYMENT", "DELIVER"]);
+    const end = await drive(workOrder.id, fixture.tenantId, ["SETTLE_PAYMENT", "DELIVER"]);
     expect(end).toEqual(["READY_FOR_DELIVERY", "CLOSED"]);
   }, 120_000);
 
@@ -251,7 +251,7 @@ describe("a work order reaches CLOSED under three different capability profiles"
     // The customer declined inspection and asked for one named service.
     const workOrder = await newWorkOrder(fixture, true);
 
-    const path = await drive(workOrder.id, ["REGISTER", "REQUEST_APPROVAL", "APPROVE", "START_WORK", "FINISH"]);
+    const path = await drive(workOrder.id, fixture.tenantId, ["REGISTER", "REQUEST_APPROVAL", "APPROVE", "START_WORK", "FINISH"]);
 
     expect(path).toEqual([
       "REGISTERED",
@@ -262,7 +262,7 @@ describe("a work order reaches CLOSED under three different capability profiles"
     ]);
 
     await settleInvoice(fixture, workOrder.id);
-    expect(await drive(workOrder.id, ["SETTLE_PAYMENT", "DELIVER"])).toEqual(["READY_FOR_DELIVERY", "CLOSED"]);
+    expect(await drive(workOrder.id, fixture.tenantId, ["SETTLE_PAYMENT", "DELIVER"])).toEqual(["READY_FOR_DELIVERY", "CLOSED"]);
   }, 120_000);
 
   it("external finance: finish goes straight to delivery readiness", async () => {
@@ -276,13 +276,13 @@ describe("a work order reaches CLOSED under three different capability profiles"
     fixtures.push(fixture);
     const workOrder = await newWorkOrder(fixture, true);
 
-    const path = await drive(workOrder.id, ["REGISTER", "REQUEST_APPROVAL", "APPROVE", "START_WORK", "FINISH"]);
+    const path = await drive(workOrder.id, fixture.tenantId, ["REGISTER", "REQUEST_APPROVAL", "APPROVE", "START_WORK", "FINISH"]);
     expect(path[path.length - 1]).toBe("READY_FOR_DELIVERY");
 
     // No internal invoice exists, and none is required -- the invoice and
     // payment gates belong to BILLING and FINANCE_CORE, both external, so
     // they are not evaluated at all.
-    expect(await drive(workOrder.id, ["DELIVER"])).toEqual(["CLOSED"]);
+    expect(await drive(workOrder.id, fixture.tenantId, ["DELIVER"])).toEqual(["CLOSED"]);
   }, 120_000);
 });
 
@@ -293,7 +293,7 @@ describe("the lifecycle refuses what the graph does not allow", () => {
     const workOrder = await newWorkOrder(fixture);
 
     // A brand-new work order cannot be finished.
-    await expect(lifecycle.apply(workOrder.id, "FINISH", ACTOR)).rejects.toThrow(/not available/i);
+    await expect(lifecycle.apply(workOrder.id, fixture.tenantId, "FINISH", ACTOR)).rejects.toThrow(/not available/i);
 
     const unchanged = await prisma.workOrder.findUnique({ where: { id: workOrder.id } });
     expect(unchanged?.status).toBe("DRAFT");
@@ -307,9 +307,9 @@ describe("the lifecycle refuses what the graph does not allow", () => {
     });
     fixtures.push(fixture);
     const workOrder = await newWorkOrder(fixture, true);
-    await drive(workOrder.id, ["REGISTER", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
+    await drive(workOrder.id, fixture.tenantId, ["REGISTER", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
 
-    await expect(lifecycle.apply(workOrder.id, "REQUEST_PART", ACTOR)).rejects.toThrow();
+    await expect(lifecycle.apply(workOrder.id, fixture.tenantId, "REQUEST_PART", ACTOR)).rejects.toThrow();
   }, 120_000);
 });
 
@@ -324,7 +324,7 @@ describe("a policy narrows the graph, for real, against Postgres", () => {
     fixtures.push(fixture);
 
     const skipped = await newWorkOrder(fixture, true);
-    const path = await drive(skipped.id, ["REGISTER", "REQUEST_APPROVAL"]);
+    const path = await drive(skipped.id, fixture.tenantId, ["REGISTER", "REQUEST_APPROVAL"]);
     expect(path).toEqual(["REGISTERED", "AWAITING_CUSTOMER_APPROVAL"]);
 
     await policiesForTest.set(
@@ -337,12 +337,12 @@ describe("a policy narrows the graph, for real, against Postgres", () => {
     );
 
     const mustInspect = await newWorkOrder(fixture, true);
-    await lifecycle.apply(mustInspect.id, "REGISTER", ACTOR);
-    await expect(lifecycle.apply(mustInspect.id, "REQUEST_APPROVAL", ACTOR)).rejects.toThrow(/not available/i);
+    await lifecycle.apply(mustInspect.id, fixture.tenantId, "REGISTER", ACTOR);
+    await expect(lifecycle.apply(mustInspect.id, fixture.tenantId, "REQUEST_APPROVAL", ACTOR)).rejects.toThrow(/not available/i);
 
     // The unconditional route stays open: it is what the policy's own
     // registry entry promises can never be stranded.
-    const stillReachable = await drive(mustInspect.id, ["START_INSPECTION", "REQUEST_APPROVAL"]);
+    const stillReachable = await drive(mustInspect.id, fixture.tenantId, ["START_INSPECTION", "REQUEST_APPROVAL"]);
     expect(stillReachable).toEqual(["UNDER_INSPECTION", "AWAITING_CUSTOMER_APPROVAL"]);
   }, 120_000);
 
@@ -361,33 +361,33 @@ describe("a policy narrows the graph, for real, against Postgres", () => {
 
     // Clean job -- no faults at all -- finishes straight to invoicing.
     const clean = await newWorkOrder(fixture);
-    await drive(clean.id, ["REGISTER", "START_INSPECTION"]);
+    await drive(clean.id, fixture.tenantId, ["REGISTER", "START_INSPECTION"]);
     await inspect(fixture.tenantId, clean.id);
-    await drive(clean.id, ["REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
-    const cleanPath = await drive(clean.id, ["FINISH"]);
+    await drive(clean.id, fixture.tenantId, ["REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
+    const cleanPath = await drive(clean.id, fixture.tenantId, ["FINISH"]);
     expect(cleanPath).toEqual(["PAYMENT_PENDING"]);
 
     // Same shape, but this job carries a CRITICAL fault -- QC is not optional.
     const risky = await newWorkOrder(fixture);
-    await drive(risky.id, ["REGISTER", "START_INSPECTION"]);
+    await drive(risky.id, fixture.tenantId, ["REGISTER", "START_INSPECTION"]);
     await inspect(fixture.tenantId, risky.id);
-    await drive(risky.id, ["REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
+    await drive(risky.id, fixture.tenantId, ["REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
     await prisma.fault.create({
       data: { tenantId: fixture.tenantId, workOrderId: risky.id, description: "Brake line leak", severity: "CRITICAL" },
     });
-    const riskyPath = await drive(risky.id, ["FINISH"]);
+    const riskyPath = await drive(risky.id, fixture.tenantId, ["FINISH"]);
     expect(riskyPath).toEqual(["READY_FOR_QC"]);
 
     // A HIGH-severity fault, one notch below CRITICAL, still does not
     // trip it -- the fact is specifically about CRITICAL, not "any fault".
     const moderate = await newWorkOrder(fixture);
-    await drive(moderate.id, ["REGISTER", "START_INSPECTION"]);
+    await drive(moderate.id, fixture.tenantId, ["REGISTER", "START_INSPECTION"]);
     await inspect(fixture.tenantId, moderate.id);
-    await drive(moderate.id, ["REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
+    await drive(moderate.id, fixture.tenantId, ["REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
     await prisma.fault.create({
       data: { tenantId: fixture.tenantId, workOrderId: moderate.id, description: "Worn pad", severity: "HIGH" },
     });
-    const moderatePath = await drive(moderate.id, ["FINISH"]);
+    const moderatePath = await drive(moderate.id, fixture.tenantId, ["FINISH"]);
     expect(moderatePath).toEqual(["PAYMENT_PENDING"]);
   }, 120_000);
 });
@@ -397,21 +397,21 @@ describe("gates block, with a message a person can act on", () => {
     const fixture = await createWorkshop(`gate-${SUFFIX}`, { TEAM_REVIEW: "DISABLED", TEAMS: "DISABLED", QC: "DISABLED" });
     fixtures.push(fixture);
     const workOrder = await newWorkOrder(fixture, true);
-    await drive(workOrder.id, ["REGISTER", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
+    await drive(workOrder.id, fixture.tenantId, ["REGISTER", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
 
     await prisma.task.create({
       data: { tenantId: fixture.tenantId, workOrderId: workOrder.id, title: "Replace pads", status: "IN_PROGRESS" },
     });
 
-    await expect(lifecycle.apply(workOrder.id, "FINISH", ACTOR)).rejects.toThrow(/outstanding/i);
+    await expect(lifecycle.apply(workOrder.id, fixture.tenantId, "FINISH", ACTOR)).rejects.toThrow(/outstanding/i);
 
     // And the preview shows the same thing without moving anything.
-    const preview = await lifecycle.previewGates(workOrder.id, "FINISH");
+    const preview = await lifecycle.previewGates(workOrder.id, fixture.tenantId, "FINISH");
     expect(preview?.passed).toBe(false);
     expect(preview?.evaluations.some((e) => e.gate === "approved_work_completed" && !e.satisfied)).toBe(true);
 
     await prisma.task.updateMany({ where: { workOrderId: workOrder.id }, data: { status: "DONE" } });
-    expect((await lifecycle.apply(workOrder.id, "FINISH", ACTOR)).to).toBe("PAYMENT_PENDING");
+    expect((await lifecycle.apply(workOrder.id, fixture.tenantId, "FINISH", ACTOR)).to).toBe("PAYMENT_PENDING");
   }, 120_000);
 
   it("never evaluates a gate whose capability is inactive", async () => {
@@ -428,9 +428,9 @@ describe("gates block, with a message a person can act on", () => {
     });
     fixtures.push(fixture);
     const workOrder = await newWorkOrder(fixture, true);
-    await drive(workOrder.id, ["REGISTER", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
+    await drive(workOrder.id, fixture.tenantId, ["REGISTER", "REQUEST_APPROVAL", "APPROVE", "START_WORK"]);
 
-    const preview = await lifecycle.previewGates(workOrder.id, "FINISH");
+    const preview = await lifecycle.previewGates(workOrder.id, fixture.tenantId, "FINISH");
     const evaluated = preview?.evaluations.map((e) => e.gate) ?? [];
 
     expect(evaluated).not.toContain("parts.received_used_or_returned");
@@ -446,7 +446,7 @@ describe("every transition emits its domain event", () => {
     fixtures.push(fixture);
     const workOrder = await newWorkOrder(fixture);
 
-    await lifecycle.apply(workOrder.id, "REGISTER", ACTOR, { reason: "intake complete" });
+    await lifecycle.apply(workOrder.id, fixture.tenantId, "REGISTER", ACTOR, { reason: "intake complete" });
 
     const event = await prisma.operationEvent.findFirst({
       where: { tenantId: fixture.tenantId, eventKey: "work_order.status_changed" },
@@ -523,7 +523,7 @@ describe("a terminal state settles what the job reserved", () => {
 
     expect((await stock.balanceOf(itemId, warehouseId)).availableQty).toBe(6);
 
-    await lifecycle.apply(workOrder.id, "CANCEL", ACTOR, { reason: "Customer took the car away." });
+    await lifecycle.apply(workOrder.id, fixture.tenantId, "CANCEL", ACTOR, { reason: "Customer took the car away." });
 
     const after = await stock.balanceOf(itemId, warehouseId);
     expect(after.reservedQty).toBe(0);
@@ -545,9 +545,9 @@ describe("a terminal state settles what the job reserved", () => {
     const { itemId, warehouseId } = await reservedPartOn(fixture, workOrder.id, 3);
 
     // The declined-inspection route this file's other walkthroughs take.
-    await drive(workOrder.id, ["REGISTER", "REQUEST_APPROVAL", "APPROVE", "START_WORK", "FINISH"]);
+    await drive(workOrder.id, fixture.tenantId, ["REGISTER", "REQUEST_APPROVAL", "APPROVE", "START_WORK", "FINISH"]);
     await settleInvoice(fixture, workOrder.id);
-    await drive(workOrder.id, ["SETTLE_PAYMENT", "DELIVER"]);
+    await drive(workOrder.id, fixture.tenantId, ["SETTLE_PAYMENT", "DELIVER"]);
 
     const closed = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrder.id } });
     expect(closed.status).toBe("CLOSED");
@@ -564,7 +564,7 @@ describe("a terminal state settles what the job reserved", () => {
     const workOrder = await newWorkOrder(fixture);
     const { itemId, warehouseId } = await reservedPartOn(fixture, workOrder.id, 2);
 
-    await lifecycle.apply(workOrder.id, "CANCEL", ACTOR, { reason: "Cancelled." });
+    await lifecycle.apply(workOrder.id, fixture.tenantId, "CANCEL", ACTOR, { reason: "Cancelled." });
 
     const stored = await stock.balanceOf(itemId, warehouseId);
     expect(await stock.replay(itemId, warehouseId, "availableQty")).toBe(stored.availableQty);

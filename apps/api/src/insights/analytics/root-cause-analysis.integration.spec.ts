@@ -25,8 +25,6 @@ let otherBranchId: string;
 let customerId: string;
 let asset1Id: string;
 let asset2Id: string;
-let tech1Id: string;
-let tech2Id: string;
 let lowSampleTechId: string;
 
 const baseScope: AnalyticsScope = {
@@ -34,8 +32,6 @@ const baseScope: AnalyticsScope = {
   categoryIds: [],
 };
 
-const FROM_DATE = new Date("2026-03-01T00:00:00.000Z");
-const TO_DATE = new Date("2026-03-31T23:59:59.999Z");
 const QUERY_WINDOW = {
   from: "2026-03-01T00:00:00.000Z",
   to: "2026-03-31T23:59:59.999Z",
@@ -113,18 +109,16 @@ beforeAll(async () => {
   const acc1 = await prisma.account.create({
     data: { tenantId, accountType: "TENANT_STAFF", email: `tech1-${SUFFIX}@test.com`, status: "ACTIVE" },
   });
-  const staff1 = await prisma.staffUser.create({
+  await prisma.staffUser.create({
     data: { tenantId, accountId: acc1.id, fullName: "Technician One", role: "TECHNICIAN" },
   });
-  tech1Id = staff1.id;
 
   const acc2 = await prisma.account.create({
     data: { tenantId, accountType: "TENANT_STAFF", email: `tech2-${SUFFIX}@test.com`, status: "ACTIVE" },
   });
-  const staff2 = await prisma.staffUser.create({
+  await prisma.staffUser.create({
     data: { tenantId, accountId: acc2.id, fullName: "Technician Two", role: "TECHNICIAN" },
   });
-  tech2Id = staff2.id;
 
   const acc3 = await prisma.account.create({
     data: { tenantId, accountType: "TENANT_STAFF", email: `tech3-${SUFFIX}@test.com`, status: "ACTIVE" },
@@ -355,7 +349,7 @@ describe("Phase 2 -- Prompt 8: Root-Cause Analysis Engine Integration Suite", ()
       },
     });
 
-    const reworkTask = await prisma.task.create({
+    await prisma.task.create({
       data: {
         tenantId,
         workOrderId: parentTask.workOrderId,

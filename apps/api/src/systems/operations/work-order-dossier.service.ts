@@ -114,11 +114,11 @@ export class WorkOrderDossierService {
    * note before close was never in question.
    */
   async addNote(tenantId: string, workOrderId: string, body: string, actor: WorkOrderNoteActor): Promise<WorkOrderNoteRecord> {
-    const workOrder = await this.prisma.workOrder.findUnique({
-      where: { id: workOrderId },
-      select: { id: true, tenantId: true, status: true },
+    const workOrder = await this.prisma.workOrder.findFirst({
+      where: { id: workOrderId, tenantId },
+      select: { id: true, status: true },
     });
-    if (!workOrder || workOrder.tenantId !== tenantId) {
+    if (!workOrder) {
       throw new NotFoundException({ code: "work_order_not_found", message: "Work order not found." });
     }
 

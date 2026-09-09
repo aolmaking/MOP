@@ -288,8 +288,8 @@ export class InventoryViewService {
   }
 
   /** Requested vs handed over, for one request. Delegated, never re-derived. */
-  fulfilment(partRequestId: string) {
-    return this.parts.fulfilment(partRequestId);
+  fulfilment(partRequestId: string, tenantId: string) {
+    return this.parts.fulfilment(partRequestId, tenantId);
   }
 
   /**

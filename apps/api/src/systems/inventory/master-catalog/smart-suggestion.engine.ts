@@ -15,7 +15,7 @@ export interface RankedServiceItem {
   readonly serviceKey: string;
   readonly serviceName: string;
   readonly category: string;
-  readonly laborPrice: number;
+  readonly laborPrice: string;
   readonly standardHours: number;
   readonly rankGroup: SuggestionRankGroup;
   readonly score: number;
@@ -59,7 +59,7 @@ export interface SuggestionContext {
 export interface SuggestedService {
   readonly serviceName: string;
   readonly category: string;
-  readonly laborPrice: number;
+  readonly laborPrice: string;
   readonly standardHours: number;
   readonly isPrimary: boolean;
   readonly rationale: string;
@@ -151,7 +151,7 @@ export class SmartSuggestionEngine {
           serviceKey: defaultDiag.serviceKey ?? defaultDiag.itemKey,
           serviceName: defaultDiag.displayName ?? defaultDiag.itemKey,
           category: defaultDiag.category,
-          laborPrice: Number(defaultDiag.laborPrice),
+          laborPrice: defaultDiag.laborPrice,
           standardHours: defaultDiag.standardHours,
           rankGroup: "RECOMMENDED",
           score: 100,
@@ -301,7 +301,7 @@ export class SmartSuggestionEngine {
         serviceKey: item.service.serviceKey ?? item.service.itemKey,
         serviceName: item.service.displayName ?? item.service.itemKey,
         category: item.service.category,
-        laborPrice: Number(item.service.laborPrice),
+        laborPrice: item.service.laborPrice,
         standardHours: item.service.standardHours,
         rankGroup: "RECOMMENDED",
         score: item.score,
@@ -325,7 +325,7 @@ export class SmartSuggestionEngine {
         serviceKey: top.service.serviceKey ?? top.service.itemKey,
         serviceName: top.service.displayName ?? top.service.itemKey,
         category: top.service.category,
-        laborPrice: Number(top.service.laborPrice),
+        laborPrice: top.service.laborPrice,
         standardHours: top.service.standardHours,
         rankGroup: "RECOMMENDED",
         score: top.score,

@@ -87,9 +87,9 @@ async function workOrderInProgress() {
     ACTOR,
   );
 
-  await lifecycle.apply(result.workOrderId, "REQUEST_APPROVAL", ACTOR);
-  await lifecycle.apply(result.workOrderId, "APPROVE", ACTOR);
-  await lifecycle.apply(result.workOrderId, "START_WORK", ACTOR);
+  await lifecycle.apply(result.workOrderId, tenantId, "REQUEST_APPROVAL", ACTOR);
+  await lifecycle.apply(result.workOrderId, tenantId, "APPROVE", ACTOR);
+  await lifecycle.apply(result.workOrderId, tenantId, "START_WORK", ACTOR);
 
   return result.workOrderId;
 }
@@ -199,7 +199,7 @@ describe("start-inspection and start-work", () => {
       "REGISTERED",
     );
 
-    const result = await work.startInspection(intakeResult.workOrderId, ACTOR);
+    const result = await work.startInspection(intakeResult.workOrderId, tenantId, ACTOR);
 
     expect(result.to).toBe("UNDER_INSPECTION");
     expect((await prisma.workOrder.findUniqueOrThrow({ where: { id: intakeResult.workOrderId } })).status).toBe(
@@ -219,10 +219,10 @@ describe("start-inspection and start-work", () => {
       },
       ACTOR,
     );
-    await lifecycle.apply(intakeResult.workOrderId, "REQUEST_APPROVAL", ACTOR);
-    await lifecycle.apply(intakeResult.workOrderId, "APPROVE", ACTOR);
+    await lifecycle.apply(intakeResult.workOrderId, tenantId, "REQUEST_APPROVAL", ACTOR);
+    await lifecycle.apply(intakeResult.workOrderId, tenantId, "APPROVE", ACTOR);
 
-    const result = await work.startWork(intakeResult.workOrderId, ACTOR);
+    const result = await work.startWork(intakeResult.workOrderId, tenantId, ACTOR);
 
     expect(result.to).toBe("IN_PROGRESS");
     expect((await prisma.workOrder.findUniqueOrThrow({ where: { id: intakeResult.workOrderId } })).status).toBe(
@@ -243,7 +243,7 @@ describe("start-inspection and start-work", () => {
       ACTOR,
     );
 
-    await expect(work.startWork(intakeResult.workOrderId, ACTOR)).rejects.toMatchObject({ status: 409 });
+    await expect(work.startWork(intakeResult.workOrderId, tenantId, ACTOR)).rejects.toMatchObject({ status: 409 });
   }, 120_000);
 });
 
@@ -259,7 +259,7 @@ describe("inspections and faults", () => {
         odometerOrHours: 84_500,
         fields: { batteryVoltage: "12.4", warningLights: ["ABS"] },
         note: "Battery weak",
-      },
+      }, tenantId,
       ACTOR,
     );
 
@@ -273,7 +273,7 @@ describe("inspections and faults", () => {
     const workOrderId = await workOrderInProgress();
 
     const fault = await work.createFault(
-      { workOrderId, description: "Brake pads below minimum", severity: "CRITICAL" },
+      { workOrderId, description: "Brake pads below minimum", severity: "CRITICAL" }, tenantId,
       ACTOR,
     );
 
@@ -289,7 +289,7 @@ describe("inspections and faults", () => {
     const workOrderId = await workOrderInProgress();
     const before = await prisma.customerTimelineEvent.count({ where: { workOrderId } });
 
-    await work.createFault({ workOrderId, description: "Worn wiper", severity: "LOW" }, ACTOR);
+    await work.createFault({ workOrderId, description: "Worn wiper", severity: "LOW" }, tenantId, ACTOR);
 
     expect(await prisma.customerTimelineEvent.count({ where: { workOrderId } })).toBe(before);
   }, 120_000);
@@ -298,7 +298,7 @@ describe("inspections and faults", () => {
 describe("blockers", () => {
   it("moves the work order to BLOCKED and carries its audience", async () => {
     const workOrderId = await workOrderInProgress();
-    const task = await work.createTask(workOrderId, "Replace pads", ACTOR);
+    const task = await work.createTask(workOrderId, tenantId, "Replace pads", ACTOR);
 
     await work.reportBlocker({ taskId: task.id, reason: "WAITING_PART" }, tenantId, ACTOR);
 
@@ -315,7 +315,7 @@ describe("blockers", () => {
 
   it("escalates a safety issue immediately and notifies widely", async () => {
     const workOrderId = await workOrderInProgress();
-    const task = await work.createTask(workOrderId, "Inspect suspension", ACTOR);
+    const task = await work.createTask(workOrderId, tenantId, "Inspect suspension", ACTOR);
 
     const blocker = await work.reportBlocker({ taskId: task.id, reason: "SAFETY_ISSUE" }, tenantId, ACTOR);
 
@@ -330,7 +330,7 @@ describe("blockers", () => {
 
   it("refuses to complete a task while it is blocked", async () => {
     const workOrderId = await workOrderInProgress();
-    const task = await work.createTask(workOrderId, "Blocked work", ACTOR);
+    const task = await work.createTask(workOrderId, tenantId, "Blocked work", ACTOR);
     await work.reportBlocker({ taskId: task.id, reason: "TOOL_MISSING" }, tenantId, ACTOR);
 
     await expect(work.completeTask(task.id, tenantId, ACTOR)).rejects.toThrow(/blocker/i);
@@ -338,8 +338,8 @@ describe("blockers", () => {
 
   it("returns the work order to IN_PROGRESS only when nothing else blocks it", async () => {
     const workOrderId = await workOrderInProgress();
-    const taskA = await work.createTask(workOrderId, "A", ACTOR);
-    const taskB = await work.createTask(workOrderId, "B", ACTOR);
+    const taskA = await work.createTask(workOrderId, tenantId, "A", ACTOR);
+    const taskB = await work.createTask(workOrderId, tenantId, "B", ACTOR);
 
     const first = await work.reportBlocker({ taskId: taskA.id, reason: "TOOL_MISSING" }, tenantId, ACTOR);
     const second = await work.reportBlocker({ taskId: taskB.id, reason: "UNCLEAR_DIAGNOSIS" }, tenantId, ACTOR);
@@ -348,10 +348,10 @@ describe("blockers", () => {
     // because the job is already blocked.
     expect(second.id).toBeDefined();
 
-    await work.resolveBlocker(first.id, ACTOR);
+    await work.resolveBlocker(first.id, tenantId, ACTOR);
     expect((await prisma.workOrder.findUnique({ where: { id: workOrderId } }))?.status).toBe("BLOCKED");
 
-    await work.resolveBlocker(second.id, ACTOR);
+    await work.resolveBlocker(second.id, tenantId, ACTOR);
     expect((await prisma.workOrder.findUnique({ where: { id: workOrderId } }))?.status).toBe("IN_PROGRESS");
   }, 120_000);
 
@@ -364,13 +364,13 @@ describe("blockers", () => {
     // turns out to still have taskB's blocker open on it.
     // docs/scenarios3/EDGE_CASE_REGISTER.md, H1.
     const workOrderId = await workOrderInProgress();
-    const taskA = await work.createTask(workOrderId, "A", ACTOR);
-    const taskB = await work.createTask(workOrderId, "B", ACTOR);
+    const taskA = await work.createTask(workOrderId, tenantId, "A", ACTOR);
+    const taskB = await work.createTask(workOrderId, tenantId, "B", ACTOR);
 
     const first = await work.reportBlocker({ taskId: taskA.id, reason: "TOOL_MISSING" }, tenantId, ACTOR);
 
     await Promise.all([
-      work.resolveBlocker(first.id, ACTOR),
+      work.resolveBlocker(first.id, tenantId, ACTOR),
       work.reportBlocker({ taskId: taskB.id, reason: "UNCLEAR_DIAGNOSIS" }, tenantId, ACTOR),
     ]);
 
@@ -389,35 +389,35 @@ describe("blockers", () => {
 describe("tasks and the finish gate together", () => {
   it("blocks finish until every task is done, then allows it", async () => {
     const workOrderId = await workOrderInProgress();
-    const task = await work.createTask(workOrderId, "Fit parts", ACTOR);
+    const task = await work.createTask(workOrderId, tenantId, "Fit parts", ACTOR);
 
-    await expect(lifecycle.apply(workOrderId, "FINISH", ACTOR)).rejects.toThrow(/outstanding/i);
+    await expect(lifecycle.apply(workOrderId, tenantId, "FINISH", ACTOR)).rejects.toThrow(/outstanding/i);
 
     await work.completeTask(task.id, tenantId, ACTOR);
 
-    expect((await lifecycle.apply(workOrderId, "FINISH", ACTOR)).to).toBe("PAYMENT_PENDING");
+    expect((await lifecycle.apply(workOrderId, tenantId, "FINISH", ACTOR)).to).toBe("PAYMENT_PENDING");
   }, 120_000);
 
   it("blocks finish while a blocker is open, naming the blocker", async () => {
     const workOrderId = await workOrderInProgress();
-    const task = await work.createTask(workOrderId, "Held up", ACTOR);
+    const task = await work.createTask(workOrderId, tenantId, "Held up", ACTOR);
     await work.reportBlocker({ taskId: task.id, reason: "TOOL_MISSING" }, tenantId, ACTOR);
 
     // The work order is BLOCKED, so FINISH is not even routable from here
     // -- the graph refuses before any gate is consulted.
-    await expect(lifecycle.apply(workOrderId, "FINISH", ACTOR)).rejects.toThrow(/not available/i);
+    await expect(lifecycle.apply(workOrderId, tenantId, "FINISH", ACTOR)).rejects.toThrow(/not available/i);
   }, 120_000);
 });
 
 describe("TIME_TRACKING governs whether completeTask needs a reported duration", () => {
   it("OPTIONAL (the default): completes with no time given, and stores it when given", async () => {
     const workOrderId = await workOrderInProgress();
-    const untimed = await work.createTask(workOrderId, "No timer used", ACTOR);
+    const untimed = await work.createTask(workOrderId, tenantId, "No timer used", ACTOR);
     await work.completeTask(untimed.id, tenantId, ACTOR);
     const untimedRow = await prisma.task.findUniqueOrThrow({ where: { id: untimed.id } });
     expect(untimedRow.actualMinutes).toBeNull();
 
-    const timed = await work.createTask(workOrderId, "Timer used", ACTOR);
+    const timed = await work.createTask(workOrderId, tenantId, "Timer used", ACTOR);
     await work.completeTask(timed.id, tenantId, ACTOR, 25);
     const timedRow = await prisma.task.findUniqueOrThrow({ where: { id: timed.id } });
     expect(timedRow.actualMinutes).toBe(25);
@@ -428,7 +428,7 @@ describe("TIME_TRACKING governs whether completeTask needs a reported duration",
     const { tenantId } = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrderId }, select: { tenantId: true } });
     await policiesForTest.set(tenantId, "TIME_TRACKING", "REQUIRED", ACTOR, "PLATFORM", "Integration test.");
 
-    const task = await work.createTask(workOrderId, "Must be timed", ACTOR);
+    const task = await work.createTask(workOrderId, tenantId, "Must be timed", ACTOR);
     await expect(work.completeTask(task.id, tenantId, ACTOR)).rejects.toMatchObject({
       response: { code: "time_not_recorded" },
     });
@@ -444,7 +444,7 @@ describe("TIME_TRACKING governs whether completeTask needs a reported duration",
     const { tenantId } = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrderId }, select: { tenantId: true } });
     await policiesForTest.set(tenantId, "TIME_TRACKING", "OFF", ACTOR, "PLATFORM", "Integration test.");
 
-    const task = await work.createTask(workOrderId, "Never timed", ACTOR);
+    const task = await work.createTask(workOrderId, tenantId, "Never timed", ACTOR);
     await work.completeTask(task.id, tenantId, ACTOR, 999);
     const row = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
     expect(row.actualMinutes).toBeNull();
@@ -490,7 +490,7 @@ describe("a catalogued service, performed and billed end to end", () => {
 
   it("refuses to attach a task to a service the workshop never priced", async () => {
     const workOrderId = await workOrderInProgress();
-    await expect(work.createTask(workOrderId, "Fit spoiler", ACTOR, technicianId, "Fit spoiler")).rejects.toThrow(
+    await expect(work.createTask(workOrderId, tenantId, "Fit spoiler", ACTOR, technicianId, "Fit spoiler")).rejects.toThrow(
       /Service Catalog/,
     );
   });
@@ -499,7 +499,7 @@ describe("a catalogued service, performed and billed end to end", () => {
     const workOrderId = await workOrderInProgress();
 
     // 1. The technician's work is a catalogued service, not free text.
-    const task = await work.createTask(workOrderId, "Replace battery", ACTOR, technicianId, "Replace battery");
+    const task = await work.createTask(workOrderId, tenantId, "Replace battery", ACTOR, technicianId, "Replace battery");
     expect(task.serviceKey).toBe("Replace battery");
 
     // 2. Real stock, really consumed.
@@ -558,7 +558,7 @@ describe("a catalogued service, performed and billed end to end", () => {
     // 3. Completing the work is what makes it billable.
     await work.completeTask(task.id, tenantId, ACTOR);
 
-    const performed = await work.performedServices(workOrderId);
+    const performed = await work.performedServices(workOrderId, tenantId);
     expect(performed).toHaveLength(1);
     expect(performed[0].serviceKey).toBe("Replace battery");
     expect(performed[0].technicianIds).toContain(technicianId);
@@ -606,7 +606,7 @@ describe("a catalogued service, performed and billed end to end", () => {
 
   it("repricing the service changes the next job, and leaves the already-billed one alone", async () => {
     const firstJob = await workOrderInProgress();
-    const firstTask = await work.createTask(firstJob, "Replace battery", ACTOR, technicianId, "Replace battery");
+    const firstTask = await work.createTask(firstJob, tenantId, "Replace battery", ACTOR, technicianId, "Replace battery");
     await work.completeTask(firstTask.id, tenantId, ACTOR);
     const before = await finance.addLine(
       { tenantId, workOrderId: firstJob, name: "Replace battery", itemType: "SERVICE", quantity: 1 },
@@ -621,7 +621,7 @@ describe("a catalogued service, performed and billed end to end", () => {
     );
 
     const secondJob = await workOrderInProgress();
-    const secondTask = await work.createTask(secondJob, "Replace battery", ACTOR, technicianId, "Replace battery");
+    const secondTask = await work.createTask(secondJob, tenantId, "Replace battery", ACTOR, technicianId, "Replace battery");
     await work.completeTask(secondTask.id, tenantId, ACTOR);
     const after = await finance.addLine(
       { tenantId, workOrderId: secondJob, name: "Replace battery", itemType: "SERVICE", quantity: 1 },
@@ -637,9 +637,9 @@ describe("a catalogued service, performed and billed end to end", () => {
 
   it("only counts work that is actually done", async () => {
     const workOrderId = await workOrderInProgress();
-    await work.createTask(workOrderId, "Replace battery", ACTOR, technicianId, "Replace battery");
+    await work.createTask(workOrderId, tenantId, "Replace battery", ACTOR, technicianId, "Replace battery");
 
     // Created but not completed -- nothing to bill and nothing to report.
-    expect(await work.performedServices(workOrderId)).toHaveLength(0);
+    expect(await work.performedServices(workOrderId, tenantId)).toHaveLength(0);
   });
 });

@@ -82,7 +82,7 @@ export class DeliveryService {
     const candidates: DeliveryCandidate[] = [];
 
     for (const row of rows) {
-      const blockedBy = await this.whatIsHoldingIt(row.id, row.status, row.invoice !== null);
+      const blockedBy = await this.whatIsHoldingIt(row.id, scope.tenantId, row.status, row.invoice !== null);
       const unsettledInvoiceId = await this.unsettledInvoice(row.invoice?.id ?? null);
 
       candidates.push({
@@ -134,8 +134,13 @@ export class DeliveryService {
    * manager to hand back a car nobody had paid for. Only once DELIVER is
    * actually reachable do the gates decide.
    */
-  private async whatIsHoldingIt(workOrderId: string, status: string, hasInvoice: boolean): Promise<string[]> {
-    const intents = await this.lifecycle.availableIntents(workOrderId);
+  private async whatIsHoldingIt(
+    workOrderId: string,
+    tenantId: string,
+    status: string,
+    hasInvoice: boolean,
+  ): Promise<string[]> {
+    const intents = await this.lifecycle.availableIntents(workOrderId, tenantId);
 
     if (!intents.includes("DELIVER")) {
       if (status !== "PAYMENT_PENDING") return ["This job has not reached handover yet."];
@@ -151,7 +156,7 @@ export class DeliveryService {
       ];
     }
 
-    const gates = await this.lifecycle.previewGates(workOrderId, "DELIVER");
+    const gates = await this.lifecycle.previewGates(workOrderId, tenantId, "DELIVER");
 
     // No gates is a genuine pass, not a missing answer: a workshop with
     // every optional capability removed still has to be able to hand a

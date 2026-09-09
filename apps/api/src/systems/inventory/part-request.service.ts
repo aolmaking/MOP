@@ -123,7 +123,7 @@ export class PartRequestService {
     }
 
     await this.requireInventory(input.tenantId);
-    await this.requireAuthorizedConsumption(input.workOrderId, input.inspectionId);
+    await this.requireAuthorizedConsumption(input.workOrderId, input.tenantId, input.inspectionId);
 
     const created = await this.prisma.$transaction(async (tx) => {
       const request = await tx.partRequest.create({
@@ -158,7 +158,7 @@ export class PartRequestService {
       // from a different task's request simply refuses the move -- this
       // request still stands on its own, same shape as
       // TechnicianWorkService.moveIfPossible for blockers.
-      await this.moveIfPossible(input.workOrderId, "REQUEST_PART", actor, tx);
+      await this.moveIfPossible(input.workOrderId, input.tenantId, "REQUEST_PART", actor, tx);
 
       return request;
     });
@@ -226,7 +226,7 @@ export class PartRequestService {
     // Checked before the replay lookup so an unauthorized cart is refused
     // on every submit, not just the first: a replay that returned the
     // earlier basket would hand back requests this boundary now forbids.
-    await this.requireAuthorizedConsumption(input.workOrderId, input.inspectionId);
+    await this.requireAuthorizedConsumption(input.workOrderId, input.tenantId, input.inspectionId);
 
     const replay = await this.prisma.partRequest.findMany({
       where: { tenantId: input.tenantId, cartKey },
@@ -287,7 +287,7 @@ export class PartRequestService {
         }
 
         // Once, at the end. See (2) above.
-        await this.moveIfPossible(input.workOrderId, "REQUEST_PART", actor, tx);
+        await this.moveIfPossible(input.workOrderId, input.tenantId, "REQUEST_PART", actor, tx);
 
         return requests;
       });
@@ -381,7 +381,7 @@ export class PartRequestService {
       });
     }
 
-    const before = await this.fulfilment(input.partRequestId);
+    const before = await this.fulfilment(input.partRequestId, request.tenantId);
     if (input.quantity > before.outstanding) {
       // Refused rather than trimmed. Issuing four against a request for
       // three means somebody miscounted, and quietly issuing three would
@@ -449,11 +449,11 @@ export class PartRequestService {
       // swallow-if-refused shape as everywhere else this asks the graph
       // rather than assuming.
       if (fullyIssued) {
-        await this.moveIfPossible(request.workOrderId, "PART_RECEIVED", actor, tx);
+        await this.moveIfPossible(request.workOrderId, tenantId, "PART_RECEIVED", actor, tx);
       }
     });
 
-    return this.fulfilment(input.partRequestId);
+    return this.fulfilment(input.partRequestId, request.tenantId);
   }
 
   /**
@@ -512,7 +512,7 @@ export class PartRequestService {
     const request = await this.load(partRequestId, tenantId);
     await this.requireInventory(request.tenantId);
 
-    const issued = await this.fulfilment(partRequestId);
+    const issued = await this.fulfilment(partRequestId, request.tenantId);
     if (quantity > issued.issued) {
       throw new BadRequestException({
         code: "over_return",
@@ -745,7 +745,7 @@ export class PartRequestService {
     const request = await this.load(partRequestId, tenantId);
     await this.requireInventory(request.tenantId);
 
-    const issued = await this.fulfilment(partRequestId);
+    const issued = await this.fulfilment(partRequestId, request.tenantId);
     if (quantity > issued.issued) {
       throw new BadRequestException({
         code: "over_return",
@@ -861,9 +861,9 @@ export class PartRequestService {
    * Computed every time, never stored. A cached total is a second source
    * of truth and the two will eventually disagree (PHASE_7.md section 2).
    */
-  async fulfilment(partRequestId: string): Promise<Fulfilment> {
-    const request = await this.prisma.partRequest.findUnique({
-      where: { id: partRequestId },
+  async fulfilment(partRequestId: string, tenantId: string): Promise<Fulfilment> {
+    const request = await this.prisma.partRequest.findFirst({
+      where: { id: partRequestId, tenantId },
       select: { quantity: true },
     });
     if (!request) throw new NotFoundException({ code: "part_request_not_found", message: "Request not found." });
@@ -900,8 +900,8 @@ export class PartRequestService {
     issuedQuantity: number,
     actor: LifecycleActor,
   ): Promise<void> {
-    const item = await tx.inventoryItem.findUnique({
-      where: { id: request.inventoryItemId },
+    const item = await tx.inventoryItem.findFirst({
+      where: { id: request.inventoryItemId, tenantId: request.tenantId },
       select: { name: true, sellingPrice: true, cost: true },
     });
     if (!item) return;
@@ -951,8 +951,12 @@ export class PartRequestService {
 
     const remaining = line.quantity - returnedQuantity;
     if (remaining > 0) {
+      // tenant-scope-ok: `line.id` comes from the lookup three lines above,
+      // keyed on the partRequestId of a request every caller of this private
+      // helper loaded through `load(id, tenantId)`. There is no caller id here.
       await tx.workOrderPartLine.update({ where: { id: line.id }, data: { quantity: remaining } });
     } else {
+      // tenant-scope-ok: same row, same proof as the update above.
       await tx.workOrderPartLine.delete({ where: { id: line.id } });
     }
   }
@@ -966,12 +970,13 @@ export class PartRequestService {
    */
   private async moveIfPossible(
     workOrderId: string,
+    tenantId: string,
     intent: "REQUEST_PART" | "PART_RECEIVED",
     actor: LifecycleActor,
     tx: Prisma.TransactionClient,
   ): Promise<void> {
     try {
-      await this.lifecycle.apply(workOrderId, intent, actor, { tx });
+      await this.lifecycle.apply(workOrderId, tenantId, intent, actor, { tx });
     } catch {
       // Not available from the work order's current state; the part
       // request record stands on its own.
@@ -1058,8 +1063,8 @@ export class PartRequestService {
     workOrderId: string,
     warehouseId: string,
   ): Promise<void> {
-    const workOrder = await this.prisma.workOrder.findUnique({
-      where: { id: workOrderId },
+    const workOrder = await this.prisma.workOrder.findFirst({
+      where: { id: workOrderId, tenantId },
       select: { branchId: true },
     });
     if (!workOrder?.branchId) return;
@@ -1097,10 +1102,14 @@ export class PartRequestService {
    * asked of the lifecycle service, never re-derived here -- Inventory
    * enforcing operational truth is right, Inventory deciding it is not.
    */
-  private async requireAuthorizedConsumption(workOrderId: string, inspectionId?: string): Promise<void> {
+  private async requireAuthorizedConsumption(
+    workOrderId: string,
+    tenantId: string,
+    inspectionId?: string,
+  ): Promise<void> {
     if (inspectionId) {
       const inspection = await this.prisma.inspection.findFirst({
-        where: { id: inspectionId, workOrderId },
+        where: { id: inspectionId, workOrderId, tenantId },
         select: { id: true },
       });
       if (!inspection) {
@@ -1112,7 +1121,7 @@ export class PartRequestService {
       return;
     }
 
-    await this.lifecycle.assertOperationalWorkAuthorized(workOrderId);
+    await this.lifecycle.assertOperationalWorkAuthorized(workOrderId, tenantId);
   }
 
   private async move(
@@ -1269,7 +1278,7 @@ export class PartRequestService {
     payload: Record<string, unknown>,
     workOrderId?: string,
   ): Promise<void> {
-    const customer = workOrderId ? await this.customerOf(tx, workOrderId) : null;
+    const customer = workOrderId ? await this.customerOf(tx, workOrderId, tenantId) : null;
 
     await this.events.emit(
       {
@@ -1288,9 +1297,13 @@ export class PartRequestService {
     );
   }
 
-  private async customerOf(tx: Prisma.TransactionClient, workOrderId: string): Promise<string | null> {
-    const workOrder = await tx.workOrder.findUnique({
-      where: { id: workOrderId },
+  private async customerOf(
+    tx: Prisma.TransactionClient,
+    workOrderId: string,
+    tenantId: string,
+  ): Promise<string | null> {
+    const workOrder = await tx.workOrder.findFirst({
+      where: { id: workOrderId, tenantId },
       select: { customerId: true },
     });
     return workOrder?.customerId ?? null;

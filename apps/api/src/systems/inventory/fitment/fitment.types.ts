@@ -45,8 +45,8 @@ export interface ResolvedFitmentItem {
   readonly fitmentNotes?: string;
   readonly inventoryItemId?: string;
   readonly barcode?: string;
-  readonly sellingPrice: number;
-  readonly cost?: number;
+  readonly sellingPrice: string;
+  readonly cost?: string;
   readonly inStock: boolean;
   readonly availableStock: number;
 }

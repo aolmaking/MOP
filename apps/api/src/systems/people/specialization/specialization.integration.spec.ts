@@ -144,7 +144,7 @@ describe("service card -- Nafath's oil change", () => {
     const oldEntry = await specialization.fillEntry(tenantId, definition.id, technicianStaffId, { note: "before" });
     expect(oldEntry.definitionVersion).toBe(1);
 
-    const revised = await specialization.reviseFields(definition.id, [
+    const revised = await specialization.reviseFields(definition.id, tenantId, [
       { key: "note", label: "Note", type: "TEXT" },
       { key: "extra", label: "Extra", type: "TEXT", required: true },
     ]);

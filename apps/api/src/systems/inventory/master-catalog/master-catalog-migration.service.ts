@@ -1,8 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../../../runtime/database/prisma.service";
-import { CARS_SERVICES, CARS_CATEGORIES } from "./cars-catalog.dataset";
-import { MOTORCYCLES_SERVICES, MOTORCYCLES_CATEGORIES } from "./motorcycles-catalog.dataset";
-import { HEAVY_EQUIPMENT_SERVICES, HEAVY_EQUIPMENT_CATEGORIES } from "./heavy-equipment-catalog.dataset";
+import { CARS_SERVICES } from "./cars-catalog.dataset";
+import { MOTORCYCLES_SERVICES } from "./motorcycles-catalog.dataset";
+import { HEAVY_EQUIPMENT_SERVICES } from "./heavy-equipment-catalog.dataset";
 import { Prisma } from "@mop/database";
 
 export const CURRENT_MASTER_CATALOG_VERSION = 2;

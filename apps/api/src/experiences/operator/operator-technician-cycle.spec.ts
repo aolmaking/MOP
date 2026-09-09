@@ -52,7 +52,13 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
     // The lifecycle service is the only thing allowed to move WorkOrder.status,
     // so the operator service now asks it for a transition instead of writing
     // the column. The mock records the intent and reports where it landed.
-    mockLifecycle = { apply: jest.fn(async (workOrderId, intent) => ({ workOrderId, from: "UNDER_INSPECTION", to: intent === "APPROVE" ? "APPROVED_FOR_WORK" : "UNDER_INSPECTION" })) };
+    mockLifecycle = {
+      apply: jest.fn(async (workOrderId, _tenantId, intent) => ({
+        workOrderId,
+        from: "UNDER_INSPECTION",
+        to: intent === "APPROVE" ? "APPROVED_FOR_WORK" : "UNDER_INSPECTION",
+      })),
+    };
 
     operatorService = new OperatorService(mockPrisma, mockIntake, mockLifecycle, mockCatalog);
     technicianService = new TechnicianWorkViewService(
@@ -299,7 +305,7 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
       // The intent, not the column. Only WorkOrderLifecycleService writes
       // WorkOrder.status; the operator service names the move and the
       // capability-aware graph decides where it lands.
-      expect(mockLifecycle.apply).toHaveBeenCalledWith(workOrderId, 'APPROVE', expect.anything());
+      expect(mockLifecycle.apply).toHaveBeenCalledWith(workOrderId, tenantId, 'APPROVE', expect.anything());
       expect(mockPrisma.task.create).toHaveBeenCalledTimes(2);
     });
 

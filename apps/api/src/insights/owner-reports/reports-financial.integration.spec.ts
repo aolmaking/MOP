@@ -413,7 +413,7 @@ describe("ReportsFinancialService", () => {
     });
 
     // PENDING refund request should NOT reduce collected cash
-    const pendingReq = await prisma.refundRequest.create({
+    await prisma.refundRequest.create({
       data: {
         tenantId,
         invoiceId: invoice.id,

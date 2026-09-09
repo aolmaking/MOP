@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable } from "@nestjs/common";
 import { PrismaService } from "../../runtime/database/prisma.service";
-import { resolveDateRange, safeDivide, type ReportQueryParams } from "../owner-reports/date-range.util";
+import { resolveDateRange, type ReportQueryParams } from "../owner-reports/date-range.util";
 import type { AnalyticsScope } from "./analytics-scope.util";
 import { QcFailureReason, TaskReworkReason } from "@mop/database";
 
@@ -145,7 +145,6 @@ export class QualityAnalyticsService {
       where: { tenantId, ...(branchFilter ? { id: branchFilter } : {}) },
       select: { id: true, name: true },
     });
-    const branchMap = new Map<string, string>(branches.map((b) => [b.id, b.name]));
 
     // -------------------------------------------------------------------------
     // 1. QC EVALUATIONS & FIRST PASS YIELD
@@ -228,7 +227,7 @@ export class QualityAnalyticsService {
       return st;
     };
 
-    for (const [woId, events] of qcEventsByWo.entries()) {
+    for (const events of qcEventsByWo.values()) {
       const firstEv = events[0]; // chronologically earliest
       if (firstEv.createdAt >= range.from && firstEv.createdAt <= range.to) {
         firstPassEvaluations++;

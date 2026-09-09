@@ -125,14 +125,14 @@ async function bookIn(plate: string): Promise<string> {
  * customer decision it never needed.
  */
 async function authorizeForWork(workOrderId: string): Promise<void> {
-  await lifecycle.apply(workOrderId, "START_INSPECTION", ACTOR);
+  await lifecycle.apply(workOrderId, tenantId, "START_INSPECTION", ACTOR);
   await techWork.recordInspection(
-    { workOrderId, technicianId: mineStaffId, type: "QUICK", fields: {}, note: "Road tested." },
+    { workOrderId, technicianId: mineStaffId, type: "QUICK", fields: {}, note: "Road tested." }, tenantId,
     ACTOR,
   );
   const order = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrderId }, select: { status: true } });
   if (order.status !== "APPROVED_FOR_WORK") {
-    await lifecycle.apply(workOrderId, "APPROVE", ACTOR);
+    await lifecycle.apply(workOrderId, tenantId, "APPROVE", ACTOR);
   }
 }
 
@@ -231,7 +231,7 @@ describe("a technician's shift", () => {
     // Assignment is not activity. A technician with nine assigned jobs
     // still has exactly one car in their hands, and guessing from
     // assignment alone would put the wrong one on the page they never tap.
-    await techWork.createTask(myJobId, "Replace front brake pads", ACTOR, mineStaffId);
+    await techWork.createTask(myJobId, tenantId, "Replace front brake pads", ACTOR, mineStaffId);
     const beforeStart = await techView.activeJob(mineStaffId, tenantId);
 
     expect(beforeStart).toBeNull();
@@ -272,7 +272,7 @@ describe("a technician's shift", () => {
 
   it("clears from the manager's queue when the technician resolves it", async () => {
     const blocker = await prisma.taskBlocker.findFirstOrThrow({ where: { taskId: myTaskId, status: "OPEN" } });
-    await techWork.resolveBlocker(blocker.id, ACTOR);
+    await techWork.resolveBlocker(blocker.id, tenantId, ACTOR);
 
     const items = await attention.build({ tenantId, branchScope: [] });
 
@@ -297,7 +297,7 @@ describe("a technician's shift", () => {
     const blocker = await prisma.taskBlocker.findFirstOrThrow({
       where: { taskId: myTaskId, status: { in: ["OPEN", "ESCALATED"] } },
     });
-    await techWork.resolveBlocker(blocker.id, ACTOR);
+    await techWork.resolveBlocker(blocker.id, tenantId, ACTOR);
   });
 
   it("shows the finish conditions before anything is pressed", async () => {
@@ -320,7 +320,7 @@ describe("a technician's shift", () => {
 
   it("records a fault the technician found, which becomes the customer's decision", async () => {
     const fault = await techWork.createFault(
-      { workOrderId: myJobId, description: "Rear discs scored beyond limit", severity: "HIGH" },
+      { workOrderId: myJobId, description: "Rear discs scored beyond limit", severity: "HIGH" }, tenantId,
       ACTOR,
     );
 
@@ -347,7 +347,7 @@ describe("a technician's shift", () => {
     // second, looser check.
     const before = await prisma.workOrder.findUniqueOrThrow({ where: { id: myJobId }, select: { status: true } });
 
-    await expect(techWork.finishWorkOrder(myJobId, ACTOR)).rejects.toMatchObject({ status: 409 });
+    await expect(techWork.finishWorkOrder(myJobId, tenantId, ACTOR)).rejects.toMatchObject({ status: 409 });
 
     const after = await prisma.workOrder.findUniqueOrThrow({ where: { id: myJobId }, select: { status: true } });
     expect(after.status).toBe(before.status);

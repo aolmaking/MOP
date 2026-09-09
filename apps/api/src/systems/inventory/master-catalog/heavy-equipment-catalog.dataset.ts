@@ -5,7 +5,6 @@ import type {
   MasterItemDef,
   MasterServiceDef,
   MasterInspectionCheckpointDef,
-  ComponentPosition,
 } from "./cars-catalog.dataset";
 
 export const HEAVY_EQUIPMENT_CATEGORIES: readonly MasterCategoryDef[] = [

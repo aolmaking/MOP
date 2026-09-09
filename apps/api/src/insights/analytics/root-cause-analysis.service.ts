@@ -1,5 +1,4 @@
 import { ForbiddenException, Injectable } from "@nestjs/common";
-import { Prisma, QcFailureReason, TaskReworkReason } from "@mop/database";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { resolveDateRange, safeDivide } from "../owner-reports/date-range.util";
 import type { AnalyticsScope } from "./analytics-scope.util";
@@ -12,7 +11,6 @@ import {
 import { detectStatusLoops } from "../workflow-health/loop-detection.util";
 import { resolveOutcome } from "../../systems/operations/history/recommendation-outcome";
 import type {
-  DiagnosticEvidenceLevel,
   DiagnosticEvidenceReference,
   DiagnosticFact,
   DiagnosticFactor,
@@ -1375,12 +1373,10 @@ export class RootCauseAnalysisService {
     }
 
     let approvedCount = 0;
-    let plannedCount = 0;
     let performedCount = 0;
     let unperformedApprovedCount = 0;
     let noWorkLinkedCount = 0;
     let expiredCount = 0;
-    let declinedCount = 0;
 
     const evidenceReferences: DiagnosticEvidenceReference[] = [];
 
@@ -1400,7 +1396,6 @@ export class RootCauseAnalysisService {
       });
       const outcome = outcomeResult.outcome;
 
-      if (outcome === "DECLINED") declinedCount += 1;
       if (outcome === "EXPIRED") expiredCount += 1;
       if (
         outcome === "APPROVED_NO_WORK_LINKED" ||
@@ -1411,15 +1406,6 @@ export class RootCauseAnalysisService {
         outcome === "NOT_PERFORMED"
       ) {
         approvedCount += 1;
-      }
-
-      if (
-        outcome === "APPROVED_PLANNED" ||
-        outcome === "APPROVED_IN_PROGRESS" ||
-        outcome === "PARTIALLY_PERFORMED" ||
-        outcome === "PERFORMED"
-      ) {
-        plannedCount += 1;
       }
 
       if (outcome === "PERFORMED") {
@@ -1589,7 +1575,6 @@ export class RootCauseAnalysisService {
     });
 
     const readyAtMap = new Map<string, Date>();
-    const paymentPendingMap = new Map<string, number>();
 
     for (const e of deliveryEvents) {
       const payload = e.payload as { to?: string; from?: string };

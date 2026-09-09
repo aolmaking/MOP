@@ -1,5 +1,4 @@
 import { Injectable } from "@nestjs/common";
-import { Prisma } from "@mop/database";
 import { PrismaService } from "../../../runtime/database/prisma.service";
 import type { AnalyticsScope } from "../analytics-scope.util";
 import type {

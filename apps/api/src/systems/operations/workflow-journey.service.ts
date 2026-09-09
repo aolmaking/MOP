@@ -302,7 +302,7 @@ export class WorkflowJourneyService {
         asOf,
       ),
       events,
-      actions: await this.actionsFor(workOrderId, audience, viewer),
+      actions: await this.actionsFor(workOrderId, tenantId, audience, viewer),
       asOf: asOf.toISOString(),
     };
   }
@@ -455,6 +455,7 @@ export class WorkflowJourneyService {
    */
   private async actionsFor(
     workOrderId: string,
+    tenantId: string,
     audience: JourneyAudience,
     viewer?: JourneyViewer,
   ): Promise<readonly JourneyAction[]> {
@@ -463,7 +464,7 @@ export class WorkflowJourneyService {
     const catalogue = ACTIONS[audience];
     if (Object.keys(catalogue).length === 0) return [];
 
-    const intents = await this.lifecycle.availableIntents(workOrderId);
+    const intents = await this.lifecycle.availableIntents(workOrderId, tenantId);
     const offers = intents.map((intent) => catalogue[intent]).filter((offer): offer is ActionOffer => !!offer);
     if (offers.length === 0) return [];
 

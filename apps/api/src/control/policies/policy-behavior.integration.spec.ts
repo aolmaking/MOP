@@ -200,12 +200,12 @@ describe("DELIVERY_BLOCKED_UNTIL_PAID runtime enforcement", () => {
 
     // Configure ALWAYS: unpaid delivery must be rejected
     await policies.set(tenantId, "DELIVERY_BLOCKED_UNTIL_PAID", "ALWAYS", PLATFORM_ACTOR, "PLATFORM", "Payment required before keys");
-    const blockedGate = await gates.evaluate(wo.id, ["payment.settled_or_policy_allows"], { FINANCE_CORE: "ENABLED" }, "DELIVERY");
+    const blockedGate = await gates.evaluate(wo.id, tenantId, ["payment.settled_or_policy_allows"], { FINANCE_CORE: "ENABLED" }, "DELIVERY");
     expect(blockedGate.passed).toBe(false);
 
     // Switch policy to NEVER: unpaid delivery is permitted (e.g. fleet/commercial account)
     await policies.set(tenantId, "DELIVERY_BLOCKED_UNTIL_PAID", "NEVER", PLATFORM_ACTOR, "PLATFORM", "Allow credit handover for accounts");
-    const allowedGate = await gates.evaluate(wo.id, ["payment.settled_or_policy_allows"], { FINANCE_CORE: "ENABLED" }, "DELIVERY");
+    const allowedGate = await gates.evaluate(wo.id, tenantId, ["payment.settled_or_policy_allows"], { FINANCE_CORE: "ENABLED" }, "DELIVERY");
     expect(allowedGate.passed).toBe(true);
   });
 });
@@ -370,7 +370,7 @@ describe("CUSTOMER_SUPPLIED_PARTS & DIRECT_PART_PURCHASE runtime enforcement", (
     await policies.set(tenantId, "CUSTOMER_SUPPLIED_PARTS", "REFUSED", PLATFORM_ACTOR, "PLATFORM", "Workshop policy: no customer parts");
 
     await expect(
-      techWork.addExternalPartLine(wo.id, { name: "Brought Oil Filter", provenance: "CUSTOMER_SUPPLIED", quantity: 1 }, staffActor),
+      techWork.addExternalPartLine(wo.id, tenantId, { name: "Brought Oil Filter", provenance: "CUSTOMER_SUPPLIED", quantity: 1 }, staffActor),
     ).rejects.toMatchObject({
       status: 400,
       response: { code: "customer_parts_refused" },
@@ -379,7 +379,7 @@ describe("CUSTOMER_SUPPLIED_PARTS & DIRECT_PART_PURCHASE runtime enforcement", (
     // Switch to ACCEPTED_LIABILITY_RECORDED: succeeds with $0 selling price & no warranty
     await policies.set(tenantId, "CUSTOMER_SUPPLIED_PARTS", "ACCEPTED_LIABILITY_RECORDED", PLATFORM_ACTOR, "PLATFORM", "Allow customer parts with disclaimer");
     const custLine = await techWork.addExternalPartLine(
-      wo.id,
+      wo.id, tenantId,
       { name: "Brought Oil Filter", provenance: "CUSTOMER_SUPPLIED", quantity: 1 },
       staffActor,
     );
@@ -389,7 +389,7 @@ describe("CUSTOMER_SUPPLIED_PARTS & DIRECT_PART_PURCHASE runtime enforcement", (
     // DIRECT_PART_PURCHASE: NEVER disallows direct external purchases
     await policies.set(tenantId, "DIRECT_PART_PURCHASE", "NEVER", PLATFORM_ACTOR, "PLATFORM", "All parts must pass through store");
     await expect(
-      techWork.addExternalPartLine(wo.id, { name: "Local Spark Plug", provenance: "EXTERNAL_PURCHASE", quantity: 4 }, staffActor),
+      techWork.addExternalPartLine(wo.id, tenantId, { name: "Local Spark Plug", provenance: "EXTERNAL_PURCHASE", quantity: 4 }, staffActor),
     ).rejects.toMatchObject({
       status: 400,
       response: { code: "direct_purchase_forbidden" },
@@ -420,7 +420,7 @@ describe("CUSTOMER_SUPPLIED_PARTS & DIRECT_PART_PURCHASE runtime enforcement", (
 
     // Attempting direct purchase of item that is currently in stock must be rejected
     await expect(
-      techWork.addExternalPartLine(wo.id, { name: inStockItem.name, provenance: "EXTERNAL_PURCHASE", quantity: 1 }, staffActor),
+      techWork.addExternalPartLine(wo.id, tenantId, { name: inStockItem.name, provenance: "EXTERNAL_PURCHASE", quantity: 1 }, staffActor),
     ).rejects.toMatchObject({
       status: 400,
       response: { code: "warehouse_stock_available" },
@@ -428,7 +428,7 @@ describe("CUSTOMER_SUPPLIED_PARTS & DIRECT_PART_PURCHASE runtime enforcement", (
 
     // Out-of-stock item direct purchase is permitted
     const outOfStockBuy = await techWork.addExternalPartLine(
-      wo.id,
+      wo.id, tenantId,
       { name: "Special Out-of-Stock Sensor", provenance: "EXTERNAL_PURCHASE", quantity: 1 },
       staffActor,
     );
@@ -469,7 +469,7 @@ describe("UNAPPROVED_WORK_EXECUTION runtime enforcement", () => {
     });
 
     // Lifecycle guard also refuses
-    await expect(lifecycle.assertOperationalWorkAuthorized(wo.id)).rejects.toMatchObject({
+    await expect(lifecycle.assertOperationalWorkAuthorized(wo.id, wo.tenantId)).rejects.toMatchObject({
       status: 409,
       response: { code: "work_not_authorized" },
     });

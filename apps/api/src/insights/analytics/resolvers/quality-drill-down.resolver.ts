@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../../runtime/database/prisma.service";
 import type { AnalyticsScope } from "../analytics-scope.util";
 import type {
@@ -11,7 +11,6 @@ import type {
 } from "../drill-down.types";
 import type { DrillDownResolver } from "./drill-down-resolver.interface";
 import { decodeCursor, paginateRecords, resolvePageLimit } from "../drill-down-pagination.util";
-import { QcFailureReason, TaskReworkReason } from "@mop/database";
 
 const MIN_SAMPLE_SIZE = 5;
 

@@ -788,7 +788,7 @@ export interface ResolvedFitmentItemView {
   readonly fitmentQuality: 'EXACT_MATCH' | 'CROSS_COMPATIBLE' | 'UNIVERSAL';
   readonly grade: 'OEM' | 'PREMIUM_AFTERMARKET' | 'STANDARD_AFTERMARKET' | 'ECONOMY';
   readonly fitmentNotes?: string;
-  readonly sellingPrice: number;
+  readonly sellingPrice: string;
   readonly inStock: boolean;
   readonly availableStock: number;
 }

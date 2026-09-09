@@ -23,7 +23,6 @@ import { PeopleAnalyticsService } from "../analytics/people-analytics.service";
 import { OperationsAnalyticsService } from "../analytics/operations-analytics.service";
 import { WorkflowBottlenecksService } from "../workflow-health/workflow-bottlenecks.service";
 import { TeamLeaderService } from "../../experiences/team-leader/team-leader.service";
-import { ReportingService } from "../analyst-reporting/reporting.service";
 import type { AnalyticsScope } from "../analytics/analytics-scope.util";
 import type { PrismaService } from "../../runtime/database/prisma.service";
 
@@ -33,7 +32,6 @@ const people = new PeopleAnalyticsService(asService);
 const operations = new OperationsAnalyticsService(asService);
 const bottlenecks = new WorkflowBottlenecksService(asService);
 const teamLeader = new TeamLeaderService(asService, { technicianBrief: jest.fn() } as never);
-const reporting = new ReportingService(asService);
 
 const unscoped: AnalyticsScope = { branchIds: [], categoryIds: [] };
 
@@ -401,7 +399,7 @@ describe("People & Workflow Analytics Correctness Regression", () => {
 
   it("5. historical asOf behavior for SLA risk evaluates against period boundary, not live clock", async () => {
     // Work order created on May 1, promised for May 10, closed on May 20
-    const wo = await prisma.workOrder.create({
+    await prisma.workOrder.create({
       data: {
         tenantId,
         branchId: branchAId,
@@ -438,7 +436,7 @@ describe("People & Workflow Analytics Correctness Regression", () => {
   });
 
   it("6. branch scoping isolates operational and workflow metrics to requested branch", async () => {
-    const woA = await prisma.workOrder.create({
+    await prisma.workOrder.create({
       data: {
         tenantId,
         branchId: branchAId,
@@ -448,7 +446,7 @@ describe("People & Workflow Analytics Correctness Regression", () => {
         createdAt: new Date("2026-06-01T08:00:00.000Z"),
       },
     });
-    const woB = await prisma.workOrder.create({
+    await prisma.workOrder.create({
       data: {
         tenantId,
         branchId: branchBId,
@@ -476,7 +474,7 @@ describe("People & Workflow Analytics Correctness Regression", () => {
   });
 
   it("7. tenant isolation guarantees no cross-tenant leakage", async () => {
-    const otherWo = await prisma.workOrder.create({
+    await prisma.workOrder.create({
       data: {
         tenantId: otherTenantId,
         branchId: branchAId, // different tenant

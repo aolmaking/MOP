@@ -207,7 +207,6 @@ export class DecisionsAnalyticsService {
 
     let approvedCount = 0;
     let rejectedCount = 0;
-    let pendingCount = 0;
     let plannedCount = 0;
     let startedCount = 0;
     let performedCount = 0;
@@ -360,7 +359,6 @@ export class DecisionsAnalyticsService {
             criticalRejections += 1;
           }
         } else {
-          pendingCount += 1;
           impEntry.pending += 1;
         }
 

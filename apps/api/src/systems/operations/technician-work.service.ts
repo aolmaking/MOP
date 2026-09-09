@@ -71,13 +71,14 @@ export class TechnicianWorkService {
    */
   async createTask(
     workOrderId: string,
+    tenantId: string,
     title: string,
     actor: LifecycleActor,
     assignToStaffUserId?: string,
     serviceKey?: string,
     decisionItemId?: string,
   ) {
-    const workOrder = await this.requireWorkOrder(workOrderId);
+    const workOrder = await this.requireWorkOrder(workOrderId, tenantId);
 
     // Refuse a key the workshop does not actually have. A task pointing at
     // a service that was never priced would bill nothing and report under
@@ -142,7 +143,7 @@ export class TechnicianWorkService {
     // Diagnostic work needs no task and is not blocked by this: it is an
     // Inspection, which is the one work vehicle a pre-authorization job
     // legitimately has.
-    await this.lifecycle.assertOperationalWorkAuthorized(workOrderId);
+    await this.lifecycle.assertOperationalWorkAuthorized(workOrderId, tenantId);
 
     return this.prisma.$transaction(async (tx) => {
       const task = await tx.task.create({
@@ -192,7 +193,7 @@ export class TechnicianWorkService {
     // authorized this morning can be back in AWAITING_CUSTOMER_APPROVAL
     // this afternoon, and a task created while it was legal must not stay
     // startable through the change.
-    await this.lifecycle.assertOperationalWorkAuthorized(task.workOrderId);
+    await this.lifecycle.assertOperationalWorkAuthorized(task.workOrderId, task.tenantId);
 
     const executionPolicy = await this.policies.resolveValue(task.tenantId, "UNAPPROVED_WORK_EXECUTION");
     if (executionPolicy === "BLOCKED") {
@@ -265,7 +266,7 @@ export class TechnicianWorkService {
     // reads DONE tasks. Authorization is therefore checked here too, so a
     // task that slipped through before this boundary existed cannot be
     // completed into an invoice line for work nobody agreed to.
-    await this.lifecycle.assertOperationalWorkAuthorized(task.workOrderId);
+    await this.lifecycle.assertOperationalWorkAuthorized(task.workOrderId, task.tenantId);
 
     const openBlockers = await this.prisma.taskBlocker.count({
       where: { taskId, status: { in: ["OPEN", "ESCALATED"] } },
@@ -318,14 +319,11 @@ export class TechnicianWorkService {
    */
   async returnTaskForRework(
     taskId: string,
+    tenantId: string,
     actor: LifecycleActor,
     input: { reason?: TaskReworkReason; note?: string } = {},
   ) {
-    const task = await this.prisma.task.findUnique({
-      where: { id: taskId },
-      select: { id: true, tenantId: true, workOrderId: true, status: true, serviceKey: true },
-    });
-    if (!task) throw new NotFoundException({ code: "task_not_found", message: "Task not found." });
+    const task = await this.requireTask(taskId, tenantId);
 
     if (task.status === "CANCELLED") {
       throw new BadRequestException({ code: "task_cancelled", message: "Cancelled task cannot be returned for rework." });
@@ -379,10 +377,11 @@ export class TechnicianWorkService {
       note?: string;
       assignToStaffUserId?: string;
     },
+    tenantId: string,
     actor: LifecycleActor,
   ) {
-    const original = await this.prisma.task.findUnique({
-      where: { id: input.originalTaskId },
+    const original = await this.prisma.task.findFirst({
+      where: { id: input.originalTaskId, tenantId },
       select: {
         id: true,
         tenantId: true,
@@ -398,7 +397,7 @@ export class TechnicianWorkService {
     }
 
     // Work order must still be authorized for operational work
-    await this.lifecycle.assertOperationalWorkAuthorized(original.workOrderId);
+    await this.lifecycle.assertOperationalWorkAuthorized(original.workOrderId, original.tenantId);
 
     const taskTitle = input.title ?? `Rework: ${original.title}`;
 
@@ -463,8 +462,9 @@ export class TechnicianWorkService {
    * the preview and the press, which is the only way this stays correct
    * under a technician who leaves the tablet open.
    */
-  async finishWorkOrder(workOrderId: string, actor: LifecycleActor) {
-    return this.lifecycle.apply(workOrderId, "FINISH", actor);
+  async finishWorkOrder(workOrderId: string, tenantId: string, actor: LifecycleActor) {
+    await this.requireWorkOrder(workOrderId, tenantId);
+    return this.lifecycle.apply(workOrderId, tenantId, "FINISH", actor);
   }
 
   /**
@@ -485,8 +485,8 @@ export class TechnicianWorkService {
    *     intent → lifecycle.apply throws; transaction rolls back; nothing
    *     persists.
    */
-  async startInspection(workOrderId: string, actor: LifecycleActor) {
-    const workOrder = await this.requireWorkOrder(workOrderId);
+  async startInspection(workOrderId: string, tenantId: string, actor: LifecycleActor) {
+    const workOrder = await this.requireWorkOrder(workOrderId, tenantId);
 
     return this.prisma.$transaction(async (tx) => {
       // Serialize all concurrent startInspection calls on the WorkOrder
@@ -534,27 +534,29 @@ export class TechnicianWorkService {
       // The lifecycle write is folded into this transaction via options.tx.
       // If the graph refuses (wrong state, policy, capability) the whole
       // transaction rolls back and neither write persists.
-      const result = await this.lifecycle.apply(workOrderId, "START_INSPECTION", actor, { tx });
+      const result = await this.lifecycle.apply(workOrderId, tenantId, "START_INSPECTION", actor, { tx });
 
       return { ...result, inspectionId: inspection.id };
     });
   }
 
-  async startWork(workOrderId: string, actor: LifecycleActor) {
-    return this.lifecycle.apply(workOrderId, "START_WORK", actor);
+  async startWork(workOrderId: string, tenantId: string, actor: LifecycleActor) {
+    await this.requireWorkOrder(workOrderId, tenantId);
+    return this.lifecycle.apply(workOrderId, tenantId, "START_WORK", actor);
   }
 
   async addExternalPartLine(
     workOrderId: string,
+    tenantId: string,
     input: { name: string; provenance: "CUSTOMER_SUPPLIED" | "EXTERNAL_PURCHASE"; quantity?: number },
     actor: LifecycleActor,
   ) {
-    const workOrder = await this.requireWorkOrder(workOrderId);
+    const workOrder = await this.requireWorkOrder(workOrderId, tenantId);
 
     // A WorkOrderPartLine is billable on creation and never passes through
     // inventory, which made this the shortest route from "unauthorized
     // job" to "charge on an invoice" in the whole product.
-    await this.lifecycle.assertOperationalWorkAuthorized(workOrderId);
+    await this.lifecycle.assertOperationalWorkAuthorized(workOrderId, tenantId);
 
     if (input.provenance === "CUSTOMER_SUPPLIED") {
       const policy = await this.policies.resolveValue(workOrder.tenantId, "CUSTOMER_SUPPLIED_PARTS");
@@ -639,9 +641,10 @@ export class TechnicianWorkService {
    */
   async performedServices(
     workOrderId: string,
+    tenantId: string,
   ): Promise<readonly { taskId: string; serviceKey: string; title: string; technicianIds: readonly string[] }[]> {
     const tasks = await this.prisma.task.findMany({
-      where: { workOrderId, status: "DONE", serviceKey: { not: null } },
+      where: { workOrderId, tenantId, status: "DONE", serviceKey: { not: null } },
       select: {
         id: true,
         title: true,
@@ -686,10 +689,10 @@ export class TechnicianWorkService {
    *   ALL_WORK              -- never attempt APPROVE; the customer-decision
    *                           flow is the sole authority for progression.
    */
-  async recordInspection(input: RecordInspectionInput, actor: LifecycleActor) {
-    const workOrder = await this.requireWorkOrder(input.workOrderId);
-    const owner = await this.prisma.workOrder.findUnique({
-      where: { id: input.workOrderId },
+  async recordInspection(input: RecordInspectionInput, tenantId: string, actor: LifecycleActor) {
+    const workOrder = await this.requireWorkOrder(input.workOrderId, tenantId);
+    const owner = await this.prisma.workOrder.findFirst({
+      where: { id: input.workOrderId, tenantId },
       select: { customerId: true, tenantId: true },
     });
 
@@ -710,6 +713,9 @@ export class TechnicianWorkService {
       let row: Inspection;
       if (open) {
         // Complete the existing in-progress row.
+        // tenant-scope-ok: `open.id` came from the findFirst three lines above,
+        // which is keyed on a workOrderId this method already proved belongs to
+        // `tenantId` via requireWorkOrder. There is no id here from a caller.
         row = await tx.inspection.update({
           where: { id: open.id },
           data: {
@@ -773,7 +779,7 @@ export class TechnicianWorkService {
       pendingCriticalDecisions = evaluation.pendingCriticalDecisions;
       if (evaluation.canAutoApprove) {
         // Case A: no CRITICAL faults exist. Attempt APPROVE; graph and gate decide.
-        await this.moveIfPossible(input.workOrderId, "APPROVE", actor);
+        await this.moveIfPossible(input.workOrderId, tenantId, "APPROVE", actor);
       }
       // Case B: at least one CRITICAL fault has no linked item -- remain
       // UNDER_INSPECTION. pendingCriticalDecisions: true is returned.
@@ -788,7 +794,7 @@ export class TechnicianWorkService {
       // APPROVED_FOR_WORK; when findings were noted, it remains at
       // UNDER_INSPECTION awaiting customer recommendations/decisions.
       if (input.note === "OK") {
-        await this.moveIfPossible(input.workOrderId, "APPROVE", actor);
+        await this.moveIfPossible(input.workOrderId, tenantId, "APPROVE", actor);
       }
     }
 
@@ -847,8 +853,8 @@ export class TechnicianWorkService {
    * Task.decisionItemId's own check exists to prevent -- one step earlier
    * in the Inspection → Fault → Recommendation → Task chain.
    */
-  async createFault(input: CreateFaultInput, actor: LifecycleActor) {
-    const workOrder = await this.requireWorkOrder(input.workOrderId);
+  async createFault(input: CreateFaultInput, tenantId: string, actor: LifecycleActor) {
+    const workOrder = await this.requireWorkOrder(input.workOrderId, tenantId);
 
     if (input.inspectionId) {
       const inspection = await this.prisma.inspection.findFirst({
@@ -971,15 +977,15 @@ export class TechnicianWorkService {
       // resolveBlocker's own decision. The work order may already be
       // BLOCKED from another task, in which case the graph refuses --
       // correctly, and it is not an error.
-      await this.moveIfPossible(task.workOrderId, "REPORT_BLOCKER", actor, input.reason, tx);
+      await this.moveIfPossible(task.workOrderId, tenantId, "REPORT_BLOCKER", actor, input.reason, tx);
 
       return created;
     });
   }
 
-  async resolveBlocker(blockerId: string, actor: LifecycleActor) {
-    const blocker = await this.prisma.taskBlocker.findUnique({
-      where: { id: blockerId },
+  async resolveBlocker(blockerId: string, tenantId: string, actor: LifecycleActor) {
+    const blocker = await this.prisma.taskBlocker.findFirst({
+      where: { id: blockerId, tenantId },
       select: { id: true, tenantId: true, taskId: true, task: { select: { workOrderId: true } } },
     });
     if (!blocker) throw new NotFoundException({ code: "blocker_not_found", message: "Blocker not found." });
@@ -1000,6 +1006,9 @@ export class TechnicianWorkService {
         where: { id: blockerId },
         data: { status: "RESOLVED", resolvedAt: new Date() },
       });
+      // tenant-scope-ok: `blocker.taskId` is read off the blocker row this
+      // method loaded under `{ id: blockerId, tenantId }`, so the task is that
+      // blocker's own and therefore this tenant's.
       await tx.task.update({ where: { id: blocker.taskId }, data: { status: "IN_PROGRESS" } });
 
       await this.events.emit(
@@ -1023,7 +1032,7 @@ export class TechnicianWorkService {
 
       // Only unblock the work order once nothing else is holding it.
       if (stillBlocked === 0) {
-        await this.moveIfPossible(blocker.task.workOrderId, "RESOLVE_BLOCKER", actor, undefined, tx);
+        await this.moveIfPossible(blocker.task.workOrderId, tenantId, "RESOLVE_BLOCKER", actor, undefined, tx);
       }
     });
   }
@@ -1048,22 +1057,36 @@ export class TechnicianWorkService {
    */
   private async moveIfPossible(
     workOrderId: string,
+    tenantId: string,
     intent: "REPORT_BLOCKER" | "RESOLVE_BLOCKER" | "APPROVE",
     actor: LifecycleActor,
     reason?: string,
     tx?: Prisma.TransactionClient,
   ): Promise<void> {
     try {
-      await this.lifecycle.apply(workOrderId, intent, actor, { reason, tx });
+      await this.lifecycle.apply(workOrderId, tenantId, intent, actor, { reason, tx });
     } catch {
       // Not available from the work order's current state; the record
       // stands on its own.
     }
   }
 
-  private async requireWorkOrder(workOrderId: string) {
-    const workOrder = await this.prisma.workOrder.findUnique({
-      where: { id: workOrderId },
+  /**
+   * A work order belonging to THIS workshop, or nothing.
+   *
+   * The sibling of `requireTask` below, and it was left unscoped when that one
+   * was written. Every method that reached a work order through here --
+   * starting an inspection, starting work, recording an inspection, logging a
+   * fault, adding an external part, recording services, finishing the job --
+   * therefore trusted the id exactly as the task methods used to, and a runtime
+   * probe already proved what that allows on the task side.
+   *
+   * Missing rather than forbidden, for the same reason: a 403 on a foreign id
+   * confirms the id is real.
+   */
+  private async requireWorkOrder(workOrderId: string, tenantId: string) {
+    const workOrder = await this.prisma.workOrder.findFirst({
+      where: { id: workOrderId, tenantId },
       select: { id: true, tenantId: true, status: true },
     });
     if (!workOrder) {

@@ -197,7 +197,7 @@ describe("one car, counter to keys, with every surface agreeing", () => {
   it("4. the declined inspection routes straight to approval, skipping inspection", async () => {
     // The graph's own edge for this case. A workshop without it would
     // strand every customer who refuses an inspection.
-    const moved = await lifecycle.apply(workOrderId, "REQUEST_APPROVAL", ACTOR);
+    const moved = await lifecycle.apply(workOrderId, tenantId, "REQUEST_APPROVAL", ACTOR);
 
     expect(moved.to).toBe("AWAITING_CUSTOMER_APPROVAL");
   });
@@ -257,10 +257,10 @@ describe("one car, counter to keys, with every surface agreeing", () => {
       data: { status: "RESOLVED", respondedAt: new Date() },
     });
 
-    const approved = await lifecycle.apply(workOrderId, "APPROVE", ACTOR);
+    const approved = await lifecycle.apply(workOrderId, tenantId, "APPROVE", ACTOR);
     expect(approved.to).toBe("APPROVED_FOR_WORK");
 
-    const started = await lifecycle.apply(workOrderId, "START_WORK", ACTOR);
+    const started = await lifecycle.apply(workOrderId, tenantId, "START_WORK", ACTOR);
     expect(started.to).toBe("IN_PROGRESS");
 
     await expect(laneOf(workOrderId)).resolves.toBe("WITH_US");
@@ -293,7 +293,7 @@ describe("one car, counter to keys, with every surface agreeing", () => {
     // The whole reason inspectionDeclined is stored as a fact. A naive
     // gate blocks this job forever, which is the failure the founding
     // scenario exists to prevent.
-    const finished = await lifecycle.apply(workOrderId, "FINISH", ACTOR);
+    const finished = await lifecycle.apply(workOrderId, tenantId, "FINISH", ACTOR);
 
     expect(["READY_FOR_TEAM_REVIEW", "READY_FOR_QC", "PAYMENT_PENDING", "READY_FOR_DELIVERY"]).toContain(finished.to);
   });
@@ -304,7 +304,7 @@ describe("one car, counter to keys, with every surface agreeing", () => {
       const current = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrderId }, select: { status: true } });
       if (["READY_FOR_DELIVERY", "PAYMENT_PENDING"].includes(current.status)) break;
       try {
-        await lifecycle.apply(workOrderId, intent, ACTOR);
+        await lifecycle.apply(workOrderId, tenantId, intent, ACTOR);
       } catch {
         // Not every profile has this step; the loop is finding the path,
         // not asserting one.

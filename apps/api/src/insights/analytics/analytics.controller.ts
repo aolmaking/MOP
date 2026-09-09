@@ -18,7 +18,7 @@ import { QualityAnalyticsService } from "./quality-analytics.service";
 import { RootCauseAnalysisService } from "./root-cause-analysis.service";
 import { UniversalDrillDownService } from "./universal-drill-down.service";
 import type { DiagnosticSubject } from "./root-cause-analysis.types";
-import type { DrillDownQuery, EvidenceEntityType } from "./drill-down.types";
+import type { EvidenceEntityType } from "./drill-down.types";
 
 /**
  * Data Analyst (docs/detailed-specs/data-analyst.md) -- analytical views

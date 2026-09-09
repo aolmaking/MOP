@@ -93,7 +93,7 @@ describe('End-to-End Inspection → Operator Final Approval → Inventory Flow',
         })),
         create: jest.fn().mockImplementation(async ({ data }) => ({ id: data.id || 'insp-created', ...data })),
         update: jest.fn().mockImplementation(async ({ where, data }) => ({ id: where.id, ...data })),
-        upsert: jest.fn().mockImplementation(async ({ create, update }) => ({ id: create.id, ...create })),
+        upsert: jest.fn().mockImplementation(async ({ create }) => ({ id: create.id, ...create })),
       },
       fault: {
         create: jest.fn().mockImplementation(async ({ data }) => {
@@ -422,7 +422,10 @@ describe('End-to-End Inspection → Operator Final Approval → Inventory Flow',
       // decision, not this service's. Asserting the prisma write instead of the
       // intent is what let the service bypass the inspection_completed gate and
       // the APPROVAL_REQUIRED_SCOPE policy while this test stayed green.
-      expect(lifecycle.apply).toHaveBeenCalledWith(workOrderId, 'APPROVE', expect.anything());
+      // The tenant is an argument now, not something the service reads off the
+      // row it happens to load. That is the whole point of the change: the only
+      // writer of WorkOrder.status verifies ownership itself.
+      expect(lifecycle.apply).toHaveBeenCalledWith(workOrderId, tenantId, 'APPROVE', expect.anything());
       expect(mockPrisma.workOrder.update).not.toHaveBeenCalled();
     });
   });
@@ -462,7 +465,6 @@ describe('End-to-End Inspection → Operator Final Approval → Inventory Flow',
 
   describe('6. Test E — Inventory & Tenant Scoping', () => {
     it('strictly isolates stock by tenant and does not reserve stock from another tenant or warehouse', async () => {
-      const foreignTenant = 'tenant-alexandria-02';
       const foreignWarehouse = 'wh-alex';
       stockBalances.set(`item-brake-pads:${foreignWarehouse}`, { availableQty: 50, reservedQty: 0 });
 

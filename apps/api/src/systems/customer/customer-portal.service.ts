@@ -351,7 +351,7 @@ export class CustomerPortalService {
       },
     });
 
-    await this.lifecycle.apply(workOrder.id, "ISSUE_INVOICE", {
+    await this.lifecycle.apply(workOrder.id, tenantId, "ISSUE_INVOICE", {
       accountId: session.accountId,
       displayName: session.displayName || "Customer",
       actorType: "CUSTOMER",

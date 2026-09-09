@@ -228,7 +228,7 @@ describe("Quality & Rework Intelligence Integration (Phase 2 - Prompt 7)", () =>
       },
     });
 
-    const woRelinked = await prisma.workOrder.create({
+    await prisma.workOrder.create({
       data: {
         tenantId,
         branchId: branchAId,
@@ -254,7 +254,7 @@ describe("Quality & Rework Intelligence Integration (Phase 2 - Prompt 7)", () =>
 
   it("10-11: Detects repeat vehicle visits within 30 days and NEVER labels it warranty", async () => {
     // Prior closed job on asset 2
-    const priorClosedWo = await prisma.workOrder.create({
+    await prisma.workOrder.create({
       data: {
         tenantId,
         branchId: branchAId,
@@ -266,7 +266,7 @@ describe("Quality & Rework Intelligence Integration (Phase 2 - Prompt 7)", () =>
     });
 
     // Subsequent job on asset 2 created 10 days later (within 30 days)
-    const subsequentWo = await prisma.workOrder.create({
+    await prisma.workOrder.create({
       data: {
         tenantId,
         branchId: branchAId,
@@ -360,7 +360,7 @@ describe("Quality & Rework Intelligence Integration (Phase 2 - Prompt 7)", () =>
     });
 
     // Rework task linked to original
-    const reworkTask = await prisma.task.create({
+    await prisma.task.create({
       data: {
         tenantId,
         workOrderId: wo.id,
@@ -485,7 +485,7 @@ describe("Quality & Rework Intelligence Integration (Phase 2 - Prompt 7)", () =>
     });
 
     const serviceKey = "BRAKE_SERVICE";
-    const t = await prisma.task.create({
+    await prisma.task.create({
       data: {
         tenantId,
         workOrderId: wo.id,
@@ -529,7 +529,7 @@ describe("Quality & Rework Intelligence Integration (Phase 2 - Prompt 7)", () =>
     });
 
     // Assigned to Tech Ahmed at completion
-    const initialAssignment = await prisma.taskAssignment.create({
+    await prisma.taskAssignment.create({
       data: {
         tenantId,
         taskId: task.id,
@@ -736,7 +736,7 @@ describe("Quality & Rework Intelligence Integration (Phase 2 - Prompt 7)", () =>
 
   it("30: Separates repeat visit count from unique vehicles with repeat visits", async () => {
     // Asset 1 has 1 prior closure, then 2 separate subsequent visits within 30 days
-    const priorWo = await prisma.workOrder.create({
+    await prisma.workOrder.create({
       data: {
         tenantId,
         branchId: branchAId,

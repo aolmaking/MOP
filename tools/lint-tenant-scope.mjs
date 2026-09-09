@@ -91,6 +91,111 @@ function whereClause(args) {
   return null;
 }
 
+/** The id expression a where clause keys on, e.g. `taskId` in `{ id: taskId }`. */
+function idExpression(where) {
+  const match = where.match(/\bid\s*:\s*([A-Za-z0-9_.$]+)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * The enclosing CLASS METHOD, not the innermost block.
+ *
+ * The safe shape almost always spans a nested scope: the ownership check runs
+ * at the top of the method and the write happens inside a
+ * `$transaction(async (tx) => { … })` callback. Stopping at the innermost brace
+ * would put the check outside the window and see none of them.
+ *
+ * A class member declared at two-space indentation is the boundary. Anything
+ * before it belongs to a different method and proves nothing about this one.
+ */
+const METHOD_START = /\n {2}(?:(?:private|protected|public|static|readonly)\s+)*(?:async\s+)?[A-Za-z_$][\w$]*\s*\(/g;
+
+function enclosingMethodStart(source, index) {
+  METHOD_START.lastIndex = 0;
+  let start = 0;
+  let match;
+  while ((match = METHOD_START.exec(source)) !== null) {
+    if (match.index >= index) break;
+    start = match.index;
+  }
+  return start;
+}
+
+function isOwnershipProvenAbove(source, index, model, where) {
+  const id = idExpression(where);
+  if (!id) return false;
+
+  const body = source.slice(enclosingMethodStart(source, index), index);
+
+  // Proof 1: an inline load of the SAME model, earlier in this method, whose
+  // where clause names both the tenant and this exact id.
+  const inline = new RegExp(
+    `\\.${model}\\.(?:findFirst|findFirstOrThrow|findUnique|findUniqueOrThrow|findMany)\\s*\\(`,
+    "g",
+  );
+
+  let found;
+  while ((found = inline.exec(body)) !== null) {
+    let depth = 0;
+    let end = inline.lastIndex - 1;
+    for (; end < body.length; end++) {
+      if (body[end] === "(") depth++;
+      else if (body[end] === ")") {
+        depth--;
+        if (depth === 0) break;
+      }
+    }
+    const earlier = whereClause(body.slice(inline.lastIndex - 1, end + 1));
+    if (!earlier || !/tenantId/.test(earlier)) continue;
+    if (idExpression(earlier) === id) return true;
+  }
+
+  // Proof 2: a scoping helper called earlier in this method with BOTH this id
+  // and a tenant id, in either order -- `this.requireTask(taskId, tenantId)`,
+  // `this.findOwned(tenantId, staffId)`, `requireOwnedInvoice(id, tenantId)`.
+  //
+  // This is the shape the Phase 2 isolation work deliberately introduced: scope
+  // at the load so a later edit cannot skip it. Recognising it is not a
+  // loosening -- the helper IS the check, and it names this same id.
+  const escaped = id.replace(/[.$]/g, "\\$&");
+  const tenantArg = "[A-Za-z0-9_.$]*[Tt]enantId";
+  const helperName = "\\b(?:require|load|resolve|assert|ensure|find|get)[A-Za-z]*\\s*\\(\\s*";
+  if (
+    new RegExp(`${helperName}${escaped}\\s*,\\s*${tenantArg}`).test(body) ||
+    new RegExp(`${helperName}${tenantArg}\\s*,\\s*${escaped}`).test(body)
+  ) {
+    return true;
+  }
+
+  // Proof 3: the id was READ OFF a row this method already proved.
+  //
+  //   const staff = await this.findOwned(tenantId, staffId);
+  //   await tx.account.update({ where: { id: staff.accountId } });
+  //
+  // `staff` is this tenant's, so `staff.accountId` is this tenant's account.
+  // Only a binding proved by one of the two rules above counts, and only when
+  // the flagged id reads a field off it -- `staff.accountId`, never a bare
+  // `accountId` that could have come from anywhere.
+  const derived = id.match(/^([A-Za-z_$][\w$]*)\.[\w$]+$/);
+  if (derived) {
+    const binding = derived[1];
+    const assigned = new RegExp(
+      `\\b(?:const|let)\\s+${binding}\\s*=[^;]*?(?:${helperName.slice(2)}|\\.[a-zA-Z]+\\.find[A-Za-z]*\\s*\\()`,
+      "s",
+    );
+    const assignment = body.match(assigned);
+    if (assignment) {
+      // The assignment itself has to have been tenant-scoped. Take the
+      // statement it belongs to and require a tenantId inside it.
+      const from = body.lastIndexOf(assignment[0]);
+      const statement = body.slice(from, body.indexOf(";", from) + 1);
+      if (/tenantId/.test(statement)) return true;
+    }
+  }
+
+  return false;
+}
+
 const problems = [];
 
 for (const file of walk(API_SRC)) {
@@ -135,6 +240,28 @@ for (const file of walk(API_SRC)) {
       .slice(Math.max(0, lineNo - 1 - ALLOW_LOOKBACK), lineNo)
       .some((candidate) => candidate.includes(ALLOW));
     if (exempt) continue;
+
+    // Ownership already PROVEN earlier in the same function.
+    //
+    // The overwhelmingly common safe shape is a load that checks the tenant
+    // followed by writes against the row it just proved:
+    //
+    //   const task = await this.prisma.task.findFirst({ where: { id, tenantId } });
+    //   if (!task) throw new NotFoundException(...);
+    //   await tx.task.update({ where: { id }, ... });
+    //
+    // The second call carries no tenantId and does not need one -- the id was
+    // established as this tenant's a few lines above, in code the same request
+    // ran. Demanding a hand-written "tenant-scope-ok:" on each of those would
+    // produce dozens of comments asserting something a machine can check, and a
+    // comment nobody re-verifies is worth less than no comment at all.
+    //
+    // So this looks for the proof rather than for a promise, and stays
+    // deliberately narrow about what counts as one: SAME function, SAME model,
+    // EARLIER in the source, a where clause naming BOTH tenantId and this exact
+    // id expression. A different id, a different model, or a check that happens
+    // afterwards proves nothing and is still reported.
+    if (isOwnershipProvenAbove(source, match.index, model, where)) continue;
 
     problems.push({
       rel,

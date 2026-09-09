@@ -346,6 +346,8 @@ export class FinanceService {
         workOrderId,
       );
 
+      // tenant-scope-ok: `invoice` was created with this tenantId earlier in
+      // this same transaction.
       const stored = await tx.invoice.findUniqueOrThrow({
         where: { id: invoice.id },
         select: { invoiceNumber: true, issuedAt: true },
@@ -526,7 +528,7 @@ export class FinanceService {
       throw error;
     }
 
-    await this.refreshCachedTotals(invoiceId);
+    await this.refreshCachedTotals(invoiceId, tenantId);
     const after = await this.settlement(invoiceId);
 
     // A settled invoice is what turns PAYMENT_PENDING into a car somebody
@@ -540,7 +542,7 @@ export class FinanceService {
     // the money is recorded either way, and a lifecycle refusal must
     // never roll back a payment the customer actually made.
     if (after.settled && workOrderId) {
-      await this.moveIfPossible(workOrderId, "SETTLE_PAYMENT", actor);
+      await this.moveIfPossible(workOrderId, tenantId, "SETTLE_PAYMENT", actor);
     }
 
     return after;
@@ -555,9 +557,14 @@ export class FinanceService {
    * past this point, simply does not move. The payment stands regardless,
    * which is why this can never throw into the caller.
    */
-  private async moveIfPossible(workOrderId: string, intent: "SETTLE_PAYMENT", actor: LifecycleActor): Promise<void> {
+  private async moveIfPossible(
+    workOrderId: string,
+    tenantId: string,
+    intent: "SETTLE_PAYMENT",
+    actor: LifecycleActor,
+  ): Promise<void> {
     try {
-      await this.lifecycle.apply(workOrderId, intent, actor);
+      await this.lifecycle.apply(workOrderId, tenantId, intent, actor);
     } catch {
       // Not available from the work order's current state; the payment
       // record stands on its own.
@@ -780,7 +787,7 @@ export class FinanceService {
       return issued;
     });
 
-    await this.refreshCachedTotals(refund.invoiceId);
+    await this.refreshCachedTotals(refund.invoiceId, tenantId);
 
     return { id: refundRequestId, creditNoteNumber: creditNote.creditNoteNumber };
   }
@@ -1095,6 +1102,8 @@ export class FinanceService {
           const recomputed = invoiceTotal([
             { unitPrice: existing.unitPrice.toFixed(2), quantity: item.quantity, labour: existing.laborPrice.toFixed(2) },
           ]);
+          // tenant-scope-ok: `existing` came from `already`, read by
+          // `running.id` -- a running invoice upserted with this tenantId above.
           await tx.runningInvoiceLine.update({
             where: { id: existing.id },
             data: { quantity: item.quantity, total: recomputed.total },
@@ -1116,11 +1125,11 @@ export class FinanceService {
     });
   }
 
-  private async refreshCachedTotals(invoiceId: string): Promise<void> {
+  private async refreshCachedTotals(invoiceId: string, tenantId: string): Promise<void> {
     const current = await this.settlement(invoiceId);
 
-    await this.prisma.invoice.update({
-      where: { id: invoiceId },
+    await this.prisma.invoice.updateMany({
+      where: { id: invoiceId, tenantId },
       data: {
         paid: current.paid,
         balance: current.outstanding,
@@ -1202,7 +1211,7 @@ export class FinanceService {
     targetType: string = "Invoice",
   ): Promise<void> {
     const customerId = workOrderId
-      ? (await tx.workOrder.findUnique({ where: { id: workOrderId }, select: { customerId: true } }))?.customerId
+      ? (await tx.workOrder.findFirst({ where: { id: workOrderId, tenantId }, select: { customerId: true } }))?.customerId
       : null;
 
     await this.events.emit(

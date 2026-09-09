@@ -86,12 +86,18 @@ export class SpecializationService {
    * meaning what they meant when they were filled, per this phase's own
    * open question about versioning.
    */
-  async reviseFields(definitionId: string, fields: readonly FieldSpec[]): Promise<DefinitionSummary> {
+  async reviseFields(
+    definitionId: string,
+    tenantId: string,
+    fields: readonly FieldSpec[],
+  ): Promise<DefinitionSummary> {
     this.validateFieldSpecs(fields);
 
-    const current = await this.prisma.specializationDefinition.findUnique({ where: { id: definitionId } });
+    const current = await this.prisma.specializationDefinition.findFirst({ where: { id: definitionId, tenantId } });
     if (!current) throw new NotFoundException({ code: "definition_not_found", message: "That definition does not exist." });
 
+    // tenant-scope-ok: `current` was loaded with this tenantId immediately
+    // above, so the row this updates is proven to be theirs.
     const updated = await this.prisma.specializationDefinition.update({
       where: { id: definitionId },
       data: { version: current.version + 1, fields: fields as unknown as object },

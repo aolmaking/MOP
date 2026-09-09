@@ -23,7 +23,7 @@ process.env.DATABASE_URL ??=
 
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import { NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { AuditService } from "../../audit/audit.service";
 import { SpecializationService } from "../../systems/people/specialization/specialization.service";

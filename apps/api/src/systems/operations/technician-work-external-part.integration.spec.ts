@@ -52,11 +52,11 @@ describe("W3-A3-010 external-part billing", () => {
       },
       select: { id: true, tenantId: true },
     });
-    const line = await work.addExternalPartLine(workOrder.id, { name: "Customer Brake Pad", provenance: "CUSTOMER_SUPPLIED", quantity: 2 }, { accountId: "test", displayName: "Test", actorType: "TENANT_STAFF" });
+    const line = await work.addExternalPartLine(workOrder.id, workOrder.tenantId, { name: "Customer Brake Pad", provenance: "CUSTOMER_SUPPLIED", quantity: 2 }, { accountId: "test", displayName: "Test", actorType: "TENANT_STAFF" });
     expect(line.sellingPrice.toString()).toBe("0");
     expect(line.workshopWarranted).toBe(false);
     expect(line.partRequestId).toBeNull();
-    const gate = await gates.evaluate(workOrder.id, ["parts.external_resolved"], {}, "FINISH");
+    const gate = await gates.evaluate(workOrder.id, workOrder.tenantId, ["parts.external_resolved"], {}, "FINISH");
     expect(gate.passed).toBe(true);
     await prisma.workOrderPartLine.deleteMany({ where: { workOrderId: workOrder.id } });
     await prisma.workOrder.delete({ where: { id: workOrder.id } });

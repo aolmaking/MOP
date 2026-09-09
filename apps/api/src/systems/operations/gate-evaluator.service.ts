@@ -37,12 +37,13 @@ export class GateEvaluatorService {
 
   async evaluate(
     workOrderId: string,
+    tenantId: string,
     gates: readonly GateKey[],
     capabilities: CapabilityProfile,
     checkpoint: GateCheckpoint,
   ): Promise<GateResult> {
     const live = gates.filter((gate) => this.isLive(gate, capabilities));
-    const suppressed = await this.suppressedByPolicy(workOrderId, live);
+    const suppressed = await this.suppressedByPolicy(workOrderId, tenantId, live);
 
     const evaluations: GateEvaluation[] = [];
     for (const gate of live) {
@@ -53,7 +54,7 @@ export class GateEvaluatorService {
       // which reads as a bug to the person holding the tablet.
       if (suppressed.has(gate)) continue;
 
-      const satisfied = await this.check(gate, workOrderId);
+      const satisfied = await this.check(gate, workOrderId, tenantId);
       evaluations.push(
         satisfied ? { gate, satisfied: true } : { gate, satisfied: false, blockedMessage: messageFor(gate) },
       );
@@ -74,17 +75,21 @@ export class GateEvaluatorService {
    *
    * One query, not one per gate: this runs on every finish attempt.
    */
-  private async suppressedByPolicy(workOrderId: string, live: readonly GateKey[]): Promise<ReadonlySet<GateKey>> {
+  private async suppressedByPolicy(
+    workOrderId: string,
+    tenantId: string,
+    live: readonly GateKey[],
+  ): Promise<ReadonlySet<GateKey>> {
     const suppressed = new Set<GateKey>();
     if (!live.includes("parts.received_used_or_returned")) return suppressed;
 
-    const workOrder = await this.prisma.workOrder.findUnique({
-      where: { id: workOrderId },
-      select: { tenantId: true },
+    const workOrder = await this.prisma.workOrder.findFirst({
+      where: { id: workOrderId, tenantId },
+      select: { id: true },
     });
     if (!workOrder) return suppressed;
 
-    const rule = await this.policies.resolveValue(workOrder.tenantId, "RETURN_UNUSED_BEFORE_FINISH");
+    const rule = await this.policies.resolveValue(tenantId, "RETURN_UNUSED_BEFORE_FINISH");
     // WARN_ONLY and NOT_REQUIRED both stop the gate blocking. They differ
     // in what the workshop does about it afterwards -- reconciliation is
     // Inventory's job, not the finish gate's -- and neither difference
@@ -111,7 +116,7 @@ export class GateEvaluatorService {
    * because the system that answers it does not exist, it must be added
    * here explicitly when that system is built -- never defaulted to true.
    */
-  private async check(gate: GateKey, workOrderId: string): Promise<boolean> {
+  private async check(gate: GateKey, workOrderId: string, tenantId: string): Promise<boolean> {
     switch (gate) {
       case "inspection_completed": {
         // Satisfied by a COMPLETED inspection, OR by the work order never
@@ -119,7 +124,7 @@ export class GateEvaluatorService {
         // and asks for a single named service must not be blocked by a
         // step they refused (SCENARIOS.md 1.2).
         const [workOrder, firstStart] = await Promise.all([
-          this.prisma.workOrder.findUnique({ where: { id: workOrderId }, select: { inspectionDeclined: true } }),
+          this.prisma.workOrder.findFirst({ where: { id: workOrderId, tenantId }, select: { inspectionDeclined: true } }),
           // The earliest moment any repair actually began on this job.
           this.prisma.task.findFirst({
             where: { workOrderId, startedAt: { not: null } },

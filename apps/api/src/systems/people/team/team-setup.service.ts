@@ -191,6 +191,8 @@ export class TeamSetupService {
   ): Promise<TeamView> {
     await this.requireTeamInScope(tenantId, branchScope, teamId);
 
+    // tenant-scope-ok: `requireTeamInScope` above loaded this team by
+    // tenantId and branch scope, and throws when it is not theirs.
     await this.prisma.team.update({
       where: { id: teamId },
       data: { specializations },
@@ -217,6 +219,8 @@ export class TeamSetupService {
 
     if (team.teamLeaderId === teamLeaderId) return this.oneTeam(tenantId, branchScope, teamId);
 
+    // tenant-scope-ok: `requireTeamInScope` above loaded this team by
+    // tenantId and branch scope, and throws when it is not theirs.
     await this.prisma.team.update({ where: { id: teamId }, data: { teamLeaderId } });
 
     await this.record(tenantId, actor, {
