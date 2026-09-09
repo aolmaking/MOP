@@ -61,6 +61,19 @@ const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: "workorders.branch.reassign_technician", module: "OPERATIONS" },
   { key: "workorders.branch.manage_blockers", module: "OPERATIONS" },
   { key: "workorders.branch.release_delivery", module: "OPERATIONS" },
+  // The operator's review of a submitted inspection: editing the quote the
+  // customer will be shown, and dispatching the approved work to the floor.
+  //
+  // This existed only as a hardcoded role allow-list in OperatorController --
+  // `new Set(["OPERATOR", "BRANCH_MANAGER", "TENANT_OWNER", "TENANT_ADMIN"])` --
+  // which put it above the resolver's eleven layers instead of inside them. A
+  // workshop could not delegate it to anyone else, could not revoke it from the
+  // roles named, and the two owner roles held a write power that
+  // default-role-permissions.ts explicitly withholds from them ("actually
+  // working a Work Order is Branch Manager/Technician territory"). It also could
+  // not be switched off with the OPERATIONS module, since a Set in a controller
+  // knows nothing about capabilities.
+  { key: "workorders.branch.dispatch_repair", module: "OPERATIONS" },
   // Advancing a finished job. Two separate keys because they are two
   // separate jobs: team review is a supervisor reading a technician's
   // work, QC is the workshop's own last look before a customer sees it.
@@ -113,6 +126,17 @@ const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: "finance.running_invoice.add_line", module: "FINANCE" },
   { key: "finance.invoice.view", module: "FINANCE" },
   { key: "finance.invoice.issue", module: "FINANCE" },
+  // Selling parts over the counter, which is a different act from invoicing a
+  // repair and so a different key.
+  //
+  // `finance.invoice.issue` guards the money on a job the workshop has worked
+  // on -- tenant-owner.md's Pricing page keeps that with the owner unless it is
+  // delegated, and the branch manager is denied it by default. A counter sale
+  // is retail: the customer buys a part and pays, no vehicle work exists, and
+  // reception doing it is the entire reason the OPERATOR role has a till. Both
+  // used to be ungated, so nothing distinguished them; gating them on the same
+  // key would have taken the till away from the role that mans it.
+  { key: "finance.counter_sale.create", module: "FINANCE" },
   { key: "finance.payment.record", module: "FINANCE" },
   { key: "finance.refund.request", module: "FINANCE" },
   // Deliberately a separate key from .request -- requesting and deciding

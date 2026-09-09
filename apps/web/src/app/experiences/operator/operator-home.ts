@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ButtonDirective } from '../../ui/button/button.directive';
 import { AuthStore } from '../../identity/auth.store';
+import { AccessApi } from '../../identity/access.api';
 import { WorkshopBrandingService } from '../../ui/workshop-branding.service';
 import { AnimatedPartIconComponent } from '../../shared/components/animated-part/animated-part-icon.component';
 import { CAR_SUBSYSTEMS, type CarSubsystemConfig } from '../../shared/components/car-3d/car-subsystems';
@@ -42,6 +43,7 @@ export const PRESET_SERVICES: ReadonlyArray<{ name: string; labor: number }> = [
 })
 export class OperatorHome {
   private readonly api = inject(OperatorApi);
+  private readonly access = inject(AccessApi);
   private readonly authStore = inject(AuthStore);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
@@ -96,6 +98,18 @@ export class OperatorHome {
   protected readonly isSavingQuote = signal<boolean>(false);
   protected readonly isDispatchingRepair = signal<boolean>(false);
 
+  /**
+   * Whether this person may edit a quote and dispatch the repair.
+   *
+   * The two buttons used to be unconditional, because the server gated them on
+   * a hardcoded list of role names in the controller and there was nothing for
+   * the page to ask about. They are a real permission now
+   * (workorders.branch.dispatch_repair), so a workshop that has not delegated
+   * it to this person gets a read-only report rather than two buttons that
+   * answer 403.
+   */
+  protected readonly canDispatchRepair = signal<boolean>(false);
+
   // Editable quote state
   protected readonly editableFindings = signal<OperatorInspectionFinding[]>([]);
   protected readonly editableParts = signal<OperatorInspectionPart[]>([]);
@@ -146,6 +160,10 @@ export class OperatorHome {
   );
 
   constructor() {
+    this.access
+      .can('workorders.branch.dispatch_repair')
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((allowed) => this.canDispatchRepair.set(allowed));
     this.loadOverview();
     this.loadInspectionReports();
   }

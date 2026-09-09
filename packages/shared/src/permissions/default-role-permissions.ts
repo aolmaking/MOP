@@ -80,6 +80,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "workorders.branch.reassign_technician": true,
     "workorders.branch.manage_blockers": true,
     "workorders.branch.release_delivery": true,
+    // The branch manager reviews and dispatches inspection reports on the
+    // operator surface too -- a small branch has no separate operator.
+    "workorders.branch.dispatch_repair": true,
+    "finance.counter_sale.create": true,
     // A branch manager runs QC by default. Team review belongs to the
     // team leader below, but a branch small enough to have no team
     // leader still needs somebody able to pass it, so the manager holds
@@ -182,6 +186,14 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Partial<Record<StaffRole, Partia
     "analytics.export": true,
   },
   OPERATOR: {
+    // The operator's core act: reviewing a technician's report, adjusting the
+    // quote, and dispatching the approved work. Held by default because it is
+    // the whole reason the role exists -- but held as a revocable permission
+    // now, not as a role name compiled into a controller.
+    "workorders.branch.dispatch_repair": true,
+    // The till. See permission-manifest.ts on why this is not
+    // finance.invoice.issue.
+    "finance.counter_sale.create": true,
     "customer.intake.create": true,
     "workorders.branch.view": true,
     "decisions.branch.view": true,

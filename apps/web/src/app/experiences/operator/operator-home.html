@@ -1051,24 +1051,26 @@
                 <button type="button" class="btn-banner-cancel" (click)="closeReportModal()">
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  class="btn-banner-save"
-                  (click)="saveQuote()"
-                  [disabled]="isSavingQuote() || isDispatchingRepair()"
-                >
-                  {{ isSavingQuote() ? 'Saving…' : '💾 Save Draft' }}
-                </button>
-                <button
-                  type="button"
-                  class="btn-banner-send-done"
-                  (click)="dispatchToRepair()"
-                  [disabled]="isSavingQuote() || isDispatchingRepair() || approvedFindingsCount() === 0"
-                  id="btn-approve-done-action"
-                >
-                  <span class="btn-plane-glyph">✓</span>
-                  <span>{{ isDispatchingRepair() ? 'Approving & Dispatching…' : '✓ Approve Selected & Dispatch Repair' }}</span>
-                </button>
+                @if (canDispatchRepair()) {
+                  <button
+                    type="button"
+                    class="btn-banner-save"
+                    (click)="saveQuote()"
+                    [disabled]="isSavingQuote() || isDispatchingRepair()"
+                  >
+                    {{ isSavingQuote() ? 'Saving…' : '💾 Save Draft' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-banner-send-done"
+                    (click)="dispatchToRepair()"
+                    [disabled]="isSavingQuote() || isDispatchingRepair() || approvedFindingsCount() === 0"
+                    id="btn-approve-done-action"
+                  >
+                    <span class="btn-plane-glyph">✓</span>
+                    <span>{{ isDispatchingRepair() ? 'Approving & Dispatching…' : '✓ Approve Selected & Dispatch Repair' }}</span>
+                  </button>
+                }
               </div>
             </div>
           </div>
