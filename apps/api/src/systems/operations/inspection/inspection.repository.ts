@@ -155,9 +155,28 @@ export class InspectionRepository {
           ? `${def ? def.label : finding.findingKey} — ${finding.technicianObservation}`
           : def ? def.label : finding.findingKey;
 
+        // A critical finding is stored as CRITICAL.
+        //
+        // This used to map CRITICAL onto HIGH, which meant nothing in the
+        // shipped inspection flow could ever write `SeverityLevel.CRITICAL` --
+        // and three separate mechanisms read exactly that value:
+        //
+        //   work_order.has_critical_fault   the fact QC_MANDATORY's
+        //                                   RISK_FLAGGED_ONLY option routes on
+        //   evaluateCriticalFaultProgression  APPROVAL_REQUIRED_SCOPE's
+        //                                   CRITICAL_ONLY option
+        //   the attention queue's critical rejections
+        //
+        // So a workshop could configure risk-based QC or critical-only customer
+        // approval, and the option could never fire on a single job. The
+        // operator hub even mapped HIGH back to "CRITICAL" for display, so the
+        // screen and the database disagreed about the same brake finding.
+        //
+        // HIGH stays reachable through `TechnicianWorkService.createFault`,
+        // which takes the full four-value scale directly.
         const prismaSeverity =
           finding.severity === "CRITICAL"
-            ? "HIGH"
+            ? "CRITICAL"
             : finding.severity === "ATTENTION"
               ? "MEDIUM"
               : "LOW";

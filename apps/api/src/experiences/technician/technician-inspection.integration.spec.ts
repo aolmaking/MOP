@@ -367,7 +367,11 @@ describe("TechnicianInspectionService (Phase C Workshop Real-Time Integration)",
       // Verify Fault was projected into Prisma model Fault
       expect(storedFaults.length).toBe(1);
       expect(storedFaults[0].code).toBe("CAR_PAD_THICKNESS_CRITICAL");
-      expect(storedFaults[0].severity).toBe("HIGH"); // Prisma SeverityLevel.HIGH represents CRITICAL
+      // A CRITICAL finding is stored as CRITICAL. This asserted HIGH while the
+      // repository downgraded it, which is precisely what made
+      // `work_order.has_critical_fault` -- and every policy option routing on it
+      // -- unreachable from the shipped inspection flow.
+      expect(storedFaults[0].severity).toBe("CRITICAL");
       expect(storedFaults[0].workOrderId).toBe("wo-test-1");
 
       // Calling submit again or mutating after submit should be rejected (INV-6)

@@ -90,7 +90,7 @@ describe("InspectionRepository", () => {
           workOrderId: "wo-2",
           inspectionId: "insp-2",
           code: "CAR_PAD_THICKNESS_CRITICAL",
-          severity: "HIGH",
+          severity: "CRITICAL",
           customerApprovalRequired: true,
         }),
       }),
