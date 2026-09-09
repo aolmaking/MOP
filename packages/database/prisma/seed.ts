@@ -87,7 +87,7 @@ interface TenantSpec {
   ownerEmail: string;
   ownerName: string;
   /** Mirrors a capability profile in @mop/shared until Phase 3 stores capabilities properly. */
-  enabledModules: string[];
+  planModules: string[];
   branches: Array<{ name: string; code: string }>;
   warehouses: Array<{ name: string; code: string }>;
 }
@@ -110,7 +110,7 @@ const TENANTS: readonly TenantSpec[] = [
     timezone: "Africa/Cairo",
     ownerEmail: "owner@apex-motors.local",
     ownerName: "Apex Owner",
-    enabledModules: [
+    planModules: [
       "ORGANIZATION",
       "OPERATIONS",
       "INVENTORY",
@@ -148,7 +148,7 @@ const TENANTS: readonly TenantSpec[] = [
     ownerName: "Delta Owner",
     // No INVENTORY, no TEAM_MANAGEMENT -- this is the shape that strands
     // work orders if the Finish Gate is not capability-aware.
-    enabledModules: ["ORGANIZATION", "OPERATIONS", "FINANCE", "REPORTS", "AUDIT", "CUSTOMER_PORTAL"],
+    planModules: ["ORGANIZATION", "OPERATIONS", "FINANCE", "REPORTS", "AUDIT", "CUSTOMER_PORTAL"],
     // Rule 1 of the capability model: a single-branch workshop still has
     // exactly one Branch row. "No branches" is never modelled as null.
     branches: [{ name: "Main Bay", code: "MAIN" }],
@@ -167,7 +167,7 @@ async function main() {
     console.log(`  ${spec.name}`);
     console.log(`                  tenant ${tenant.id} (slug "${tenant.slug}", ${tenant.currency}/${tenant.timezone})`);
     console.log(`                  owner  ${spec.ownerEmail} / ${OWNER_PASSWORD} (account ${ownerAccount.id})`);
-    console.log(`                  modules ${spec.enabledModules.join(", ")}`);
+    console.log(`                  modules ${spec.planModules.join(", ")}`);
     console.log(`                  ${spec.branches.length} branch(es), ${spec.warehouses.length} warehouse(s)\n`);
   }
 
@@ -202,7 +202,7 @@ async function findOrCreatePlan(spec: TenantSpec) {
       maxUsers: spec.maxUsers,
       maxWarehouses: spec.maxWarehouses,
       allowedCategories: [spec.primaryCategory],
-      allowedModules: spec.enabledModules,
+      allowedModules: spec.planModules,
       allowedFeatures: [],
       allowedReports: [],
       // Mirrors apps/api/src/insights/analytics/saved-views.constants.ts's
@@ -210,7 +210,7 @@ async function findOrCreatePlan(spec: TenantSpec) {
       // seeded plan that has Reports at all, so the demo Data Analyst
       // account can actually exercise the export endpoint, not just view
       // it locked.
-      allowedExports: spec.enabledModules.includes("REPORTS")
+      allowedExports: spec.planModules.includes("REPORTS")
         ? ["OPERATIONS", "PEOPLE", "INVENTORY", "DECISIONS", "FEATURE_ADOPTION"]
         : [],
       monthlyPrice: 0,
@@ -256,11 +256,7 @@ async function ensureConfiguration(tenantId: string, spec: TenantSpec) {
     data: {
       tenantId,
       theme: empty,
-      pageLayouts: empty,
       roleExperience: empty,
-      workflowPolicy: empty,
-      featureFlags: empty,
-      enabledModules: spec.enabledModules,
       enabledFeatures: [],
       forms: empty,
       messageTemplates: empty,

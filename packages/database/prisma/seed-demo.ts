@@ -313,7 +313,12 @@ async function ensureManager(tenantId: string) {
   // direction: MANAGER_PERMISSIONS carries deliberate demo-only
   // overrides on top of a `false` default. Hence a merge.
   const managerDefaults = DEFAULT_ROLE_PERMISSIONS.BRANCH_MANAGER ?? {};
-  const managerGrants = new Map<string, boolean>(Object.entries(managerDefaults));
+  // `Object.entries` widens the template to `boolean | undefined`; a key that
+  // is present is present, so an undefined value here would be a defect in the
+  // manifest rather than a grant to guess at.
+  const managerGrants = new Map<string, boolean>(
+    Object.entries(managerDefaults).map(([key, allowed]) => [key, allowed === true]),
+  );
   for (const permissionKey of MANAGER_PERMISSIONS) managerGrants.set(permissionKey, true);
 
   for (const [permissionKey, allowed] of managerGrants) {
