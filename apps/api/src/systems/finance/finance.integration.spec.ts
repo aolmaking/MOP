@@ -128,6 +128,18 @@ async function makeShop(name: string, overrides: Record<string, string> = {}): P
   return { tenantId: tenant.id, branchId: branch.id, customerId: customer.id, assetId: asset.id };
 }
 
+/**
+ * Tax is the workshop's own setting, so every test that cares about it has to
+ * say what this workshop charges rather than passing a rate to the call.
+ */
+async function setTax(config: { taxRatePercent: string; taxInclusive: boolean; invoiceNumberPrefix?: string }) {
+  await prisma.financeConfiguration.upsert({
+    where: { tenantId: paid.tenantId },
+    create: { tenantId: paid.tenantId, ...config },
+    update: config,
+  });
+}
+
 async function makeJob(shop: Shop): Promise<string> {
   const workOrder = await prisma.workOrder.create({
     data: {
@@ -161,6 +173,20 @@ beforeAll(async () => {
   paid = await makeShop("Paid");
   free = await makeShop("Free", { FINANCE_CORE: "DISABLED" });
 }, 240_000);
+
+/**
+ * Every test here shares one workshop, and tax is now a property OF that
+ * workshop rather than an argument to the call -- so a test that configures a
+ * rate would otherwise change the totals of every test after it. Reset rather
+ * than create: one test deliberately runs with no configuration row at all.
+ */
+afterEach(async () => {
+  if (!paid) return;
+  await prisma.financeConfiguration.updateMany({
+    where: { tenantId: paid.tenantId },
+    data: { taxRatePercent: "0", taxInclusive: true, invoiceNumberPrefix: "INV" },
+  });
+});
 
 afterAll(async () => {
   for (const shop of [paid, free]) {
@@ -236,7 +262,8 @@ describe("issuing an invoice", () => {
       );
     }
 
-    const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR, { taxPercent: 14 });
+    await setTax({ taxRatePercent: "14", taxInclusive: false });
+    const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR);
     const lines = await prisma.invoiceLine.findMany({
       where: { invoice: { workOrderId: job } },
       select: { total: true },
@@ -1421,5 +1448,177 @@ describe("approved customer decisions are billed at the agreed price", () => {
 
     const total = await finance.jobTotal(paid.tenantId, job);
     expect(total.total).toBe("1200.00");
+  });
+});
+
+/**
+ * REC-022: `taxRatePercent`, `taxInclusive` and `invoiceNumberPrefix` were
+ * settable on the finance page and read by nothing, so a workshop that
+ * configured 14% VAT issued invoices with no tax on them at all.
+ */
+describe("the workshop's own finance settings reach the invoice", () => {
+  async function jobWithLine(unitPrice = "100.00"): Promise<string> {
+    const job = await makeJob(paid);
+    await finance.addLine(
+      { tenantId: paid.tenantId, workOrderId: job, name: "Service", itemType: "LABOUR", quantity: 1, unitPrice },
+      ACTOR,
+    );
+    return job;
+  }
+
+  it("charges the configured rate on top when the workshop prices tax-exclusive", async () => {
+    await setTax({ taxRatePercent: "14", taxInclusive: false });
+    const job = await jobWithLine();
+
+    const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR);
+
+    expect(settlement.total).toBe("114.00");
+  });
+
+  it("takes the tax out of the price when the workshop prices tax-inclusive", async () => {
+    // The same 100.00 line. The customer pays 100.00 either way here -- what
+    // changes is whether the workshop keeps all of it.
+    await setTax({ taxRatePercent: "14", taxInclusive: true });
+    const job = await jobWithLine();
+
+    const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR);
+    const invoice = await prisma.invoice.findFirstOrThrow({ where: { workOrderId: job } });
+
+    expect(settlement.total).toBe("100.00");
+    expect(invoice.tax.toFixed(2)).toBe("12.28");
+  });
+
+  it("charges no tax for a workshop that has configured none", async () => {
+    await setTax({ taxRatePercent: "0", taxInclusive: true });
+    const job = await jobWithLine();
+
+    const settlement = await finance.issueInvoice(paid.tenantId, job, ACTOR);
+    const invoice = await prisma.invoice.findFirstOrThrow({ where: { workOrderId: job } });
+
+    expect(settlement.total).toBe("100.00");
+    expect(invoice.tax.toFixed(2)).toBe("0.00");
+  });
+
+  it("numbers the invoice with the workshop's own prefix", async () => {
+    await setTax({ taxRatePercent: "0", taxInclusive: true, invoiceNumberPrefix: "WSH" });
+    const job = await jobWithLine();
+
+    await finance.issueInvoice(paid.tenantId, job, ACTOR);
+    const invoice = await prisma.invoice.findFirstOrThrow({ where: { workOrderId: job } });
+
+    expect(invoice.invoiceNumber.startsWith("WSH-")).toBe(true);
+  });
+});
+
+/**
+ * REC-022 continued: `maxBranchDiscountPercent` and `invoiceTerms` were the
+ * last two settable-but-unread finance fields with a defined meaning.
+ */
+describe("branch authority over discounts, and the terms an invoice carries", () => {
+  const BRANCH_MANAGER = {
+    accountId: `bm-${SUFFIX}`,
+    displayName: "Branch Manager",
+    actorType: "TENANT_STAFF" as const,
+  };
+
+  async function jobWorth(unitPrice: string): Promise<string> {
+    const job = await makeJob(paid);
+    await finance.addLine(
+      { tenantId: paid.tenantId, workOrderId: job, name: "Service", itemType: "LABOUR", quantity: 1, unitPrice },
+      ACTOR,
+    );
+    return job;
+  }
+
+  beforeAll(async () => {
+    const account = await prisma.account.create({
+      data: {
+        id: BRANCH_MANAGER.accountId,
+        accountType: "TENANT_STAFF",
+        tenantId: paid.tenantId,
+        email: `bm-${SUFFIX}@example.com`,
+        status: "ACTIVE",
+      },
+    });
+    await prisma.staffUser.create({
+      data: { tenantId: paid.tenantId, accountId: account.id, fullName: "Branch Manager", role: "BRANCH_MANAGER" },
+    });
+  });
+
+  it("refuses a branch manager an approval above the branch ceiling", async () => {
+    await prisma.financeConfiguration.upsert({
+      where: { tenantId: paid.tenantId },
+      create: { tenantId: paid.tenantId, maxBranchDiscountPercent: "10" },
+      update: { maxBranchDiscountPercent: "10" },
+    });
+    const job = await jobWorth("100.00");
+    const request = await finance.requestDiscount(paid.tenantId, job, "25.00", "Regular customer", ACTOR);
+
+    // 25.00 on a 100.00 job is 25%, over the branch's 10%.
+    await expect(finance.approveDiscount(request.id, paid.tenantId, BRANCH_MANAGER)).rejects.toMatchObject({
+      response: { code: "discount_above_branch_authority" },
+    });
+  });
+
+  it("lets the same branch manager approve within the ceiling", async () => {
+    await prisma.financeConfiguration.upsert({
+      where: { tenantId: paid.tenantId },
+      create: { tenantId: paid.tenantId, maxBranchDiscountPercent: "10" },
+      update: { maxBranchDiscountPercent: "10" },
+    });
+    const job = await jobWorth("100.00");
+    const request = await finance.requestDiscount(paid.tenantId, job, "10.00", "Regular customer", ACTOR);
+
+    await expect(finance.approveDiscount(request.id, paid.tenantId, BRANCH_MANAGER)).resolves.toMatchObject({
+      status: "APPROVED",
+    });
+  });
+
+  it("does not limit anyone who is not a branch manager", async () => {
+    await prisma.financeConfiguration.upsert({
+      where: { tenantId: paid.tenantId },
+      create: { tenantId: paid.tenantId, maxBranchDiscountPercent: "10" },
+      update: { maxBranchDiscountPercent: "10" },
+    });
+    const job = await jobWorth("100.00");
+    const request = await finance.requestDiscount(paid.tenantId, job, "40.00", "Owner's call", ACTOR);
+
+    await expect(finance.approveDiscount(request.id, paid.tenantId, ACTOR)).resolves.toMatchObject({
+      status: "APPROVED",
+    });
+  });
+
+  it("snapshots the workshop's payment terms onto the billing document", async () => {
+    await prisma.financeConfiguration.upsert({
+      where: { tenantId: paid.tenantId },
+      create: { tenantId: paid.tenantId, invoiceTerms: "Payable within 14 days." },
+      update: { invoiceTerms: "Payable within 14 days." },
+    });
+    const job = await jobWorth("100.00");
+
+    await finance.issueInvoice(paid.tenantId, job, ACTOR);
+    const invoice = await prisma.invoice.findFirstOrThrow({ where: { workOrderId: job } });
+    const document = await prisma.billingDocument.findUnique({ where: { invoiceId: invoice.id } });
+
+    expect((document?.snapshot as { terms?: string })?.terms).toBe("Payable within 14 days.");
+  });
+
+  it("accounts for the tax it charges in the document's own breakdown", async () => {
+    await prisma.financeConfiguration.upsert({
+      where: { tenantId: paid.tenantId },
+      create: { tenantId: paid.tenantId, taxRatePercent: "14", taxInclusive: false },
+      update: { taxRatePercent: "14", taxInclusive: false },
+    });
+    const job = await jobWorth("100.00");
+
+    await finance.issueInvoice(paid.tenantId, job, ACTOR);
+    const invoice = await prisma.invoice.findFirstOrThrow({ where: { workOrderId: job } });
+    const document = await prisma.billingDocument.findUnique({ where: { invoiceId: invoice.id } });
+    const breakdown = (document?.snapshot as { taxBreakdown?: Array<{ ratePercent: string; taxAmount: string }> })
+      ?.taxBreakdown;
+
+    expect(breakdown).toHaveLength(1);
+    expect(breakdown![0].ratePercent).toBe("14.00");
+    expect(breakdown![0].taxAmount).toBe("14.00");
   });
 });

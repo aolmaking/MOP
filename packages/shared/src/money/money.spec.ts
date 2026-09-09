@@ -4,6 +4,7 @@ import {
   compare,
   fromMinor,
   invoiceTotal,
+  taxIncludedIn,
   lineTotal,
   multiply,
   outstanding,
@@ -139,6 +140,31 @@ describe("an invoice adds up to what its lines say", () => {
 
     // total == subtotal - discount + tax, exactly.
     expect(add(subtract(invoice.subtotal, invoice.discount), invoice.tax)).toBe(invoice.total);
+  });
+
+  it("extracts tax from a tax-inclusive price instead of adding it on top", () => {
+    // 114.00 at 14% inclusive is 100.00 + 14.00, not 114.00 + 15.96. In a
+    // tax-inclusive market the shelf price is what the customer pays.
+    const invoice = invoiceTotal([{ unitPrice: "114.00", quantity: 1, taxPercent: 14, taxInclusive: true }]);
+
+    expect(invoice.total).toBe("114.00");
+    expect(invoice.tax).toBe("14.00");
+  });
+
+  it("keeps an inclusive line's own components adding up to what is charged", () => {
+    // The base and the tax must reconstruct the price exactly -- no cent may
+    // fall out of the column the customer adds up themselves.
+    for (const price of ["0.01", "3.33", "99.99", "1800.50"]) {
+      const tax = taxIncludedIn(price, 14);
+      const line = invoiceTotal([{ unitPrice: price, quantity: 1, taxPercent: 14, taxInclusive: true }]);
+      expect(line.total).toBe(price);
+      expect(line.tax).toBe(tax);
+    }
+  });
+
+  it("charges nothing extra when the rate is zero, inclusive or not", () => {
+    expect(invoiceTotal([{ unitPrice: "50.00", quantity: 1, taxPercent: 0, taxInclusive: true }]).tax).toBe(ZERO);
+    expect(invoiceTotal([{ unitPrice: "50.00", quantity: 1, taxPercent: 0 }]).total).toBe("50.00");
   });
 
   it("totals an empty invoice to zero rather than throwing", () => {

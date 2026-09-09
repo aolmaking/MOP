@@ -49,12 +49,6 @@ export class IssueInvoiceDto {
   @Min(0)
   @Max(100)
   discountPercent?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  taxPercent?: number;
 }
 
 export class RecordPaymentDto {

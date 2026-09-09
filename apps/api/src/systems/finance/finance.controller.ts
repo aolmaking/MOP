@@ -51,7 +51,6 @@ export class FinanceController {
     const tenantId = await this.require(session, "finance.invoice.issue");
     return this.finance.issueInvoice(tenantId, id, this.actor(session), {
       discountPercent: dto.discountPercent,
-      taxPercent: dto.taxPercent,
     });
   }
 

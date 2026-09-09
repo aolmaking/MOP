@@ -162,6 +162,14 @@ export interface InvoiceSnapshot {
   readonly taxTotal: string;
   readonly total: string;
   readonly issuedAt: string;
+  /**
+   * The workshop's payment terms, snapshotted onto the document because the
+   * terms in force when an invoice was issued are what that invoice is
+   * subject to -- editing the settings page must not silently restate an
+   * invoice already in a customer's hands. Absent when the workshop has set
+   * none.
+   */
+  readonly terms?: string;
 }
 
 export interface BillingValidationResult {

@@ -8,6 +8,7 @@ import {
   isZero,
   outstanding,
   overpaid,
+  percentage,
   subtract,
   sum,
   type ChargeableItemType,
@@ -238,7 +239,7 @@ export class FinanceService {
     tenantId: string,
     workOrderId: string,
     actor: LifecycleActor,
-    options: { discountPercent?: number; taxPercent?: number } = {},
+    options: { discountPercent?: number } = {},
   ): Promise<Settlement> {
     await this.requireFinance(tenantId);
 
@@ -286,13 +287,21 @@ export class FinanceService {
       this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { country: true, currency: true } }),
     ]);
 
+    // Tax is a fact about where the workshop trades, not a per-invoice
+    // choice, so it comes from the workshop's own finance configuration and
+    // has no caller override. It used to arrive as a request field nothing
+    // sent, which meant every invoice this product has ever issued carried
+    // zero tax however the workshop was configured.
+    const finance = await this.financeSettings(tenantId);
+
     const computed = invoiceTotal(
       running.lines.map((line) => ({
         unitPrice: line.unitPrice.toFixed(2),
         quantity: line.quantity,
         labour: line.laborPrice.toFixed(2),
         discountPercent: options.discountPercent,
-        taxPercent: options.taxPercent,
+        taxPercent: finance.taxRatePercent,
+        taxInclusive: finance.taxInclusive,
       })),
     );
 
@@ -308,7 +317,7 @@ export class FinanceService {
           tenantId,
           branchId: workOrder.branchId,
           workOrderId,
-          invoiceNumber: await this.nextInvoiceNumber(tx, tenantId),
+          invoiceNumber: await this.nextInvoiceNumber(tx, tenantId, finance.invoiceNumberPrefix),
           subtotal: computed.subtotal,
           discount: computed.discount,
           tax: computed.tax,
@@ -368,6 +377,22 @@ export class FinanceService {
         sourceId: invoice.id,
       }));
 
+      // One rate applies to the whole invoice today, because one rate is
+      // what the workshop configures. The breakdown is still a list, because a
+      // jurisdiction with per-item rates is the reason the contract has one --
+      // and it was empty even when tax was charged, which would have rendered
+      // a legal document that showed a tax total it could not account for.
+      const taxBreakdown = isZero(computed.tax)
+        ? []
+        : [
+            {
+              taxCode: "STANDARD",
+              ratePercent: finance.taxRatePercent.toFixed(2),
+              taxableAmount: subtract(computed.total, computed.tax),
+              taxAmount: computed.tax,
+            },
+          ];
+
       const candidate: InvoiceCandidate = {
         tenantId,
         branchId: workOrder.branchId,
@@ -378,7 +403,7 @@ export class FinanceService {
         billingProfile: "DEFAULT",
         invoiceType: "STANDARD",
         lines: candidateLines,
-        taxBreakdown: [],
+        taxBreakdown,
         subtotal: computed.subtotal,
         discountTotal: computed.discount,
         taxTotal: computed.tax,
@@ -395,12 +420,13 @@ export class FinanceService {
         currency: tenant.currency,
         country: tenant.country,
         lines: candidateLines,
-        taxBreakdown: [],
+        taxBreakdown,
         subtotal: computed.subtotal,
         discountTotal: computed.discount,
         taxTotal: computed.tax,
         total: computed.total,
         issuedAt: stored.issuedAt.toISOString(),
+        ...(finance.invoiceTerms ? { terms: finance.invoiceTerms } : {}),
       };
 
       // Same transaction, deliberately -- an invoice must never exist
@@ -857,6 +883,21 @@ export class FinanceService {
     return { id: requestId, status: "PENDING" };
   }
 
+  /**
+   * Approving is where `maxBranchDiscountPercent` earns its place.
+   *
+   * A branch manager runs one branch and answers for its margin; the ceiling
+   * is how the workshop says how far that authority reaches before the owner
+   * has to look. It was settable on the finance page and read by nothing, so
+   * a branch manager could approve any discount at all, which is precisely
+   * the escalation the setting exists to force.
+   *
+   * The ceiling is a percentage and the request is an amount, so it is
+   * measured against what this job is actually worth. A zero ceiling means no
+   * branch-level authority rather than "unlimited": that is the schema
+   * default, and reading it the other way would make the strictest possible
+   * configuration the most permissive.
+   */
   async approveDiscount(discountRequestId: string, tenantId: string, actor: LifecycleActor): Promise<{ id: string; status: "APPROVED" }> {
     const discount = await this.prisma.discountRequest.findFirst({ where: { id: discountRequestId, tenantId } });
     if (!discount) throw new NotFoundException({ code: "discount_not_found", message: "Discount request not found." });
@@ -866,6 +907,10 @@ export class FinanceService {
         message: `This discount request is already ${discount.status.toLowerCase()}.`,
       });
     }
+
+    // After the state check: "already approved" is a more useful answer than
+    // "you may not approve this", and it is true regardless of who is asking.
+    await this.enforceBranchDiscountCeiling(tenantId, discount.workOrderId, discount.amount.toFixed(2), actor);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.discountRequest.update({
@@ -921,6 +966,41 @@ export class FinanceService {
    * above), an approved request can only ever be spent once, with no
    * separate "consumed" flag needed.
    */
+  /**
+   * Refuses an approval a branch manager is not senior enough to give.
+   * Anyone else -- an owner, a finance role -- is unaffected: this is a limit
+   * on branch authority, not a limit on the workshop.
+   */
+  private async enforceBranchDiscountCeiling(
+    tenantId: string,
+    workOrderId: string,
+    amount: Money,
+    actor: LifecycleActor,
+  ): Promise<void> {
+    const approver = await this.prisma.staffUser.findFirst({
+      where: { tenantId, accountId: actor.accountId },
+      select: { role: true },
+    });
+    if (approver?.role !== "BRANCH_MANAGER") return;
+
+    const config = await this.prisma.financeConfiguration.findUnique({
+      where: { tenantId },
+      select: { maxBranchDiscountPercent: true },
+    });
+    // money-lint-ok: a percentage (0-100), not currency.
+    const ceilingPercent = config ? Number(config.maxBranchDiscountPercent) : 0;
+
+    const total = await this.jobTotal(tenantId, workOrderId);
+    const ceiling = percentage(total.total, ceilingPercent);
+
+    if (compare(amount, ceiling) > 0) {
+      throw new ForbiddenException({
+        code: "discount_above_branch_authority",
+        message: `A branch manager may approve up to ${ceiling} on this job. This one needs someone above the branch.`,
+      });
+    }
+  }
+
   private async enforceDiscountAuthority(
     tenantId: string,
     workOrderId: string,
@@ -1158,14 +1238,42 @@ export class FinanceService {
    * method now actually uses has existed in the schema the whole time.
    * See docs/scenarios3/EDGE_CASE_REGISTER.md, H3.
    */
-  private async nextInvoiceNumber(tx: Prisma.TransactionClient, tenantId: string): Promise<string> {
+  /**
+   * The workshop's tax rule and invoice numbering, with the schema's own
+   * defaults when a workshop has never opened the finance settings page.
+   * Those defaults -- no tax, inclusive, "INV" -- are the same ones the
+   * column declares, so an unconfigured workshop behaves exactly as it did.
+   */
+  private async financeSettings(
+    tenantId: string,
+  ): Promise<{
+    taxRatePercent: number;
+    taxInclusive: boolean;
+    invoiceNumberPrefix: string;
+    invoiceTerms: string | null;
+  }> {
+    const config = await this.prisma.financeConfiguration.findUnique({
+      where: { tenantId },
+      select: { taxRatePercent: true, taxInclusive: true, invoiceNumberPrefix: true, invoiceTerms: true },
+    });
+    return {
+      // money-lint-ok: a tax rate (0-100), not currency. The money module
+      // takes the percentage as a number and resolves the fraction itself.
+      taxRatePercent: config ? Number(config.taxRatePercent) : 0,
+      taxInclusive: config?.taxInclusive ?? true,
+      invoiceNumberPrefix: config?.invoiceNumberPrefix ?? "INV",
+      invoiceTerms: config?.invoiceTerms ?? null,
+    };
+  }
+
+  private async nextInvoiceNumber(tx: Prisma.TransactionClient, tenantId: string, prefix: string): Promise<string> {
     const [row] = await tx.$queryRaw<{ lastNumber: number }[]>(Prisma.sql`
       INSERT INTO "invoice_sequences" ("tenantId", "lastNumber")
       VALUES (${tenantId}, 1)
       ON CONFLICT ("tenantId") DO UPDATE SET "lastNumber" = "invoice_sequences"."lastNumber" + 1
       RETURNING "lastNumber"
     `);
-    return `INV-${String(row.lastNumber).padStart(6, "0")}`;
+    return `${prefix}-${String(row.lastNumber).padStart(6, "0")}`;
   }
 
   /**

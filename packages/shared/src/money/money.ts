@@ -126,6 +126,24 @@ export function multiply(value: Money, quantity: number): Money {
 }
 
 /**
+ * The tax already contained in a tax-inclusive amount.
+ *
+ * `value` is what the customer pays; the taxable base is
+ * `value / (1 + rate)`, and the tax is the remainder. Computed as the
+ * remainder rather than as a percentage of the derived base, so base + tax is
+ * exactly `value` with no cent left over -- the invoice column has to add up.
+ */
+export function taxIncludedIn(value: Money, percent: number): Money {
+  if (!Number.isFinite(percent)) throw new Error(`Percentage must be a finite number, got ${percent}.`);
+  if (percent === 0) return ZERO;
+  const minor = toMinor(value);
+  // money-lint-ok: minor units are integers; the fraction is the rate itself,
+  // resolved to an exact integer by roundHalfUp before it leaves this line.
+  const base = roundHalfUp(minor / (1 + percent / 100));
+  return fromMinor(minor - base);
+}
+
+/**
  * Applies a percentage, rounded half-up to the cent.
  *
  * Percentages are the one place a fraction legitimately enters, so the
@@ -148,6 +166,14 @@ export interface LineInput {
   readonly discountPercent?: number;
   /** Tax rate for this line, applied after the discount. */
   readonly taxPercent?: number;
+  /**
+   * The listed price already contains the tax, so the tax is extracted from
+   * the line rather than added on top. Which of the two a market uses is a
+   * fact about the market, not a preference: in a tax-inclusive country the
+   * shelf price is what the customer pays, and adding tax to it charges them
+   * twice.
+   */
+  readonly taxInclusive?: boolean;
 }
 
 export interface LineTotal {
@@ -174,6 +200,14 @@ export function lineTotal(line: LineInput): LineTotal {
   const gross = add(multiply(line.unitPrice, line.quantity), line.labour ?? ZERO);
   const discount = line.discountPercent ? percentage(gross, line.discountPercent) : ZERO;
   const net = subtract(gross, discount);
+  if (line.taxInclusive) {
+    // The price already contains the tax, so the total IS the net and the tax
+    // is reported out of it. `net` stays what the customer is charged, which
+    // keeps `subtotal - discount + tax` from double-counting.
+    const tax = line.taxPercent ? taxIncludedIn(net, line.taxPercent) : ZERO;
+    return { gross, discount, net, tax, total: net };
+  }
+
   const tax = line.taxPercent ? percentage(net, line.taxPercent) : ZERO;
 
   return { gross, discount, net, tax, total: add(net, tax) };
