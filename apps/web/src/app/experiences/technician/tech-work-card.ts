@@ -231,26 +231,12 @@ export class TechWorkCard {
   protected readonly newFindingDesc = signal<string>('');
   protected readonly newFindingSeverity = signal<'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'>('MEDIUM');
 
-  // POS Parts Catalog & Selection (Real Workshop Stock with Fallback)
-  protected readonly DEFAULT_POS_ITEMS = [
-    { id: 'pos-1', sku: 'BRK-PAD-01', name: 'Ceramic Brake Pads (Front)', category: 'Brakes', unitPrice: 65, stock: 12 },
-    { id: 'pos-2', sku: 'BRK-ROT-02', name: 'Slotted Disc Brake Rotors (Pair)', category: 'Brakes', unitPrice: 140, stock: 6 },
-    { id: 'pos-3', sku: 'BAT-12V-60AH', name: 'AGM Heavy Duty Battery 12V 60Ah', category: 'Battery', unitPrice: 165, stock: 8 },
-    { id: 'pos-4', sku: 'OIL-SYN-5W30', name: 'Full Synthetic Engine Oil 5W-30 (4L)', category: 'Fluids', unitPrice: 48, stock: 25 },
-    { id: 'pos-5', sku: 'FLT-OIL-09', name: 'Spin-on Premium Oil Filter', category: 'Fluids', unitPrice: 15, stock: 30 },
-    { id: 'pos-6', sku: 'FLT-CAB-03', name: 'Activated Carbon Cabin Air Filter', category: 'AC', unitPrice: 22, stock: 14 },
-    { id: 'pos-7', sku: 'FLT-ENG-04', name: 'High-Flow Engine Air Filter', category: 'Engine', unitPrice: 25, stock: 18 },
-    { id: 'pos-8', sku: 'SPK-PLG-IR4', name: 'Iridium Spark Plugs (Set of 4)', category: 'Ignition', unitPrice: 52, stock: 16 },
-    { id: 'pos-9', sku: 'WPR-BLD-22', name: 'All-Weather Wiper Blades 22" (Pair)', category: 'Wipers', unitPrice: 30, stock: 20 },
-    { id: 'pos-10', sku: 'CLN-5050-01', name: 'Long-Life Coolant Premix 50/50 (4L)', category: 'Cooling', unitPrice: 28, stock: 15 },
-    { id: 'pos-11', sku: 'SUS-STR-01', name: 'Front Strut Shock Absorber Assembly', category: 'Suspension', unitPrice: 125, stock: 4 },
-    { id: 'pos-12', sku: 'TIR-205-55-16', name: 'Michelin Primacy 205/55 R16 Tire', category: 'Tires', unitPrice: 110, stock: 8 },
-  ];
-
   protected readonly workshopInventory = signal<
     Array<{ id: string; sku: string; name: string; category: string; unitPrice: number; stock: number }>
   >([]);
   protected readonly isInventoryLoading = signal<boolean>(false);
+  /** Why the stock list is empty, when it is empty because something failed. */
+  protected readonly inventoryError = signal<string | null>(null);
 
   // Two-Tier Context-Aware Smart Suggestions
   protected readonly smartSuggestions = signal<GroupedSuggestionsView | null>(null);
@@ -258,9 +244,24 @@ export class TechWorkCard {
 
   protected readonly posModalOpen = signal<boolean>(false);
   protected readonly posSearchQuery = signal<string>('');
+  /**
+   * The workshop's own stock, and nothing else.
+   *
+   * There used to be a twelve-item `DEFAULT_POS_ITEMS` behind this — ceramic
+   * brake pads at 65, a battery at 165, a Michelin tyre at 110, each with an
+   * invented stock level — shown whenever the real inventory read came back
+   * empty, which includes when it failed and when the workshop genuinely has
+   * no catalogue yet. A technician could put a part the workshop has never
+   * stocked, at a price nobody set, onto a customer's job. It is the same
+   * defect as the fabricated prices on the operator's till (REC-040), one room
+   * over.
+   *
+   * An empty catalogue is now an empty list, and the modal says which of the
+   * three reasons it is.
+   */
   protected readonly filteredPosCatalog = computed(() => {
     const q = this.posSearchQuery().toLowerCase().trim();
-    const source = this.workshopInventory().length > 0 ? this.workshopInventory() : this.DEFAULT_POS_ITEMS;
+    const source = this.workshopInventory();
     if (!q) return source;
     return source.filter(
       (item) =>
@@ -829,8 +830,12 @@ export class TechWorkCard {
             );
           }
         },
-        error: () => {
+        error: (err: PresentedError) => {
           this.isInventoryLoading.set(false);
+          // Said out loud. Silently empty was indistinguishable from "this
+          // workshop stocks nothing", which is how the invented catalogue went
+          // unnoticed for as long as it did.
+          this.inventoryError.set(err.message ?? 'The workshop stock list could not be loaded.');
         },
       });
     }
