@@ -383,6 +383,32 @@ export class StockService {
         });
       }
 
+      // The transfer itself, before the two movements that carry it out.
+      //
+      // Both movements already claimed `referenceType: "InventoryTransfer"`
+      // while no such row was ever written, and each put the OTHER warehouse's
+      // id in `referenceId` -- so the ledger pointed at a transfer that did
+      // not exist, and the two halves of one move could not be recognised as
+      // one move by anything reading it back. A reference has to resolve.
+      //
+      // RECEIVED rather than REQUESTED: this is an immediate move between two
+      // of the workshop's own shelves, and both balances land in the same
+      // transaction. REQUESTED/IN_TRANSIT describe a transfer that has been
+      // asked for and not yet arrived, which this operation cannot produce.
+      const transfer = await tx.inventoryTransfer.create({
+        data: {
+          tenantId: input.tenantId,
+          inventoryItemId: input.inventoryItemId,
+          sourceWarehouseId: input.sourceWarehouseId,
+          destWarehouseId: input.destinationWarehouseId,
+          quantity: input.quantity,
+          status: "RECEIVED",
+          requestedById: input.actorId,
+          receivedAt: new Date(),
+        },
+        select: { id: true },
+      });
+
       const srcBal = await this.record(
         {
           tenantId: input.tenantId,
@@ -392,7 +418,7 @@ export class StockService {
           quantity: input.quantity,
           actorId: input.actorId,
           referenceType: "InventoryTransfer",
-          referenceId: input.destinationWarehouseId,
+          referenceId: transfer.id,
         },
         tx,
       );
@@ -406,7 +432,7 @@ export class StockService {
           quantity: input.quantity,
           actorId: input.actorId,
           referenceType: "InventoryTransfer",
-          referenceId: input.sourceWarehouseId,
+          referenceId: transfer.id,
         },
         tx,
       );

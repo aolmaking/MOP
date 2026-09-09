@@ -225,11 +225,16 @@ describe("PlatformController (integration, real HTTP)", () => {
     expect(res.status).toBe(201);
     tenantIdsToClean.push(res.body.tenant.id);
 
-    const definition = await prisma.specializationDefinition.findFirst({
+    // The pack seeds every card it declares, so this names the one it means.
+    // A bare findFirst returned whichever row Postgres handed back and read as
+    // a real failure whenever that was the other card.
+    const definitions = await prisma.specializationDefinition.findMany({
       where: { tenantId: res.body.tenant.id, kind: "SERVICE_CARD" },
     });
-    expect(definition?.name).toBe("Oil Change");
-    expect((definition?.fields as unknown as { key: string }[]).map((f) => f.key)).toContain("viscosity");
+    expect(definitions.map((d) => d.name).sort()).toEqual(["Fluid Top-Up", "Oil Change"]);
+
+    const oilChange = definitions.find((d) => d.name === "Oil Change");
+    expect((oilChange?.fields as unknown as { key: string }[]).map((f) => f.key)).toContain("viscosity");
 
     await prisma.specializationDefinition.deleteMany({ where: { tenantId: res.body.tenant.id } });
   });

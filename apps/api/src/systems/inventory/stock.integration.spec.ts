@@ -71,6 +71,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   const where = { tenantId };
+  await prisma.inventoryTransfer.deleteMany({ where });
   await prisma.stockMovement.deleteMany({ where });
   await prisma.warehouseStockBalance.deleteMany({ where });
   await prisma.inventoryItem.deleteMany({ where });
@@ -573,4 +574,83 @@ describe("concurrent issues of the last unit", () => {
     });
     expect(movements).toBe(1);
   }, 30_000);
+});
+
+/**
+ * REC-029: a transfer moved stock and recorded no transfer. Both movements
+ * claimed `referenceType: "InventoryTransfer"` while nothing ever wrote one,
+ * and each carried the other warehouse's id as the reference -- so the ledger
+ * cited a row that did not exist, and nothing reading it back could tell that
+ * the two halves were one move.
+ */
+describe("a transfer is a recorded transfer, not two loose movements", () => {
+  it("writes the transfer, and both movements point at it", async () => {
+    const item = await prisma.inventoryItem.create({
+      data: { tenantId, sku: `SKU-${SUFFIX}-xfer`, name: "Transferred Pad", itemType: "PART", sellingPrice: 10 },
+    });
+    await stock.record({
+      tenantId,
+      inventoryItemId: item.id,
+      warehouseId,
+      type: "SUPPLIER_RECEIPT",
+      quantity: 8,
+      actorId: ACTOR,
+    });
+
+    await stock.transferStock({
+      tenantId,
+      inventoryItemId: item.id,
+      sourceWarehouseId: warehouseId,
+      destinationWarehouseId: otherWarehouseId,
+      quantity: 3,
+      actorId: ACTOR,
+    });
+
+    const transfers = await prisma.inventoryTransfer.findMany({ where: { tenantId, inventoryItemId: item.id } });
+    expect(transfers).toHaveLength(1);
+    expect(transfers[0].sourceWarehouseId).toBe(warehouseId);
+    expect(transfers[0].destWarehouseId).toBe(otherWarehouseId);
+    expect(transfers[0].quantity).toBe(3);
+    expect(transfers[0].status).toBe("RECEIVED");
+
+    const movements = await prisma.stockMovement.findMany({
+      where: { tenantId, inventoryItemId: item.id, type: { in: ["TRANSFER_OUT", "TRANSFER_IN"] } },
+      select: { type: true, referenceType: true, referenceId: true },
+    });
+    expect(movements).toHaveLength(2);
+    for (const movement of movements) {
+      expect(movement.referenceType).toBe("InventoryTransfer");
+      // The reference resolves to a real row, which is the whole point.
+      expect(movement.referenceId).toBe(transfers[0].id);
+    }
+  });
+
+  it("records nothing at all when the transfer is refused", async () => {
+    // The transfer row must not outlive a move that never happened -- it is
+    // written inside the same transaction as the movements for that reason.
+    const item = await prisma.inventoryItem.create({
+      data: { tenantId, sku: `SKU-${SUFFIX}-xfer-short`, name: "Short Pad", itemType: "PART", sellingPrice: 10 },
+    });
+    await stock.record({
+      tenantId,
+      inventoryItemId: item.id,
+      warehouseId,
+      type: "SUPPLIER_RECEIPT",
+      quantity: 1,
+      actorId: ACTOR,
+    });
+
+    await expect(
+      stock.transferStock({
+        tenantId,
+        inventoryItemId: item.id,
+        sourceWarehouseId: warehouseId,
+        destinationWarehouseId: otherWarehouseId,
+        quantity: 5,
+        actorId: ACTOR,
+      }),
+    ).rejects.toMatchObject({ response: { code: "insufficient_transfer_stock" } });
+
+    expect(await prisma.inventoryTransfer.count({ where: { tenantId, inventoryItemId: item.id } })).toBe(0);
+  });
 });
