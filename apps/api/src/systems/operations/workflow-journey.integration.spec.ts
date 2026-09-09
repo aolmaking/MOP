@@ -17,6 +17,7 @@ import { WorkflowJourneyService } from "./workflow-journey.service";
 import { JourneyFactsService } from "./journey-facts.service";
 import { JourneyEventsService } from "./journey-events.service";
 import { WorkOrderLifecycleService } from "./work-order-lifecycle.service";
+import { StockService } from "../inventory/stock.service";
 import { GateEvaluatorService } from "./gate-evaluator.service";
 import { OperationEventsService } from "./operation-events.service";
 import { CustomerSafeProjectionService } from "./customer-safe-projection.service";
@@ -40,6 +41,7 @@ const lifecycle = new WorkOrderLifecycleService(
   new OperationEventsService(asService, audit, new CustomerSafeProjectionService()),
   new GateEvaluatorService(asService, policies),
   policies,
+  new StockService(asService),
 );
 const journeys = new WorkflowJourneyService(
   asService,

@@ -9,7 +9,7 @@ import { OperationsModule } from "../operations/operations.module";
 import { AuditModule } from "../../audit/audit.module";
 import { InventoryController } from "./inventory.controller";
 import { InventoryViewService } from "./inventory-view.service";
-import { StockService } from "./stock.service";
+import { StockModule } from "./stock.module";
 import { PartRequestService } from "./part-request.service";
 import { InventoryHomeService } from "./inventory-home.service";
 import { CatalogService } from "./catalog.service";
@@ -40,10 +40,11 @@ import { VehicleFitmentService } from "./fitment/vehicle-fitment.service";
     OperationsModule,
     AuditModule,
     PoliciesModule,
+    // The ledger is a leaf both systems import -- see stock.module.ts.
+    StockModule,
   ],
   controllers: [InventoryController],
   providers: [
-    StockService,
     PartRequestService,
     InventoryViewService,
     InventoryHomeService,
@@ -58,7 +59,9 @@ import { VehicleFitmentService } from "./fitment/vehicle-fitment.service";
     VehicleFitmentService,
   ],
   exports: [
-    StockService,
+    // Re-exported so existing importers of InventoryModule keep reaching the
+    // ledger without also having to know about StockModule.
+    StockModule,
     PartRequestService,
     InventoryReportsService,
     CatalogService,

@@ -11,6 +11,7 @@ import { scryptSync } from "node:crypto";
 import { PrismaClient } from "@mop/database";
 import type { PrismaService } from "../../runtime/database/prisma.service";
 import { AuthService, LOCKOUT_THRESHOLD, MultipleAccountsError, TenantUnavailableError } from "./auth.service";
+import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 import { hashPassword } from "./password.util";
 import { issueToken, newSessionId, parseToken } from "./token.util";
 
@@ -21,7 +22,10 @@ describe("AuthService (integration)", () => {
   let planId: string;
 
   beforeAll(async () => {
-    service = new AuthService(prisma as unknown as PrismaService);
+    service = new AuthService(
+      prisma as unknown as PrismaService,
+      new CapabilityResolutionService(prisma as unknown as PrismaService),
+    );
 
     const plan = await prisma.plan.create({
       data: {
@@ -65,10 +69,24 @@ describe("AuthService (integration)", () => {
         roleExperience: {},
         workflowPolicy: {},
         featureFlags: {},
-        enabledModules: ["INVENTORY"],
         enabledFeatures: ["QUICK_INSPECTION"],
         forms: {},
         messageTemplates: {},
+      },
+    });
+
+    // The workshop's shape lives here, not in a module list on the
+    // configuration row. An absent row reads as ENABLED, so only the deviation
+    // is written -- which is also how workshop creation records a profile.
+    await prisma.tenantCapability.create({
+      data: {
+        tenantId,
+        capabilityKey: "INVENTORY",
+        status: "DISABLED",
+        effectiveFrom: new Date(),
+        source: "PLATFORM",
+        configuredBy: "test-fixture",
+        reason: "This workshop does not hold its own stock.",
       },
     });
   });
@@ -119,7 +137,11 @@ describe("AuthService (integration)", () => {
     expect(context.tenantId).toBe(tenantId);
     expect(context.role).toBe("BRANCH_MANAGER");
     expect(context.branchScope).toEqual(["branch-1"]);
-    expect(context.enabledModules).toEqual(["INVENTORY"]);
+    // Derived from the tenant's capabilities, not copied from a column.
+    // This workshop has INVENTORY off, so the session must not carry it --
+    // and must still carry the modules no capability governs.
+    expect(context.enabledModules).not.toContain("INVENTORY");
+    expect(context.enabledModules).toEqual(expect.arrayContaining(["OPERATIONS", "ORGANIZATION", "AUDIT", "REPORTS"]));
     expect(context.landingPage).toBe("branch-home");
     expect(parseToken(cookies.accessToken.value)).not.toBeNull();
     expect(parseToken(cookies.refreshToken.value)).not.toBeNull();

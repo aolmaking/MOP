@@ -271,7 +271,6 @@ export class PlatformService {
             roleExperience: {},
             workflowPolicy: {},
             featureFlags: {},
-            enabledModules: [...modulesForProfile((dto.capabilities ?? {}) as CapabilityProfile)],
             enabledFeatures: [],
             forms: {},
             messageTemplates: {},

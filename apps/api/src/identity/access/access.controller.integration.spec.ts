@@ -76,7 +76,6 @@ describe("AccessController (integration, real HTTP)", () => {
         // or ModuleEnabledLayer (layer 4) denies+locks before the role
         // template (layer 7) is ever reached -- this test wants the
         // allow/deny split to come specifically from the role template.
-        enabledModules: ["ORGANIZATION", "FINANCE"],
         enabledFeatures: [],
         forms: {},
         messageTemplates: {},

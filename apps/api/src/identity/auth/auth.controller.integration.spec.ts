@@ -75,7 +75,6 @@ describe("AuthController (integration, real HTTP)", () => {
         roleExperience: {},
         workflowPolicy: {},
         featureFlags: {},
-        enabledModules: ["INVENTORY"],
         enabledFeatures: [],
         forms: {},
         messageTemplates: {},

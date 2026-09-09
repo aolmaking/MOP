@@ -14,6 +14,7 @@ import { CapabilityResolutionService } from "../capabilities/capability-resoluti
 import { AuditService } from "../../audit/audit.service";
 import { GateEvaluatorService } from "../../systems/operations/gate-evaluator.service";
 import { WorkOrderLifecycleService } from "../../systems/operations/work-order-lifecycle.service";
+import { StockService } from "../../systems/inventory/stock.service";
 import { OperationEventsService } from "../../systems/operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../../systems/operations/customer-safe-projection.service";
 import { TechnicianWorkService } from "../../systems/operations/technician-work.service";
@@ -33,7 +34,7 @@ const caps = new CapabilityResolutionService(asService);
 const policies = new PolicyResolutionService(asService, audit, caps);
 const events = new OperationEventsService(asService, audit, new CustomerSafeProjectionService());
 const gates = new GateEvaluatorService(asService, policies);
-const lifecycle = new WorkOrderLifecycleService(asService, caps, events, gates, policies);
+const lifecycle = new WorkOrderLifecycleService(asService, caps, events, gates, policies, new StockService(asService));
 const techWork = new TechnicianWorkService(asService, events, lifecycle, policies);
 const priceCatalog = new PriceCatalogService(asService, audit);
 const billing = new BillingService(asService, new GenericBillingAdapter());

@@ -20,6 +20,7 @@ import { PrismaClient } from "@mop/database";
 import { laneForStatus } from "@mop/shared";
 import { IntakeService } from "../../systems/operations/intake.service";
 import { WorkOrderLifecycleService } from "../../systems/operations/work-order-lifecycle.service";
+import { StockService } from "../../systems/inventory/stock.service";
 import { GateEvaluatorService } from "../../systems/operations/gate-evaluator.service";
 import { OperationEventsService } from "../../systems/operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../../systems/operations/customer-safe-projection.service";
@@ -55,6 +56,7 @@ const lifecycle = new WorkOrderLifecycleService(
   events,
   new GateEvaluatorService(asService, policiesForTest),
   policiesForTest,
+  new StockService(asService),
 );
 const intake = new IntakeService(asService, events, lifecycle);
 

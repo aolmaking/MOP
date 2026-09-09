@@ -25,6 +25,8 @@ import { Test } from "@nestjs/testing";
 import cookieParser from "cookie-parser";
 import request from "supertest";
 import { PrismaClient } from "@mop/database";
+import { modulesForProfile } from "@mop/shared";
+import { CapabilityResolutionService } from "../../capabilities/capability-resolution.service";
 import { AuthModule } from "../../../identity/auth/auth.module";
 import { PlatformModule } from "../platform.module";
 import { DatabaseModule } from "../../../runtime/database/database.module";
@@ -317,14 +319,13 @@ describe("Workshop onboarding (integration, real HTTP, real Postgres)", () => {
       // no FINANCE module -- and `ModuleEnabledLayer` denied every finance
       // permission with "this module is not enabled for your workshop".
       // Found by logging in as a created workshop's owner, not by a test.
-      const config = await prisma.tenantConfiguration.findUnique({
-        where: { tenantId },
-        select: { enabledModules: true },
-      });
-      expect(config!.enabledModules).toContain("FINANCE");
+      const modules = modulesForProfile(
+        await new CapabilityResolutionService(prisma as unknown as PrismaService).resolveCurrent(tenantId),
+      );
+      expect(modules).toContain("FINANCE");
       // And nothing it does not have.
-      expect(config!.enabledModules).not.toContain("INVENTORY");
-      expect(config!.enabledModules).not.toContain("TEAM_MANAGEMENT");
+      expect(modules).not.toContain("INVENTORY");
+      expect(modules).not.toContain("TEAM_MANAGEMENT");
     });
 
     it("has the branch it declared, and no store", async () => {
@@ -448,11 +449,16 @@ describe("Workshop onboarding (integration, real HTTP, real Postgres)", () => {
     });
 
     it("enables every module its capabilities require, whatever template was named", async () => {
-      const config = await prisma.tenantConfiguration.findUnique({
-        where: { tenantId },
-        select: { enabledModules: true },
-      });
-      expect([...config!.enabledModules].sort()).toEqual([
+      // Derived from the workshop's capability rows, which is the only place
+      // this answer lives now. It used to be read from
+      // `TenantConfiguration.enabledModules` -- a column written once here at
+      // creation and never updated by a capability change, so this test could
+      // pass while the workshop's real shape had moved on months ago.
+      const capabilities = await new CapabilityResolutionService(
+        prisma as unknown as PrismaService,
+      ).resolveCurrent(tenantId);
+
+      expect([...modulesForProfile(capabilities)].sort()).toEqual([
         "AUDIT",
         "CUSTOMER_PORTAL",
         "FINANCE",

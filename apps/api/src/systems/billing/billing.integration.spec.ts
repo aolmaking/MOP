@@ -34,6 +34,7 @@ import type {
 import { FinanceService } from "../finance/finance.service";
 import { ChargeableItemsService } from "../operations/chargeable-items.service";
 import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
+import { StockService } from "../inventory/stock.service";
 import { GateEvaluatorService } from "../operations/gate-evaluator.service";
 import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 import { OperationEventsService } from "../operations/operation-events.service";
@@ -69,6 +70,7 @@ const lifecycleForFinance = new WorkOrderLifecycleService(
   events,
   new GateEvaluatorService(asService, policiesForTest),
   policiesForTest,
+  new StockService(asService),
 );
 const genericBilling = new BillingService(asService, new GenericBillingAdapter());
 const chargeable = new ChargeableItemsService(asService);

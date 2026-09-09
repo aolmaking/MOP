@@ -18,6 +18,7 @@ import { CustomerDecisionService } from "./decision.service";
 import { OperationEventsService } from "../operations/operation-events.service";
 import { CustomerSafeProjectionService } from "../operations/customer-safe-projection.service";
 import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
+import { StockService } from "../inventory/stock.service";
 import { GateEvaluatorService } from "../operations/gate-evaluator.service";
 import { AuditService } from "../../audit/audit.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
@@ -35,6 +36,7 @@ const lifecycle = new WorkOrderLifecycleService(
   events,
   new GateEvaluatorService(asService, policies),
   policies,
+  new StockService(asService),
 );
 const decisions = new CustomerDecisionService(asService, events, policies, lifecycle);
 

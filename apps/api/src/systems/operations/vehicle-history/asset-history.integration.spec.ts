@@ -11,6 +11,7 @@ import { AssetHistoryService } from "./asset-history.service";
 import { TechnicianWorkViewService } from "../../../experiences/technician/technician-work-view.service";
 import { WorkshopHistoryService } from "../history/workshop-history.service";
 import { WorkOrderLifecycleService } from "../work-order-lifecycle.service";
+import { StockService } from "../../inventory/stock.service";
 import { CapabilityResolutionService } from "../../../control/capabilities/capability-resolution.service";
 import { GateEvaluatorService } from "../gate-evaluator.service";
 import { OperationEventsService } from "../operation-events.service";
@@ -43,6 +44,7 @@ const lifecycle = new WorkOrderLifecycleService(
   events,
   new GateEvaluatorService(asService, policiesForTest),
   policiesForTest,
+  new StockService(asService),
 );
 const techView = new TechnicianWorkViewService(
   asService,

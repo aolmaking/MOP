@@ -14,13 +14,19 @@ process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { WorkshopsService } from "./workshops.service";
+import { CapabilityResolutionService } from "../../capabilities/capability-resolution.service";
 import { WorkshopHealthService } from "./workshop-health.service";
 import { AuditService } from "../../../audit/audit.service";
 import type { PrismaService } from "../../../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
-const workshops = new WorkshopsService(asService, new AuditService(asService), new WorkshopHealthService());
+const workshops = new WorkshopsService(
+  asService,
+  new AuditService(asService),
+  new WorkshopHealthService(),
+  new CapabilityResolutionService(asService),
+);
 
 const ACTOR = { accountId: "platform-1", displayName: "Platform Admin" };
 const SUFFIX = `wsrace-${Date.now()}`;

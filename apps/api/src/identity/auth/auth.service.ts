@@ -1,7 +1,8 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
-import { normalizePhoneNumber, type EffectiveRole, type SessionContext } from "@mop/shared";
+import { modulesForProfile, normalizePhoneNumber, type EffectiveRole, type SessionContext } from "@mop/shared";
 import { Prisma } from "@mop/database";
 import { PrismaService } from "../../runtime/database/prisma.service";
+import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 import { dummyVerifyForTimingSafety, hashPassword, needsRehash, verifyPassword } from "./password.util";
 import { issueToken, newSessionId, parseToken, secretMatchesHash } from "./token.util";
 
@@ -50,7 +51,31 @@ export interface LoginResult {
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capabilities: CapabilityResolutionService,
+  ) {}
+
+  /**
+   * The modules this workshop actually has, derived from its capabilities.
+   *
+   * There used to be two answers to this question. `TenantConfiguration.enabledModules`
+   * was written once at creation from `modulesForProfile(capabilities)` and read
+   * here into every session -- and `CapabilityChangeService.apply()` never
+   * updated it. So the moment a workshop's shape changed, the stored list and
+   * the live capability profile disagreed, and `ModuleEnabledLayer` -- a
+   * permission layer, deciding real access -- was reading the stale one.
+   *
+   * That inverted the rule the whole engine rests on: capability sits ABOVE
+   * role precisely so a permission can never resurrect a disabled capability.
+   * A cached projection of the capabilities cannot enforce that, because it can
+   * be wrong. Derived here from the same rows the resolver reads, there is one
+   * answer and it cannot drift.
+   */
+  private async enabledModulesFor(tenantId: string): Promise<string[]> {
+    const profile = await this.capabilities.resolveCurrent(tenantId);
+    return [...modulesForProfile(profile)];
+  }
 
   /**
    * `identifier` is email OR phone (E.164) -- Register as Customer makes
@@ -339,7 +364,7 @@ export class AuthService {
         teamScope: [],
         managedTechnicianIds,
         permissions: [],
-        enabledModules: tenant.configuration?.enabledModules ?? [],
+        enabledModules: await this.enabledModulesFor(tenant.id),
         enabledFeatures: tenant.configuration?.enabledFeatures ?? [],
         tenantStatus: tenant.status,
         landingPage: LANDING_PAGES[staff.role as EffectiveRole],
@@ -367,7 +392,7 @@ export class AuthService {
         teamScope: [],
         managedTechnicianIds: [],
         permissions: [],
-        enabledModules: tenant.configuration?.enabledModules ?? [],
+        enabledModules: await this.enabledModulesFor(tenant.id),
         enabledFeatures: tenant.configuration?.enabledFeatures ?? [],
         tenantStatus: tenant.status,
         landingPage: LANDING_PAGES.CUSTOMER,

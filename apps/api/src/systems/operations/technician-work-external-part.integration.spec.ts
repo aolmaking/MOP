@@ -3,6 +3,7 @@ import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { TechnicianWorkService } from "./technician-work.service";
 import { WorkOrderLifecycleService } from "./work-order-lifecycle.service";
+import { StockService } from "../inventory/stock.service";
 import { OperationEventsService } from "./operation-events.service";
 import { CustomerSafeProjectionService } from "./customer-safe-projection.service";
 import { GateEvaluatorService } from "./gate-evaluator.service";
@@ -18,7 +19,7 @@ const caps = new CapabilityResolutionService(asService);
 const policies = new PolicyResolutionService(asService, audit, caps);
 const events = new OperationEventsService(asService, audit, new CustomerSafeProjectionService());
 const gates = new GateEvaluatorService(asService, policies);
-const lifecycle = new WorkOrderLifecycleService(asService, caps, events, gates, policies);
+const lifecycle = new WorkOrderLifecycleService(asService, caps, events, gates, policies, new StockService(asService));
 const work = new TechnicianWorkService(asService, events, lifecycle, policies);
 
 describe("W3-A3-010 external-part billing", () => {

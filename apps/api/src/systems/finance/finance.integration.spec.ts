@@ -16,6 +16,7 @@ import { PrismaClient } from "@mop/database";
 import { FinanceService } from "./finance.service";
 import { ChargeableItemsService } from "../operations/chargeable-items.service";
 import { WorkOrderLifecycleService } from "../operations/work-order-lifecycle.service";
+import { StockService } from "../inventory/stock.service";
 import { GateEvaluatorService } from "../operations/gate-evaluator.service";
 import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 import { OperationEventsService } from "../operations/operation-events.service";
@@ -62,7 +63,8 @@ const finance = new FinanceService(
     events,
     new GateEvaluatorService(asService, policiesForTest),
     policiesForTest,
-  ),
+  new StockService(asService),
+),
 );
 
 const ACTOR = { accountId: "cashier-1", displayName: "Cashier", actorType: "TENANT_STAFF" as const };

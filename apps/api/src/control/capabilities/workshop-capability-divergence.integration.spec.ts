@@ -82,7 +82,7 @@ describe("Workshop Capability Divergence (A/B Runtime Proof on Real Postgres)", 
   const events = new OperationEventsService(asService, audit, new CustomerSafeProjectionService());
   const policies = new PolicyResolutionService(asService, audit, capabilitiesService);
   const gates = new GateEvaluatorService(asService, policies);
-  const lifecycle = new WorkOrderLifecycleService(asService, capabilitiesService, events, gates, policies);
+  const lifecycle = new WorkOrderLifecycleService(asService, capabilitiesService, events, gates, policies, new StockService(asService));
   const partRequestService = new PartRequestService(asService, capabilitiesService, stock, events, policies, lifecycle);
 
   const suffix = `div-${Date.now()}`;

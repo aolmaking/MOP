@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { PoliciesModule } from "../../control/policies/policies.module";
+import { StockModule } from "../inventory/stock.module";
 import { DatabaseModule } from "../../runtime/database/database.module";
 import { CapabilitiesModule } from "../../control/capabilities/capabilities.module";
 import { OperationEventsModule } from "./operation-events.module";
@@ -23,7 +24,10 @@ import { RuleEvaluatorService } from "./inspection/recommendations/rule-evaluato
  * rather than scattered through the services that happen to need them.
  */
 @Module({
-  imports: [DatabaseModule, CapabilitiesModule, OperationEventsModule, PoliciesModule],
+    // StockModule: a work order reaching a terminal state settles whatever
+  // stock it had reserved, and this service is the only thing that can move a
+  // work order to one.
+  imports: [DatabaseModule, CapabilitiesModule, OperationEventsModule, PoliciesModule, StockModule],
   providers: [
     GateEvaluatorService,
     WorkOrderLifecycleService,

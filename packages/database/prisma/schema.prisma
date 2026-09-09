@@ -219,6 +219,12 @@ enum StockMovementType {
   // part came from somewhere else). Never left standing without either this or
   // a later issue against it.
   RELEASE_RESERVATION
+  // A reservation that was actually used: the part left the reserved bucket
+  // and left the building with the car. Shaped like ISSUE deliberately -- a
+  // part leaving on a job is represented by its bucket going down and nothing
+  // going up, and reservations must not have a different accounting from the
+  // rest of inventory just because they arrived by a different door.
+  CONSUME_RESERVATION
 }
 
 enum TransferStatus {
@@ -2327,7 +2333,6 @@ model TenantConfiguration {
   roleExperience   Json
   workflowPolicy   Json
   featureFlags     Json
-  enabledModules   String[]
   enabledFeatures  String[]
   forms            Json
   messageTemplates Json

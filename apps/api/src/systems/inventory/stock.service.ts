@@ -50,9 +50,21 @@ const EFFECTS: Record<StockMovementType, BucketEffect> = {
     direction: -1,
     alsoMoves: { bucket: "availableQty", direction: 1 },
   },
+  // The promise kept: the part left with the car. One-sided, exactly like
+  // ISSUE -- a part leaving on a job is its bucket going down and nothing
+  // going up. Giving reservations a different accounting from every other way
+  // a part leaves would be a second model of the same fact.
+  CONSUME_RESERVATION: { bucket: "reservedQty", direction: -1 },
 };
 
 export type StockBucket = "availableQty" | "reservedQty" | "issuedQty" | "returnPendingQty" | "damagedQty";
+
+/** The three movements that make up a reservation's whole life. */
+const RESERVATION_TYPES: ReadonlySet<StockMovementType> = new Set([
+  "RESERVE",
+  "RELEASE_RESERVATION",
+  "CONSUME_RESERVATION",
+]);
 
 export interface MovementInput {
   readonly tenantId: string;
@@ -237,6 +249,75 @@ export class StockService {
     // Joins the caller's transaction when there is one, so issuing a part
     // and moving its stock cannot half-happen.
     return tx ? run(tx) : this.prisma.$transaction(run);
+  }
+
+  /**
+   * Settle every reservation still standing against one work order.
+   *
+   * A reservation had no end. `RESERVE` took units off the sellable shelf when
+   * an operator approved a repair, and nothing anywhere consumed or released
+   * them: not the technician using the part, not the job closing, not the job
+   * being cancelled. So a workshop's sellable count bled downward over time
+   * while the parts were still on the shelf, and `availableQty + reservedQty`
+   * was the only figure that stayed true.
+   *
+   * What is outstanding is read from the ledger rather than from a column,
+   * which is the whole reason the ledger exists: sum the RESERVE movements
+   * carrying this work order's reference, subtract what has already been
+   * consumed or released against it, and settle the remainder. That also makes
+   * this safe to call twice -- a second call finds nothing outstanding and
+   * writes nothing, so a retried transition cannot double-release stock.
+   *
+   * `consume` is the part leaving with the car; `release` is the promise given
+   * up and the units going back on sale.
+   */
+  async settleReservationsFor(
+    workOrderId: string,
+    outcome: "consume" | "release",
+    actorId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const client = tx ?? this.prisma;
+
+    const movements = await client.stockMovement.findMany({
+      where: { referenceType: "WorkOrder", referenceId: workOrderId },
+      select: { tenantId: true, inventoryItemId: true, warehouseId: true, type: true, quantity: true },
+    });
+
+    const outstanding = new Map<string, { tenantId: string; inventoryItemId: string; warehouseId: string; quantity: number }>();
+    for (const movement of movements) {
+      if (!RESERVATION_TYPES.has(movement.type)) continue;
+      const key = `${movement.inventoryItemId}:${movement.warehouseId}`;
+      const entry =
+        outstanding.get(key) ??
+        {
+          tenantId: movement.tenantId,
+          inventoryItemId: movement.inventoryItemId,
+          warehouseId: movement.warehouseId,
+          quantity: 0,
+        };
+      // money-lint-ok: a count of physical objects, not a currency amount.
+      entry.quantity += movement.type === "RESERVE" ? movement.quantity : -movement.quantity;
+      outstanding.set(key, entry);
+    }
+
+    const type = outcome === "consume" ? "CONSUME_RESERVATION" : "RELEASE_RESERVATION";
+    for (const entry of outstanding.values()) {
+      if (entry.quantity <= 0) continue;
+      await this.record(
+        {
+          tenantId: entry.tenantId,
+          inventoryItemId: entry.inventoryItemId,
+          warehouseId: entry.warehouseId,
+          type,
+          quantity: entry.quantity,
+          actorId,
+          referenceType: "WorkOrder",
+          referenceId: workOrderId,
+        },
+        tx,
+      );
+    }
   }
 
   async balanceOf(inventoryItemId: string, warehouseId: string): Promise<StockBalance> {

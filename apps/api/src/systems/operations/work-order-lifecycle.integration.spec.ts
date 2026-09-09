@@ -20,6 +20,7 @@ import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import type { WorkflowIntent } from "@mop/shared";
 import { WorkOrderLifecycleService } from "./work-order-lifecycle.service";
+import { StockService } from "../inventory/stock.service";
 import { GateEvaluatorService } from "./gate-evaluator.service";
 import { OperationEventsService } from "./operation-events.service";
 import { CustomerSafeProjectionService } from "./customer-safe-projection.service";
@@ -47,7 +48,7 @@ const capabilities = new CapabilityResolutionService(asService);
 const audit = new AuditService(asService);
 const events = new OperationEventsService(asService, audit, new CustomerSafeProjectionService());
 const gates = new GateEvaluatorService(asService, policiesForTest);
-const lifecycle = new WorkOrderLifecycleService(asService, capabilities, events, gates, policiesForTest);
+const lifecycle = new WorkOrderLifecycleService(asService, capabilities, events, gates, policiesForTest, new StockService(asService));
 
 const ACTOR = { accountId: "tech-1", displayName: "Technician", actorType: "TENANT_STAFF" as const };
 const SUFFIX = `wo-${Date.now()}`;
@@ -187,6 +188,12 @@ async function cleanup(fixture: Fixture) {
   await prisma.fault.deleteMany({ where });
   await prisma.inspection.deleteMany({ where });
   await prisma.workOrder.deleteMany({ where });
+  // Stock rows, added when this file grew reservation-settlement tests. The
+  // ledger references the warehouse, so it has to go before the shelf does.
+  await prisma.stockMovement.deleteMany({ where });
+  await prisma.warehouseStockBalance.deleteMany({ where });
+  await prisma.inventoryItem.deleteMany({ where });
+  await prisma.warehouse.deleteMany({ where });
   await prisma.asset.deleteMany({ where });
   await prisma.customer.deleteMany({ where });
   await prisma.branch.deleteMany({ where });
@@ -448,5 +455,119 @@ describe("every transition emits its domain event", () => {
 
     expect(event).not.toBeNull();
     expect(event?.payload).toMatchObject({ from: "DRAFT", to: "REGISTERED", intent: "REGISTER" });
+  }, 120_000);
+});
+
+/**
+ * Stock a job reserved does not stay reserved forever.
+ *
+ * `RESERVE` took units off the sellable shelf when an operator approved a
+ * repair, and nothing anywhere consumed or released them -- not the technician
+ * using the part, not the job closing, not the job being cancelled. So a
+ * workshop's sellable count bled downward over time while the parts were still
+ * physically on the shelf.
+ *
+ * Settled here rather than in the operator service on purpose: this is the only
+ * thing that can move a work order to a terminal state, so there is no path to
+ * one that can skip the settlement, and no second place deciding what a
+ * reservation means.
+ */
+describe("a terminal state settles what the job reserved", () => {
+  const stock = new StockService(asService);
+
+  async function reservedPartOn(fixture: Fixture, workOrderId: string, quantity: number) {
+    const warehouseId = (
+      await prisma.warehouse.create({
+        data: { tenantId: fixture.tenantId, name: `Store ${workOrderId.slice(-5)}`, code: `S${workOrderId.slice(-4)}` },
+      })
+    ).id;
+    const itemId = (
+      await prisma.inventoryItem.create({
+        data: {
+          tenantId: fixture.tenantId,
+          sku: `LC-${workOrderId.slice(-6)}`,
+          name: "Reserved part",
+          itemType: "PART",
+          sellingPrice: "80.00",
+        },
+      })
+    ).id;
+
+    await stock.record({
+      tenantId: fixture.tenantId,
+      inventoryItemId: itemId,
+      warehouseId,
+      type: "SUPPLIER_RECEIPT",
+      quantity: 10,
+      actorId: ACTOR.accountId,
+    });
+    await stock.record({
+      tenantId: fixture.tenantId,
+      inventoryItemId: itemId,
+      warehouseId,
+      type: "RESERVE",
+      quantity,
+      actorId: ACTOR.accountId,
+      referenceType: "WorkOrder",
+      referenceId: workOrderId,
+    });
+
+    return { itemId, warehouseId };
+  }
+
+  it("cancelling a job puts its reserved parts back on sale", async () => {
+    const fixture = await createWorkshop(`cancel-${SUFFIX}`, {});
+    fixtures.push(fixture);
+    const workOrder = await newWorkOrder(fixture);
+    const { itemId, warehouseId } = await reservedPartOn(fixture, workOrder.id, 4);
+
+    expect((await stock.balanceOf(itemId, warehouseId)).availableQty).toBe(6);
+
+    await lifecycle.apply(workOrder.id, "CANCEL", ACTOR, { reason: "Customer took the car away." });
+
+    const after = await stock.balanceOf(itemId, warehouseId);
+    expect(after.reservedQty).toBe(0);
+    // Back on the shelf, because nobody fitted them.
+    expect(after.availableQty).toBe(10);
+  }, 120_000);
+
+  it("closing a job consumes them -- they left with the car", async () => {
+    // Review and QC off, so FINISH goes straight to invoicing: this test is
+    // about what happens to reserved stock at the end, not about routing.
+    // INVENTORY stays ON -- the reservation is the point.
+    const fixture = await createWorkshop(`close-${SUFFIX}`, {
+      TEAM_REVIEW: "DISABLED",
+      TEAMS: "DISABLED",
+      QC: "DISABLED",
+    });
+    fixtures.push(fixture);
+    const workOrder = await newWorkOrder(fixture, true);
+    const { itemId, warehouseId } = await reservedPartOn(fixture, workOrder.id, 3);
+
+    // The declined-inspection route this file's other walkthroughs take.
+    await drive(workOrder.id, ["REGISTER", "REQUEST_APPROVAL", "APPROVE", "START_WORK", "FINISH"]);
+    await settleInvoice(fixture, workOrder.id);
+    await drive(workOrder.id, ["SETTLE_PAYMENT", "DELIVER"]);
+
+    const closed = await prisma.workOrder.findUniqueOrThrow({ where: { id: workOrder.id } });
+    expect(closed.status).toBe("CLOSED");
+
+    const after = await stock.balanceOf(itemId, warehouseId);
+    expect(after.reservedQty).toBe(0);
+    // NOT back on the shelf. The customer drove away with them.
+    expect(after.availableQty).toBe(7);
+  }, 120_000);
+
+  it("the settlement is a movement, so the balance still replays", async () => {
+    const fixture = await createWorkshop(`replay-${SUFFIX}`, {});
+    fixtures.push(fixture);
+    const workOrder = await newWorkOrder(fixture);
+    const { itemId, warehouseId } = await reservedPartOn(fixture, workOrder.id, 2);
+
+    await lifecycle.apply(workOrder.id, "CANCEL", ACTOR, { reason: "Cancelled." });
+
+    const stored = await stock.balanceOf(itemId, warehouseId);
+    expect(await stock.replay(itemId, warehouseId, "availableQty")).toBe(stored.availableQty);
+    expect(await stock.replay(itemId, warehouseId, "reservedQty")).toBe(stored.reservedQty);
   }, 120_000);
 });

@@ -1,5 +1,6 @@
 import { WorkshopHealthService } from "./workshop-health.service";
 import { WorkshopsService } from "./workshops.service";
+import { CapabilityResolutionService } from "../../capabilities/capability-resolution.service";
 
 describe("WorkshopsService", () => {
   function tenant(overrides: Record<string, unknown> = {}) {
@@ -53,6 +54,13 @@ describe("WorkshopsService", () => {
       workOrder: {
         groupBy: jest.fn().mockResolvedValue([]),
       },
+      // The workshop detail derives its module list from the tenant's
+      // capability rows now, rather than reading a cached column that a
+      // capability change never updated. No rows means every capability is
+      // ENABLED, which is what an unconfigured fixture should mean.
+      tenantCapability: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       session: {
         groupBy: jest.fn().mockResolvedValue([]),
       },
@@ -68,7 +76,12 @@ describe("WorkshopsService", () => {
 
     return {
       prisma,
-      service: new WorkshopsService(prisma as never, {} as never, new WorkshopHealthService()),
+      service: new WorkshopsService(
+        prisma as never,
+        {} as never,
+        new WorkshopHealthService(),
+        new CapabilityResolutionService(prisma as never),
+      ),
     };
   }
 

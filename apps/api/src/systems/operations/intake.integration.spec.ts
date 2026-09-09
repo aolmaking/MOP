@@ -14,6 +14,7 @@ import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { IntakeService } from "./intake.service";
 import { WorkOrderLifecycleService } from "./work-order-lifecycle.service";
+import { StockService } from "../inventory/stock.service";
 import { GateEvaluatorService } from "./gate-evaluator.service";
 import { OperationEventsService } from "./operation-events.service";
 import { CustomerSafeProjectionService } from "./customer-safe-projection.service";
@@ -44,6 +45,7 @@ const lifecycle = new WorkOrderLifecycleService(
   events,
   new GateEvaluatorService(asService, policiesForTest),
   policiesForTest,
+  new StockService(asService),
 );
 const intake = new IntakeService(asService, events, lifecycle);
 

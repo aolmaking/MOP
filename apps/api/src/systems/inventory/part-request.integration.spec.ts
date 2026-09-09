@@ -38,6 +38,7 @@ const lifecycle = new WorkOrderLifecycleService(
   events,
   new GateEvaluatorService(asService, policies),
   policies,
+  new StockService(asService),
 );
 const parts = new PartRequestService(asService, capabilities, stock, events, policies, lifecycle);
 const assetHistory = new AssetHistoryService(asService);

@@ -1,7 +1,9 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, type TenantStatus } from "@mop/database";
+import { modulesForProfile } from "@mop/shared";
 import { PrismaService } from "../../../runtime/database/prisma.service";
 import { AuditService } from "../../../audit/audit.service";
+import { CapabilityResolutionService } from "../../capabilities/capability-resolution.service";
 import { WorkshopHealthService, type HealthStatus, type HealthWarning } from "./workshop-health.service";
 import type { ListWorkshopsQueryDto } from "./list-workshops.dto";
 
@@ -43,6 +45,7 @@ export class WorkshopsService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly health: WorkshopHealthService,
+    private readonly capabilities: CapabilityResolutionService,
   ) {}
 
   async list(query: ListWorkshopsQueryDto): Promise<WorkshopListResult> {
@@ -168,7 +171,12 @@ export class WorkshopsService {
       branches: { items: branchPage, total: branchTotal },
       warehouses: { items: warehousePage, total: warehouseTotal },
       usersByRole: usersByRole.map((u) => ({ role: u.role, count: u._count })),
-      enabledModules: tenant.configuration?.enabledModules ?? [],
+      // Derived from the workshop's live capabilities, like every other
+      // reader. This used to read `TenantConfiguration.enabledModules`, a
+      // column written once at creation and never updated by a capability
+      // change -- so the platform's own view of a workshop's shape could
+      // disagree with the workshop's actual shape.
+      enabledModules: [...modulesForProfile(await this.capabilities.resolveCurrent(tenantId))],
       recentActivity: recentAudit,
       recentPlatformControls: recentControls,
       subscription: {

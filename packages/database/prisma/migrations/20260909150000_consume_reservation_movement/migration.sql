@@ -1,0 +1,14 @@
+-- A reservation now has an end.
+--
+-- `RESERVE` and `RELEASE_RESERVATION` made reserved stock auditable, but
+-- nothing ever consumed a reservation: the units left the sellable shelf when
+-- an operator approved a repair and never came back, were never marked issued,
+-- and were never released if the job was cancelled. A workshop's sellable count
+-- bled downward over time while the parts were still physically on the shelf,
+-- and `availableQty + reservedQty` was the only figure that stayed honest.
+--
+-- Settled by WorkOrderLifecycleService when a job reaches a terminal state --
+-- consumed on CLOSED, released on CANCELLED. That service is the only writer of
+-- WorkOrder.status, so there is no path to a terminal state that can skip it,
+-- and no second place deciding what a reservation means.
+ALTER TYPE "StockMovementType" ADD VALUE 'CONSUME_RESERVATION';

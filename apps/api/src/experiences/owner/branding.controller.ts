@@ -91,7 +91,6 @@ export class OwnerBrandingController {
           roleExperience: {},
           workflowPolicy: {},
           featureFlags: {},
-          enabledModules: [],
           enabledFeatures: [],
           forms: {},
           messageTemplates: {},

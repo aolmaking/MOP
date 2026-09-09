@@ -13,6 +13,7 @@ import {
 import type { Prisma, WorkOrderStatus, QcFailureReason } from "@mop/database";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
+import { StockService } from "../inventory/stock.service";
 import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 import { OperationEventsService } from "./operation-events.service";
 import { GateEvaluatorService } from "./gate-evaluator.service";
@@ -71,6 +72,7 @@ export class WorkOrderLifecycleService {
     private readonly events: OperationEventsService,
     private readonly gates: GateEvaluatorService,
     private readonly policies: PolicyResolutionService,
+    private readonly stock: StockService,
   ) {}
 
   /**
@@ -150,6 +152,28 @@ export class WorkOrderLifecycleService {
           code: "concurrent_transition",
           message: "This work order changed while you were working on it. Reload and try again.",
         });
+      }
+
+      // A terminal state settles whatever stock this job had reserved.
+      //
+      // `RESERVE` took units off the sellable shelf when an operator approved
+      // the repair, and nothing consumed or released them afterwards -- so a
+      // workshop's sellable count bled downward while the parts were still on
+      // the shelf. Closed means the parts left with the car; cancelled means
+      // the promise is given up and they go back on sale.
+      //
+      // Here rather than in the operator service, because this is the only
+      // thing that can move a work order to a terminal state, so there is no
+      // path that can reach one without settling. `settleReservationsFor`
+      // reads what is still outstanding from the ledger, so a retried
+      // transition finds nothing and writes nothing.
+      if (target === "CLOSED" || target === "CANCELLED") {
+        await this.stock.settleReservationsFor(
+          workOrderId,
+          target === "CLOSED" ? "consume" : "release",
+          actor.accountId,
+          tx,
+        );
       }
 
       await this.events.emit(

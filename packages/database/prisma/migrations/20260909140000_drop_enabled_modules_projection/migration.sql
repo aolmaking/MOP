@@ -1,0 +1,27 @@
+-- One answer to "which modules does this workshop have".
+--
+-- `TenantConfiguration.enabledModules` was a cached projection of
+-- `modulesForProfile(capabilities)`, written once at workshop creation and
+-- never again: `CapabilityChangeService.apply()` wrote TenantCapability rows
+-- and audited them, and left this column exactly as it was. So from the first
+-- capability change onward the column and the workshop's real shape disagreed.
+--
+-- That would be a stale report on its own. What made it a defect is who read
+-- it: `AuthService` copied it into every session, and `ModuleEnabledLayer` --
+-- layer 4 of the permission resolver, returning `locked: true` -- decided real
+-- access from it. The engine's central rule is that capability sits ABOVE role
+-- so a permission can never resurrect a disabled capability; a cache of the
+-- capabilities cannot enforce that, because it can be wrong in both directions.
+-- A workshop that switched INVENTORY off kept its inventory permissions, and
+-- one that switched it on could not use them.
+--
+-- The owner's branding page made it worse still: saving branding upserts the
+-- configuration row and passed `enabledModules: []` on create, which would have
+-- blanked every module the workshop had.
+--
+-- Every reader now derives from the TenantCapability rows the resolver reads --
+-- the session, the platform's workshop view, and the feature-adoption report --
+-- so the column has no readers and no writers left. Dropped rather than kept in
+-- step, because a second copy that happens to agree today is the same defect
+-- waiting for the next writer that forgets it.
+ALTER TABLE "tenant_configuration" DROP COLUMN "enabledModules";

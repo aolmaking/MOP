@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { CapabilitiesModule } from "../../control/capabilities/capabilities.module";
 import { DatabaseModule } from "../../runtime/database/database.module";
 import { AuthModule } from "../../identity/auth/auth.module";
 import { AccessModule } from "../../identity/access/access.module";
@@ -23,7 +24,7 @@ import { OperationsDrillDownResolver } from "./resolvers/operations-drill-down.r
 import { RootCauseDrillDownResolver } from "./resolvers/root-cause-drill-down.resolver";
 
 @Module({
-  imports: [DatabaseModule, AuthModule, AccessModule, AuditModule, InventoryModule],
+  imports: [DatabaseModule, AuthModule, AccessModule, AuditModule, InventoryModule, CapabilitiesModule],
   controllers: [AnalyticsController],
   providers: [
     AnalyticsHomeService,

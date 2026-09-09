@@ -295,6 +295,118 @@ describe("reservations move two buckets and stay replayable", () => {
     expect(await stock.replay(reserveItemId, warehouseId, "availableQty")).toBe(stored.availableQty);
   });
 
+  /**
+   * A reservation's end.
+   *
+   * `RESERVE` existed and nothing ever undid it: the units left the sellable
+   * shelf when an operator approved a repair and stayed in `reservedQty`
+   * forever, whatever became of the job. A workshop's sellable count bled
+   * downward while the parts were still physically on the shelf, and
+   * `availableQty + reservedQty` was the only figure that stayed true.
+   *
+   * `settleReservationsFor` reads what is still outstanding from the ledger
+   * rather than from a column, which is both what a ledger is for and what
+   * makes it safe to call twice.
+   */
+  describe("settling what a work order reserved", () => {
+    let settleItemId: string;
+
+    beforeEach(async () => {
+      settleItemId = (
+        await prisma.inventoryItem.create({
+          data: {
+            tenantId,
+            sku: `SETTLE-${SUFFIX}-${Math.random().toString(36).slice(2, 8)}`,
+            name: "Settling part",
+            itemType: "PART",
+            sellingPrice: "60.00",
+          },
+        })
+      ).id;
+      await stock.record({
+        tenantId,
+        inventoryItemId: settleItemId,
+        warehouseId,
+        type: "SUPPLIER_RECEIPT",
+        quantity: 10,
+        actorId: ACTOR,
+      });
+      await stock.record({
+        tenantId,
+        inventoryItemId: settleItemId,
+        warehouseId,
+        type: "RESERVE",
+        quantity: 3,
+        actorId: ACTOR,
+        referenceType: "WorkOrder",
+        referenceId: "wo-settle",
+      });
+    });
+
+    it("consumes the reservation when the job is closed -- the part left with the car", async () => {
+      await stock.settleReservationsFor("wo-settle", "consume", ACTOR);
+
+      const after = await stock.balanceOf(settleItemId, warehouseId);
+      expect(after.reservedQty).toBe(0);
+      // Not back on the shelf: those three are gone with the customer.
+      expect(after.availableQty).toBe(7);
+    });
+
+    it("releases the reservation when the job is cancelled -- the parts go back on sale", async () => {
+      await stock.settleReservationsFor("wo-settle", "release", ACTOR);
+
+      const after = await stock.balanceOf(settleItemId, warehouseId);
+      expect(after.reservedQty).toBe(0);
+      expect(after.availableQty).toBe(10);
+    });
+
+    it("settling twice does nothing the second time", async () => {
+      // A transition can be retried. Reading what is outstanding from the
+      // ledger rather than from a flag is what makes that safe -- a second
+      // call finds nothing and writes nothing, instead of releasing stock the
+      // workshop no longer has.
+      await stock.settleReservationsFor("wo-settle", "release", ACTOR);
+      await stock.settleReservationsFor("wo-settle", "release", ACTOR);
+
+      const after = await stock.balanceOf(settleItemId, warehouseId);
+      expect(after.availableQty).toBe(10);
+      expect(after.reservedQty).toBe(0);
+
+      const releases = await prisma.stockMovement.count({
+        where: { inventoryItemId: settleItemId, type: "RELEASE_RESERVATION" },
+      });
+      expect(releases).toBe(1);
+    });
+
+    it("leaves another work order's reservation alone", async () => {
+      await stock.record({
+        tenantId,
+        inventoryItemId: settleItemId,
+        warehouseId,
+        type: "RESERVE",
+        quantity: 2,
+        actorId: ACTOR,
+        referenceType: "WorkOrder",
+        referenceId: "wo-other",
+      });
+
+      await stock.settleReservationsFor("wo-settle", "release", ACTOR);
+
+      const after = await stock.balanceOf(settleItemId, warehouseId);
+      // The other job's two are still spoken for.
+      expect(after.reservedQty).toBe(2);
+      expect(after.availableQty).toBe(8);
+    });
+
+    it("THE RULE still holds once a reservation has been settled", async () => {
+      await stock.settleReservationsFor("wo-settle", "consume", ACTOR);
+
+      const stored = await stock.balanceOf(settleItemId, warehouseId);
+      expect(await stock.replay(settleItemId, warehouseId, "reservedQty")).toBe(stored.reservedQty);
+      expect(await stock.replay(settleItemId, warehouseId, "availableQty")).toBe(stored.availableQty);
+    });
+  });
+
   it("lets exactly one of two simultaneous reservations of the last unit succeed", async () => {
     const lastItemId = (
       await prisma.inventoryItem.create({

@@ -24,6 +24,7 @@ process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
 import { WorkOrderLifecycleService } from "./work-order-lifecycle.service";
+import { StockService } from "../inventory/stock.service";
 import { GateEvaluatorService } from "./gate-evaluator.service";
 import { OperationEventsService } from "./operation-events.service";
 import { CustomerSafeProjectionService } from "./customer-safe-projection.service";
@@ -44,7 +45,7 @@ const policiesForTest = new PolicyResolutionService(
 const capabilities = new CapabilityResolutionService(asService);
 const events = new OperationEventsService(asService, new AuditService(asService), new CustomerSafeProjectionService());
 const gates = new GateEvaluatorService(asService, policiesForTest);
-const lifecycle = new WorkOrderLifecycleService(asService, capabilities, events, gates, policiesForTest);
+const lifecycle = new WorkOrderLifecycleService(asService, capabilities, events, gates, policiesForTest, new StockService(asService));
 const techWork = new TechnicianWorkService(asService, events, lifecycle, policiesForTest);
 
 const ACTOR = { accountId: "tech-t01", displayName: "Technician T01", actorType: "TENANT_STAFF" as const };

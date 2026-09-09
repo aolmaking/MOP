@@ -31,6 +31,7 @@ import { PlatformService } from "../platform/platform.service";
 import { CapabilityResolutionService } from "./capability-resolution.service";
 import { PolicyResolutionService } from "../policies/policy-resolution.service";
 import { WorkOrderLifecycleService } from "../../systems/operations/work-order-lifecycle.service";
+import { StockService } from "../../systems/inventory/stock.service";
 import { AssetHistoryService } from "../../systems/operations/vehicle-history/asset-history.service";
 import { WorkshopHistoryService } from "../../systems/operations/history/workshop-history.service";
 import { GateEvaluatorService } from "../../systems/operations/gate-evaluator.service";
@@ -51,7 +52,7 @@ describe("Workshop Specialization Divergence (Real PostgreSQL Integration)", () 
   const policies = new PolicyResolutionService(asService, audit, capabilitiesService);
   const gates = new GateEvaluatorService(asService, policies);
   const events = new OperationEventsService(asService, audit, new CustomerSafeProjectionService());
-  const lifecycle = new WorkOrderLifecycleService(asService, capabilitiesService, events, gates, policies);
+  const lifecycle = new WorkOrderLifecycleService(asService, capabilitiesService, events, gates, policies, new StockService(asService));
   const assetHistory = new AssetHistoryService(asService);
   const workshopHistory = new WorkshopHistoryService(asService, assetHistory);
 

@@ -1,5 +1,7 @@
 import { Injectable } from "@nestjs/common";
+import { modulesForProfile } from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
+import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 import { resolveDateRange, type ReportQueryParams } from "../owner-reports/date-range.util";
 
 export interface FeatureUsageRow {
@@ -35,20 +37,27 @@ export interface FeatureAdoptionReport {
  */
 @Injectable()
 export class FeatureAdoptionAnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capabilities: CapabilityResolutionService,
+  ) {}
 
   async build(tenantId: string, params: ReportQueryParams): Promise<FeatureAdoptionReport> {
     const range = resolveDateRange(params);
 
     const [config, quickInspections, fullInspections, decisionRequests, templatesPublished] = await Promise.all([
-      this.prisma.tenantConfiguration.findUnique({ where: { tenantId }, select: { enabledFeatures: true, enabledModules: true } }),
+      this.prisma.tenantConfiguration.findUnique({ where: { tenantId }, select: { enabledFeatures: true } }),
       this.prisma.inspection.count({ where: { tenantId, type: "QUICK", createdAt: { gte: range.from, lte: range.to } } }),
       this.prisma.inspection.count({ where: { tenantId, type: "FULL", createdAt: { gte: range.from, lte: range.to } } }),
       this.prisma.customerDecisionRequest.count({ where: { tenantId, createdAt: { gte: range.from, lte: range.to } } }),
       this.prisma.messageTemplate.count({ where: { tenantId, publishedAt: { gte: range.from, lte: range.to } } }),
     ]);
 
-    const enabled = new Set([...(config?.enabledFeatures ?? []), ...(config?.enabledModules ?? [])]);
+    // Modules come from the capability profile, features from the stored
+    // list. Reading a module list that a capability change never updated made
+    // this report describe a workshop shape that had not existed for months.
+    const modules = modulesForProfile(await this.capabilities.resolveCurrent(tenantId));
+    const enabled = new Set([...(config?.enabledFeatures ?? []), ...modules]);
     const features: FeatureUsageRow[] = [];
 
     if (enabled.has("OPERATIONS") || enabled.size === 0) {

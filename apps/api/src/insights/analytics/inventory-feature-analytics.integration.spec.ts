@@ -9,13 +9,14 @@ import { PrismaClient } from "@mop/database";
 import { InventoryReportsService } from "../../systems/inventory/inventory-reports.service";
 import { InventoryAnalyticsService } from "./inventory-analytics.service";
 import { FeatureAdoptionAnalyticsService } from "./feature-adoption-analytics.service";
+import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 import type { PrismaService } from "../../runtime/database/prisma.service";
 
 const prisma = new PrismaClient();
 const asService = prisma as unknown as PrismaService;
 const inventoryReports = new InventoryReportsService(asService);
 const inventoryAnalytics = new InventoryAnalyticsService(asService, inventoryReports);
-const featureAdoption = new FeatureAdoptionAnalyticsService(asService);
+const featureAdoption = new FeatureAdoptionAnalyticsService(asService, new CapabilityResolutionService(asService));
 
 const SUFFIX = `ainv-${Date.now()}`;
 let tenantId: string;

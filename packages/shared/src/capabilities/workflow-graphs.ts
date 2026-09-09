@@ -85,22 +85,22 @@ export const WORK_ORDER_GRAPH: WorkflowGraph = {
     },
 
     { from: "AWAITING_CUSTOMER_APPROVAL", to: "APPROVED_FOR_WORK", intent: "APPROVE", gates: ["inspection_completed"], label: "customer approved" },
-    { from: "AWAITING_CUSTOMER_APPROVAL", to: "CANCELLED", label: "customer rejected everything" },
+    { from: "AWAITING_CUSTOMER_APPROVAL", to: "CANCELLED", intent: "CANCEL", label: "customer rejected everything" },
 
     { from: "APPROVED_FOR_WORK", to: "IN_PROGRESS", intent: "START_WORK", label: "work started" },
 
     // Internal parts lifecycle -- only exists with an inventory.
     { from: "IN_PROGRESS", to: "WAITING_PARTS", requires: ["INVENTORY"], intent: "REQUEST_PART", label: "part requested from stock" },
     { from: "WAITING_PARTS", to: "IN_PROGRESS", requires: ["INVENTORY"], intent: "PART_RECEIVED", label: "part received" },
-    { from: "WAITING_PARTS", to: "CANCELLED", requires: ["INVENTORY"], label: "job cancelled while waiting" },
+    { from: "WAITING_PARTS", to: "CANCELLED", requires: ["INVENTORY"], intent: "CANCEL", label: "job cancelled while waiting" },
 
     { from: "IN_PROGRESS", to: "WAITING_CUSTOMER", intent: "ASK_CUSTOMER", label: "further approval needed mid-job" },
     { from: "WAITING_CUSTOMER", to: "IN_PROGRESS", intent: "CUSTOMER_RESPONDED", label: "customer responded" },
-    { from: "WAITING_CUSTOMER", to: "CANCELLED", label: "customer withdrew" },
+    { from: "WAITING_CUSTOMER", to: "CANCELLED", intent: "CANCEL", label: "customer withdrew" },
 
     { from: "IN_PROGRESS", to: "BLOCKED", intent: "REPORT_BLOCKER", label: "blocker reported" },
     { from: "BLOCKED", to: "IN_PROGRESS", intent: "RESOLVE_BLOCKER", label: "blocker resolved" },
-    { from: "BLOCKED", to: "CANCELLED", label: "blocker unresolvable" },
+    { from: "BLOCKED", to: "CANCELLED", intent: "CANCEL", label: "blocker unresolvable" },
 
     // Finish routing. SEVERAL of these can be live at once -- a workshop
     // with team review, QC and finance has all three -- so declaration
@@ -215,13 +215,23 @@ export const WORK_ORDER_GRAPH: WorkflowGraph = {
 
     { from: "PAYMENT_PENDING", to: "READY_FOR_DELIVERY", requires: ["FINANCE_CORE"], intent: "SETTLE_PAYMENT", label: "payment settled" },
     { from: "READY_FOR_DELIVERY", to: "CLOSED", intent: "DELIVER", gates: ["invoice.issued", "payment.settled_or_policy_allows"], label: "vehicle delivered" },
-    { from: "READY_FOR_DELIVERY", to: "CANCELLED", label: "cancelled before handover" },
+    { from: "READY_FOR_DELIVERY", to: "CANCELLED", intent: "CANCEL", label: "cancelled before handover" },
 
-    { from: "DRAFT", to: "CANCELLED", label: "abandoned at intake" },
-    { from: "REGISTERED", to: "CANCELLED", label: "customer left" },
-    { from: "UNDER_INSPECTION", to: "CANCELLED", label: "cancelled during inspection" },
-    { from: "APPROVED_FOR_WORK", to: "CANCELLED", label: "cancelled before work started" },
-    { from: "IN_PROGRESS", to: "CANCELLED", label: "cancelled mid-work" },
+    // Every route to CANCELLED carries the CANCEL intent.
+    //
+    // All eleven existed as edges and not one of them named an intent, so
+    // `resolveIntent` could never find any of them: "CANCEL does not apply to
+    // WorkOrder in this workshop's configuration", from every state, forever.
+    // `CANCEL` sat in WORKFLOW_INTENTS with no transition behind it, exactly as
+    // ISSUE_INVOICE did. Since WorkOrderLifecycleService became the only writer
+    // of the column, that meant a work order could not be cancelled by
+    // anything: not an abandoned intake, not a customer who withdrew, not an
+    // unresolvable blocker -- all of which are drawn here as real routes.
+    { from: "DRAFT", to: "CANCELLED", intent: "CANCEL", label: "abandoned at intake" },
+    { from: "REGISTERED", to: "CANCELLED", intent: "CANCEL", label: "customer left" },
+    { from: "UNDER_INSPECTION", to: "CANCELLED", intent: "CANCEL", label: "cancelled during inspection" },
+    { from: "APPROVED_FOR_WORK", to: "CANCELLED", intent: "CANCEL", label: "cancelled before work started" },
+    { from: "IN_PROGRESS", to: "CANCELLED", intent: "CANCEL", label: "cancelled mid-work" },
   ],
 };
 
