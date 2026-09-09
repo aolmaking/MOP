@@ -96,10 +96,15 @@
 - **Status:** **VERIFIED**
 
 ### REC-010 — `WorkOrder.status` written outside the lifecycle service · **P1**
-- **Verification:** `VERIFIED_CODE`
-- **Sites:** `operator.service.ts:432, 981` (update), `operator.service.ts:560` + `customer-portal.service.ts:325` (create at `PAYMENT_PENDING`), `technician-work-view.service.ts:1269` (update). `intake.service.ts:102` is legitimate — it creates at `WORK_ORDER_GRAPH.initial` — and needs an exemption comment rather than a change.
-- **Consequence:** no graph check, no gate, no `OperationEvent`, no audit row; cycle-time analytics and the `ORPHANED_STATUS_CHANGE` detector both go blind.
-- **Status:** `OPEN` — this is Phase 3 (spine convergence), not a scoping fix.
+- **Verification:** `VERIFIED_RUNTIME`
+- **Sites found:** `operator.service.ts` (intake → `UNDER_INSPECTION`; dispatch → `APPROVED_FOR_WORK`; counter sale created at `PAYMENT_PENDING`), `customer-portal.service.ts` (counter sale, same), `technician-work-view.service.ts` (report submission re-asserting `UNDER_INSPECTION`). `intake.service.ts` was a linter false positive — it creates at `WORK_ORDER_GRAPH.initial`, which the linter now recognises as the one sanctioned create.
+- **What each one actually cost:**
+  - The two operator writes were `status: "..." as any` inside `try {} catch {}` blocks commented *"non-fatal if in mock test"* — production code shaped around a unit-test mock. The dispatch write skipped the `inspection_completed` gate and the `APPROVAL_REQUIRED_SCOPE` policy, so a workshop configured to send findings to the customer before work begins had that requirement bypassed on every dispatch.
+  - The technician write asserted the status the job was already in. A no-op whose only real effect was to make the CLAUDE.md grep return a hit and to suggest the technician moves the job.
+  - Both counter sales assigned `PAYMENT_PENDING` directly. That state and its only exit (`SETTLE_PAYMENT`) both require `FINANCE_CORE`, so a workshop without the finance module got a sale permanently stranded in a state its own graph cannot leave — a breach of the reachability guarantee the capability engine exists to hold.
+- **Fix:** every site asks for an INTENT now. Intake uses `START_INSPECTION`; dispatch uses `APPROVE` and returns `transition.to` rather than a literal, because the same intent routes to `AWAITING_CUSTOMER_APPROVAL` under `APPROVAL_REQUIRED_SCOPE`; the counter sale takes a newly declared `DRAFT → PAYMENT_PENDING` edge carrying `ISSUE_INVOICE` and requiring `FINANCE_CORE`. That intent was already in `WORKFLOW_INTENTS` and already named a progress step in `workflow-journey.ts`, but no transition had ever carried it. The technician's redundant write is gone and the response reports the status actually stored.
+- **Proof:** `lint-status-writers` reports zero. The 250 shared tests — reachability validator, graph safety, workflow router — pass with the new edge. Both operator specs now assert the intent rather than the column, and `operator-surface.http.spec.ts` proves the dispatched status over real HTTP.
+- **Status:** **VERIFIED**
 
 ### REC-031 — 75 remaining bare-id loads, triaged but not individually verified · **P1**
 - **Verification:** `PARTIALLY_VERIFIED`
@@ -120,16 +125,16 @@
 
 | ID | Issue | Severity | Level | State |
 |---|---|---|---|---|
-| REC-012 | Operator `update-quote` / `approve-repair` return **HTTP 400** — page sends `note`/`tasks`, DTOs declare `notes` and no `tasks` | P1 | `VERIFIED_RUNTIME` | OPEN |
+| REC-012 | Operator `update-quote` / `approve-repair` return **HTTP 400** — page sends `note`/`tasks`, DTOs declare `notes` and no `tasks` | P1 | `VERIFIED_RUNTIME` | **VERIFIED** — see below |
 | REC-013 | No frontend calls `POST /finance/work-orders/:id/invoice`; `READY_FOR_DELIVERY → CLOSED` is gated on `invoice.issued` | P1 | `VERIFIED_CODE` | OPEN |
-| REC-014 | Inspection domain `CRITICAL` collapses to Prisma `HIGH`; `has_critical_fault`, `QC_MANDATORY=RISK_FLAGGED_ONLY`, `APPROVAL_REQUIRED_SCOPE=CRITICAL_ONLY` and `critical_warning_acknowledged` all unreachable | P1 | `VERIFIED_CODE` | OPEN |
-| REC-015 | `OperatorService` writes `WarehouseStockBalance` directly with no `StockMovement`; no `RESERVE`/`RELEASE` movement type exists, so `replay()` cannot reproduce `reservedQty` | P1 | `VERIFIED_CODE` | OPEN |
-| REC-016 | Duplicate fault projection — `submitInspectionReport` writes Faults twice, the second without dedupe | P2 | `VERIFIED_CODE` | OPEN |
+| REC-014 | Inspection domain `CRITICAL` collapses to Prisma `HIGH`; `has_critical_fault`, `QC_MANDATORY=RISK_FLAGGED_ONLY`, `APPROVAL_REQUIRED_SCOPE=CRITICAL_ONLY` and `critical_warning_acknowledged` all unreachable | P1 | `VERIFIED_CODE` | **VERIFIED** — see below |
+| REC-015 | `OperatorService` writes `WarehouseStockBalance` directly with no `StockMovement`; no `RESERVE`/`RELEASE` movement type exists, so `replay()` cannot reproduce `reservedQty` | P1 | `VERIFIED_CODE` | **VERIFIED** — see below (and REC-033) |
+| REC-016 | Duplicate fault projection — `submitInspectionReport` writes Faults twice, the second without dedupe | P2 | `VERIFIED_CODE` | **VERIFIED** — see below |
 | REC-017 | Catalog provisioned regardless of the `INVENTORY` capability and of `plan.maxWarehouses` — Beta got 42 items and a warehouse on a plan allowing 0 | P2 | `VERIFIED_RUNTIME` | OPEN |
 | REC-018 | Only `firstWarehouseId` is stocked — a second warehouse is created empty and its branch cannot be served | P2 | `VERIFIED_RUNTIME` | OPEN |
 | REC-019 | Two sources of truth for enabled modules — `TenantConfiguration.enabledModules` vs `modulesForProfile(capabilities)`; `CapabilityChangeService.apply()` never updates the stored list | P2 | `VERIFIED_CODE` | OPEN |
 | REC-020 | 71 eslint errors | P3 | `VERIFIED_RUNTIME` | OPEN |
-| REC-021 | `OperatorController` gates on a hardcoded role allow-list instead of `EffectiveAccessService`; its three work-order routes never check branch scope | P1 | `VERIFIED_CODE` | OPEN |
+| REC-021 | `OperatorController` gates on a hardcoded role allow-list instead of `EffectiveAccessService`; its three work-order routes never check branch scope | P1 | `VERIFIED_CODE` | **VERIFIED** — see below |
 | REC-022 | 8 of 16 `FinanceConfiguration` fields have no reader (`taxRatePercent` never reaches an invoice) | P3 | `VERIFIED_CODE` | OPEN |
 | REC-023 | `CustomFieldDefinition` and `MessageTemplate` persist through the real API and are consumed by nothing | P3 | `VERIFIED_RUNTIME` | OPEN |
 | REC-024 | `ORPHANED_STATUS_CHANGE` checks for *zero* status events, so it never fires on an operator-created job that has one from intake | P2 | `VERIFIED_CODE` | OPEN |
@@ -138,6 +143,72 @@
 | REC-027 | Onboarding / capability-divergence / catalog-cart tests not updated when catalog provisioning was added (4 of the 6 remaining suite failures) | P3 | `VERIFIED_RUNTIME` | OPEN |
 | REC-028 | `POST /platform/workshops` returns 500 in `platform.controller.integration.spec.ts:135` | P2 | `VERIFIED_RUNTIME` | OPEN |
 | REC-029 | `StockService.transferStock` moves stock but writes no `InventoryTransfer` row | P3 | `VERIFIED_CODE` | OPEN |
+
+---
+
+## Phase 4 — The operator surface · **COMPLETE**
+
+These four were entangled at one boundary: adding real nested validation to the
+operator DTOs forces the severity vocabulary to be settled, and settling it
+exposes the second fault-writing path. They were fixed and verified together.
+
+### REC-012 — Both operator write endpoints returned HTTP 400 · **P1**
+- **Verification:** `VERIFIED_HTTP`
+- **Symptom:** every *Save Quote* and every *Dispatch to Repair* in the product came back `400 property note should not exist` / `400 property tasks should not exist`. The operator surface had no working write path at all.
+- **Root cause:** two field-name disagreements between the page and the DTO — the page sends `note` and `tasks: [{title, estimatedMinutes}]`, the DTO declared `notes` and `tasksToCreate?: string[]`. With the global pipe's `forbidNonWhitelisted`, an undeclared property is a rejected request, not an ignored one. `tasksToCreate` had no producer anywhere in the repository, so it was removed rather than kept alongside.
+- **Why no test caught it:** every existing test of this flow calls the service directly and constructs its own object, so it never crosses the pipe. That is the exact gap Mission Section C names.
+- **Also fixed here:** the quote line shapes were `@IsArray()` over an inline TypeScript type, which validates the array and nothing inside it. That is how the page's `serviceName` and the service's `s.name` could disagree in silence, giving every dispatched task the title *"Perform Vehicle Repair"* whatever the operator approved. All three line types are `@ValidateNested` classes now.
+- **Proof:** `operator-dto-contract.spec.ts` (12 tests) pushes the page's real payloads through a real `ValidationPipe`; `operator-surface.http.spec.ts` sends them over real HTTP and reads the stored rows back — the note persists, the labour total is the one sent, and the created task is called *"Front brake service"*.
+- **Status:** **VERIFIED**
+
+### REC-014 — `SeverityLevel.CRITICAL` was unreachable · **P1**
+- **Verification:** `VERIFIED_RUNTIME`
+- `InspectionRepository` mapped a domain `CRITICAL` finding onto Prisma `HIGH`, so nothing in the shipped inspection flow could ever store `CRITICAL`. Three mechanisms read exactly that value: the `work_order.has_critical_fault` fact that `QC_MANDATORY = RISK_FLAGGED_ONLY` routes on, `evaluateCriticalFaultProgression` behind `APPROVAL_REQUIRED_SCOPE = CRITICAL_ONLY`, and the attention queue's critical rejections. A workshop could configure risk-based QC or critical-only customer approval and the option could never fire on a single job. The operator hub then mapped `HIGH` back to "CRITICAL" for display, so the screen and the database disagreed about the same brake finding.
+- **Fix:** `CRITICAL → CRITICAL`, `ATTENTION → MEDIUM`, otherwise `LOW`. The two display re-maps in `OperatorService` are gone, and the quote DTO carries the full four-value scale the database stores instead of silently rewriting `HIGH` to `MEDIUM` on the way in.
+- **Two tests encoded the old lossy mapping** (`technician-inspection.integration.spec.ts`, `inspection.repository.spec.ts`, one of them with the comment *"Prisma SeverityLevel.HIGH represents CRITICAL"*). Both now assert `CRITICAL`.
+- **Status:** **VERIFIED**
+
+### REC-016 — Duplicate fault projection · **P2**
+- **Verification:** `VERIFIED_CODE`
+- `submitInspectionReport` wrote `Fault` rows a second time, after the aggregate had already projected them, with no dedupe and with the severity flattened.
+- **Fix:** the second write runs only when the aggregate has not already projected (`SUBMITTED` / `OPERATOR_REVIEW` / `LOCKED`), skips a fault it can already find by description and code, and passes the finding's own severity through.
+- **Status:** **VERIFIED**
+
+### REC-021 — Operator authorization was a hardcoded role list with no branch scope · **P1**
+- **Verification:** `VERIFIED_HTTP`
+- **Two distinct defects.**
+  - **Authorization.** All fourteen routes were gated by one `new Set(["OPERATOR", "BRANCH_MANAGER", "TENANT_OWNER", "TENANT_ADMIN"])`. That sits *above* the eleven-layer resolver rather than inside it: a workshop could not delegate reception work to a role the Set omits, could not revoke it from one it names, and switching the OPERATIONS module off changed nothing, because a Set in a controller cannot see a capability. It also handed `TENANT_OWNER` and `TENANT_ADMIN` write powers that `default-role-permissions.ts` withholds from them in as many words — *"actually working a Work Order is Branch Manager/Technician territory"*.
+  - **Branch scope.** `overview` and `inspection-reports` filtered by the session's branch scope; the three per-work-order routes took only a tenant id. An operator at one branch could read another branch's inspection report, reprice its quote and dispatch its repair by holding an id — and the product hands work-order ids out on other pages.
+- **Fix:** every route names its permission and goes through `EffectiveAccessService.can`. Two new keys were needed and neither existed: `workorders.branch.dispatch_repair` (reviewing a quote and dispatching), and `finance.counter_sale.create` — kept deliberately separate from `finance.invoice.issue`, because invoicing a repair is owner-delegated money while a counter sale is retail and manning the till is why the OPERATOR role exists. Both default to `true` for `OPERATOR` and `BRANCH_MANAGER` only. The three work-order routes now pass through `requireWorkOrderInScope`, which answers `404`, not `403` — a 403 on a foreign id confirms the id is real.
+- **Migration required:** yes. `20260909120000_seed_operator_surface_permissions` backfills both keys for existing tenants, since an absent `RolePermission` row denies by default and workshops whose operators were dispatching yesterday must keep dispatching today. `ON CONFLICT DO NOTHING`, so an owner who has already decided otherwise is not overruled.
+- **Frontend:** the operator page asks `/access/check` for `workorders.branch.dispatch_repair` and hides *Save Draft* and *Approve & Dispatch* when the answer is no, rather than drawing two buttons that answer 403.
+- **Proof:** `operator-surface.http.spec.ts` — 9 tests over real HTTP against real Postgres, in a two-branch workshop. A north-branch operator gets `200` on their own job and `404` on a south-branch one for read, quote and dispatch alike, with the south inspection's pricing and the south job's status and task count asserted unchanged afterwards. A technician gets `403`. The owner gets `403` on dispatch and `200` on the read, which is exactly what the documented model says.
+- **Status:** **VERIFIED**
+
+---
+
+## Phase 5 — Inventory accounting on the operator path · **PARTIAL**
+
+### REC-015 — Reserved stock had no ledger behind it · **P1**
+- **Verification:** `VERIFIED_RUNTIME`
+- **Symptom:** `OperatorService.approveRepair` moved `WarehouseStockBalance` by hand — `availableQty: { decrement }`, `reservedQty: { increment }` — inside a `catch {}` commented "non-fatal". `StockService`'s own header forbids that in as many words: *"nothing else in the codebase is permitted to update WarehouseStockBalance… A service that adjusts a balance directly is the inventory equivalent of writing `WorkOrder.status` by hand."*
+- **What it cost, beyond the rule:**
+  - No `StockMovement` row, so `reservedQty` was the one bucket in inventory that `replay()` could not reproduce — it returned 0 forever, whatever the stored balance said. The PHASE_7 standard the design is judged by (*every number traceable to the movements that produced it*) was false for exactly this number, and the existing "THE RULE" test could not have caught it, because it only asked about `availableQty` and `damagedQty`.
+  - Neither the read that decided there was enough stock nor the write took a lock, so two operators approving the same part at the same instant both reserved the last unit.
+  - A reservation that would overdraw the shelf was applied regardless; nothing refused a negative result.
+  - The shortfall branch wrote `availableQty: 0` outright instead of decrementing by what it reserved, silently erasing any receipt that landed between the read and the write.
+- **Fix:** two new movement types, `RESERVE` and `RELEASE_RESERVATION` (migration `20260909130000`). `EFFECTS` gained an `alsoMoves` half so a two-sided movement is declared as data rather than special-cased inside `record`, which keeps the invariant tests iterating every type; `replay()` counts a movement towards either of its buckets. The operator now calls `StockService.record`, which re-reads under `FOR UPDATE` and refuses rather than clamping.
+- **Also fixed here — the banned default-warehouse hardcode.** Warehouse resolution fell back to *"the first active warehouse in the tenant"* when the branch had no serving relationship. In the multi-branch chain that fallback exists for, it reserved North's brake pads against a repair booked in the South: the shelf the technician walks to still had the part, and a shelf a hundred miles away was short one. It resolves through `BranchWarehouseAccess` now and refuses with `branch_has_no_serving_warehouse` rather than guessing — a catalogued part with nowhere to draw it from is a configuration answer the workshop owes.
+- **Proof:** `stock.integration.spec.ts` gained 7 tests against real Postgres — the two buckets move together and conserve total units, the movement carries its `WorkOrder` reference, over-reserving and over-releasing are both refused with the balance unchanged, THE RULE now holds for `reservedQty`, and two simultaneous reservations of the last unit produce exactly one winner.
+- **Status:** **VERIFIED** for the reservation itself. The reservation's *end* is REC-033 below.
+
+### REC-033 — A reservation is never consumed or released · **P1 · NEW**
+- **Verification:** `VERIFIED_CODE`
+- Nothing anywhere records `RELEASE_RESERVATION`, and nothing converts reserved stock into issued stock. A grep for `reservedQty` outside `StockService` finds only readers — two report surfaces and the operator's own pre-flight check.
+- So when an operator approves a repair for a part that is in stock, the units leave the sellable shelf permanently. No `PartRequest` is created for the in-stock branch, so the technician's issue path never runs against them; they are not issued, not returned, and not released if the job is cancelled. A workshop's sellable count therefore bleeds down over time while the parts are still physically on the shelf, and `availableQty + reservedQty` is the only number that stays honest.
+- This predates the fix above and is unchanged by it — REC-015 made the movement auditable, which is what makes this visible at all. It is *not* fixed, and it is not a linter's problem.
+- **Why it is not fixed here:** the consumption point belongs to the part-request spine, and that spine is the dual-truth problem in REC-019 / Phase 3. Adding a third path from the operator's side before the spine converges would make the convergence harder, not easier. Recorded rather than half-built.
+- **Status:** `OPEN` — **blocks completion.** Phase 3 must land first.
 
 ---
 
