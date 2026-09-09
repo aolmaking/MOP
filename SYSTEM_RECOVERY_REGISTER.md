@@ -126,7 +126,7 @@
 | ID | Issue | Severity | Level | State |
 |---|---|---|---|---|
 | REC-012 | Operator `update-quote` / `approve-repair` return **HTTP 400** — page sends `note`/`tasks`, DTOs declare `notes` and no `tasks` | P1 | `VERIFIED_RUNTIME` | **VERIFIED** — see below |
-| REC-013 | No frontend calls `POST /finance/work-orders/:id/invoice`; `READY_FOR_DELIVERY → CLOSED` is gated on `invoice.issued` | P1 | `VERIFIED_CODE` | OPEN |
+| REC-013 | No frontend calls `POST /finance/work-orders/:id/invoice`; `READY_FOR_DELIVERY → CLOSED` is gated on `invoice.issued` | P1 | `VERIFIED_CODE` | **VERIFIED** — see below |
 | REC-014 | Inspection domain `CRITICAL` collapses to Prisma `HIGH`; `has_critical_fault`, `QC_MANDATORY=RISK_FLAGGED_ONLY`, `APPROVAL_REQUIRED_SCOPE=CRITICAL_ONLY` and `critical_warning_acknowledged` all unreachable | P1 | `VERIFIED_CODE` | **VERIFIED** — see below |
 | REC-015 | `OperatorService` writes `WarehouseStockBalance` directly with no `StockMovement`; no `RESERVE`/`RELEASE` movement type exists, so `replay()` cannot reproduce `reservedQty` | P1 | `VERIFIED_CODE` | **VERIFIED** — see below (and REC-033) |
 | REC-016 | Duplicate fault projection — `submitInspectionReport` writes Faults twice, the second without dedupe | P2 | `VERIFIED_CODE` | **VERIFIED** — see below |
@@ -139,7 +139,7 @@
 | REC-023 | `CustomFieldDefinition` and `MessageTemplate` persist through the real API and are consumed by nothing | P3 | `VERIFIED_RUNTIME` | OPEN |
 | REC-024 | `ORPHANED_STATUS_CHANGE` checks for *zero* status events, so it never fires on an operator-created job that has one from intake | P2 | `VERIFIED_CODE` | OPEN |
 | REC-025 | Owner reports discard the requested `branchId` in 5 methods | P2 | `VERIFIED_CODE` | OPEN |
-| REC-026 | `lint-money` roots exclude `experiences/operator` and `experiences/technician`, where all the new float money lives | P2 | `VERIFIED_RUNTIME` | OPEN |
+| REC-026 | `lint-money` roots exclude `experiences/operator` and `experiences/technician`, where all the new float money lives | P2 | `VERIFIED_RUNTIME` | **VERIFIED** — lint-template-money |
 | REC-027 | Onboarding / capability-divergence / catalog-cart tests not updated when catalog provisioning was added (4 of the 6 remaining suite failures) | P3 | `VERIFIED_RUNTIME` | OPEN |
 | REC-028 | `POST /platform/workshops` returns 500 in `platform.controller.integration.spec.ts:135` | P2 | `VERIFIED_RUNTIME` | OPEN |
 | REC-029 | `StockService.transferStock` moves stock but writes no `InventoryTransfer` row | P3 | `VERIFIED_CODE` | OPEN |
@@ -209,6 +209,83 @@ exposes the second fault-writing path. They were fixed and verified together.
 - This predates the fix above and is unchanged by it — REC-015 made the movement auditable, which is what makes this visible at all. It is *not* fixed, and it is not a linter's problem.
 - **Why it is not fixed here:** the consumption point belongs to the part-request spine, and that spine is the dual-truth problem in REC-019 / Phase 3. Adding a third path from the operator's side before the spine converges would make the convergence harder, not easier. Recorded rather than half-built.
 - **Status:** `OPEN` — **blocks completion.** Phase 3 must land first.
+
+---
+
+## Phase 6 — The journey's back half, and the surfaces that lost it · **MOSTLY COMPLETE**
+
+This phase started as "fix the 90 failing web tests" and turned into the most
+productive audit of the session. A suite that red is a suite nobody reads, and
+what it had been reporting — for weeks — was that **eight capabilities had been
+removed from the product**. Every one had the same shape: a UI redesign dropped
+the markup, the method stayed on the component with no caller, nothing failed to
+compile, nothing failed to run, and the tests that said so were dismissed as
+stale.
+
+### REC-013 — Nothing in the product could issue an invoice · **P1**
+- **Verification:** `VERIFIED_CODE` (web) — the API path is already covered by `walkthrough.http.spec.ts`
+- `POST /finance/work-orders/:id/invoice` existed, was permission-gated, and was proven by the HTTP walkthrough. No page called it. A job finished, landed in `PAYMENT_PENDING`, and stopped: Take Payment needs an invoice id that did not exist, and `DELIVER` is gated on `invoice.issued`. **No work order could reach `CLOSED` through the product.**
+- The delivery board was already saying so, in words deliberately kept apart from "has not been settled" because they are two different jobs for two different people. It named the problem and offered nothing to do about it.
+- **Fix:** an *Issue invoice* action on exactly the rows where that is what holds the car, gated on `finance.invoice.issue`. Pressing it reloads the board rather than patching the row, because issuing changes which gate blocks, what the reason says, and whether Take Payment appears — all three are the server's answers.
+- **Status:** **VERIFIED**
+
+### REC-034 — The technician could not finish a job · **P1 · NEW**
+- **Verification:** `VERIFIED_CODE`
+- `c.finish` — available, passed, and the gate conditions in the gate registry's own words — was rendered nowhere, and `finish()` had no caller. A job stayed in `IN_PROGRESS` indefinitely. The server does not offer `FINISH` as a journey action to this audience *by design*, which is exactly why the card has to own the control.
+- Together with REC-013 the whole back half of the journey was unreachable through the UI: nobody could finish, and nobody could invoice. The API walkthrough passes the whole way through, which is precisely why neither was noticed.
+- **Status:** **VERIFIED** — restored, conditions shown before the press.
+
+### REC-035 — `TIME_TRACKING: REQUIRED` bricked task completion · **P1 · NEW**
+- **Verification:** `VERIFIED_CODE`
+- `canComplete` refuses a task with no minutes under that policy. The field that supplies them was dropped and the rule was not, so **Done was permanently disabled**: a workshop that switched on a feature the product sells could not complete a single task.
+- A configuration option that bricks the page it configures — the "configuration island" failure in its purest form.
+- **Status:** **VERIFIED**
+
+### REC-036 — The technician could not report a blocker · **P1 · NEW**
+- **Verification:** `VERIFIED_CODE`
+- "Something's wrong" and its reason list were gone. `blocker.report` is a permission the product grants, and the `no_open_blocker` delivery gate exists to read what it produces — with no way to report one, that gate could never hold anything back.
+- **Status:** **VERIFIED** — reasons as taps, not a text box: a technician with one free hand will not type, and the reason enum is what routes it to the right person.
+
+### REC-037 — The whole part-request loop had no surface · **P1 · NEW**
+- **Verification:** `VERIFIED_CODE`
+- `PartList` was imported by the work card and rendered nowhere, leaving `receivePart`, `usePart`, `returnPart` and `answerClarification` orphaned. A technician could not see the parts they had asked for, mark one received or used, send one back, or answer the store's question.
+- Three delivery gates — `parts.received_used_or_returned`, `parts.no_pending_return`, `parts.external_resolved` — are satisfied *only* by those four acts. **A job with any part request on it could never be delivered.**
+- **Status:** **VERIFIED**
+
+### REC-038 — Past recommendations and their evidence went dark · **P2 · NEW**
+- **Verification:** `VERIFIED_CODE`
+- `docs/HISTORY_MODULE.md` names the recommendation outcome model as the reason the technician's history panel exists, and the contract agrees: *"Agreed and not delivered. The reason this surface exists."* The server kept sending every recommendation, its outcome, its linked work and its dated evidence to a panel that rendered none of it.
+- The Attention strip survived and says *what* was not done. What went missing is the part that says why anyone should believe it — a technician about to tell a customer "you were told about this last time" needs to be able to show that they were.
+- **Status:** **VERIFIED** — markup and styles restored from the commit that wrote them.
+
+### REC-039 — The card offered moves the server never authorized · **P1 · NEW**
+- **Verification:** `VERIFIED_CODE`
+- `primaryJobAction` computed the technician's move from the work order's status alone. That asks neither question that decides whether a move is real: does this workshop's graph allow it from here, and does this technician hold the permission. So the card could offer a button the controller then refused, and offer nothing when the server had a move to give.
+- `runJourneyAction` then `return`ed silently for any key it did not recognise — a button the server offered that did nothing at all, which is the prohibition on ignoring an error in its quietest form.
+- The inspection stage offered no status move of any kind, so a job arriving `REGISTERED` went through checkpoints, findings and a submitted report **still sitting in `REGISTERED`** — and the operator's review queue only looks at `UNDER_INSPECTION`, so that report reached nobody.
+- **Fix:** both stages render `journey().actions`; an unhandled key says so on the page.
+- **Status:** **VERIFIED**
+
+### REC-040 — Fabricated prices on the operator's till · **P1 · NEW**
+- **Verification:** `VERIFIED_CODE`
+- The till read `item.price`, `item.unitPrice` and `item.retailPrice` — three fields the server has never sent. The call was typed `Observable<any>`, so nothing objected and every read fell through to its literal: each catalogue tile advertised a fabricated **45**, and adding that part to a customer's quote charged them a fabricated **50**. Two different invented numbers for the same part on the same screen, neither ever entered by anyone in the workshop. The SKU fell through to a timestamp, so the line could not be traced to a shelf either.
+- Typing the call also exposed `item.nameEn` and `item.partNumber`, two more fields nobody sends.
+- **Also:** fifteen places wrote `${{ price }}` — a literal dollar sign — so an Egyptian workshop quoted its own customers in dollars on the quote builder, the counter and the technician's tablet. And `unitPrice * quantity` inside interpolations: float arithmetic on money in the one place `lint-money` cannot read.
+- **Fix:** the till reads the same `PartCard` contract the technician's parts page reads; `Tenant.currency` reaches the client on the branding payload; `ui/money.ts` formats against it; `lineTotal` moved into the components. `tools/lint-template-money.mjs` guards all three shapes and is wired into `lint:architecture`.
+- **Status:** **VERIFIED**
+
+### REC-041 — The technician's queue invented a car · **P2 · NEW**
+- **Verification:** `VERIFIED_CODE`
+- `item.vehicleModel || 'Toyota Corolla 2021'` — a car with no model on file was described to the technician as a Corolla, on the screen they use to confirm they are working on the right vehicle.
+- **Status:** **VERIFIED** — shown only when the server sent one.
+
+### REC-042 — `tech-work-card.spec.ts` still describes the replaced inspection panel · **P3 · NEW**
+- **Verification:** `VERIFIED_RUNTIME`
+- 23 of the original 90 web failures remain, all in this one file, all on the `.mission` "Mission 1 / Active Inspection Workspace" panel that the studio-checkpoints redesign replaced wholesale. Unlike the eight above, **no capability was lost here** — findings, severity and submission all exist in the new inspection stage under a different structure.
+- **Next step:** rewrite those 23 against the current stage, preserving the guarantees they encode: complaint shown when present and absent when blank; no completion controls before an inspection starts; no log-finding controls once it is `COMPLETED` or `DECLINED`; findings and their decision statuses stay visible after completion; the awaiting-customer and authorization-required contexts; and blockers not hidden merely because the inspection finished.
+- **Status:** `OPEN`
+
+**Web suite: 90 failing / 382 → 23 failing / 397.** API suite unchanged at **141/141 suites, 1310/1310 tests**.
 
 ---
 
