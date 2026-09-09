@@ -51,6 +51,43 @@
             </a>
           </header>
 
+          <!--
+            The customer refused the inspection.
+            
+            An operational instruction, not a status: a technician who looks
+            around anyway does work nobody authorised, which the customer
+            either refuses to pay for or the workshop absorbs. `inspectionDeclined`
+            reached the card and was read nowhere after the redesign.
+          -->
+          @if (c.inspectionDeclined) {
+            <p class="card-note">Customer refused inspection. Do only what was agreed.</p>
+          }
+
+          <!--
+            The same server-authorized moves, on the inspection side.
+
+            The inspection stage offered no status move of any kind, so a job
+            that arrived REGISTERED went through checkpoints, findings and a
+            submitted report while still sitting in REGISTERED -- and the
+            operator's review queue only looks at UNDER_INSPECTION, so the
+            report never reached anybody.
+          -->
+          @if (journey()?.actions?.length) {
+            <div class="now-actions inspection-stage-actions">
+              @for (action of journey()!.actions; track action.key) {
+                <button
+                  class="now-action"
+                  type="button"
+                  [title]="action.hint ?? ''"
+                  [disabled]="busy() !== null"
+                  (click)="runJourneyAction(action)"
+                >
+                  {{ busy() === 'primary' ? '…' : action.label }}
+                </button>
+              }
+            </div>
+          }
+
           @switch (inspectionSubStep()) {
             @case ('checkpoints') {
               <!-- ── SUB-STEP 1: 3D CAR & CHECKPOINTS ── -->
@@ -676,6 +713,18 @@
             </div>
           </header>
 
+          <!--
+            The customer refused the inspection.
+            
+            An operational instruction, not a status: a technician who looks
+            around anyway does work nobody authorised, which the customer
+            either refuses to pay for or the workshop absorbs. `inspectionDeclined`
+            reached the card and was read nowhere after the redesign.
+          -->
+          @if (c.inspectionDeclined) {
+            <p class="card-note">Customer refused inspection. Do only what was agreed.</p>
+          }
+
           <!-- Extended Info & MERGED Vehicle History Panel (Photo 1 Requirement) -->
           @if (headerExpanded()) {
             <section class="live-details-expanded" aria-label="Extended Vehicle Details and Service History">
@@ -846,6 +895,36 @@
               }
 
               <!--
+                PARTS.
+
+                Above "Something's wrong" on purpose: when a car is
+                WAITING_PARTS this is the reason, and a technician should not
+                have to open a panel to find out what is holding their job.
+
+                Restored. `PartList` was still imported by the component and
+                rendered nowhere, which left `receivePart`, `usePart`,
+                `returnPart` and `answerClarification` with no caller. Three
+                delivery gates -- parts.received_used_or_returned,
+                parts.no_pending_return and parts.external_resolved -- are
+                satisfied only by those four acts, so a job with a part request
+                on it could never be handed back to its customer.
+              -->
+              @if (openParts().length > 0) {
+                <section class="tools parts-section">
+                  <h2 class="tools-title">Parts</h2>
+
+                  <app-part-list
+                    [parts]="openParts()"
+                    [busy]="busy()"
+                    (receive)="receivePart($event)"
+                    (markUsed)="usePart($event)"
+                    (returned)="returnPart($event)"
+                    (clarified)="answerClarification($event)"
+                  />
+                </section>
+              }
+
+              <!--
                 SOMETHING'S WRONG.
 
                 Restored. The redesign dropped every one of these controls
@@ -867,6 +946,9 @@
                   <button class="tap" type="button" (click)="panel.set(panel() === 'blocker' ? 'none' : 'blocker')">
                     I'm blocked
                   </button>
+                  <button class="tap" type="button" (click)="panel.set(panel() === 'fault' ? 'none' : 'fault')">
+                    Found a fault
+                  </button>
                 </div>
 
                 @if (panel() === 'blocker') {
@@ -882,6 +964,77 @@
                       </li>
                     }
                   </ul>
+                }
+
+                @if (panel() === 'fault') {
+                  <div class="fault">
+                    <textarea
+                      class="fault-text"
+                      rows="3"
+                      placeholder="What did you find?"
+                      [value]="faultText()"
+                      (input)="faultText.set($any($event.target).value)"
+                    ></textarea>
+
+                    <div class="severity">
+                      @for (level of ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']; track level) {
+                        <button
+                          class="tap tap--severity"
+                          type="button"
+                          [class.tap--selected]="faultSeverity() === level"
+                          (click)="faultSeverity.set(level)"
+                        >
+                          {{ label(level) }}
+                        </button>
+                      }
+                    </div>
+
+                    <label class="ask-toggle">
+                      <input
+                        type="checkbox"
+                        [checked]="askCustomer()"
+                        (change)="askCustomer.set($any($event.target).checked)"
+                      />
+                      Ask the customer to approve this
+                    </label>
+
+                    @if (askCustomer()) {
+                      <div class="ask-price">
+                        <label class="ask-price-field">
+                          <span>Price</span>
+                          <input
+                            type="text"
+                            inputmode="decimal"
+                            placeholder="0.00"
+                            [value]="faultPrice()"
+                            (input)="faultPrice.set($any($event.target).value)"
+                          />
+                        </label>
+                        <label class="ask-price-field">
+                          <span>Labour (optional)</span>
+                          <input
+                            type="text"
+                            inputmode="decimal"
+                            placeholder="0.00"
+                            [value]="faultLaborPrice()"
+                            (input)="faultLaborPrice.set($any($event.target).value)"
+                          />
+                        </label>
+                        @if (!priceValid()) {
+                          <p class="ask-price-hint">Enter the price you'd charge for this, e.g. 450 or 450.00.</p>
+                        }
+                      </div>
+                    }
+
+                    <button
+                      class="tap tap--primary tap--wide"
+                      type="button"
+                      [disabled]="busy() !== null || (askCustomer() && !priceValid())"
+                      (click)="logFault()"
+                    >
+                      {{ busy() === 'fault' ? '…' : askCustomer() ? 'Log it and ask the customer' : 'Log it' }}
+                    </button>
+                  </div>
                 }
               </section>
 
@@ -924,17 +1077,37 @@
               }
 
               <!-- Primary Job Action (e.g. Start Work or Finish) -->
-              @if (primaryJobAction(); as action) {
+              <!--
+                The job-level move, as the SERVER named it.
+
+                This was a `primaryJobAction` computed on the client from the
+                status alone -- REGISTERED means "Start inspection",
+                APPROVED_FOR_WORK means "Start work". That asks neither of the
+                two questions that decide whether the move is real: does this
+                workshop's own graph allow it from here, and does this
+                technician hold the permission. So the card could offer a
+                button the controller then refused, and could offer nothing at
+                all when the server had a move to give.
+
+                `journey().actions` is the answer to both, computed once on the
+                server and already used by the workflow strip beside this.
+              -->
+              @if (journey()?.actions?.length) {
                 <section class="tools primary-action-card">
                   <h3 class="tools-title">Job Status Progression</h3>
-                  <button
-                    class="tap tap--primary tap--wide"
-                    type="button"
-                    [disabled]="busy() !== null"
-                    (click)="pressPrimaryJobAction(action)"
-                  >
-                    {{ busy() === 'primary' ? '…' : action.label }}
-                  </button>
+                  <div class="now-actions">
+                    @for (action of journey()!.actions; track action.key) {
+                      <button
+                        class="now-action tap tap--primary tap--wide"
+                        type="button"
+                        [title]="action.hint ?? ''"
+                        [disabled]="busy() !== null"
+                        (click)="runJourneyAction(action)"
+                      >
+                        {{ busy() === 'primary' ? '…' : action.label }}
+                      </button>
+                    }
+                  </div>
                 </section>
               }
             </div>

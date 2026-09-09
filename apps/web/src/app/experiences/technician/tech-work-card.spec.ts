@@ -499,18 +499,20 @@ describe('TechWorkCard vehicle history', () => {
     const { fixture } = await render(card(), { history: brief() });
     const element = await openHistory(fixture);
 
-    expect(element.querySelector('.history-empty')?.textContent).toContain('never been here before');
-    expect(element.querySelector('.history-group')).toBeNull();
+    expect(element.querySelector('.history-empty')?.textContent).toContain('First visit for this vehicle');
+    expect(element.querySelector('.history-section')).toBeNull();
   });
 
   it('leads with what was agreed and never done', async () => {
     const { fixture } = await render(card(), { history: POPULATED });
     const element = await openHistory(fixture);
 
-    const alert = element.querySelector('.history-alert');
-    expect(alert?.textContent).toContain('Agreed before and not done');
+    // Renamed from `.history-alert` when the panel was redesigned; same
+    // strip, same job -- what was agreed and never delivered, first.
+    const alert = element.querySelector('.history-notice');
+    expect(alert?.textContent).toContain('agreed work not completed');
     expect(alert?.textContent).toContain('Wheel alignment');
-    // The performed one is NOT in the alert -- that is the whole point.
+    // The performed one is NOT in the strip -- that is the whole point.
     expect(alert?.textContent).not.toContain('Replace front brake discs');
   });
 
@@ -572,11 +574,11 @@ describe('TechWorkCard vehicle history', () => {
 
     // The panel is closed and empty again, not showing car A's story.
     expect(element.textContent).not.toContain('Grinding noise when braking');
-    expect(element.querySelector('.history-alert')).toBeNull();
+    expect(element.querySelector('.history-notice')).toBeNull();
 
     const secondCar = await openHistory(fixture);
     expect(secondCar.textContent).not.toContain('Grinding noise when braking');
-    expect(secondCar.querySelector('.history-empty')?.textContent).toContain('never been here before');
+    expect(secondCar.querySelector('.history-empty')?.textContent).toContain('First visit for this vehicle');
 
     // And back to A, which must be re-fetched rather than remembered.
     api.vehicleHistory.mockReturnValue(of(POPULATED));

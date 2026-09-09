@@ -43,6 +43,7 @@ const BLOCKER_REASONS = [
   imports: [
     RouterLink,
     WorkflowStrip,
+    PartList,
     TechVehicleHistory,
     Car3dViewerComponent,
     AnimatedPartIconComponent,
@@ -1042,6 +1043,17 @@ export class TechWorkCard {
    * ignored rather than guessed at -- a new server-side action reaches
    * this client as nothing, never as the wrong request.
    */
+  /**
+   * Take the move the server offered.
+   *
+   * `workflow-journey.service.ts` decides which actions a technician is
+   * offered at all -- it asks the graph AND the permission, and deliberately
+   * withholds moves that belong to somebody else, because "a dead button
+   * teaches people not to press buttons". So this handles exactly the keys it
+   * can send, and says so out loud rather than returning quietly if that ever
+   * stops being true: a button that does nothing is worse than one that is not
+   * there.
+   */
   protected runJourneyAction(action: JourneyAction): void {
     switch (action.key) {
       case 'start_inspection':
@@ -1051,6 +1063,7 @@ export class TechWorkCard {
         this.run('primary', this.api.startWork(this.id()));
         return;
       default:
+        this.actionError.set(`This page cannot perform "${action.label}" yet.`);
         return;
     }
   }
@@ -1192,20 +1205,6 @@ export class TechWorkCard {
    * APPROVED_FOR_WORK are the only two states with a technician-pressed
    * move waiting, and the graph itself decides whether either applies.
    */
-  protected readonly primaryJobAction = computed<{ key: 'start-inspection' | 'start-work'; label: string } | null>(() => {
-    const status = this.card()?.status;
-    if (status === 'REGISTERED') return { key: 'start-inspection', label: 'Start inspection' };
-    if (status === 'APPROVED_FOR_WORK') return { key: 'start-work', label: 'Start work' };
-    return null;
-  });
-
-  protected pressPrimaryJobAction(action: { key: 'start-inspection' | 'start-work' }): void {
-    if (action.key === 'start-inspection') {
-      this.run('start-inspection', this.api.startInspection(this.id()));
-    } else {
-      this.run('start-work', this.api.startWork(this.id()));
-    }
-  }
 
   protected startRepairWork(): void {
     this.run('start-work', this.api.startWork(this.id()));
