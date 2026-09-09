@@ -5,6 +5,7 @@ import { ErrorBanner } from '../../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../../ui/button/button.directive';
 import type { PresentedError } from '../../../runtime/http/error.interceptor';
 import { AccessApi } from '../../../identity/access.api';
+import { FinanceApi } from '../../finance/finance.api';
 import { ApprovalsApi, type DeliveryBoard, type DeliveryCandidate } from './approvals.api';
 
 type State = 'loading' | 'ready' | 'empty' | 'forbidden' | 'error';
@@ -26,6 +27,7 @@ type State = 'loading' | 'ready' | 'empty' | 'forbidden' | 'error';
 export class DeliveryPage {
   private readonly api = inject(ApprovalsApi);
   private readonly access = inject(AccessApi);
+  private readonly finance = inject(FinanceApi);
 
   /**
    * Whether this person may actually take money.
@@ -39,6 +41,18 @@ export class DeliveryPage {
    */
   protected readonly mayTakePayment = signal(false);
 
+  /**
+   * Whether this person may turn a finished job into an invoice.
+   *
+   * Separate from `mayTakePayment` because they are separate keys and
+   * `default-role-permissions.ts` withholds both from BRANCH_MANAGER by
+   * default -- issuing is the owner's until delegated, same as the till.
+   */
+  protected readonly mayIssueInvoice = signal(false);
+
+  /** Which row is mid-issue, so only its own button shows the wait. */
+  protected readonly issuing = signal<string | null>(null);
+
   protected readonly board = signal<DeliveryBoard | null>(null);
   protected readonly error = signal<PresentedError | null>(null);
   protected readonly state = signal<State>('loading');
@@ -49,6 +63,45 @@ export class DeliveryPage {
   constructor() {
     this.load();
     this.access.can('finance.payment.record').subscribe((allowed) => this.mayTakePayment.set(allowed));
+    this.access.can('finance.invoice.issue').subscribe((allowed) => this.mayIssueInvoice.set(allowed));
+  }
+
+  /**
+   * A job at PAYMENT_PENDING with no invoice yet.
+   *
+   * This was the dead end in the journey. The board already said "The
+   * final invoice has not been issued" -- correctly, and in the right
+   * words -- but no page in the product called
+   * `POST /finance/work-orders/:id/invoice`, so there was nothing the
+   * manager could do about it. The take-payment page needs an invoice id
+   * that did not exist, and DELIVER is gated on `invoice.issued`, so a
+   * work order could not reach CLOSED through the product at all.
+   */
+  protected awaitingInvoice(row: DeliveryCandidate): boolean {
+    return row.status === 'PAYMENT_PENDING' && !row.unsettledInvoiceId && !row.invoiceId;
+  }
+
+  /**
+   * Issue the invoice, then reload rather than patch the row.
+   *
+   * Issuing changes what is holding the car -- the gate flips, the
+   * blocking reason changes, and "Take payment" becomes available -- and
+   * all three of those are the server's answers. Reloading is how this
+   * page and the gate evaluator stay unable to disagree.
+   */
+  protected issueInvoice(row: DeliveryCandidate): void {
+    this.issuing.set(row.workOrderId);
+    this.releaseError.set(null);
+    this.finance.issueInvoice(row.workOrderId).subscribe({
+      next: () => {
+        this.issuing.set(null);
+        this.load();
+      },
+      error: (err: PresentedError) => {
+        this.issuing.set(null);
+        this.releaseError.set(err.message ?? 'The invoice could not be issued.');
+      },
+    });
   }
 
   protected load(): void {

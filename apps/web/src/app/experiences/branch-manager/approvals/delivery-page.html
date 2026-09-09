@@ -67,6 +67,29 @@
                     }
                   </ul>
 
+                  @if (awaitingInvoice(row) && mayIssueInvoice()) {
+                    <!--
+                      The step before "Take payment", and the one the
+                      product was missing entirely. Nothing anywhere
+                      called the issue endpoint, so a job that reached
+                      PAYMENT_PENDING had no way forward: no invoice to
+                      pay against, and DELIVER gated on `invoice.issued`.
+                      The row already named the problem; this is the
+                      answer to it.
+                    -->
+                    <button
+                      appButton
+                      variant="primary"
+                      size="small"
+                      type="button"
+                      class="row-pay"
+                      [disabled]="issuing() === row.workOrderId"
+                      (click)="issueInvoice(row)"
+                    >
+                      {{ issuing() === row.workOrderId ? 'Issuing…' : 'Issue invoice' }}
+                    </button>
+                  }
+
                   @if ((row.unsettledInvoiceId || row.invoiceId) && mayTakePayment()) {
                     <!--
                       The way OUT of the held state, not just its name.

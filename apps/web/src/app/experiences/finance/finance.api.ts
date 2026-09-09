@@ -41,6 +41,24 @@ export interface Settlement {
 export class FinanceApi {
   private readonly http = inject(HttpClient);
 
+  /**
+   * Turn a finished job into the invoice it will be paid against.
+   *
+   * There was no caller for this endpoint anywhere in the web app, which
+   * made the last third of the journey unreachable: a job sits in
+   * PAYMENT_PENDING, the delivery board correctly reports "The final invoice
+   * has not been issued", the take-payment page needs an invoice id that
+   * does not exist, and DELIVER is gated on `invoice.issued`. So no work
+   * order could reach CLOSED through the product at all.
+   *
+   * Discount and tax are optional and omitted here: the workshop's
+   * FinanceConfiguration supplies the defaults, and a page that made the
+   * counter retype them every time would be inviting a different bug.
+   */
+  issueInvoice(workOrderId: string): Observable<Settlement> {
+    return this.http.post<Settlement>(`/api/v1/finance/work-orders/${workOrderId}/invoice`, {});
+  }
+
   jobTotal(workOrderId: string): Observable<JobTotal> {
     return this.http.get<JobTotal>(`/api/v1/finance/work-orders/${workOrderId}/total`);
   }
