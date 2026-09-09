@@ -1,13 +1,16 @@
-# MOP System Recovery — Report (Phases 0–6)
+# MOP System Recovery — Report (Phases 0–7)
 
 **Branch:** `recovery/architectural-convergence`, forked from `main` @ `663eecd`
 **Commits:** `b3b9585` · `37264b7` · `32484c9` · `ee0417e` · `e3c54ab` · `73f4d9b` · `fcaa029` · `e38c34c` · `6c8fcfc` · `65b0b76` · `79d8f12` · `14ebcaa` · `dae5fe3` · `53b9bc1` · `e27bb29` · `107235f` · `ff1032c` · `26c3ce7` · `11c0f06`
 **Sibling worktrees** (`E:/mop-fleet/{w-a3,w-infra,w-int}`) were not touched.
 
-> This report covers the phases actually completed and verified. **The dual-spine
-> convergence (mission Phase 3) and the phases after Reporting remain open**, and
-> are listed in §7. Nothing here is described as done that was not executed and
-> observed. `SYSTEM_RECOVERY_REGISTER.md` carries every finding with its evidence.
+> This report covers the phases actually completed and verified. Phase 7 closed the
+> dual-spine convergence, the reservation lifecycle, the inspection-panel contract,
+> every flagged bare-id load and both remaining architectural linters; §9 records it
+> and supersedes §6 and §7 where they disagree. **Two items remain open by
+> deliberate decision, and §9 says why for each.** Nothing here is described as done
+> that was not executed and observed. `SYSTEM_RECOVERY_REGISTER.md` carries every
+> finding with its evidence.
 
 ---
 
@@ -18,14 +21,14 @@
 | Empty DB → migrate → seed | **FAIL** — `staffUser.create()` impossible | **PASS** |
 | Migration history ≡ `schema.prisma` | **3 statements of drift** | **no difference** |
 | API suites (serial, migration-built DB) | **43 / 139 failing** | **0 / 139 failing** |
-| API tests | **431 / 1282 failing** | **0 / 1282 failing** |
+| API tests | **431 / 1282 failing** | **0 / 1349 failing** (Phase 7) |
 | Cross-tenant attack probes | **4 of 13 leaking** (6 with a legitimate delegation) | **0 of 13 leaking** |
 | `pnpm typecheck` | PASS | PASS |
 | API build · web build | PASS | PASS |
 | Shared package tests | 250/250 | 250/250 |
-| Web tests | **90 / 382 failing** | **23 / 397 failing** (one file, REC-042) |
+| Web tests | **90 / 382 failing** | **0 / 387 failing** (Phase 7) |
 | Architectural linters reached by `pnpm lint` | **none** | **all eleven** |
-| Architectural linters passing | 3 of 7 | **9 of 11** |
+| Architectural linters passing | 3 of 7 | **11 of 11** (Phase 7) |
 | `WorkOrder.status` written outside the lifecycle | **5 places** | **none** |
 | `reservedQty` reproducible from the ledger | **no** | **yes** |
 | A work order can reach `CLOSED` through the UI | **no** | **yes** |
@@ -51,8 +54,9 @@ are back, found by taking the failing web suite seriously instead of dismissing
 it. Two of them — issuing an invoice and finishing a job — meant no work order
 could reach `CLOSED` through the product at all.
 
-**Architectural convergence:** not yet. The dual-spine problem (§7, Phase 3) is
-untouched and remains the largest single risk.
+**Architectural convergence:** done, and proven at runtime — see §9. The stored
+`enabledModules` projection is dropped, a reservation is consumed or released by the
+lifecycle service itself, and `lint-tenant-scope` reports zero.
 
 ---
 
@@ -77,16 +81,19 @@ untouched and remains the largest single risk.
 | **REC-015** | **Inventory** | **P1** | `OperatorService` moved `WarehouseStockBalance` by hand with no movement row, no lock and no refusal — `reservedQty` was the one bucket `replay()` could not reproduce. Warehouse fell back to "the first active one", reserving North's stock against a South repair | `RESERVE`/`RELEASE_RESERVATION` movement types with a declared two-sided effect; `BranchWarehouseAccess` resolves the shelf and refuses rather than guessing | `VERIFIED_RUNTIME` — 7 new tests: buckets conserve, over-reserve refused, THE RULE holds for `reservedQty`, one winner in a race |
 | **REC-021** | **Security** | **P1** | All fourteen operator routes gated by a hardcoded `Set` of role names — above the resolver, invisible to capabilities, and granting owners writes the defaults withhold. The three per-work-order routes had no branch scope | Every route names its permission through `EffectiveAccessService`; two new keys; the work-order routes answer 404 outside scope | `VERIFIED_HTTP` — 9 tests, two-branch workshop, victim's data asserted unchanged after each refusal |
 | **REC-013 / 034–041** | **Product** | **P1** | Eight capabilities removed from the UI by redesigns; each left its method on the component with no caller. **No work order could reach `CLOSED` through the product**, no job with a part request could be delivered, and `TIME_TRACKING: REQUIRED` disabled Done permanently | Invoice issuance, finish + conditions, time entry, blockers, the parts loop, fault logging, past recommendations, the declined-inspection note — all restored; job actions now come from `journey().actions` | `VERIFIED_CODE` + the web suite: **90 → 23 failures** |
-| **REC-040** | **Money** | **P1** | The till read three fields the server never sends, so every tile showed a fabricated 45 and every added line charged a fabricated 50. Fifteen hardcoded `# MOP System Recovery — Report (Phases 0–6)
+| **REC-040** | **Money** | **P1** | The till read three fields the server never sends, so every tile showed a fabricated 45 and every added line charged a fabricated 50. Fifteen hardcoded `# MOP System Recovery — Report (Phases 0–7)
 
 **Branch:** `recovery/architectural-convergence`, forked from `main` @ `663eecd`
 **Commits:** `b3b9585` · `37264b7` · `32484c9` · `ee0417e` · `e3c54ab` · `73f4d9b` · `fcaa029` · `e38c34c` · `6c8fcfc` · `65b0b76` · `79d8f12` · `14ebcaa` · `dae5fe3` · `53b9bc1` · `e27bb29` · `107235f` · `ff1032c` · `26c3ce7` · `11c0f06`
 **Sibling worktrees** (`E:/mop-fleet/{w-a3,w-infra,w-int}`) were not touched.
 
-> This report covers the phases actually completed and verified. **The dual-spine
-> convergence (mission Phase 3) and the phases after Reporting remain open**, and
-> are listed in §7. Nothing here is described as done that was not executed and
-> observed. `SYSTEM_RECOVERY_REGISTER.md` carries every finding with its evidence.
+> This report covers the phases actually completed and verified. Phase 7 closed the
+> dual-spine convergence, the reservation lifecycle, the inspection-panel contract,
+> every flagged bare-id load and both remaining architectural linters; §9 records it
+> and supersedes §6 and §7 where they disagree. **Two items remain open by
+> deliberate decision, and §9 says why for each.** Nothing here is described as done
+> that was not executed and observed. `SYSTEM_RECOVERY_REGISTER.md` carries every
+> finding with its evidence.
 
 ---
 
@@ -97,14 +104,14 @@ untouched and remains the largest single risk.
 | Empty DB → migrate → seed | **FAIL** — `staffUser.create()` impossible | **PASS** |
 | Migration history ≡ `schema.prisma` | **3 statements of drift** | **no difference** |
 | API suites (serial, migration-built DB) | **43 / 139 failing** | **0 / 139 failing** |
-| API tests | **431 / 1282 failing** | **0 / 1282 failing** |
+| API tests | **431 / 1282 failing** | **0 / 1349 failing** (Phase 7) |
 | Cross-tenant attack probes | **4 of 13 leaking** (6 with a legitimate delegation) | **0 of 13 leaking** |
 | `pnpm typecheck` | PASS | PASS |
 | API build · web build | PASS | PASS |
 | Shared package tests | 250/250 | 250/250 |
-| Web tests | **90 / 382 failing** | **23 / 397 failing** (one file, REC-042) |
+| Web tests | **90 / 382 failing** | **0 / 387 failing** (Phase 7) |
 | Architectural linters reached by `pnpm lint` | **none** | **all eleven** |
-| Architectural linters passing | 3 of 7 | **9 of 11** |
+| Architectural linters passing | 3 of 7 | **11 of 11** (Phase 7) |
 | `WorkOrder.status` written outside the lifecycle | **5 places** | **none** |
 | `reservedQty` reproducible from the ledger | **no** | **yes** |
 | A work order can reach `CLOSED` through the UI | **no** | **yes** |
@@ -130,8 +137,9 @@ are back, found by taking the failing web suite seriously instead of dismissing
 it. Two of them — issuing an invoice and finishing a job — meant no work order
 could reach `CLOSED` through the product at all.
 
-**Architectural convergence:** not yet. The dual-spine problem (§7, Phase 3) is
-untouched and remains the largest single risk.
+**Architectural convergence:** done, and proven at runtime — see §9. The stored
+`enabledModules` projection is dropped, a reservation is consumed or released by the
+lifecycle service itself, and `lint-tenant-scope` reports zero.
 
 ---
 
@@ -298,3 +306,67 @@ cannot see a button that is not there.
    exists; the guarantees to preserve are enumerated in the register.
 5. **REC-032** — a schema per jest worker, so `pnpm test` is trustworthy in
    parallel.
+
+---
+
+## 9 · Phase 7 — convergence, and the configuration that changed nothing
+
+Supersedes §6 and §7 above wherever they disagree. Full evidence per finding is in
+`SYSTEM_RECOVERY_REGISTER.md`, Phase 7.
+
+### What is now true
+
+| Signal | Phase 6 | Phase 7 |
+|---|---|---|
+| API suites · tests (serial, migration-built DB) | 143 / 143 · 1310 / 1310 | **143 / 143 · 1349 / 1349** |
+| Web tests | 23 failing / 397 | **0 failing / 387** |
+| Shared tests | 250 / 250 | **253 / 253** |
+| `pnpm typecheck` | PASS | PASS |
+| eslint errors | 71 → 25 | **0** |
+| Architectural linters passing | 9 of 11 | **11 of 11** |
+| `lint-tenant-scope` flagged sites | 72 | **0** |
+| `lint-money` violations | 5 | **0** |
+| Two sources of truth for a workshop's enabled modules | yes | **no — the projection column is dropped** |
+| A stock reservation is consumed or released | never | **consumed on CLOSED, released on CANCELLED** |
+| An invoice carries the workshop's configured tax | never | **always** |
+| A branch manager's report is scoped to their branch | on 3 of 5 pages | **on all 5** |
+
+### The three findings that were security, not tidiness
+
+Threading the session tenant through the last flagged loads was mostly mechanical,
+but three of them were reachable holes rather than internal helpers:
+
+- an operator could open an intake against **another workshop's asset id**;
+- any workshop could **revoke another workshop's stakeholder grant** by id;
+- a specialization definition could be **versioned out from under the entries**
+  filled against it, by anyone who knew the id.
+
+### The finding that was money
+
+Tax reached `issueInvoice` only as an optional request field that no page ever sent.
+**Every invoice this product has ever issued carried zero tax**, whatever the workshop
+had configured on its own finance settings page. Four other settable-and-unread fields
+went with it — invoice numbering, payment terms, the branch discount ceiling, and
+whether prices are tax-inclusive, which needed real arithmetic rather than a flag:
+adding 14% to a tax-inclusive price charges the customer twice.
+
+### What remains open, and why
+
+| ID | Issue | Sev | Why it is open |
+|---|---|---|---|
+| REC-023 | Custom field definitions and message templates are written by a real page and consumed by nothing | P3 | Half-wiring it is worse than the gap. Validating server-side without rendering the fields would let an owner define a **required** field the technician cannot see, bricking inspection submission — the same configuration-island failure as REC-035. Closing it means rendering the fields on nine forms and capturing them into nine write paths. |
+| REC-032 | The suite is serial by construction, not parallel-safe | P2 | `maxWorkers: 1` removes the run mode that produced false failures; a schema per `JEST_WORKER_ID` is the real fix and is not done. |
+| REC-022 (part) | `technicianPriceVisible`, `depositRequired`, `depositPercent` still have no reader | P3 | Not wiring gaps. The first contradicts the technician surface as built; the second pair needs a deposit concept in the money model — a payment taken before an invoice exists has nothing to settle against. Both are product decisions. |
+| — | The technician's POS cart holds money as a JavaScript number for its own subtotals | P3 | A client-side cart, not an API boundary. `lint-money` and `lint-template-money` both pass; this is recorded so it is not rediscovered as a finding. |
+
+**No HIGH or CRITICAL item remains open.** The mission's stop condition is met for
+every P1 and P2 except REC-032, which is stated above rather than claimed closed.
+
+### What this phase confirms about the two lessons in §7
+
+Both held again. `ORPHANED_STATUS_CHANGE` — the detector whose whole job is to notice
+a status written outside the lifecycle service — could not fire on any job that had
+ever been through intake, and no test failed because of it. And the finance settings
+page wrote sixteen fields to the database of which eight changed nothing, while every
+test around it passed. **A green suite still does not mean the system works**; what
+found both was asking what reads a value, not what writes it.

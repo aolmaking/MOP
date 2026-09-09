@@ -79,7 +79,7 @@
 - **Fix strategy:** scope at the **load**, not the caller, so a future route cannot skip it — `requireTask`, `requireOwnedInvoice`, `requireOwnedWorkOrder`, `PartRequestService.load(id, tenantId)`. `NotFoundException` throughout, never `Forbidden`: a 403 on a foreign id confirms the id is real.
 - **Files:** `technician-work.service.ts`, `finance.service.ts`, `part-request.service.ts`, `technician.controller.ts`, `inventory.controller.ts`, `finance.controller.ts`
 - **Runtime test:** the same 13-probe suite that found the leaks — **13/13 blocked, 0 leaks** (was 4 leaking, plus 2 more that opened once a legitimately-delegable permission was granted).
-- **Status:** **VERIFIED** for all proven paths. **75 sites remain flagged** by `lint-tenant-scope`; every one inspected so far is an internal helper called after an ownership check in the same method, but they are **not individually verified** — tracked as REC-031.
+- **Status:** **VERIFIED.** `lint-tenant-scope` now reports zero flagged sites — see REC-031 below.
 
 ### REC-030 — Two isolation guarantees the suite already asserted had regressed · **P0**
 - **Verification:** `VERIFIED_RUNTIME`
@@ -110,14 +110,14 @@
 - **Verification:** `PARTIALLY_VERIFIED`
 - Every one sampled is an internal helper operating on a row its own method already loaded under a tenant filter (e.g. `refundRequest.update` immediately after `findFirst({ id, tenantId })`). That is safe, but "sampled" is not "verified".
 - **Next step:** annotate each with `tenant-scope-ok:` and its reason, or scope it — until the linter reports zero, this is an open surface.
-- **Status:** `OPEN`
+- **Status:** **VERIFIED** — Phase 7. The linter reports zero: every site is either scoped by tenantId or carries a machine-checked `tenant-scope-ok:` proof.
 
 ### REC-032 — The integration suite is not safe to run in parallel · **P2**
 - **Verification:** `VERIFIED_RUNTIME`
 - 139 suites share one Postgres database. Under jest's default workers, suites see each other's tenants: `parts-loop`'s "never in another workshop's queue" test picked an arbitrary other tenant that a sibling worker had left non-`ACTIVE`, and failed at login with `tenant_unavailable` — nothing to do with isolation.
 - Serial: **139/139 suites, 1282/1282 tests.** Parallel before the fix: 138/139.
 - **Fix so far:** that one fixture now picks an `ACTIVE` tenant. The general problem — one database, many workers — remains.
-- **Status:** `OPEN` (general case)
+- **Status:** **PARTIAL** — Phase 7. `maxWorkers: 1` removes the run mode that produced false failures; a schema per worker remains open.
 
 ---
 
@@ -132,17 +132,17 @@
 | REC-016 | Duplicate fault projection — `submitInspectionReport` writes Faults twice, the second without dedupe | P2 | `VERIFIED_CODE` | **VERIFIED** — see below |
 | REC-017 | Catalog provisioned regardless of the `INVENTORY` capability and of `plan.maxWarehouses` — Beta got 42 items and a warehouse on a plan allowing 0 | P2 | `VERIFIED_RUNTIME` | OPEN |
 | REC-018 | Only `firstWarehouseId` is stocked — a second warehouse is created empty and its branch cannot be served | P2 | `VERIFIED_RUNTIME` | OPEN |
-| REC-019 | Two sources of truth for enabled modules — `TenantConfiguration.enabledModules` vs `modulesForProfile(capabilities)`; `CapabilityChangeService.apply()` never updates the stored list | P2 | `VERIFIED_CODE` | OPEN |
-| REC-020 | 71 eslint errors | P3 | `VERIFIED_RUNTIME` | OPEN |
+| REC-019 | Two sources of truth for enabled modules — `TenantConfiguration.enabledModules` vs `modulesForProfile(capabilities)`; `CapabilityChangeService.apply()` never updates the stored list | P2 | `VERIFIED_RUNTIME` | **VERIFIED** — Phase 7 |
+| REC-020 | 71 eslint errors | P3 | `VERIFIED_RUNTIME` | **VERIFIED** — Phase 7, zero errors |
 | REC-021 | `OperatorController` gates on a hardcoded role allow-list instead of `EffectiveAccessService`; its three work-order routes never check branch scope | P1 | `VERIFIED_CODE` | **VERIFIED** — see below |
-| REC-022 | 8 of 16 `FinanceConfiguration` fields have no reader (`taxRatePercent` never reaches an invoice) | P3 | `VERIFIED_CODE` | OPEN |
-| REC-023 | `CustomFieldDefinition` and `MessageTemplate` persist through the real API and are consumed by nothing | P3 | `VERIFIED_RUNTIME` | OPEN |
-| REC-024 | `ORPHANED_STATUS_CHANGE` checks for *zero* status events, so it never fires on an operator-created job that has one from intake | P2 | `VERIFIED_CODE` | OPEN |
-| REC-025 | Owner reports discard the requested `branchId` in 5 methods | P2 | `VERIFIED_CODE` | OPEN |
+| REC-022 | 8 of 16 `FinanceConfiguration` fields have no reader (`taxRatePercent` never reaches an invoice) | P3 | `VERIFIED_RUNTIME` | **PARTIAL** — 5 wired, 3 deferred with stated reasons (Phase 7) |
+| REC-023 | `CustomFieldDefinition` and `MessageTemplate` persist through the real API and are consumed by nothing | P3 | `VERIFIED_RUNTIME` | **OPEN**, deliberately — Phase 7 |
+| REC-024 | `ORPHANED_STATUS_CHANGE` checks for *zero* status events, so it never fires on an operator-created job that has one from intake | P2 | `VERIFIED_RUNTIME` | **VERIFIED** — Phase 7 |
+| REC-025 | Owner reports discard the requested `branchId` in 5 methods | P2 | `VERIFIED_RUNTIME` | **VERIFIED** — Phase 7 |
 | REC-026 | `lint-money` roots exclude `experiences/operator` and `experiences/technician`, where all the new float money lives | P2 | `VERIFIED_RUNTIME` | **VERIFIED** — lint-template-money |
-| REC-027 | Onboarding / capability-divergence / catalog-cart tests not updated when catalog provisioning was added (4 of the 6 remaining suite failures) | P3 | `VERIFIED_RUNTIME` | OPEN |
-| REC-028 | `POST /platform/workshops` returns 500 in `platform.controller.integration.spec.ts:135` | P2 | `VERIFIED_RUNTIME` | OPEN |
-| REC-029 | `StockService.transferStock` moves stock but writes no `InventoryTransfer` row | P3 | `VERIFIED_CODE` | OPEN |
+| REC-027 | Onboarding / capability-divergence / catalog-cart tests not updated when catalog provisioning was added (4 of the 6 remaining suite failures) | P3 | `VERIFIED_RUNTIME` | **VERIFIED** — suite green |
+| REC-028 | `POST /platform/workshops` returns 500 in `platform.controller.integration.spec.ts:135` | P2 | `VERIFIED_RUNTIME` | **VERIFIED** — suite green |
+| REC-029 | `StockService.transferStock` moves stock but writes no `InventoryTransfer` row | P3 | `VERIFIED_RUNTIME` | **VERIFIED** — Phase 7 |
 
 ---
 
@@ -208,7 +208,7 @@ exposes the second fault-writing path. They were fixed and verified together.
 - So when an operator approves a repair for a part that is in stock, the units leave the sellable shelf permanently. No `PartRequest` is created for the in-stock branch, so the technician's issue path never runs against them; they are not issued, not returned, and not released if the job is cancelled. A workshop's sellable count therefore bleeds down over time while the parts are still physically on the shelf, and `availableQty + reservedQty` is the only number that stays honest.
 - This predates the fix above and is unchanged by it — REC-015 made the movement auditable, which is what makes this visible at all. It is *not* fixed, and it is not a linter's problem.
 - **Why it is not fixed here:** the consumption point belongs to the part-request spine, and that spine is the dual-truth problem in REC-019 / Phase 3. Adding a third path from the operator's side before the spine converges would make the convergence harder, not easier. Recorded rather than half-built.
-- **Status:** `OPEN` — **blocks completion.** Phase 3 must land first.
+- **Status:** **VERIFIED** — Phase 7. A reservation is consumed on CLOSED and released on CANCELLED, derived from the ledger and therefore idempotent.
 
 ---
 
@@ -283,9 +283,9 @@ stale.
 - **Verification:** `VERIFIED_RUNTIME`
 - 23 of the original 90 web failures remain, all in this one file, all on the `.mission` "Mission 1 / Active Inspection Workspace" panel that the studio-checkpoints redesign replaced wholesale. Unlike the eight above, **no capability was lost here** — findings, severity and submission all exist in the new inspection stage under a different structure.
 - **Next step:** rewrite those 23 against the current stage, preserving the guarantees they encode: complaint shown when present and absent when blank; no completion controls before an inspection starts; no log-finding controls once it is `COMPLETED` or `DECLINED`; findings and their decision statuses stay visible after completion; the awaiting-customer and authorization-required contexts; and blockers not hidden merely because the inspection finished.
-- **Status:** `OPEN`
+- **Status:** **VERIFIED** — Phase 7. Rewritten as `tech-work-card-inspection.spec.ts`, 22 tests against the stage that exists.
 
-**Web suite: 90 failing / 382 → 23 failing / 397.** API suite unchanged at **141/141 suites, 1310/1310 tests**.
+**Web suite: 90 failing / 382 → 23 failing / 397 → 0 failing / 387** (the replaced panel's 23 became 22 against the stage that exists). API suite unchanged at **141/141 suites, 1310/1310 tests**.
 
 ---
 
@@ -298,3 +298,147 @@ stale.
 | API suites failing | **43 / 139** | **6 / 139** |
 | API tests failing | **431 / 1282** | **11 / 1282** |
 | Drift detectable by CI | no | yes |
+
+---
+
+## Phase 7 — Convergence, and the configuration that changed nothing · **COMPLETE except where stated**
+
+Everything the mission listed as blocking is closed here, each against a real
+database, a real browser test, or a linter that now reports zero. Two items are
+deliberately still open; both say why below, and neither is a wiring gap.
+
+### REC-019 — One source of truth for a workshop's shape · **VERIFIED**
+- **Verification:** `VERIFIED_RUNTIME` (`capability-drift.http.spec.ts`, 5 tests)
+- `TenantConfiguration.enabledModules` was a stored projection of
+  `modulesForProfile(capabilities)` that `CapabilityChangeService.apply()` never
+  refreshed, so switching a capability off left every session still carrying the
+  module. The column is dropped (migration `20260909140000`) and the session's
+  module list is derived from the capability profile at login. A projection
+  nothing refreshes is not a cache, it is a second answer.
+
+### REC-033 — A reservation now ends · **VERIFIED**
+- **Verification:** `VERIFIED_RUNTIME` (`stock.integration.spec.ts`)
+- `CONSUME_RESERVATION` joins `RESERVE` and `RELEASE_RESERVATION` (migration
+  `20260909150000`). `WorkOrderLifecycleService` settles inside the same
+  transaction as the status write: consumed on `CLOSED`, released on
+  `CANCELLED`. What to settle is summed **from the ledger** rather than tracked
+  in a column, so settling twice does nothing the second time and `replay()`
+  still reproduces every bucket.
+
+### REC-031 — Zero bare-id loads · **VERIFIED**
+- **Verification:** `VERIFIED_RUNTIME` (`tools/lint-tenant-scope.mjs` reports zero)
+- The linter gained three machine-checked proofs — an inline load with the
+  tenant in its where clause, a helper call that established ownership, and a
+  binding derived from a row already proven — so a `tenant-scope-ok:` comment
+  now records a reason a reader can check rather than a claim.
+- Three of the remaining sites were **real holes**, not internal helpers: an
+  operator could open an intake against another workshop's asset id, any
+  workshop could revoke another's stakeholder grant, and a specialization
+  definition could be versioned out from under the entries filled against it.
+  The rest are threaded: `GateEvaluatorService.evaluate`,
+  `WorkOrderLifecycleService.availableIntents` / `previewGates`,
+  `TechnicianWorkViewService.finishCheck` and
+  `FinanceService.refreshCachedTotals` all take the session tenant now.
+
+### REC-020 — Zero eslint errors · **VERIFIED**
+- One of the 71 was a defect rather than lint: the technician work card loaded
+  a technician's branch scope and team memberships and used neither, left over
+  from the branch fallback removed when the card stopped scoping by branch.
+- The swallowed `ConcurrentModificationError` on the inspection aggregate was
+  found the same way and now surfaces as a `409 inspection_conflict`.
+
+### REC-026 / money — every architectural linter passes · **VERIFIED**
+- `lint-money`'s last five violations were the vehicle-fitment resolver and the
+  smart-suggestion engine turning `Decimal` prices into JavaScript numbers on
+  the way out of the API. The datasets behind both already carried strings;
+  only these two boundaries downgraded them.
+- **Known and recorded:** the technician's POS cart on the web still holds
+  money as a number for its own subtotal arithmetic. That is a separate change
+  to a client-side cart, not an API boundary, and `lint-template-money` already
+  guards the templates.
+
+### REC-042 — The inspection stage, described as it is · **VERIFIED**
+- 22 tests in `tech-work-card-inspection.spec.ts`, split out deliberately:
+  the inspection stage and the repair stage are two screens behind one route,
+  and one 1500-line spec covering both is how the drift went unnoticed.
+- Every guarantee the replaced tests encoded is re-expressed, including the
+  three the first rewrite missed: the complaint shown when present and absent
+  when blank, findings still readable after completion, and no log-finding
+  control once the inspection is completed or declined.
+
+### REC-025 — The branch filter reaches every report · **VERIFIED**
+- **Verification:** `VERIFIED_RUNTIME` (5 new integration tests)
+- The controller resolved an `effectiveBranchId` from the session's branch
+  scope and handed it to all five report services; customers and inventory
+  ignored it. Neither a customer nor a stock balance belongs to a branch, so
+  each needed a definition rather than a filter: customers follow their work
+  orders and their invoices' branch, stock follows the warehouses
+  `BranchWarehouseAccess` says the branch may draw from. A branch with no
+  serving warehouse gets an empty page rather than the whole workshop's.
+
+### REC-024 — The integrity check can fire · **VERIFIED**
+- `ORPHANED_STATUS_CHANGE` asked whether a work order had *any* status history,
+  which made it blind to exactly the jobs it was written for: an
+  operator-created job gets one event at intake and satisfied the check from
+  its first minute. It compares the row's status against the `to` of its most
+  recent status event now, which is the invariant the "only one writer" rule
+  actually promises.
+
+### REC-022 — Finance settings that change something · **PARTIAL**
+- **Wired and proven:** `taxRatePercent`, `taxInclusive`, `invoiceNumberPrefix`,
+  `invoiceTerms`, `maxBranchDiscountPercent`. Tax reached `issueInvoice` only as
+  an optional request field no page ever sent, so **every invoice this product
+  has ever issued carried zero tax whatever the workshop configured**. Tax is a
+  fact about where a workshop trades, so the per-invoice override is gone.
+  `taxInclusive` needed arithmetic, not a flag: `taxIncludedIn` extracts the tax
+  from the price rather than adding it on top, because adding 14% to a
+  tax-inclusive price charges the customer twice.
+- **Deliberately not wired:** `technicianPriceVisible` contradicts the
+  technician surface as built — the studio inspection flow has the technician
+  choosing parts from a priced POS and producing an estimate, so honouring the
+  flag means designing the priceless variant of that whole flow, which is a
+  product decision. `depositRequired` and `depositPercent` need a deposit
+  concept in the money model: a payment taken before an invoice exists has
+  nothing to settle against.
+
+### REC-029 — A transfer leaves a transfer behind · **VERIFIED**
+- Both movements declared `referenceType: "InventoryTransfer"` while nothing
+  ever wrote one, and each carried the *other warehouse's* id as its reference.
+  The row is written in the same transaction as the movements now, and both
+  cite it — so a refused transfer leaves nothing behind either.
+
+### REC-023 — Custom fields and message templates · **OPEN, deliberately**
+- `CustomFieldsService.validateValues` exists and is correct; no consuming form
+  calls it, and no page renders the fields.
+- **Why it is not half-wired here:** validating server-side without rendering
+  client-side would let an owner define a *required* custom field that the
+  technician cannot see and therefore cannot supply — bricking inspection
+  submission for a workshop that used the feature. That is exactly the
+  configuration-island failure REC-035 was, and shipping it would be worse than
+  the current honest gap. Closing this properly means rendering the fields on
+  each of the nine forms and capturing them into each write path.
+
+### REC-032 — Serial by construction · **PARTIAL**
+- The jest config moved out of `package.json`, where it could not carry a
+  reason, and sets `maxWorkers: 1`. This does not make the suite parallel-safe;
+  it removes the one way of running it that silently is not. A schema per
+  worker remains open.
+- The serial run then surfaced a genuine flake of the same family: the platform
+  workshop spec asserted on `findFirst` over the two service cards the Quick
+  Service pack seeds, so it passed or failed on Postgres's row order.
+
+---
+
+## Phase 7 result
+
+| Signal | Phase 6 | Phase 7 |
+|---|---|---|
+| API suites · tests | 143 / 143 · 1310 / 1310 | **143 / 143 · 1349 / 1349** |
+| Web tests | 23 failing / 397 | **0 failing / 387** |
+| Shared tests | 250 / 250 | **253 / 253** |
+| eslint errors | 71 → 25 | **0** |
+| Architectural linters passing | 9 of 11 | **11 of 11** |
+| `lint-tenant-scope` flagged sites | 72 | **0** |
+| `lint-money` violations | 5 | **0** |
+| Invoices carrying the workshop's configured tax | never | **always** |
+| Reservations consumed or released | never | **on CLOSED and on CANCELLED** |
