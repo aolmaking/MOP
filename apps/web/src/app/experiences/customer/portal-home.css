@@ -1152,3 +1152,85 @@
   line-height: 1.5;
 }
 
+
+/*
+  Report an issue.
+
+  The customer's one outbound action on this page, so it reads as a primary
+  affordance rather than another tile: everything above it is something the
+  workshop is telling them, and this is the one place they can say something
+  back. Spacing and radii come from the tokens, so it sits in the same rhythm
+  as the tiles beneath it.
+*/
+.report-issue {
+  margin-block: var(--space-6);
+}
+
+.report-trigger {
+  inline-size: 100%;
+}
+
+.report-booked {
+  margin-block-end: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--success-soft, rgb(16 185 129 / 0.12));
+  color: var(--text);
+}
+
+.report-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-lg);
+  background: var(--surface, #ffffff);
+}
+
+.report-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.report-label {
+  font-weight: 600;
+}
+
+.report-select,
+.report-textarea {
+  min-block-size: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: var(--radius-md);
+  background: var(--surface, #ffffff);
+  color: var(--text);
+  font: inherit;
+}
+
+.report-textarea {
+  resize: vertical;
+}
+
+.report-error {
+  color: var(--danger, #b91c1c);
+}
+
+.report-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+
+.report-pos {
+  display: flex;
+  min-block-size: var(--tap);
+  align-items: center;
+  justify-content: center;
+  margin-block-end: var(--space-3);
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  text-decoration: none;
+}

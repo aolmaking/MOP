@@ -128,6 +128,82 @@
           }
         </section>
 
+        <!-- REPORT AN ISSUE -->
+        <section class="report-issue">
+          @if (reportBooked()) {
+            <p class="report-booked" role="status">
+              Thank you — we have your request. The workshop will be in touch.
+            </p>
+          }
+
+          @if (!reporting()) {
+            <!--
+              The counter, for a customer who only needs a part and does not
+              need the car looked at. /customer/pos has existed as a route and
+              /customer-portal/parts-catalog as an endpoint; nothing linked to
+              either, so the page was reachable only by typing the URL.
+            -->
+            <a id="btn-customer-pos" class="report-pos" routerLink="/customer/pos">Buy Parts (POS)</a>
+            <button
+              id="btn-report-issue"
+              appButton
+              variant="primary"
+              type="button"
+              class="report-trigger"
+              (click)="openReport()"
+            >
+              Report an Issue
+            </button>
+          } @else {
+            <form class="report-form" (ngSubmit)="submitReport()">
+              <h2 class="section-title">Report an Issue</h2>
+
+              @if (myAssets().length > 1) {
+                <label class="report-field">
+                  <span class="report-label">Which vehicle?</span>
+                  <select
+                    class="report-select"
+                    [value]="reportAssetId()"
+                    (change)="reportAssetId.set($any($event.target).value)"
+                  >
+                    <option value="">I'll say in the description</option>
+                    @for (asset of myAssets(); track asset.id) {
+                      <option [value]="asset.id">{{ asset.plateNumber ?? asset.vinOrChassisNumber ?? asset.category }}</option>
+                    }
+                  </select>
+                </label>
+              }
+
+              <label class="report-field">
+                <span class="report-label">What is happening?</span>
+                <!--
+                  A plain input handler rather than ngModel: the signal has to
+                  be current by the time the submit button's disabled state is
+                  read, and ngModel's update is a tick behind.
+                -->
+                <textarea
+                  class="report-textarea"
+                  rows="4"
+                  placeholder="Squeaking noise when braking, warning light on the dash…"
+                  [value]="reportComplaint()"
+                  (input)="reportComplaint.set($any($event.target).value)"
+                ></textarea>
+              </label>
+
+              @if (reportError()) {
+                <p class="report-error" role="alert">{{ reportError() }}</p>
+              }
+
+              <div class="report-actions">
+                <button appButton variant="secondary" type="button" (click)="closeReport()">Cancel</button>
+                <button appButton variant="primary" type="submit" [disabled]="!canSubmitReport()">
+                  {{ reportSubmitting() ? 'Sending…' : 'Send to the workshop' }}
+                </button>
+              </div>
+            </form>
+          }
+        </section>
+
         <!-- ORIENTATION TILES -->
         <div class="tiles">
           <a class="tile" routerLink="/customer/garage" [queryParams]="{ tab: 'vehicles' }">
@@ -137,6 +213,10 @@
           <a class="tile" routerLink="/customer">
             <span class="tile-count">{{ d.currentServiceCount }}</span>
             <span class="tile-label">In service now</span>
+          </a>
+          <a id="btn-customer-pos-card" class="tile" routerLink="/customer/pos">
+            <span class="tile-count">🛒</span>
+            <span class="tile-label">Open Parts POS</span>
           </a>
           <a class="tile" routerLink="/customer/garage" [queryParams]="{ tab: 'invoices' }">
             <span class="tile-count">{{ d.openInvoiceBalance }}</span>

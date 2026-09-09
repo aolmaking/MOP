@@ -81,6 +81,78 @@ export class PortalHome {
 
   protected readonly myAssets = signal<readonly PortalAsset[]>([]);
 
+  /**
+   * Reporting a problem.
+   *
+   * `POST /customer-portal/service-requests` has existed on the server, with a
+   * validated DTO and a client method on `CustomerPortalApi`, and nothing in
+   * the product ever called it. A customer could watch a repair and pay for
+   * one, but could not ask for one: the portal's whole reason to exist had no
+   * front door. The spec for this button was written and the button never was,
+   * which is why that test had been failing since the day it landed.
+   */
+  protected readonly reporting = signal(false);
+  protected readonly reportAssetId = signal<string>('');
+  protected readonly reportComplaint = signal<string>('');
+  protected readonly reportSubmitting = signal(false);
+  protected readonly reportError = signal<string | null>(null);
+  protected readonly reportBooked = signal<string | null>(null);
+
+  /**
+   * The complaint is what the workshop has to act on, so an empty one is
+   * refused here rather than sent for the server to reject. Three characters
+   * is the server's own floor, not a number invented for this page.
+   */
+  protected readonly canSubmitReport = computed(
+    () => this.reportComplaint().trim().length >= 3 && !this.reportSubmitting(),
+  );
+
+  protected openReport(): void {
+    this.reporting.set(true);
+    this.reportError.set(null);
+    this.reportBooked.set(null);
+    const assets = this.myAssets();
+    // Pre-selected only when there is no choice to make. Picking one of several
+    // on the customer's behalf is how the wrong car gets booked in.
+    this.reportAssetId.set(assets.length === 1 ? assets[0].id : '');
+  }
+
+  protected closeReport(): void {
+    this.reporting.set(false);
+    this.reportComplaint.set('');
+    this.reportError.set(null);
+  }
+
+  protected submitReport(): void {
+    if (!this.canSubmitReport()) return;
+
+    this.reportSubmitting.set(true);
+    this.reportError.set(null);
+
+    this.api
+      .reportIssue({
+        complaint: this.reportComplaint().trim(),
+        ...(this.reportAssetId() ? { assetId: this.reportAssetId() } : {}),
+      })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (result) => {
+          this.reportSubmitting.set(false);
+          this.reporting.set(false);
+          this.reportComplaint.set('');
+          // Confirmed on this page with the job it created, rather than routed
+          // somewhere else: the customer asked for something and is owed a
+          // plain answer that it was received.
+          this.reportBooked.set(result.workOrderId);
+          this.load();
+        },
+        error: (err: PresentedError) => {
+          this.reportSubmitting.set(false);
+          this.reportError.set(err.message ?? 'That could not be sent. Please try again.');
+        },
+      });
+  }
+
   protected readonly currentJob = computed(() => {
     const jobs = this.activeJobs();
     const selected = this.selectedJobId();
