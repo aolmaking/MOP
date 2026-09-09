@@ -179,6 +179,159 @@ describe("stock movements", () => {
   });
 });
 
+/**
+ * Reservations.
+ *
+ * `reservedQty` was a column and a `StockBucket` from the start, but no
+ * movement type moved it, so the only thing writing it was a hand-rolled
+ * `warehouseStockBalance.update` in `OperatorService`. That made it the one
+ * bucket in inventory with no ledger behind it -- `replay()` returned 0 for it
+ * no matter what the stored balance said, and THE RULE above could not have
+ * been asked about it.
+ */
+describe("reservations move two buckets and stay replayable", () => {
+  let reserveItemId: string;
+
+  beforeAll(async () => {
+    reserveItemId = (
+      await prisma.inventoryItem.create({
+        data: { tenantId, sku: `RSV-${SUFFIX}`, name: "Brake pad set", itemType: "PART", sellingPrice: "450.00" },
+      })
+    ).id;
+    await stock.record({
+      tenantId,
+      inventoryItemId: reserveItemId,
+      warehouseId,
+      type: "SUPPLIER_RECEIPT",
+      quantity: 10,
+      actorId: ACTOR,
+    });
+  });
+
+  it("takes reserved stock off the sellable shelf without destroying it", async () => {
+    const after = await stock.record({
+      tenantId,
+      inventoryItemId: reserveItemId,
+      warehouseId,
+      type: "RESERVE",
+      quantity: 4,
+      actorId: ACTOR,
+      referenceType: "WorkOrder",
+      referenceId: "wo-reserve-1",
+    });
+
+    expect(after.availableQty).toBe(6);
+    expect(after.reservedQty).toBe(4);
+    // Nothing has left the building: the two buckets still hold every unit.
+    expect(after.availableQty + after.reservedQty).toBe(10);
+  });
+
+  it("writes one movement carrying what caused it", async () => {
+    const movement = await prisma.stockMovement.findFirstOrThrow({
+      where: { tenantId, inventoryItemId: reserveItemId, type: "RESERVE" },
+      orderBy: { createdAt: "desc" },
+    });
+
+    expect(movement.quantity).toBe(4);
+    expect(movement.beforeQty).toBe(10);
+    expect(movement.afterQty).toBe(6);
+    expect(movement.referenceType).toBe("WorkOrder");
+    expect(movement.referenceId).toBe("wo-reserve-1");
+  });
+
+  it("refuses to reserve more than is on the shelf", async () => {
+    await expect(
+      stock.record({
+        tenantId,
+        inventoryItemId: reserveItemId,
+        warehouseId,
+        type: "RESERVE",
+        quantity: 99,
+        actorId: ACTOR,
+      }),
+    ).rejects.toThrow(/Not enough stock/);
+
+    const unchanged = await stock.balanceOf(reserveItemId, warehouseId);
+    expect(unchanged.availableQty).toBe(6);
+    expect(unchanged.reservedQty).toBe(4);
+  });
+
+  it("refuses to release more than was ever reserved, rather than inventing stock", async () => {
+    await expect(
+      stock.record({
+        tenantId,
+        inventoryItemId: reserveItemId,
+        warehouseId,
+        type: "RELEASE_RESERVATION",
+        quantity: 9,
+        actorId: ACTOR,
+      }),
+    ).rejects.toThrow(/Not enough stock/);
+
+    const unchanged = await stock.balanceOf(reserveItemId, warehouseId);
+    expect(unchanged.availableQty).toBe(6);
+  });
+
+  it("puts a released reservation back on the sellable shelf", async () => {
+    const after = await stock.record({
+      tenantId,
+      inventoryItemId: reserveItemId,
+      warehouseId,
+      type: "RELEASE_RESERVATION",
+      quantity: 1,
+      actorId: ACTOR,
+    });
+
+    expect(after.reservedQty).toBe(3);
+    expect(after.availableQty).toBe(7);
+  });
+
+  it("THE RULE holds for reservedQty too, which it never could before", async () => {
+    const stored = await stock.balanceOf(reserveItemId, warehouseId);
+
+    expect(await stock.replay(reserveItemId, warehouseId, "reservedQty")).toBe(stored.reservedQty);
+    // And the two-sided movements are counted on the other side as well, so
+    // adding RESERVE did not quietly break the bucket that already worked.
+    expect(await stock.replay(reserveItemId, warehouseId, "availableQty")).toBe(stored.availableQty);
+  });
+
+  it("lets exactly one of two simultaneous reservations of the last unit succeed", async () => {
+    const lastItemId = (
+      await prisma.inventoryItem.create({
+        data: { tenantId, sku: `RACE-RSV-${SUFFIX}`, name: "Last coil", itemType: "PART", sellingPrice: "90.00" },
+      })
+    ).id;
+    await stock.record({
+      tenantId,
+      inventoryItemId: lastItemId,
+      warehouseId,
+      type: "SUPPLIER_RECEIPT",
+      quantity: 1,
+      actorId: ACTOR,
+    });
+
+    // The write this replaced took no lock on either side, so two operators
+    // approving the same part at the same instant both reserved the last unit.
+    const attempt = () =>
+      stock.record({
+        tenantId,
+        inventoryItemId: lastItemId,
+        warehouseId,
+        type: "RESERVE",
+        quantity: 1,
+        actorId: ACTOR,
+      });
+
+    const outcomes = await Promise.allSettled([attempt(), attempt()]);
+    expect(outcomes.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(outcomes.filter((r) => r.status === "rejected")).toHaveLength(1);
+
+    const final = await stock.balanceOf(lastItemId, warehouseId);
+    expect(final.availableQty).toBe(0);
+    expect(final.reservedQty).toBe(1);
+  }, 30_000);
+});
+
 describe("the database enforces it too, not only the service", () => {
   it("rejects a negative balance written directly, bypassing StockService", async () => {
     // Service code is a promise; a constraint is a fact. A seed script or

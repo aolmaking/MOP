@@ -204,6 +204,21 @@ enum StockMovementType {
   // a RETURN_TO_STOCK or DAMAGED movement of the same quantity when the
   // inventory manager decides, never left standing on its own.
   RETURN_PENDING
+  // Stock spoken for by an approved repair but still on the shelf. Moves two
+  // buckets at once -- out of availableQty, into reservedQty -- so the shelf
+  // count stops offering a part that is already promised, without pretending
+  // it has left the building.
+  //
+  // reservedQty existed as a column and as a StockBucket from the start, but no
+  // movement type touched it, so the only writer was a hand-rolled
+  // `warehouseStockBalance.update` in OperatorService. That balance could
+  // therefore never be replayed against the ledger, which is the one property
+  // the whole inventory design is built to guarantee.
+  RESERVE
+  // The reverse: a reservation given up (the approval was withdrawn, or the
+  // part came from somewhere else). Never left standing without either this or
+  // a later issue against it.
+  RELEASE_RESERVATION
 }
 
 enum TransferStatus {

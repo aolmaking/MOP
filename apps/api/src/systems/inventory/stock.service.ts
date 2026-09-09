@@ -8,8 +8,21 @@ import { PrismaService } from "../../runtime/database/prisma.service";
  * Declared as data rather than as a switch, because the invariant tests
  * iterate it: a movement type added later without an entry here fails a
  * test instead of silently moving nothing.
+ *
+ * `bucket` is the movement's PRIMARY bucket -- the one `replay()` sums and the
+ * one an insufficient-stock refusal is measured against. `alsoMoves` exists for
+ * the one shape that is genuinely two-sided: a reservation does not create or
+ * destroy stock, it moves the same units between two buckets, and both halves
+ * have to happen or neither may. Keeping it declarative rather than special-
+ * casing reservations inside `record` means the invariant tests still iterate
+ * every type, and a future two-sided movement declares itself the same way.
  */
-const EFFECTS: Record<StockMovementType, { bucket: StockBucket; direction: 1 | -1 }> = {
+interface BucketEffect {
+  readonly bucket: StockBucket;
+  readonly direction: 1 | -1;
+  readonly alsoMoves?: { readonly bucket: StockBucket; readonly direction: 1 | -1 };
+}
+const EFFECTS: Record<StockMovementType, BucketEffect> = {
   // Leaves sellable stock for a job.
   ISSUE: { bucket: "availableQty", direction: -1 },
   // Comes back and is sellable again.
@@ -25,6 +38,18 @@ const EFFECTS: Record<StockMovementType, { bucket: StockBucket; direction: 1 | -
   // still with the technician. Always reversed later by a RETURN_TO_STOCK
   // or DAMAGED movement of the same quantity; never left standing alone.
   RETURN_PENDING: { bucket: "returnPendingQty", direction: 1 },
+  // Promised to an approved repair, still physically here. Off the sellable
+  // shelf and into the reserved bucket, in one movement, so the two halves can
+  // never disagree. Measured against availableQty, so reserving more than is on
+  // the shelf is refused exactly like issuing more would be.
+  RESERVE: { bucket: "availableQty", direction: -1, alsoMoves: { bucket: "reservedQty", direction: 1 } },
+  // The promise withdrawn. Measured against reservedQty, because releasing more
+  // than was ever reserved is the mistake worth refusing here.
+  RELEASE_RESERVATION: {
+    bucket: "reservedQty",
+    direction: -1,
+    alsoMoves: { bucket: "availableQty", direction: 1 },
+  },
 };
 
 export type StockBucket = "availableQty" | "reservedQty" | "issuedQty" | "returnPendingQty" | "damagedQty";
@@ -161,6 +186,23 @@ export class StockService {
         });
       }
 
+      // The other half of a two-sided movement, checked before either half is
+      // written: a reservation that would drive reservedQty negative is refused
+      // whole, never applied halfway.
+      const counterpart = effect.alsoMoves
+        ? {
+            bucket: effect.alsoMoves.bucket,
+            after: locked[effect.alsoMoves.bucket] + input.quantity * effect.alsoMoves.direction,
+          }
+        : null;
+
+      if (counterpart && counterpart.after < 0) {
+        throw new BadRequestException({
+          code: "insufficient_stock",
+          message: `Not enough stock: ${locked[counterpart.bucket]} available, ${Math.abs(delta)} needed.`,
+        });
+      }
+
       const balance = await client.warehouseStockBalance.update({
         where: {
           inventoryItemId_warehouseId: {
@@ -168,7 +210,10 @@ export class StockService {
             warehouseId: input.warehouseId,
           },
         },
-        data: { [effect.bucket]: after },
+        data: {
+          [effect.bucket]: after,
+          ...(counterpart ? { [counterpart.bucket]: counterpart.after } : {}),
+        },
       });
 
       await client.stockMovement.create({
@@ -309,7 +354,16 @@ export class StockService {
       // money-lint-ok: a count of physical objects, not a currency amount.
       // Integer arithmetic in JS is exact below 2^53, and no workshop has
       // nine quadrillion brake pads.
-      return effect.bucket === bucket ? total + movement.quantity * effect.direction : total;
+      //
+      // A two-sided movement counts towards whichever of its two buckets is
+      // being replayed. Reading only the primary bucket would make reservedQty
+      // replay as zero forever -- which is precisely the state this bucket was
+      // in before RESERVE existed.
+      // money-lint-ok: a count of physical objects, not a currency amount.
+      if (effect.bucket === bucket) return total + movement.quantity * effect.direction;
+      // money-lint-ok: same count, counted on the movement's other side.
+      if (effect.alsoMoves?.bucket === bucket) return total + movement.quantity * effect.alsoMoves.direction;
+      return total;
     }, 0);
   }
 }
