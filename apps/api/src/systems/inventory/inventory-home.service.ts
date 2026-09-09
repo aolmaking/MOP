@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../runtime/database/prisma.service";
+import { CONSUMPTION_MOVEMENT_TYPES } from "./stock.service";
 
 /** A count, plus where it actually is. */
 export interface ScopedCount {
@@ -217,7 +218,7 @@ export class InventoryHomeService {
       by: ["inventoryItemId"],
       where: {
         tenantId,
-        type: "ISSUE",
+        type: { in: [...CONSUMPTION_MOVEMENT_TYPES] },
         createdAt: { gte: since },
         ...(warehouseIds.length > 0 ? { warehouseId: { in: [...warehouseIds] } } : {}),
       },

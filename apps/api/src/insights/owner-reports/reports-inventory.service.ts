@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { InventoryReportsService, type InventoryReports } from "../../systems/inventory/inventory-reports.service";
 import { resolveDateRange, toDecimalNumber, type ReportQueryParams } from "./date-range.util";
+import { CONSUMPTION_MOVEMENT_TYPES } from "../../systems/inventory/stock.service";
 
 /**
  * A sentinel warehouse id, used when a branch serves no warehouse at all: an
@@ -183,7 +184,7 @@ export class ReportsInventoryService {
         tenantId,
         inventoryItemId: { in: [...byItem.keys()] },
         ...(warehouseScope.length > 0 ? { warehouseId: { in: [...warehouseScope] } } : {}),
-        type: { in: ["ISSUE", "TRANSFER_OUT"] },
+        type: { in: [...CONSUMPTION_MOVEMENT_TYPES, "TRANSFER_OUT"] },
       },
       select: { inventoryItemId: true },
       distinct: ["inventoryItemId"],

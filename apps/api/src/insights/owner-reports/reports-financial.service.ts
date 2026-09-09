@@ -42,6 +42,19 @@ export interface FinancialReport {
   readonly laborRevenue: number;
   readonly partsRevenue: number;
   readonly discountsTotal: number;
+  /**
+   * Tax charged in this range, and what is left after it.
+   *
+   * `revenue` on every other line here is what was invoiced, tax included --
+   * that is what the customer was asked for and what the trend has always
+   * meant. Since Phase 7 an invoice actually carries the workshop's configured
+   * tax, so without these two the owner's revenue silently included money
+   * being collected on the state's behalf, with nothing on the page saying so.
+   * Both are reported rather than one being redefined: changing what an
+   * existing number means, quietly, is how a report stops being trusted.
+   */
+  readonly taxTotal: number;
+  readonly netOfTaxRevenue: number;
   readonly branchRevenue: readonly BranchRevenueRow[];
   readonly topServicesByRevenue: readonly ServiceRevenueRow[];
   readonly paymentMethods: readonly PaymentMethodRow[];
@@ -84,10 +97,11 @@ export class ReportsFinancialService {
 
     const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { currency: true } });
 
-    const [trend, laborParts, discountsTotal, branchRevenue, topServices, paymentMethods, outstandingAging] =
+    const [trend, laborParts, taxAndGross, discountsTotal, branchRevenue, topServices, paymentMethods, outstandingAging] =
       await Promise.all([
         this.trend(tenantId, range, granularity, branchId),
         this.laborVsParts(tenantId, range, branchId),
+        this.taxAndGross(tenantId, range, branchId),
         this.discountsTotal(tenantId, range, branchId),
         this.branchRevenue(tenantId, range, branchId),
         this.topServicesByRevenue(tenantId, range, branchId),
@@ -102,6 +116,8 @@ export class ReportsFinancialService {
       laborRevenue: laborParts.labor,
       partsRevenue: laborParts.parts,
       discountsTotal,
+      taxTotal: taxAndGross.tax,
+      netOfTaxRevenue: taxAndGross.netOfTax,
       branchRevenue,
       topServicesByRevenue: topServices,
       paymentMethods,
@@ -238,6 +254,40 @@ export class ReportsFinancialService {
     return {
       labor: Number(fromMinor(laborMinor)),
       parts: Number(fromMinor(partsMinor)),
+    };
+  }
+
+  /**
+   * The tax on this range's invoices, and the revenue left once it is out.
+   *
+   * Read off `Invoice.tax` rather than recomputed from a rate: the rate can
+   * change, and an invoice issued last month is subject to the rate it carried
+   * when it was issued. Recomputing would quietly restate history -- the same
+   * reason `invoiceTerms` is snapshotted onto the billing document.
+   *
+   * Minor units throughout: subtracting two floats is exactly how a report
+   * comes back a cent short of the invoices behind it.
+   */
+  private async taxAndGross(
+    tenantId: string,
+    range: { from: Date; to: Date },
+    branchId: string | undefined,
+  ): Promise<{ tax: number; netOfTax: number }> {
+    const result = await this.prisma.invoice.aggregate({
+      where: {
+        tenantId,
+        issuedAt: { gte: range.from, lte: range.to },
+        ...validInvoiceWhere(branchId),
+      },
+      _sum: { tax: true, total: true },
+    });
+
+    const taxMinor = toMinor(toDecimalNumber(result._sum.tax).toFixed(2));
+    const totalMinor = toMinor(toDecimalNumber(result._sum.total).toFixed(2));
+
+    return {
+      tax: Number(fromMinor(taxMinor)),
+      netOfTax: Number(fromMinor(totalMinor - taxMinor)),
     };
   }
 

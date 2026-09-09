@@ -248,3 +248,50 @@ describe("the branch filter is honoured", () => {
     expect(main.partProfitability.map((row) => row.inventoryItemId)).not.toContain(item.id);
   });
 });
+
+/**
+ * REC-046, the dead-stock half: a part sold every week through the
+ * approve-repair path produced no `ISSUE` movement, so this report called it
+ * stock that had never moved in its life.
+ */
+describe("dead stock knows about consumed reservations", () => {
+  it("does not call a part dead when it left the shelf on a job", async () => {
+    const warehouse = await prisma.warehouse.create({ data: { tenantId, name: "Live", code: `LIV-${SUFFIX}` } });
+    const item = await prisma.inventoryItem.create({
+      data: { tenantId, sku: `SKU-${SUFFIX}-live`, name: "Sells Every Week", itemType: "PART", sellingPrice: 40 },
+    });
+    await prisma.warehouseStockBalance.create({
+      data: { tenantId, warehouseId: warehouse.id, inventoryItemId: item.id, availableQty: 5 },
+    });
+    await prisma.stockMovement.create({
+      data: {
+        tenantId,
+        warehouseId: warehouse.id,
+        inventoryItemId: item.id,
+        type: "CONSUME_RESERVATION",
+        quantity: 3,
+        actorId: "store-1",
+        beforeQty: 3,
+        afterQty: 0,
+      },
+    });
+
+    const report = await inventory.build(tenantId, {});
+
+    expect(report.deadStock.map((row) => row.inventoryItemId)).not.toContain(item.id);
+  });
+
+  it("still calls a part dead when nothing has ever moved", async () => {
+    const warehouse = await prisma.warehouse.create({ data: { tenantId, name: "Dusty", code: `DST-${SUFFIX}` } });
+    const item = await prisma.inventoryItem.create({
+      data: { tenantId, sku: `SKU-${SUFFIX}-dead`, name: "Never Sold", itemType: "PART", sellingPrice: 40 },
+    });
+    await prisma.warehouseStockBalance.create({
+      data: { tenantId, warehouseId: warehouse.id, inventoryItemId: item.id, availableQty: 5 },
+    });
+
+    const report = await inventory.build(tenantId, {});
+
+    expect(report.deadStock.map((row) => row.inventoryItemId)).toContain(item.id);
+  });
+});

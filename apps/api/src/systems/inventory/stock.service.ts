@@ -22,6 +22,22 @@ interface BucketEffect {
   readonly direction: 1 | -1;
   readonly alsoMoves?: { readonly bucket: StockBucket; readonly direction: 1 | -1 };
 }
+/**
+ * The movement types that mean a part left the shelf on a job.
+ *
+ * There are two of them, and every derived view that asks "what moved?" has to
+ * ask about both. A part promised to an approved repair leaves through
+ * `CONSUME_RESERVATION` and never produces an `ISSUE` at all, so usage,
+ * velocity, stock risk, fast-moving and dead-stock all under-reported exactly
+ * the parts that go through the operator's approve-repair path -- and dead
+ * stock called a part "never moved" when the workshop had been selling it for
+ * months.
+ *
+ * Exported as one constant rather than repeated as a literal in five files,
+ * because the five had already drifted apart once.
+ */
+export const CONSUMPTION_MOVEMENT_TYPES = ["ISSUE", "CONSUME_RESERVATION"] as const;
+
 const EFFECTS: Record<StockMovementType, BucketEffect> = {
   // Leaves sellable stock for a job.
   ISSUE: { bucket: "availableQty", direction: -1 },

@@ -51,4 +51,24 @@
       <p class="panel-hint">Approved discounts in this period.</p>
     </section>
   </div>
+
+  <div class="grid-2">
+    <!--
+      Revenue everywhere else on this page is what was invoiced, tax included.
+      Since an invoice actually carries the workshop's configured tax, that
+      number includes money being collected on the state's behalf -- so both
+      figures are named here rather than one of them being quietly redefined.
+    -->
+    <section class="panel">
+      <h2 class="panel-title">Tax charged</h2>
+      <p class="discount-total">{{ fmtMoney(data().taxTotal) }}</p>
+      <p class="panel-hint">Included in every revenue figure above.</p>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Revenue net of tax</h2>
+      <p class="discount-total">{{ fmtMoney(data().netOfTaxRevenue) }}</p>
+      <p class="panel-hint">What was invoiced, once the tax is taken out.</p>
+    </section>
+  </div>
 </div>

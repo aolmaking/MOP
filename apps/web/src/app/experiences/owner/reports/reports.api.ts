@@ -152,6 +152,9 @@ export interface FinancialReport {
   readonly laborRevenue: number;
   readonly partsRevenue: number;
   readonly discountsTotal: number;
+  /** Tax charged in this range, and the revenue left once it is out. */
+  readonly taxTotal: number;
+  readonly netOfTaxRevenue: number;
   readonly branchRevenue: readonly BranchRevenueRow[];
   readonly topServicesByRevenue: readonly ServiceRevenueRow[];
   readonly paymentMethods: readonly PaymentMethodRow[];

@@ -360,3 +360,86 @@ describe("Reports & Stock Insights", () => {
     expect(scoped.returns.total).toBe(0);
   });
 });
+
+/**
+ * REC-046: a part promised to an approved repair leaves the shelf through
+ * `CONSUME_RESERVATION` and never produces an `ISSUE` at all. Every derived
+ * view here asked for `type: "ISSUE"`, so usage, velocity, stock risk and
+ * fast-moving all under-reported exactly the parts that go through the
+ * operator's approve-repair path -- the busiest path in the product.
+ */
+describe("a consumed reservation is a part that left the shelf", () => {
+  let consumedItemId: string;
+
+  beforeAll(async () => {
+    const item = await prisma.inventoryItem.create({
+      data: {
+        tenantId,
+        sku: `SKU-${SUFFIX}-consumed`,
+        name: "Reserved Then Fitted",
+        itemType: "PART",
+        sellingPrice: 100,
+        stockTracked: true,
+        lowStockThreshold: 2,
+      },
+    });
+    consumedItemId = item.id;
+
+    await stock.record({
+      tenantId,
+      inventoryItemId: consumedItemId,
+      warehouseId: mainId,
+      type: "SUPPLIER_RECEIPT",
+      quantity: 20,
+      actorId: ACTOR,
+    });
+    // Promised to a job, then fitted -- the two movements the operator path
+    // actually writes. No ISSUE is produced anywhere in this sequence.
+    await stock.record({
+      tenantId,
+      inventoryItemId: consumedItemId,
+      warehouseId: mainId,
+      type: "RESERVE",
+      quantity: 15,
+      actorId: ACTOR,
+    });
+    await stock.record({
+      tenantId,
+      inventoryItemId: consumedItemId,
+      warehouseId: mainId,
+      type: "CONSUME_RESERVATION",
+      quantity: 15,
+      actorId: ACTOR,
+    });
+  });
+
+  it("counts it as usage", async () => {
+    const report = await reports.build(tenantId, [mainId]);
+    const usage = report.usage.find((row) => row.itemId === consumedItemId);
+
+    expect(usage?.issued).toBe(15);
+  });
+
+  it("counts it towards stock risk, so a fast-selling part is not called safe", async () => {
+    const report = await reports.build(tenantId, [mainId]);
+    const risk = report.stockRisk.find((row) => row.itemId === consumedItemId);
+
+    // 5 left against 15 consumed in the 30-day window: ten days of runway,
+    // which is inside the horizon this report warns about. Before the fix the
+    // item had no consumption at all as far as this query could see, so it was
+    // reported as not moving -- the safest-looking possible answer.
+    expect(risk).toBeDefined();
+    expect(risk?.available).toBe(5);
+    expect(risk?.daysLeft).not.toBeNull();
+  });
+
+  it("does not count the reservation itself as usage", async () => {
+    // A reservation is a promise, not a sale. Counting both halves would
+    // report every fitted part twice.
+    const report = await reports.build(tenantId, [mainId]);
+    const usage = report.usage.find((row) => row.itemId === consumedItemId);
+
+    expect(usage?.issued).toBe(15);
+    expect(usage?.movements).toBe(1);
+  });
+});

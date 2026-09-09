@@ -519,3 +519,78 @@ describe("ReportsFinancialService", () => {
     expect(totalTrend).toBe(300);
   });
 });
+
+/**
+ * REC-047: an invoice carries the workshop's configured tax now, so "revenue"
+ * -- what was invoiced -- includes money being collected on the state's
+ * behalf. Nothing on the report said so, and an owner reading it was
+ * over-counting their own earnings by the tax rate.
+ */
+describe("tax has lineage on the financial report", () => {
+  it("reports the tax it charged, and the revenue left once it is out", async () => {
+    const at = new Date("2026-08-12T10:00:00Z");
+    const from = "2026-08-01T00:00:00Z";
+    const to = "2026-08-31T23:59:59Z";
+
+    const taxedBranch = await prisma.branch.create({ data: { tenantId, name: "Taxed", code: `TAX-${SUFFIX}` } });
+    const wo = await prisma.workOrder.create({
+      data: { tenantId, branchId: taxedBranch.id, assetId, customerId, status: "CLOSED" },
+    });
+    await prisma.invoice.create({
+      data: {
+        tenantId,
+        branchId: taxedBranch.id,
+        workOrderId: wo.id,
+        invoiceNumber: `INV-${SUFFIX}-taxed`,
+        subtotal: 1000,
+        discount: 0,
+        tax: 140,
+        total: 1140,
+        paid: 0,
+        balance: 1140,
+        issuedById: "staff-1",
+        issuedAt: at,
+      },
+    });
+
+    const report = await financial.build(tenantId, { from, to, branchId: taxedBranch.id });
+
+    expect(report.taxTotal).toBe(140);
+    // 1140 invoiced, 140 of it the state's.
+    expect(report.netOfTaxRevenue).toBe(1000);
+  });
+
+  it("reports zero tax for a workshop that charges none, rather than omitting it", async () => {
+    // An absent number reads as "unknown"; a zero reads as "none charged",
+    // and only one of those is true for a workshop with no tax configured.
+    const at = new Date("2026-09-12T10:00:00Z");
+    const untaxed = await prisma.branch.create({ data: { tenantId, name: "Untaxed", code: `UNT-${SUFFIX}` } });
+    const wo = await prisma.workOrder.create({
+      data: { tenantId, branchId: untaxed.id, assetId, customerId, status: "CLOSED" },
+    });
+    await prisma.invoice.create({
+      data: {
+        tenantId,
+        branchId: untaxed.id,
+        workOrderId: wo.id,
+        invoiceNumber: `INV-${SUFFIX}-untaxed`,
+        subtotal: 500,
+        discount: 0,
+        total: 500,
+        paid: 0,
+        balance: 500,
+        issuedById: "staff-1",
+        issuedAt: at,
+      },
+    });
+
+    const report = await financial.build(tenantId, {
+      from: "2026-09-01T00:00:00Z",
+      to: "2026-09-30T23:59:59Z",
+      branchId: untaxed.id,
+    });
+
+    expect(report.taxTotal).toBe(0);
+    expect(report.netOfTaxRevenue).toBe(500);
+  });
+});
