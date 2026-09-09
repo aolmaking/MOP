@@ -1,12 +1,12 @@
 import { BadRequestException, Injectable, Optional } from "@nestjs/common";
-import { sum } from "@mop/shared";
-import type { CategoryCode } from "@mop/database";
+import { sum, WORK_ORDER_GRAPH } from "@mop/shared";
+import type { CategoryCode, WorkOrderStatus } from "@mop/database";
 import type { SessionContext } from "@mop/shared";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { AWAITING_CUSTOMER_STATUSES } from "./decision.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 import { IntakeService } from "../operations/intake.service";
-import type { LifecycleActor } from "../operations/work-order-lifecycle.service";
+import { WorkOrderLifecycleService, type LifecycleActor } from "../operations/work-order-lifecycle.service";
 import type { ReportCustomerIssueDto } from "./report-issue.dto";
 import type { CustomerPosOrderDto } from "./customer-pos-order.dto";
 
@@ -85,6 +85,10 @@ export class CustomerPortalService {
     private readonly prisma: PrismaService,
     @Optional() private readonly policies?: PolicyResolutionService,
     @Optional() private readonly intakeService?: IntakeService,
+    // Required in the module; last so the several specs that construct this
+    // service by hand keep working. A counter sale cannot be created without
+    // it -- see createPosOrder.
+    @Optional() private readonly lifecycle?: WorkOrderLifecycleService,
   ) {}
 
   /**
@@ -321,15 +325,36 @@ export class CustomerPortalService {
       });
     }
 
-    // 4. Create counter work order in PAYMENT_PENDING
+    // 4. A counter sale starts at the graph's initial state and takes the
+    // declared counter-sale edge -- the same route the operator's till uses.
+    // Assigning PAYMENT_PENDING here bypassed the FINANCE_CORE requirement on
+    // both that edge and the only edge out of PAYMENT_PENDING, so a customer
+    // buying parts from a shop with no finance module got an order that could
+    // never be settled or closed.
+    // No lifecycle, no sale. The alternative -- creating the order and skipping
+    // the transition -- would leave a DRAFT work order carrying a real invoice,
+    // which is worse than refusing.
+    if (!this.lifecycle) {
+      throw new BadRequestException({
+        code: "lifecycle_unavailable",
+        message: "Counter sales are not available right now.",
+      });
+    }
+
     const workOrder = await this.prisma.workOrder.create({
       data: {
         tenantId,
         branchId: branch.id,
         customerId,
         assetId: asset.id,
-        status: "PAYMENT_PENDING",
+        status: WORK_ORDER_GRAPH.initial as WorkOrderStatus,
       },
+    });
+
+    await this.lifecycle.apply(workOrder.id, "ISSUE_INVOICE", {
+      accountId: session.accountId,
+      displayName: session.displayName || "Customer",
+      actorType: "CUSTOMER",
     });
 
     const staff = (await this.prisma.account.findFirst({

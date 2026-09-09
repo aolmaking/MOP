@@ -1,10 +1,11 @@
-import { BadRequestException, Injectable, Optional } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { PrismaService } from "../../runtime/database/prisma.service";
 import { IntakeService } from "../../systems/operations/intake.service";
 import { CatalogBrowseService } from "../../systems/inventory/catalog-browse.service";
-import type { SessionContext } from "@mop/shared";
-import { type CategoryCode, Prisma } from "@mop/database";
-import type { LifecycleActor } from "../../systems/operations/work-order-lifecycle.service";
+import { StockService } from "../../systems/inventory/stock.service";
+import { WORK_ORDER_GRAPH, type SessionContext } from "@mop/shared";
+import { type CategoryCode, Prisma, type WorkOrderStatus } from "@mop/database";
+import { WorkOrderLifecycleService, type LifecycleActor } from "../../systems/operations/work-order-lifecycle.service";
 import type {
   OperatorApproveRepairDto,
   OperatorDispatchRepairDto,
@@ -67,8 +68,111 @@ export class OperatorService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly intakeService: IntakeService,
+    private readonly lifecycle: WorkOrderLifecycleService,
+    private readonly stock: StockService,
     @Optional() private readonly browse?: CatalogBrowseService,
   ) {}
+
+  /**
+   * The job, if this operator's branch scope actually reaches it.
+   *
+   * `getOverview` and `getInspectionReports` were already scoped, but the
+   * three per-work-order routes took only a tenant id -- so an operator
+   * restricted to one branch could read another branch's inspection report,
+   * reprice its quote and dispatch its repair simply by holding the id. The
+   * list they were shown never contained it; the id is guessable from any
+   * other page that shows one, and nothing here checked.
+   *
+   * An empty scope means "every branch", which is how the session encodes an
+   * unrestricted role -- see `branch-manager.controller.ts` for the same shape.
+   */
+  private async requireWorkOrderInScope(
+    tenantId: string,
+    workOrderId: string,
+    branchScope: readonly string[],
+  ): Promise<void> {
+    const order = await this.prisma.workOrder.findFirst({
+      where: {
+        id: workOrderId,
+        tenantId,
+        ...(branchScope.length > 0 ? { branchId: { in: [...branchScope] } } : {}),
+      },
+      select: { id: true },
+    });
+    if (!order) {
+      // Deliberately the same answer as a job that does not exist: telling a
+      // caller "that one is real, just not yours" leaks the other branch's
+      // workload back to them one id at a time.
+      throw new NotFoundException({ code: "work_order_not_found", message: "Work order not found." });
+    }
+  }
+
+  /**
+   * Puts stock aside for an approved repair, through the ledger.
+   *
+   * This used to be a bare `warehouseStockBalance.update` with
+   * `availableQty: { decrement }` and `reservedQty: { increment }`, wrapped in
+   * a `catch {}` commented "non-fatal". Three things were wrong with that, and
+   * the swallowed error was the least of them:
+   *
+   *   - `StockService`'s header states that nothing else in the codebase may
+   *     update a balance, for the reason PHASE_7 is judged by -- every number
+   *     on every screen traces to the movements that produced it. No movement
+   *     row was written here, so `reservedQty` was the one bucket in inventory
+   *     that `replay()` could not reproduce.
+   *   - The read that decided there was enough stock took no lock, and the
+   *     write took no lock either, so two operators approving the same part at
+   *     the same instant could both reserve the last unit. `StockService.record`
+   *     re-reads under `FOR UPDATE`.
+   *   - A reservation that would overdraw the shelf was applied anyway, since
+   *     nothing refused a negative result.
+   *
+   * `RESERVE` moves both buckets in one movement, so the shelf count and the
+   * promised count can never disagree.
+   */
+  private async reserve(
+    tenantId: string,
+    inventoryItemId: string,
+    warehouseId: string,
+    quantity: number,
+    workOrderId: string,
+    actorId: string,
+  ): Promise<void> {
+    await this.stock.record({
+      tenantId,
+      inventoryItemId,
+      warehouseId,
+      type: "RESERVE",
+      quantity,
+      actorId,
+      referenceType: "WorkOrder",
+      referenceId: workOrderId,
+    });
+  }
+
+  /**
+   * The warehouse that serves this job's branch.
+   *
+   * Deliberately refuses rather than falling back to "the first active
+   * warehouse in the tenant", which is what this did before. That fallback is
+   * exactly the hardcode the recovery mission forbids without architectural
+   * justification, and it is wrong in the shape of workshop the fallback
+   * exists for: in a multi-branch, multi-warehouse chain it silently reserved
+   * North's brake pads against a repair booked in the South, so the shelf the
+   * technician walks to still had the part and the shelf a hundred miles away
+   * was short one. `BranchWarehouseAccess` is the serving relationship the
+   * product models for exactly this question; if a branch has none, that is a
+   * configuration answer the workshop has to give, not one to guess.
+   */
+  private async servingWarehouseId(tenantId: string, branchId: string | null): Promise<string | null> {
+    if (!branchId) return null;
+    const access = await this.prisma.branchWarehouseAccess.findFirst({
+      where: { tenantId, branchId },
+      select: { warehouseId: true },
+      orderBy: { id: "asc" },
+    });
+    return access?.warehouseId ?? null;
+  }
 
   /**
    * Complete overview of reception floor for the operator.
@@ -426,17 +530,17 @@ export class OperatorService {
 
     let finalStatus = result.status;
     if (!dto.inspectionDeclined) {
-      finalStatus = "UNDER_INSPECTION";
-      if (this.prisma.workOrder?.update) {
-        try {
-          await this.prisma.workOrder.update({
-            where: { id: result.workOrderId },
-            data: { status: "UNDER_INSPECTION" as any },
-          });
-        } catch {
-          // non-fatal if in mock test
-        }
-      }
+      // Ask for the INTENT and let the graph decide where it lands.
+      //
+      // This used to write `status: "UNDER_INSPECTION" as any` directly, behind
+      // an `if (this.prisma.workOrder?.update)` guard and a `catch {}` whose
+      // comment read "non-fatal if in mock test" -- production code shaped
+      // around a unit-test mock, which meant intake could report a status the
+      // database never reached, and the transition produced no OperationEvent,
+      // no audit row and no gate check. A workshop that has inspection turned
+      // off would still have been forced into UNDER_INSPECTION here.
+      const transition = await this.lifecycle.apply(result.workOrderId, "START_INSPECTION", actor);
+      finalStatus = transition.to;
 
       await this.prisma.inspection.create({
         data: {
@@ -556,15 +660,25 @@ export class OperatorService {
       });
     }
 
-    // Create counter work order in PAYMENT_PENDING
+    // A counter sale starts where every work order starts, then takes the
+    // graph's declared counter-sale edge to PAYMENT_PENDING. Assigning that
+    // status here skipped the FINANCE_CORE requirement on both the edge in and
+    // the only edge out, stranding the sale in a shop that has no finance
+    // module -- see WORK_ORDER_GRAPH's "counter sale -> invoice".
     const workOrder = await this.prisma.workOrder.create({
       data: {
         tenantId,
         branchId: branch.id,
         customerId,
         assetId: counterAsset.id,
-        status: "PAYMENT_PENDING",
+        status: WORK_ORDER_GRAPH.initial as WorkOrderStatus,
       },
+    });
+
+    await this.lifecycle.apply(workOrder.id, "ISSUE_INVOICE", {
+      accountId: session.accountId,
+      displayName: session.displayName || "Operator",
+      actorType: "TENANT_STAFF",
     });
 
     const invoiceNumber = `INV-POS-${Date.now().toString().slice(-6)}`;
@@ -628,7 +742,7 @@ export class OperatorService {
             : o.faults.map((f) => ({
                 id: f.id,
                 description: f.description,
-                severity: f.severity === "HIGH" ? "CRITICAL" : f.severity,
+                severity: f.severity,
                 recommendedService: f.recommendedService,
                 code: f.code,
               }));
@@ -674,7 +788,8 @@ export class OperatorService {
   /**
    * Get single inspection report detail for the quote builder drawer.
    */
-  async getInspectionReportDetail(tenantId: string, workOrderId: string) {
+  async getInspectionReportDetail(tenantId: string, workOrderId: string, branchScope: readonly string[] = []) {
+    await this.requireWorkOrderInScope(tenantId, workOrderId, branchScope);
     const order = await this.prisma.workOrder.findFirst({
       where: { id: workOrderId, tenantId },
       include: {
@@ -700,7 +815,7 @@ export class OperatorService {
         : order.faults.map((f) => ({
             id: f.id,
             description: f.description,
-            severity: f.severity === "HIGH" ? "CRITICAL" : f.severity,
+            severity: f.severity,
             recommendedService: f.recommendedService,
             code: f.code,
           }));
@@ -765,7 +880,8 @@ export class OperatorService {
   /**
    * Update quote items (parts from POS, services, severities) on an inspection report.
    */
-  async updateQuote(tenantId: string, workOrderId: string, dto: OperatorUpdateQuoteDto) {
+  async updateQuote(tenantId: string, workOrderId: string, dto: OperatorUpdateQuoteDto, branchScope: readonly string[] = []) {
+    await this.requireWorkOrderInScope(tenantId, workOrderId, branchScope);
     let inspection = await this.prisma.inspection.findFirst({
       where: { workOrderId, tenantId },
       orderBy: { startedAt: "desc" },
@@ -785,7 +901,7 @@ export class OperatorService {
       findings,
       parts,
       services,
-      notes: dto.notes ?? currentFields.notes ?? "",
+      note: dto.note ?? currentFields.note ?? "",
       pricing: { partsTotal, laborTotal, grandTotal },
     };
 
@@ -820,8 +936,16 @@ export class OperatorService {
     dto: OperatorApproveRepairDto,
     session: SessionContext,
   ) {
+    // The branch filter goes on the load this method already does, rather than
+    // in a separate guard call before it: one query, and no way for a later
+    // edit to move the load above the check.
+    const branchScope = session.branchScope ?? [];
     const order = await this.prisma.workOrder.findFirst({
-      where: { id: workOrderId, tenantId },
+      where: {
+        id: workOrderId,
+        tenantId,
+        ...(branchScope.length > 0 ? { branchId: { in: [...branchScope] } } : {}),
+      },
       include: {
         inspections: { orderBy: { startedAt: "desc" }, take: 1 },
         faults: true,
@@ -829,7 +953,9 @@ export class OperatorService {
     });
 
     if (!order) {
-      throw new BadRequestException({ code: "order_not_found", message: "Work order not found" });
+      // Not found, not forbidden — a 403 on another branch's id confirms the
+      // id is real, which hands that branch's workload back one guess at a time.
+      throw new NotFoundException({ code: "work_order_not_found", message: "Work order not found." });
     }
 
     const insp = order.inspections[0];
@@ -877,6 +1003,7 @@ export class OperatorService {
       approvedServices = allServices.filter(
         (s, idx) =>
           allowedServiceIds.has(String(s.id)) ||
+          allowedServiceIds.has(String(s.serviceName)) ||
           allowedServiceIds.has(String(s.name)) ||
           allowedServiceIds.has(String(s.code)) ||
           allowedServiceIds.has(String(idx)),
@@ -941,7 +1068,7 @@ export class OperatorService {
       workOrderId,
       approvedFindingIds: dto.approvedFindingIds ?? approvedFindings.map((f: any, idx: number) => String(f.id || f.code || idx)),
       approvedPartIds: dto.approvedPartIds ?? approvedParts.map((p: any, idx: number) => String(p.inventoryItemId || p.id || p.sku || p.name || idx)),
-      approvedServiceIds: dto.approvedServiceIds ?? approvedServices.map((s: any, idx: number) => String(s.id || s.name || idx)),
+      approvedServiceIds: dto.approvedServiceIds ?? approvedServices.map((s: any, idx: number) => String(s.id || s.serviceName || s.name || idx)),
       approvedAt: new Date().toISOString(),
       approvedByStaffId: session.accountId,
       operatorNote: dto.operatorNote || dto.note || "",
@@ -977,43 +1104,47 @@ export class OperatorService {
       });
     }
 
-    // 7. Transition work order status to APPROVED_FOR_WORK
-    await this.prisma.workOrder.update({
-      where: { id: workOrderId },
-      data: {
-        status: "APPROVED_FOR_WORK" as any,
-      },
+    // 7. Authorize the work -- through the graph, not by assignment.
+    //
+    // Writing "APPROVED_FOR_WORK" here skipped the `inspection_completed` gate
+    // and the APPROVAL_REQUIRED_SCOPE policy, so a workshop configured to send
+    // findings to the customer first had that requirement bypassed every time
+    // an operator pressed Dispatch. Where the graph routes an APPROVE from
+    // UNDER_INSPECTION depends on that policy, which is exactly why this
+    // service must not name the destination.
+    const authorized = await this.lifecycle.apply(workOrderId, "APPROVE", {
+      accountId: session.accountId,
+      displayName: session.displayName || "Operator",
+      actorType: "TENANT_STAFF",
     });
 
-    // 8. Create repair tasks for technician stage 2 (ONLY for approved services)
-    if ((dto as any).tasksToCreate && (dto as any).tasksToCreate.length > 0) {
-      for (const title of (dto as any).tasksToCreate) {
-        await this.prisma.task.create({
-          data: {
-            tenantId,
-            workOrderId,
-            title: title || "Perform Vehicle Repair",
-            status: "ASSIGNED",
-          },
-        }).catch(() => null);
-      }
-    } else if (approvedServices.length > 0) {
-      for (const s of approvedServices) {
-        await this.prisma.task.create({
-          data: {
-            tenantId,
-            workOrderId,
-            title: s.name || s.title || "Perform Vehicle Repair",
-            status: "ASSIGNED",
-          },
-        }).catch(() => null);
-      }
-    } else {
+    // 8. Plan the approved work.
+    //
+    // The titles come from the tasks the operator actually composed on the
+    // page, falling back to the approved services. Both of those used to miss:
+    // the page sends `tasks`, this read `tasksToCreate` (which nothing has ever
+    // sent), and the fallback read `s.name` while the page writes
+    // `serviceName` -- so every dispatched task was called
+    // "Perform Vehicle Repair", whatever the operator approved.
+    const plannedTitles: string[] =
+      dto.tasks && dto.tasks.length > 0
+        ? dto.tasks.map((task) => task.title).filter((title) => title.trim().length > 0)
+        : approvedServices
+            .map((service: { serviceName?: string; name?: string; title?: string }) =>
+              (service.serviceName ?? service.name ?? service.title ?? "").trim(),
+            )
+            .filter((title) => title.length > 0);
+
+    // A job with nothing nameable still needs one task, or the technician is
+    // dispatched to a card with no work on it.
+    const titles = plannedTitles.length > 0 ? plannedTitles : ["Complete Inspected Repairs & Adjustments"];
+
+    for (const title of titles) {
       await this.prisma.task.create({
         data: {
           tenantId,
           workOrderId,
-          title: "Complete Inspected Repairs & Adjustments",
+          title,
           status: "ASSIGNED",
         },
       }).catch(() => null);
@@ -1025,32 +1156,8 @@ export class OperatorService {
     let partsAllocated = 0;
     let partsRequested = 0;
 
-    // Resolve workshop warehouse for the work order's branch or tenant
-    let warehouseId: string | null = null;
-    if (order.branchId && (this.prisma as any).branchWarehouseAccess) {
-      try {
-        const branchAccess = await (this.prisma as any).branchWarehouseAccess.findFirst({
-          where: { tenantId, branchId: order.branchId },
-          select: { warehouseId: true },
-        });
-        if (branchAccess) {
-          warehouseId = branchAccess.warehouseId;
-        }
-      } catch {
-        // non-fatal
-      }
-    }
-    if (!warehouseId && (this.prisma as any).warehouse) {
-      try {
-        const defaultWh = await (this.prisma as any).warehouse.findFirst({
-          where: { tenantId, isActive: true },
-          select: { id: true },
-        });
-        warehouseId = defaultWh?.id ?? null;
-      } catch {
-        // non-fatal
-      }
-    }
+    // The shelf the technician on this job will actually walk to.
+    const warehouseId = await this.servingWarehouseId(tenantId, order.branchId);
 
     for (const p of parts) {
       const requiredQty = Math.max(1, Number(p.quantity) || 1);
@@ -1102,6 +1209,20 @@ export class OperatorService {
         }
       }
 
+      // A catalogued part with nowhere to draw it from is a configuration
+      // answer the workshop owes, not something to slide past. Letting it fall
+      // through to the workshop-sourced path below would book the customer for
+      // a part that no shelf was ever asked for, and the technician would find
+      // out at the bay.
+      if (inventoryItem && !warehouseId) {
+        throw new BadRequestException({
+          code: "branch_has_no_serving_warehouse",
+          message:
+            "This branch is not served by any store, so parts cannot be reserved for it. " +
+            "Link a warehouse to the branch before dispatching a repair that needs stock.",
+        });
+      }
+
       // If inventory item and warehouse exist, check stock balance
       if (inventoryItem && warehouseId && (this.prisma as any).warehouseStockBalance) {
         let balanceRow: { availableQty: number; reservedQty: number } | null = null;
@@ -1123,23 +1244,7 @@ export class OperatorService {
 
         if (available >= requiredQty) {
           // Scenario A: FULLY IN STOCK
-          // Atomically reserve stock: availableQty -= requiredQty, reservedQty += requiredQty
-          try {
-            await (this.prisma as any).warehouseStockBalance.update({
-              where: {
-                inventoryItemId_warehouseId: {
-                  inventoryItemId: inventoryItem.id,
-                  warehouseId,
-                },
-              },
-              data: {
-                availableQty: { decrement: requiredQty },
-                reservedQty: { increment: requiredQty },
-              },
-            });
-          } catch {
-            // non-fatal
-          }
+          await this.reserve(tenantId, inventoryItem.id, warehouseId, requiredQty, workOrderId, session.accountId);
 
           if (this.prisma.workOrderPartLine) {
             await this.prisma.workOrderPartLine.create({
@@ -1163,23 +1268,11 @@ export class OperatorService {
           const shortfallQty = requiredQty - allocQty;
 
           if (allocQty > 0) {
-            // Reserve whatever available quantity exists
-            try {
-              await (this.prisma as any).warehouseStockBalance.update({
-                where: {
-                  inventoryItemId_warehouseId: {
-                    inventoryItemId: inventoryItem.id,
-                    warehouseId,
-                  },
-                },
-                data: {
-                  availableQty: 0,
-                  reservedQty: { increment: allocQty },
-                },
-              });
-            } catch {
-              // non-fatal
-            }
+            // Reserve whatever is actually on the shelf. The previous version
+            // set `availableQty: 0` outright rather than decrementing by the
+            // amount it reserved, so a concurrent receipt landing between the
+            // read and this write was silently erased.
+            await this.reserve(tenantId, inventoryItem.id, warehouseId, allocQty, workOrderId, session.accountId);
 
             if (this.prisma.workOrderPartLine) {
               await this.prisma.workOrderPartLine.create({
@@ -1263,7 +1356,10 @@ export class OperatorService {
     return {
       success: true,
       workOrderId,
-      newStatus: "APPROVED_FOR_WORK",
+      // Where the job actually landed, which is not always APPROVED_FOR_WORK:
+      // under APPROVAL_REQUIRED_SCOPE the same intent routes to
+      // AWAITING_CUSTOMER_APPROVAL, and the page must not be told otherwise.
+      newStatus: authorized.to,
       message: "Inspection quote approved and dispatched to technician for repair!",
       partsProcessed: parts.length,
       partsAllocated,

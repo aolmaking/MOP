@@ -1266,11 +1266,36 @@ export class TechnicianWorkViewService {
       // handled
     }
 
-    if (dto.findings && dto.findings.length > 0) {
+    // The repository projects findings into Faults idempotently, but only once
+    // the aggregate has reached SUBMITTED. This is the fallback for the
+    // freeform case where `submit()` was refused because some target was never
+    // inspected, and nothing was projected at all.
+    //
+    // It used to run unconditionally and without a duplicate check, so every
+    // submit wrote a SECOND Fault for every finding, and a resubmitted
+    // inspection multiplied its own findings again. It also collapsed CRITICAL
+    // onto HIGH -- see inspection.repository.ts for why that mattered.
+    const alreadyProjected =
+      aggregate.state === "SUBMITTED" || aggregate.state === "OPERATOR_REVIEW" || aggregate.state === "LOCKED";
+
+    if (!alreadyProjected && dto.findings && dto.findings.length > 0) {
       for (const f of dto.findings) {
         if (!f.description) continue;
-        const sev = (f.severity === "CRITICAL" ? "HIGH" : f.severity === "LOW" ? "LOW" : "MEDIUM") as any;
+        // The four-value scale, straight through. A finding the technician
+        // marked critical is stored critical.
+        const sev = (f.severity ?? "MEDIUM") as any;
         try {
+          const existing = await this.prisma.fault.findFirst({
+            where: {
+              tenantId,
+              workOrderId,
+              description: f.description,
+              ...(f.code ? { code: f.code } : {}),
+            },
+            select: { id: true },
+          });
+          if (existing) continue;
+
           await this.prisma.fault.create({
             data: {
               tenantId,
@@ -1288,25 +1313,26 @@ export class TechnicianWorkViewService {
       }
     }
 
-    // Work Order status stays UNDER_INSPECTION until Operator gives Final Approval & Dispatches
-    // We strictly DO NOT set AWAITING_CUSTOMER_APPROVAL here!
-    if (this.prisma.workOrder?.update) {
-      try {
-        await this.prisma.workOrder.update({
-          where: { id: workOrderId },
-          data: {
-            status: "UNDER_INSPECTION" as any,
-          },
-        });
-      } catch {
-        // non-fatal in test mocks
-      }
-    }
+    // Submitting a report is not a transition.
+    //
+    // The job is already UNDER_INSPECTION -- the technician could not have
+    // reached this method otherwise -- and it stays there until the operator
+    // reviews the findings and dispatches. So there was nothing here to write:
+    // the previous `status: "UNDER_INSPECTION" as any` was a no-op that
+    // asserted the current value, wrapped in a `catch {}` for the benefit of a
+    // test mock. Its only real effect was to make a grep for hardcoded statuses
+    // return a hit and to give the next reader the impression that the
+    // technician moves the job. Report where the job actually is instead of a
+    // literal, so the page cannot be told a status the database disagrees with.
+    const current = await this.prisma.workOrder.findFirst({
+      where: { id: workOrderId, tenantId },
+      select: { status: true },
+    });
 
     return {
       success: true,
       workOrderId,
-      status: "UNDER_INSPECTION",
+      status: current?.status ?? "UNDER_INSPECTION",
       submittedAt: nowIso,
       pricing: { partsTotal, laborTotal, grandTotal },
       aggregateVersion: aggregate.aggregateVersion,

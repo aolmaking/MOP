@@ -7,6 +7,7 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
   let mockPrisma: any;
   let mockIntake: any;
   let mockCatalog: any;
+  let mockLifecycle: any;
 
   const tenantId = 'test-tenant';
   const workOrderId = 'wo-123';
@@ -48,8 +49,12 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
       book: jest.fn(),
     };
     mockCatalog = {};
+    // The lifecycle service is the only thing allowed to move WorkOrder.status,
+    // so the operator service now asks it for a transition instead of writing
+    // the column. The mock records the intent and reports where it landed.
+    mockLifecycle = { apply: jest.fn(async (workOrderId, intent) => ({ workOrderId, from: "UNDER_INSPECTION", to: intent === "APPROVE" ? "APPROVED_FOR_WORK" : "UNDER_INSPECTION" })) };
 
-    operatorService = new OperatorService(mockPrisma, mockIntake, mockCatalog);
+    operatorService = new OperatorService(mockPrisma, mockIntake, mockLifecycle, mockCatalog);
     technicianService = new TechnicianWorkViewService(
       mockPrisma,
       {} as any,
@@ -154,7 +159,7 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
                 submittedAt: '2026-09-07T14:00:00.000Z',
                 findings: [{ description: 'Brake pads worn' }],
                 parts: [{ sku: 'BP-1', name: 'Brake Pads', quantity: 1, unitPrice: 95 }],
-                services: [{ name: 'Brake service', laborPrice: 80 }],
+                services: [{ serviceName: 'Brake service', laborPrice: 80 }],
                 pricing: { grandTotal: 175.0 },
               },
             },
@@ -202,7 +207,7 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
               inspectionReportSubmitted: true,
               findings: [{ description: 'Brake pads worn', severity: 'HIGH' }],
               parts: [{ sku: 'BP-1', name: 'Brake Pads', quantity: 1, unitPrice: 95 }],
-              services: [{ name: 'Brake Service', laborPrice: 80 }],
+              services: [{ serviceName: 'Brake Service', laborPrice: 80 }],
               pricing: { partsTotal: 95, laborTotal: 80, grandTotal: 175 },
             },
           },
@@ -217,6 +222,9 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
     });
 
     it('updates quote and recalculates pricing breakdown', async () => {
+      // The quote routes now check that the job is inside the caller's branch
+      // scope before touching it, so the mock has to have a job to find.
+      mockPrisma.workOrder.findFirst.mockResolvedValue({ id: workOrderId, tenantId });
       mockPrisma.inspection.findFirst.mockResolvedValue({
         id: 'insp-1',
         fields: {},
@@ -233,10 +241,10 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
           { sku: 'OIL-5W30', name: 'Synthetic Oil', quantity: 1, unitPrice: 40 }, // 40
         ],
         services: [
-          { name: 'Brake Pad Replacement', laborPrice: 80 },
-          { name: 'Oil Change Service', laborPrice: 30 },
+          { serviceName: 'Brake Pad Replacement', laborPrice: 80 },
+          { serviceName: 'Oil Change Service', laborPrice: 30 },
         ],
-        notes: 'Customer confirmed via phone call',
+        note: 'Customer confirmed via phone call',
       });
 
       expect(updated.success).toBe(true);
@@ -256,8 +264,8 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
               inspectionReportSubmitted: true,
               state: 'SUBMITTED',
               services: [
-                { name: 'Front Brake Pads Replacement', laborPrice: 80 },
-                { name: 'Engine Oil & Filter Service', laborPrice: 45 },
+                { serviceName: 'Front Brake Pads Replacement', laborPrice: 80 },
+                { serviceName: 'Engine Oil & Filter Service', laborPrice: 45 },
               ],
             },
           },
@@ -288,14 +296,10 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
 
       expect(result.success).toBe(true);
       expect(result.newStatus).toBe('APPROVED_FOR_WORK');
-      expect(mockPrisma.workOrder.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: workOrderId },
-          data: expect.objectContaining({
-            status: 'APPROVED_FOR_WORK',
-          }),
-        }),
-      );
+      // The intent, not the column. Only WorkOrderLifecycleService writes
+      // WorkOrder.status; the operator service names the move and the
+      // capability-aware graph decides where it lands.
+      expect(mockLifecycle.apply).toHaveBeenCalledWith(workOrderId, 'APPROVE', expect.anything());
       expect(mockPrisma.task.create).toHaveBeenCalledTimes(2);
     });
 
@@ -343,9 +347,9 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
               inspectionReportSubmitted: true,
               state: 'SUBMITTED',
               services: [
-                { name: 'Front Brake Pads Replacement', laborPrice: 80 },
-                { name: 'Engine Oil & Filter Service', laborPrice: 45 },
-                { name: 'Air Filter Replacement', laborPrice: 25 },
+                { serviceName: 'Front Brake Pads Replacement', laborPrice: 80 },
+                { serviceName: 'Engine Oil & Filter Service', laborPrice: 45 },
+                { serviceName: 'Air Filter Replacement', laborPrice: 25 },
               ],
             },
           },
@@ -371,7 +375,7 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
         workOrderId,
         {
           approvedServices: [
-            { name: 'Front Brake Pads Replacement', laborPrice: 80 },
+            { serviceName: 'Front Brake Pads Replacement', laborPrice: 80 },
           ],
           note: 'Only brake replacement approved by customer',
         },

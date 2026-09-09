@@ -191,6 +191,28 @@ export const WORK_ORDER_GRAPH: WorkflowGraph = {
 
     { from: "IN_PROGRESS", to: "PAYMENT_PENDING", requires: ["FINANCE_CORE"], intent: "FINISH", gates: ["inspection_completed", "approved_work_completed", "customer_decisions_resolved", "critical_warning_acknowledged", "no_open_blocker", "parts.received_used_or_returned", "parts.no_pending_return", "parts.external_resolved"], label: "finish -> invoice" },
 
+    // A counter sale: parts bought over the counter, no vehicle work.
+    //
+    // Both the operator's POS and the customer portal used to create their
+    // work order with `status: "PAYMENT_PENDING"` written straight into the
+    // row, which is how a workshop with FINANCE_CORE switched off could be put
+    // into PAYMENT_PENDING -- a state whose only exit, SETTLE_PAYMENT below,
+    // requires FINANCE_CORE. The sale was therefore permanently stranded in a
+    // state its own graph could not leave, which is precisely the reachability
+    // guarantee the capability engine exists to hold. Declared as an edge, the
+    // same shop now gets a refused intent at the till instead of a dead record.
+    //
+    // ISSUE_INVOICE was in WORKFLOW_INTENTS and named a progress step in
+    // workflow-journey.ts, but no transition had ever carried it. This is the
+    // step it names.
+    {
+      from: "DRAFT",
+      to: "PAYMENT_PENDING",
+      requires: ["FINANCE_CORE"],
+      intent: "ISSUE_INVOICE",
+      label: "counter sale -> invoice",
+    },
+
     { from: "PAYMENT_PENDING", to: "READY_FOR_DELIVERY", requires: ["FINANCE_CORE"], intent: "SETTLE_PAYMENT", label: "payment settled" },
     { from: "READY_FOR_DELIVERY", to: "CLOSED", intent: "DELIVER", gates: ["invoice.issued", "payment.settled_or_policy_allows"], label: "vehicle delivered" },
     { from: "READY_FOR_DELIVERY", to: "CANCELLED", label: "cancelled before handover" },

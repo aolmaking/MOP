@@ -94,8 +94,14 @@ for (const file of walk(API_SRC)) {
       }
     }
 
-    const setsStatus = payloads.some((payload) => /\bstatus\s*:/.test(payload));
-    if (!setsStatus) continue;
+    const assignments = payloads.flatMap((payload) => payload.match(/\bstatus\s*:\s*[^,\n}]+/g) ?? []);
+    if (assignments.length === 0) continue;
+
+    // Creating at the graph's own declared starting point is the sanctioned way
+    // to bring a work order into existence -- it is not a transition, and there
+    // is no earlier state to transition from. Anything else, including a create
+    // that picks a literal, is a routing decision the graph must make.
+    if (assignments.every((assignment) => assignment.includes("WORK_ORDER_GRAPH.initial"))) continue;
 
     const lineNo = source.slice(0, match.index).split("\n").length;
     const context = lines.slice(Math.max(0, lineNo - 1 - ALLOW_LOOKBACK), lineNo).join("\n");

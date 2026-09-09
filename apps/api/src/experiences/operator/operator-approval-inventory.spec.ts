@@ -6,6 +6,8 @@ import type { SessionContext } from '@mop/shared';
 describe('End-to-End Inspection → Operator Final Approval → Inventory Flow', () => {
   let operatorService: OperatorService;
   let technicianService: TechnicianWorkViewService;
+  let lifecycle: { apply: jest.Mock };
+  let stock: { record: jest.Mock };
   let inventoryViewService: InventoryViewService;
   let mockPrisma: any;
 
@@ -196,7 +198,28 @@ describe('End-to-End Inspection → Operator Final Approval → Inventory Flow',
       },
     };
 
-    operatorService = new OperatorService(mockPrisma, {} as any, {} as any);
+    lifecycle = { apply: jest.fn(async (workOrderId: string) => ({ workOrderId, from: 'UNDER_INSPECTION', to: 'APPROVED_FOR_WORK' })) };
+    // Reservations go through StockService now -- it is the only thing allowed
+    // to move a balance, and it writes the StockMovement beside it. This mock
+    // moves the same two buckets the real RESERVE movement moves, so the
+    // assertions below still describe what the shelf ends up holding.
+    stock = {
+      record: jest.fn(async ({ inventoryItemId, warehouseId: wId, type, quantity }: any) => {
+        const key = `${inventoryItemId}:${wId}`;
+        const current = stockBalances.get(key) || { availableQty: 0, reservedQty: 0 };
+        if (type !== 'RESERVE') return current;
+        if (current.availableQty < quantity) {
+          throw new Error(`Not enough stock: ${current.availableQty} available, ${quantity} needed.`);
+        }
+        const updated = {
+          availableQty: current.availableQty - quantity,
+          reservedQty: current.reservedQty + quantity,
+        };
+        stockBalances.set(key, updated);
+        return updated;
+      }),
+    };
+    operatorService = new OperatorService(mockPrisma, {} as any, lifecycle as any, stock as any, {} as any);
     technicianService = new TechnicianWorkViewService(
       mockPrisma,
       {} as any,
@@ -239,12 +262,11 @@ describe('End-to-End Inspection → Operator Final Approval → Inventory Flow',
       expect(result.success).toBe(true);
       // Explicit verification: Status MUST remain UNDER_INSPECTION awaiting Operator Review
       expect(result.status).toBe('UNDER_INSPECTION');
-      expect(mockPrisma.workOrder.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: workOrderId },
-          data: { status: 'UNDER_INSPECTION' },
-        }),
-      );
+      // Submitting a report is not a transition, so nothing writes the status
+      // here at all -- the technician's job is already UNDER_INSPECTION and stays
+      // there until the operator dispatches. This asserted a redundant write that
+      // only existed to satisfy this assertion.
+      expect(mockPrisma.workOrder.update).not.toHaveBeenCalled();
     });
   });
 
@@ -396,12 +418,12 @@ describe('End-to-End Inspection → Operator Final Approval → Inventory Flow',
 
       // WorkOrderPartLine rows for all 3 parts created
       expect(partLines).toHaveLength(3);
-      expect(mockPrisma.workOrder.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: workOrderId },
-          data: { status: 'APPROVED_FOR_WORK' },
-        }),
-      );
+      // The operator asks for an APPROVE intent; where it lands is the graph's
+      // decision, not this service's. Asserting the prisma write instead of the
+      // intent is what let the service bypass the inspection_completed gate and
+      // the APPROVAL_REQUIRED_SCOPE policy while this test stayed green.
+      expect(lifecycle.apply).toHaveBeenCalledWith(workOrderId, 'APPROVE', expect.anything());
+      expect(mockPrisma.workOrder.update).not.toHaveBeenCalled();
     });
   });
 
