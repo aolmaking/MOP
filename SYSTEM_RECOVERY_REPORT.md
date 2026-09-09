@@ -1,16 +1,15 @@
-# MOP System Recovery — Report (Phases 0–7)
+# MOP System Recovery — Report (Phases 0–12)
 
 **Branch:** `recovery/architectural-convergence`, forked from `main` @ `663eecd`
 **Commits:** `b3b9585` · `37264b7` · `32484c9` · `ee0417e` · `e3c54ab` · `73f4d9b` · `fcaa029` · `e38c34c` · `6c8fcfc` · `65b0b76` · `79d8f12` · `14ebcaa` · `dae5fe3` · `53b9bc1` · `e27bb29` · `107235f` · `ff1032c` · `26c3ce7` · `11c0f06`
 **Sibling worktrees** (`E:/mop-fleet/{w-a3,w-infra,w-int}`) were not touched.
 
-> This report covers the phases actually completed and verified. Phase 7 closed the
-> dual-spine convergence, the reservation lifecycle, the inspection-panel contract,
-> every flagged bare-id load and both remaining architectural linters; §9 records it
-> and supersedes §6 and §7 where they disagree. **Two items remain open by
-> deliberate decision, and §9 says why for each.** Nothing here is described as done
-> that was not executed and observed. `SYSTEM_RECOVERY_REGISTER.md` carries every
-> finding with its evidence.
+> **All thirteen mission phases are complete.** §9 records Phase 7 (convergence)
+> and §10 records Phases 8–12 (finance & delivery, reporting, configuration,
+> contracts, test recovery); both supersede §6 and §7 where they disagree.
+> Everything still open is open by a stated decision, listed in §10. Nothing here
+> is described as done that was not executed and observed.
+> `SYSTEM_RECOVERY_REGISTER.md` carries every finding with its evidence.
 
 ---
 
@@ -81,19 +80,18 @@ lifecycle service itself, and `lint-tenant-scope` reports zero.
 | **REC-015** | **Inventory** | **P1** | `OperatorService` moved `WarehouseStockBalance` by hand with no movement row, no lock and no refusal — `reservedQty` was the one bucket `replay()` could not reproduce. Warehouse fell back to "the first active one", reserving North's stock against a South repair | `RESERVE`/`RELEASE_RESERVATION` movement types with a declared two-sided effect; `BranchWarehouseAccess` resolves the shelf and refuses rather than guessing | `VERIFIED_RUNTIME` — 7 new tests: buckets conserve, over-reserve refused, THE RULE holds for `reservedQty`, one winner in a race |
 | **REC-021** | **Security** | **P1** | All fourteen operator routes gated by a hardcoded `Set` of role names — above the resolver, invisible to capabilities, and granting owners writes the defaults withhold. The three per-work-order routes had no branch scope | Every route names its permission through `EffectiveAccessService`; two new keys; the work-order routes answer 404 outside scope | `VERIFIED_HTTP` — 9 tests, two-branch workshop, victim's data asserted unchanged after each refusal |
 | **REC-013 / 034–041** | **Product** | **P1** | Eight capabilities removed from the UI by redesigns; each left its method on the component with no caller. **No work order could reach `CLOSED` through the product**, no job with a part request could be delivered, and `TIME_TRACKING: REQUIRED` disabled Done permanently | Invoice issuance, finish + conditions, time entry, blockers, the parts loop, fault logging, past recommendations, the declined-inspection note — all restored; job actions now come from `journey().actions` | `VERIFIED_CODE` + the web suite: **90 → 23 failures** |
-| **REC-040** | **Money** | **P1** | The till read three fields the server never sends, so every tile showed a fabricated 45 and every added line charged a fabricated 50. Fifteen hardcoded `# MOP System Recovery — Report (Phases 0–7)
+| **REC-040** | **Money** | **P1** | The till read three fields the server never sends, so every tile showed a fabricated 45 and every added line charged a fabricated 50. Fifteen hardcoded `# MOP System Recovery — Report (Phases 0–12)
 
 **Branch:** `recovery/architectural-convergence`, forked from `main` @ `663eecd`
 **Commits:** `b3b9585` · `37264b7` · `32484c9` · `ee0417e` · `e3c54ab` · `73f4d9b` · `fcaa029` · `e38c34c` · `6c8fcfc` · `65b0b76` · `79d8f12` · `14ebcaa` · `dae5fe3` · `53b9bc1` · `e27bb29` · `107235f` · `ff1032c` · `26c3ce7` · `11c0f06`
 **Sibling worktrees** (`E:/mop-fleet/{w-a3,w-infra,w-int}`) were not touched.
 
-> This report covers the phases actually completed and verified. Phase 7 closed the
-> dual-spine convergence, the reservation lifecycle, the inspection-panel contract,
-> every flagged bare-id load and both remaining architectural linters; §9 records it
-> and supersedes §6 and §7 where they disagree. **Two items remain open by
-> deliberate decision, and §9 says why for each.** Nothing here is described as done
-> that was not executed and observed. `SYSTEM_RECOVERY_REGISTER.md` carries every
-> finding with its evidence.
+> **All thirteen mission phases are complete.** §9 records Phase 7 (convergence)
+> and §10 records Phases 8–12 (finance & delivery, reporting, configuration,
+> contracts, test recovery); both supersede §6 and §7 where they disagree.
+> Everything still open is open by a stated decision, listed in §10. Nothing here
+> is described as done that was not executed and observed.
+> `SYSTEM_RECOVERY_REGISTER.md` carries every finding with its evidence.
 
 ---
 
@@ -370,3 +368,87 @@ ever been through intake, and no test failed because of it. And the finance sett
 page wrote sixteen fields to the database of which eight changed nothing, while every
 test around it passed. **A green suite still does not mean the system works**; what
 found both was asking what reads a value, not what writes it.
+
+---
+
+## 10 · Phases 8–12 — the last five, and what they found
+
+Supersedes §6 and §7 wherever they disagree. Per-finding evidence is in
+`SYSTEM_RECOVERY_REGISTER.md`, "Phases 8–12".
+
+### Verified from a clean database, end to end
+
+```
+fresh database -> migrate -> seed        PASS   (two differently-shaped tenants)
+pnpm typecheck                           PASS   (now compiles the seeds too)
+pnpm lint                                PASS   (11 architecture linters, eslint 0 errors)
+pnpm test                                PASS   shared 253 · API 1372 · web 417
+pnpm build                               PASS   (API and web)
+```
+
+| Signal | Phase 7 | Phase 12 |
+|---|---|---|
+| API suites · tests | 143 · 1349 | **144 · 1372** |
+| Web tests | 387 | **417** |
+| Fresh DB → migrate → seed | **FAIL**, undetected | **PASS** |
+| Finance capabilities reachable by a person | invoice, payment | **+ refunds, discounts, job total** |
+| Duplicate business paths (one act, two routes) | 2 | **0** |
+| Swallowed errors in the operator's dispatch path | 6 | **0** |
+
+### The four that mattered most
+
+**Three finance capabilities existed and no page could reach them.** Refunds and
+discounts were complete behind the API — permission-gated, request separated
+from decision, a refund even producing a real credit note — with **no caller
+anywhere in the product**. A customer who was overcharged had no path to their
+money. And because `DISCOUNT_AUTHORITY` routes a discount into a request that
+must be approved, a workshop that configured its discount rules was *switching
+discounts off*: the approving surface did not exist. The job total was the
+third: *Issue invoice* fixed an amount forever that nobody on the page could
+see first.
+
+**The operator wrote part requests by hand.** Behind an `as any` cast, inside
+`try {} catch { /* non-fatal */ }` — no event, no audit, no transition, and a
+silent success when it failed, so the store was never told to order a part the
+customer had already approved. Four more swallows sat in the same method,
+including an idempotency check that answered "not handled yet" on any failure.
+
+**The inspection panel talked to a server that does not exist.** The client
+declared the aggregate's fields at the top level; the server has always sent
+them one level down. Typed `http.get<any>`, neither side checked the other, so
+the technician saw no generated recommendations on any job — and nothing
+rendered them anyway: the accept path, the dismissal modal and its INV-5 reason
+were all written and unreachable.
+
+**The seed had been broken on a fresh database for five commits.** `pnpm
+db:seed` failed on a column dropped in Phase 7, and nothing noticed: the
+integration suite builds its own fixtures, `db:test:prepare` only migrates, and
+the only thing that exercises the seed is a person setting up a machine. Phase
+1's headline signal had regressed to FAIL with every test still green. The seeds
+are compiled by `pnpm typecheck` now, which is the part that stops it recurring.
+
+### What remains open, and why
+
+| ID | Issue | Sev | Why |
+|---|---|---|---|
+| REC-023 | Custom fields and message templates are written by a real page and read by nothing | P3 | Half-wiring is worse than the gap: validating server-side without rendering the fields lets an owner define a **required** field the technician cannot see, bricking inspection submission — the same failure as REC-035. Closing it means nine forms rendered and nine write paths capturing. |
+| REC-032 | The suite is serial by construction, not parallel-safe | P2 | `maxWorkers: 1` removes the run mode that produced false failures; a schema per `JEST_WORKER_ID` is the real fix and is not done. |
+| REC-054 | The technician's inspection checkpoints come from a client dataset, not the server's per-category master list | P3 | Not fabrication, but a workshop cannot configure its own checkpoints. Wiring it reworks the studio inspection flow — a product decision, not a repair. |
+| REC-022 (part) | `technicianPriceVisible`, `depositRequired`, `depositPercent` still have no reader | P3 | The first contradicts the technician surface as built; the second pair needs a deposit concept in the money model. Product decisions. |
+| — | The technician's web POS cart holds money as a JavaScript number for its own subtotals | P3 | A client-side cart, not an API boundary. Both money linters pass. |
+
+**No HIGH or CRITICAL item remains open.** Every P1 raised across the thirteen
+phases is closed and verified; the two P2s above are stated rather than claimed
+closed.
+
+### The lesson these five phases keep proving
+
+Every finding in this half came from one question — **what reads this?** — asked
+of a value, an endpoint, or a column. It found: five report queries blind to the
+movement type the busiest path writes; a plan column that sold reports it could
+not withhold; three configuration columns that changed nothing; two routes for
+one act, twice; four client methods with no caller; and a seed nobody had run.
+
+None of it was visible from the test suite. **A green suite still does not mean
+the system works** — it means nothing has asked the system the question that
+would embarrass it.

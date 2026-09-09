@@ -442,3 +442,143 @@ deliberately still open; both say why below, and neither is a wiring gap.
 | `lint-money` violations | 5 | **0** |
 | Invoices carrying the workshop's configured tax | never | **always** |
 | Reservations consumed or released | never | **on CLOSED and on CANCELLED** |
+
+---
+
+## Phases 8–12 — Finance & delivery, reporting, configuration, contracts, test recovery
+
+The mission's own phase list, finished. Each finding below was found by asking
+one question of the code and following the answer: *what reads this?*
+
+### REC-043 — The refund loop had no surface · **P1 · NEW** · **VERIFIED**
+- **Verification:** `VERIFIED_HTTP` (`money-approvals.http.spec.ts`, 7 tests)
+- `POST /finance/invoices/:id/refunds`, `/refunds/:id/approve` and `/reject`
+  were permission-gated, separated request from decision, and produced a real
+  `CreditNote` through the billing adapter. **No page called any of them.** A
+  customer overcharged, or one whose job was cancelled after payment, had no
+  path to their money — and the take-payment page was already saying *"this is
+  owed back to the customer"* with nothing to do about it, exactly as the
+  delivery board named an invoice nobody could issue before REC-013.
+- **Fix:** `GET /finance/approvals`, a branch-scoped queue carrying amount,
+  requester and reason; an owner **Money approvals** page that decides both
+  loops; a refund request on take-payment, pre-filled with the overpayment.
+
+### REC-044 — The discount loop had no surface, so the policy could only block · **P1 · NEW** · **VERIFIED**
+- **Verification:** `VERIFIED_HTTP`
+- Same three routes, same silence, worse consequence. `DISCOUNT_AUTHORITY` set
+  to anything but `ANY_STAFF_UNLIMITED` routes a discount into a request that
+  must be approved — by a surface that did not exist. **A workshop configuring
+  its discount rules was switching discounts off.** `maxBranchDiscountPercent`,
+  wired in Phase 7, had no way to be exercised by a real person either.
+
+### REC-045 — The invoice was signed blind · **P2 · NEW** · **VERIFIED**
+- `GET /finance/work-orders/:id/total` had no caller anywhere, so *Issue
+  invoice* fixed an amount forever that nobody on the page could see first. An
+  invoice is immutable once issued; signing one blind is the wrong order.
+- **Fix:** the delivery board shows what the job costs — lines, discount, the
+  workshop's own tax, total — before the press, with the discount ask beside it.
+
+### REC-046 — The derived views did not know about reservations · **P1 · NEW** · **VERIFIED**
+- **Verification:** `VERIFIED_RUNTIME` (5 integration tests)
+- A part promised to an approved repair leaves the shelf through
+  `CONSUME_RESERVATION` and never produces an `ISSUE`. Five views asked for
+  `type: "ISSUE"` alone, so usage, velocity, stock risk, fast-moving and dead
+  stock all under-reported **exactly the parts that go through the operator's
+  approve-repair path** — the busiest path in the product. Dead stock was the
+  worst: it called a part the workshop sells every week stock that had never
+  moved in its life.
+- **Fix:** `CONSUMPTION_MOVEMENT_TYPES`, exported once, used everywhere. The
+  five call sites had already drifted apart once.
+
+### REC-047 — Revenue silently included the state's money · **P2 · NEW** · **VERIFIED**
+- Since Phase 7 an invoice carries real tax, so "revenue" included tax being
+  collected on the state's behalf with nothing on the page saying so.
+- **Fix:** `taxTotal` and `netOfTaxRevenue` reported alongside, never
+  redefining what `revenue` has always meant. Both read off `Invoice.tax`
+  rather than recomputed from the current rate — an invoice is subject to the
+  rate it carried when it was issued.
+
+### REC-048 / REC-049 — Two routes for one act, twice · **P2 · NEW** · **VERIFIED**
+- The operator's `dispatch-repair` and `approve-repair`: same permission, same
+  service method, DTOs related by an empty subclass, and the web client method
+  for the first was a one-line forward to the second. Nothing called it.
+- The technician's `parts/:id/clarification` and `parts/:id/return/respond`:
+  two DTOs differing only in whether the field was `answer` or `response`,
+  calling the identical service method with identical arguments.
+
+### REC-050 — The operator wrote part requests by hand · **P1 · NEW** · **VERIFIED**
+- **Verification:** `VERIFIED_RUNTIME`
+- `approveRepair` created `PartRequest` rows through an `as any` cast inside
+  `try {} catch { /* non-fatal */ }`. The row had no `part_request.created`
+  event, no audit entry and no `REQUEST_PART` transition — and when it failed,
+  the operator was told the repair had been dispatched while the store was
+  never told to order anything. The same defect as REC-015 (the operator
+  writing `WarehouseStockBalance` by hand); this one hid longer because the
+  cast turned the type system off.
+- **Four more swallows went with it**, all in the same method: the idempotency
+  read that answered "not handled" on any failure (so a part could be
+  allocated, charged and requested twice), the catalogue lookup whose failure
+  made a stocked part look unstocked, the balance read whose failure sent an
+  in-stock part down the shortfall path, and `.catch(() => null)` on the
+  inspection row, the dispatched tasks and the customer's charge lines.
+
+### REC-051 — The inspection client described a server that does not exist · **P1 · NEW** · **VERIFIED**
+- The client declared the aggregate's fields at the top level; the server has
+  always answered `{ inspection, aggregateVersion, lifecycleState }` with the
+  document one level down. Typed `http.get<any>`, neither side checked the
+  other, so the card read `agg.recommendations`, got `undefined` and fell back
+  to `[]`. The target save was mismatched the same way: the server sends
+  `targetResult` and `recommendations`, the client asked for `target` and
+  `newlyGeneratedRecommendations`, so the recommendations a saved checkpoint
+  had just generated never arrived.
+- The spec mocks returned `null` for the aggregate, so no test ever looked.
+
+### REC-052 — And the recommendations had nowhere to appear · **P1 · NEW** · **VERIFIED**
+- **Verification:** `VERIFIED_CODE` (5 web tests)
+- The aggregate has generated recommendations from findings since Phase C.
+  `acceptRecommendation`, `openDismissModal` and the INV-5 dismissal modal were
+  all on the component. **No template rendered any of it** — the same signature
+  as the eight capabilities found in Phase 6: a method with no caller.
+- **Fix:** the findings sheet shows what the checks recommended, offers both
+  answers, and keeps a dismissal on screen with its reason — the reason being
+  the record INV-5 exists to force.
+
+### REC-053 — The seed had been broken on a fresh database for five commits · **P1 · NEW** · **VERIFIED**
+- **Verification:** `VERIFIED_RUNTIME` (built a database from migrations alone,
+  seeded it, dropped it)
+- `pnpm db:seed` failed with `Unknown argument enabledModules` — a column
+  dropped in Phase 7. Nothing noticed because the integration suite builds its
+  own fixtures and `db:test:prepare` only migrates: the only thing that
+  exercises the seed is a person setting up a machine. **Phase 1's "fresh DB →
+  migrate → seed = PASS" had regressed to FAIL without a single test turning
+  red.**
+- **Fix, and the guard:** `packages/database` had a tsconfig covering
+  `prisma/**/*.ts` and no typecheck script, so nothing ever compiled the seeds.
+  They are in `pnpm typecheck` now, which turns a dropped column from a runtime
+  failure on somebody's first day into a compile error in the commit that drops
+  it.
+
+### Open, deliberately, from these phases
+
+| ID | Issue | Why it is open |
+|---|---|---|
+| REC-054 | The technician's inspection checkpoints come from a client-side dataset, not the server's per-category master list (`GET /technician/inspection-checkpoints` has no caller) | Not fabrication — the local list is real — but it means a workshop cannot configure its own checkpoints. Wiring it is a rework of the studio inspection flow, which is a product decision rather than a repair. |
+| — | The recommendation dismissal modal is styled with inline `style="..."` and hardcoded colours | Pre-existing; outside this phase's scope, and `lint-directional-css` does not read inline styles. Recorded so it is not rediscovered as a finding. |
+
+---
+
+## Phases 8–12 result
+
+| Signal | Phase 7 | Phase 12 |
+|---|---|---|
+| API suites · tests | 143 · 1349 | **144 · 1372** |
+| Web tests | 387 | **417** |
+| Shared tests | 253 | **253** |
+| Fresh DB → migrate → seed | **FAIL** (undetected) | **PASS** |
+| `pnpm typecheck` | PASS (seeds not compiled) | **PASS, seeds included** |
+| `pnpm lint` · `pnpm build` | PASS | **PASS** |
+| eslint errors | 0 | **0** |
+| Architectural linters passing | 11 of 11 | **11 of 11** |
+| Finance capabilities reachable by a person | invoice, payment | **+ refunds, discounts, job total** |
+| Duplicate business paths (same act, two routes) | 2 | **0** |
+| Swallowed errors in the operator's dispatch path | 6 | **0** |
