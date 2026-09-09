@@ -3,6 +3,7 @@ import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { TakePayment } from './take-payment';
+import { AccessApi } from '../../identity/access.api';
 import { FinanceApi, type Settlement } from './finance.api';
 
 function settlement(overrides: Partial<Settlement> = {}): Settlement {
@@ -17,7 +18,7 @@ function settlement(overrides: Partial<Settlement> = {}): Settlement {
   };
 }
 
-async function render(result: Settlement | { error: unknown }) {
+async function render(result: Settlement | { error: unknown }, mayRequestRefund = true) {
   const api = {
     settlement: vi.fn(() => ('error' in result ? throwError(() => result.error) : of(result))),
     // Parameters declared so the assertions below can read the
@@ -25,9 +26,15 @@ async function render(result: Settlement | { error: unknown }) {
     pay: vi.fn((_invoiceId: string, _amount: string, _method: string, _key: string) =>
       of(settlement({ paid: '100.00', outstanding: '0.00', settled: true })),
     ),
+    requestRefund: vi.fn((_invoiceId: string, _amount: string, _reason: string) => of({ id: 'ref1' })),
   };
+  const access = { can: vi.fn(() => of(mayRequestRefund)) };
   TestBed.configureTestingModule({
-    providers: [provideRouter([]), { provide: FinanceApi, useValue: api }],
+    providers: [
+      provideRouter([]),
+      { provide: FinanceApi, useValue: api },
+      { provide: AccessApi, useValue: access },
+    ],
   });
   const fixture = TestBed.createComponent(TakePayment);
   fixture.componentRef.setInput('id', 'inv1');
@@ -162,3 +169,95 @@ describe('TakePayment', () => {
     expect(element.querySelector('select')).toBeNull();
   });
 });
+
+/**
+ * The page named an overpayment out loud -- "this is owed back to the
+ * customer" -- and offered nothing to do about it, while a complete refund
+ * loop sat behind the API with no caller anywhere in the product.
+ */
+describe('TakePayment: asking for a refund', () => {
+  it('offers the refund the overpayment message already describes', async () => {
+    const { element } = await render(
+      settlement({ paid: '120.00', outstanding: '0.00', overpaid: '20.00', settled: true }),
+    );
+
+    const labels = [...element.querySelectorAll('button')].map((b) => b.textContent?.trim() ?? '');
+    expect(labels.some((l) => l.includes('Request a refund'))).toBe(true);
+  });
+
+  it('offers nothing to somebody who may not ask', async () => {
+    // Asking and deciding are separate permissions, and a button that greets
+    // half its audience with a 403 is worse than no button.
+    const { element } = await render(
+      settlement({ paid: '120.00', outstanding: '0.00', overpaid: '20.00', settled: true }),
+      false,
+    );
+
+    const labels = [...element.querySelectorAll('button')].map((b) => b.textContent?.trim() ?? '');
+    expect(labels.some((l) => l.includes('Request a refund'))).toBe(false);
+  });
+
+  it('opens pre-filled with the overpayment, which is the amount in dispute', async () => {
+    const { fixture, element } = await render(
+      settlement({ paid: '120.00', outstanding: '0.00', overpaid: '20.00', settled: true }),
+    );
+
+    press(element, 'Request a refund')!.click();
+    fixture.detectChanges();
+
+    const amount = element.querySelector('#refund-amount') as HTMLInputElement;
+    expect(amount.value).toBe('20.00');
+  });
+
+  it('refuses to send without a reason -- the owner decides on what it says', async () => {
+    const { fixture, element, api } = await render(
+      settlement({ paid: '120.00', outstanding: '0.00', overpaid: '20.00', settled: true }),
+    );
+
+    press(element, 'Request a refund')!.click();
+    fixture.detectChanges();
+    const send = press(element, 'Send request') as HTMLButtonElement;
+
+    expect(send.disabled).toBe(true);
+    expect(api.requestRefund).not.toHaveBeenCalled();
+  });
+
+  it('sends the amount as the string it received, never a parsed number', async () => {
+    const { fixture, element, api } = await render(
+      settlement({ paid: '1800.50', outstanding: '0.00', overpaid: '1800.50', settled: true }),
+    );
+
+    press(element, 'Request a refund')!.click();
+    fixture.detectChanges();
+
+    const reason = element.querySelector('#refund-reason') as HTMLInputElement;
+    reason.value = 'Charged twice';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    press(element, 'Send request')!.click();
+    fixture.detectChanges();
+
+    expect(api.requestRefund).toHaveBeenCalledWith('inv1', '1800.50', 'Charged twice');
+  });
+
+  it('says the request landed, because what happens next happens elsewhere', async () => {
+    const { fixture, element } = await render(
+      settlement({ paid: '120.00', outstanding: '0.00', overpaid: '20.00', settled: true }),
+    );
+
+    press(element, 'Request a refund')!.click();
+    fixture.detectChanges();
+    const reason = element.querySelector('#refund-reason') as HTMLInputElement;
+    reason.value = 'Overpaid at the counter';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    press(element, 'Send request')!.click();
+    fixture.detectChanges();
+
+    expect(element.querySelector('.refund-sent')?.textContent).toContain('once the owner approves');
+  });
+});
+
+const press = (element: HTMLElement, text: string): HTMLButtonElement | undefined =>
+  [...element.querySelectorAll('button')].find((b) => b.textContent?.includes(text));

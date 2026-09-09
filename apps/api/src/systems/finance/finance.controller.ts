@@ -84,6 +84,37 @@ export class FinanceController {
    * default, stays with the owner. See finance.service.ts's own note on
    * why this isn't yet a structurally-enforced second-person check.
    */
+  /**
+   * The decider's queue: everything about money waiting on a signature.
+   *
+   * Gated on the DECIDE permissions rather than the request ones -- this is
+   * the page a person acts from, and a requester who cannot decide has no use
+   * for a list of things they may not touch. A caller holding one of the two
+   * sees that half and an empty list for the other, which is the honest answer
+   * rather than a 403 on the whole page.
+   */
+  @Get("approvals")
+  async moneyApprovals(@CurrentSession() session: SessionContext) {
+    if (!session.tenantId) {
+      throw new ForbiddenException({ code: "forbidden", message: "You do not have access to this." });
+    }
+    const [canRefund, canDiscount] = await Promise.all([
+      this.access.can(session, "finance.refund.decide"),
+      this.access.can(session, "finance.discount.decide"),
+    ]);
+    if (!canRefund && !canDiscount) {
+      throw new ForbiddenException({ code: "forbidden", message: "You do not have access to this." });
+    }
+
+    const queue = await this.finance.pendingMoneyApprovals(session.tenantId, session.branchScope ?? []);
+    return {
+      refunds: canRefund ? queue.refunds : [],
+      discounts: canDiscount ? queue.discounts : [],
+      canDecideRefunds: canRefund,
+      canDecideDiscounts: canDiscount,
+    };
+  }
+
   @Post("invoices/:id/refunds")
   async requestRefund(@CurrentSession() session: SessionContext, @Param("id") id: string, @Body() dto: RequestRefundDto) {
     const tenantId = await this.require(session, "finance.refund.request");

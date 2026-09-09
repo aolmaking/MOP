@@ -223,3 +223,72 @@
 :where(.pay) {
   background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
 }
+
+/* --- requesting a refund ------------------------------------------- */
+
+/*
+ * Below the settled block, never beside the payment amount. Two money inputs
+ * side by side on a counter screen is how the wrong one gets filled in, and
+ * these are opposite acts: one takes money, the other gives it back.
+ */
+.refund {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--text-muted);
+  border-radius: var(--radius-sm);
+}
+
+.refund-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.refund-label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--text-muted);
+}
+
+.refund-input {
+  min-block-size: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.refund-input:focus-visible {
+  outline: 2px solid var(--brand-text);
+  outline-offset: 2px;
+}
+
+.refund-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.refund-error {
+  font-size: var(--text-xs);
+  color: var(--danger, var(--text));
+}
+
+/*
+ * Stays on screen after the drawer closes. The request has left, and the next
+ * thing that happens to it happens somewhere else entirely -- on the owner's
+ * approvals page -- so the counter needs to be told it landed.
+ */
+.refund-sent {
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--brand-text);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}

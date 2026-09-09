@@ -5,7 +5,7 @@ import { ErrorBanner } from '../../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../../ui/button/button.directive';
 import type { PresentedError } from '../../../runtime/http/error.interceptor';
 import { AccessApi } from '../../../identity/access.api';
-import { FinanceApi } from '../../finance/finance.api';
+import { FinanceApi, type JobTotal, type Money } from '../../finance/finance.api';
 import { ApprovalsApi, type DeliveryBoard, type DeliveryCandidate } from './approvals.api';
 
 type State = 'loading' | 'ready' | 'empty' | 'forbidden' | 'error';
@@ -53,6 +53,36 @@ export class DeliveryPage {
   /** Which row is mid-issue, so only its own button shows the wait. */
   protected readonly issuing = signal<string | null>(null);
 
+  /**
+   * Whether this person may ask for a discount on a job.
+   *
+   * BRANCH_MANAGER holds `finance.discount.request` by default and never
+   * `finance.discount.decide` -- asking and granting are deliberately two
+   * people, the same separation as issuing an invoice and taking payment.
+   */
+  protected readonly mayRequestDiscount = signal(false);
+
+  /**
+   * What the job costs, per work order, loaded on demand.
+   *
+   * `GET /finance/work-orders/:id/total` existed, was permission-gated and had
+   * no caller anywhere in the product, so "Issue invoice" was pressed without
+   * anyone being able to see the amount it was about to fix forever. An
+   * invoice is immutable once issued; signing one blind is the wrong order.
+   */
+  protected readonly totals = signal<Record<string, JobTotal>>({});
+  protected readonly openTotal = signal<string | null>(null);
+  protected readonly loadingTotal = signal<string | null>(null);
+  protected readonly totalError = signal<string | null>(null);
+
+  /** The discount ask, open on at most one row at a time. */
+  protected readonly discountFor = signal<string | null>(null);
+  protected readonly discountAmount = signal<Money>('');
+  protected readonly discountReason = signal('');
+  protected readonly discountSubmitting = signal(false);
+  protected readonly discountError = signal<string | null>(null);
+  protected readonly discountRequestedFor = signal<string | null>(null);
+
   protected readonly board = signal<DeliveryBoard | null>(null);
   protected readonly error = signal<PresentedError | null>(null);
   protected readonly state = signal<State>('loading');
@@ -64,6 +94,7 @@ export class DeliveryPage {
     this.load();
     this.access.can('finance.payment.record').subscribe((allowed) => this.mayTakePayment.set(allowed));
     this.access.can('finance.invoice.issue').subscribe((allowed) => this.mayIssueInvoice.set(allowed));
+    this.access.can('finance.discount.request').subscribe((allowed) => this.mayRequestDiscount.set(allowed));
   }
 
   /**
@@ -102,6 +133,85 @@ export class DeliveryPage {
         this.releaseError.set(err.message ?? 'The invoice could not be issued.');
       },
     });
+  }
+
+  /**
+   * Shows what the job costs, fetched rather than remembered.
+   *
+   * Re-read on every open: parts can be issued to a job between two glances at
+   * this board, and a stale total is exactly the number somebody would sign.
+   */
+  protected toggleTotal(row: DeliveryCandidate): void {
+    if (this.openTotal() === row.workOrderId) {
+      this.openTotal.set(null);
+      return;
+    }
+
+    this.openTotal.set(row.workOrderId);
+    this.totalError.set(null);
+    this.loadingTotal.set(row.workOrderId);
+    this.finance.jobTotal(row.workOrderId).subscribe({
+      next: (total) => {
+        this.loadingTotal.set(null);
+        this.totals.update((all) => ({ ...all, [row.workOrderId]: total }));
+      },
+      error: (err: PresentedError) => {
+        this.loadingTotal.set(null);
+        this.totalError.set(err.message ?? 'The total could not be read.');
+      },
+    });
+  }
+
+  protected openDiscount(row: DeliveryCandidate): void {
+    this.discountFor.set(this.discountFor() === row.workOrderId ? null : row.workOrderId);
+    this.discountAmount.set('');
+    this.discountReason.set('');
+    this.discountError.set(null);
+  }
+
+  protected setDiscountAmount(value: string): void {
+    this.discountAmount.set(value);
+    this.discountError.set(null);
+  }
+
+  protected setDiscountReason(value: string): void {
+    this.discountReason.set(value);
+  }
+
+  protected canRequestDiscount(): boolean {
+    return (
+      /^\d+(\.\d{1,2})?$/.test(this.discountAmount().trim()) &&
+      this.discountReason().trim().length > 0 &&
+      !this.discountSubmitting()
+    );
+  }
+
+  /**
+   * An ask, not a discount.
+   *
+   * Whether it needs a decision at all is the workshop's DISCOUNT_AUTHORITY
+   * policy's business, and the server answers it. A workshop set to
+   * ANY_STAFF_UNLIMITED still routes through here, because a request that is
+   * granted immediately is still a record of who gave money away and why.
+   */
+  protected requestDiscount(row: DeliveryCandidate): void {
+    if (!this.canRequestDiscount()) return;
+
+    this.discountSubmitting.set(true);
+    this.discountError.set(null);
+    this.finance
+      .requestDiscount(row.workOrderId, this.discountAmount().trim(), this.discountReason().trim())
+      .subscribe({
+        next: () => {
+          this.discountSubmitting.set(false);
+          this.discountFor.set(null);
+          this.discountRequestedFor.set(row.workOrderId);
+        },
+        error: (err: PresentedError) => {
+          this.discountSubmitting.set(false);
+          this.discountError.set(err.message ?? 'That request did not go through.');
+        },
+      });
   }
 
   protected load(): void {

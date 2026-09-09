@@ -44,6 +44,7 @@ export class OwnerShell {
     { label: 'Forms & Fields', route: '/owner/forms' },
     { label: 'Messages', route: '/owner/messages' },
     { label: 'Pricing', route: '/owner/pricing' },
+    { label: 'Money approvals', route: '/owner/money-approvals' },
     { label: 'Reports', route: '/owner/reports' },
     { label: 'Workflow Health', route: '/owner/workflow-health' },
     // Two different products, two different entries. History is what

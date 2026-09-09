@@ -191,6 +191,15 @@ export const routes: Routes = [
         loadComponent: () => import('./experiences/owner/audit-page').then((m) => m.AuditPage),
       },
       {
+        // Refunds and discounts. Both loops were complete behind the API and
+        // reachable from no page, which made DISCOUNT_AUTHORITY a policy that
+        // could only ever block: it turns a discount into a request nothing
+        // could make and nothing could grant.
+        path: 'money-approvals',
+        loadComponent: () =>
+          import('./experiences/finance/money-approvals').then((m) => m.MoneyApprovalsPage),
+      },
+      {
         // Staff / Branches / Warehouses tabs.
         path: 'organization',
         loadComponent: () =>

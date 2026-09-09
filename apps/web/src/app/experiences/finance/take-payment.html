@@ -34,6 +34,56 @@
             <p class="settled-over">{{ s.overpaid }} overpaid — this is owed back to the customer.</p>
           }
         </div>
+
+      @if (mayRequestRefund()) {
+        @if (refundRequested()) {
+          <p class="refund-sent" role="status">
+            Refund requested. It goes back to the customer once the owner approves it.
+          </p>
+        } @else if (refundOpen()) {
+          <div class="refund">
+            <p class="refund-title">Request a refund</p>
+            <label class="refund-label" for="refund-amount">How much</label>
+            <input
+              class="refund-input"
+              id="refund-amount"
+              type="text"
+              inputmode="decimal"
+              [value]="refundAmount()"
+              (input)="setRefundAmount($any($event.target).value)"
+            />
+            <label class="refund-label" for="refund-reason">Why</label>
+            <input
+              class="refund-input"
+              id="refund-reason"
+              type="text"
+              [value]="refundReason()"
+              (input)="setRefundReason($any($event.target).value)"
+              placeholder="The owner sees this when they decide"
+            />
+            @if (refundError(); as message) {
+              <p class="refund-error" role="alert">{{ message }}</p>
+            }
+            <div class="refund-actions">
+              <button
+                appButton
+                variant="primary"
+                size="small"
+                type="button"
+                [disabled]="!canRequestRefund()"
+                (click)="requestRefund()"
+              >
+                {{ refundSubmitting() ? 'Sending…' : 'Send request' }}
+              </button>
+              <button appButton variant="ghost" size="small" type="button" (click)="closeRefund()">Cancel</button>
+            </div>
+          </div>
+        } @else {
+          <button appButton variant="secondary" size="small" type="button" (click)="openRefund()">
+            Request a refund
+          </button>
+        }
+      }
       }
     }
 

@@ -203,3 +203,112 @@
   font-weight: 600;
   text-decoration: none;
 }
+
+/* --- what the job costs -------------------------------------------- */
+
+/*
+ * Opened on demand, on the row where the invoice is about to be signed. Not
+ * always-on: this page is scanned for what is blocked, and a column of totals
+ * on every row would bury the reasons that are the point of it.
+ */
+.row-total-toggle,
+.row-total-loading {
+  align-self: start;
+}
+
+.row-total-loading {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.job-total {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.job-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.job-line-name {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/*
+ * Tabular so the column adds up by eye. The customer will do exactly that with
+ * the printed invoice, and a column that does not line up invites the question
+ * of whether the arithmetic is wrong too.
+ */
+.job-line-value {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
+}
+
+.job-line--sum {
+  padding-block-start: var(--space-1);
+  border-block-start: 1px solid var(--border);
+}
+
+.job-line--total .job-line-name,
+.job-line--total .job-line-value {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* --- asking for a discount ----------------------------------------- */
+
+.discount {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--text-muted);
+  border-radius: var(--radius-sm);
+}
+
+.discount-label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--text-muted);
+}
+
+.discount-input {
+  min-block-size: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.discount-input:focus-visible {
+  outline: 2px solid var(--brand-text);
+  outline-offset: 2px;
+}
+
+.discount-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.discount-sent {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}

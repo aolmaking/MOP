@@ -88,6 +88,37 @@ export interface Settlement {
  * **Nothing is ever edited or deleted.** A wrong payment is corrected by
  * a refund, which is its own record. An issued invoice is immutable.
  */
+export interface RefundApprovalRow {
+  readonly id: string;
+  readonly invoiceId: string;
+  readonly invoiceNumber: string;
+  readonly invoiceTotal: Money;
+  readonly workOrderId: string;
+  readonly identifier: string;
+  readonly customerName: string;
+  readonly amount: Money;
+  readonly reason: string;
+  readonly reasonCategory: string;
+  readonly requestedBy: string;
+  readonly requestedAt: string;
+}
+
+export interface DiscountApprovalRow {
+  readonly id: string;
+  readonly workOrderId: string;
+  readonly identifier: string;
+  readonly customerName: string;
+  readonly amount: Money;
+  readonly reason: string;
+  readonly requestedBy: string;
+  readonly requestedAt: string;
+}
+
+export interface MoneyApprovalQueue {
+  readonly refunds: readonly RefundApprovalRow[];
+  readonly discounts: readonly DiscountApprovalRow[];
+}
+
 @Injectable()
 export class FinanceService {
   constructor(
@@ -881,6 +912,136 @@ export class FinanceService {
     });
 
     return { id: requestId, status: "PENDING" };
+  }
+
+  /**
+   * Everything waiting on somebody senior to decide about money.
+   *
+   * Both loops -- refunds and discounts -- could be requested and decided over
+   * HTTP and were reachable from no page at all, so a refund could be asked
+   * for by nobody and granted by nobody. Requesting and deciding are separate
+   * permissions on purpose; what was missing is the list the decider works
+   * from. One call rather than two, because it is one queue to a person: "what
+   * needs my signature".
+   *
+   * Branch-scoped like every other manager surface: a refund belongs to the
+   * branch whose invoice it reverses, and a discount to the branch running the
+   * job.
+   */
+  async pendingMoneyApprovals(
+    tenantId: string,
+    branchScope: readonly string[],
+  ): Promise<MoneyApprovalQueue> {
+    const branchFilter = branchScope.length > 0 ? [...branchScope] : null;
+
+    const [refunds, discounts] = await Promise.all([
+      this.prisma.refundRequest.findMany({
+        where: {
+          tenantId,
+          status: "PENDING",
+          ...(branchFilter
+            ? { invoice: { OR: [{ branchId: { in: branchFilter } }, { branchId: null, workOrder: { branchId: { in: branchFilter } } }] } }
+            : {}),
+        },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          amount: true,
+          reason: true,
+          reasonCategory: true,
+          createdAt: true,
+          requestedById: true,
+          invoice: {
+            select: {
+              id: true,
+              invoiceNumber: true,
+              total: true,
+              workOrder: {
+                select: {
+                  id: true,
+                  customer: { select: { fullName: true } },
+                  asset: { select: { plateNumber: true, serialNumber: true } },
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.discountRequest.findMany({
+        where: {
+          tenantId,
+          status: "PENDING",
+          ...(branchFilter ? { workOrderId: { in: await this.workOrderIdsIn(tenantId, branchFilter) } } : {}),
+        },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, workOrderId: true, amount: true, reason: true, createdAt: true, requestedById: true },
+      }),
+    ]);
+
+    const jobs = await this.prisma.workOrder.findMany({
+      where: { tenantId, id: { in: discounts.map((row) => row.workOrderId) } },
+      select: {
+        id: true,
+        customer: { select: { fullName: true } },
+        asset: { select: { plateNumber: true, serialNumber: true } },
+      },
+    });
+    const jobById = new Map(jobs.map((job) => [job.id, job]));
+
+    const requesterNames = await this.namesFor([
+      ...refunds.map((row) => row.requestedById),
+      ...discounts.map((row) => row.requestedById),
+    ]);
+
+    return {
+      refunds: refunds.map((row) => ({
+        id: row.id,
+        invoiceId: row.invoice.id,
+        invoiceNumber: row.invoice.invoiceNumber,
+        invoiceTotal: row.invoice.total.toFixed(2),
+        workOrderId: row.invoice.workOrder.id,
+        identifier: row.invoice.workOrder.asset.plateNumber ?? row.invoice.workOrder.asset.serialNumber ?? "—",
+        customerName: row.invoice.workOrder.customer.fullName,
+        amount: row.amount.toFixed(2),
+        reason: row.reason,
+        reasonCategory: row.reasonCategory,
+        requestedBy: requesterNames.get(row.requestedById) ?? "A colleague",
+        requestedAt: row.createdAt.toISOString(),
+      })),
+      discounts: discounts.map((row) => ({
+        id: row.id,
+        workOrderId: row.workOrderId,
+        identifier: jobById.get(row.workOrderId)?.asset.plateNumber ?? jobById.get(row.workOrderId)?.asset.serialNumber ?? "—",
+        customerName: jobById.get(row.workOrderId)?.customer.fullName ?? "—",
+        amount: row.amount.toFixed(2),
+        reason: row.reason,
+        requestedBy: requesterNames.get(row.requestedById) ?? "A colleague",
+        requestedAt: row.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  /** Work orders in the caller's branch scope -- the discount request has no branch of its own. */
+  private async workOrderIdsIn(tenantId: string, branchIds: readonly string[]): Promise<string[]> {
+    const rows = await this.prisma.workOrder.findMany({
+      where: { tenantId, branchId: { in: [...branchIds] } },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  }
+
+  /**
+   * Who asked. A request signed "A colleague" is worse than useless to the
+   * person deciding it, and the id alone is not a name.
+   */
+  private async namesFor(accountIds: readonly string[]): Promise<Map<string, string>> {
+    const unique = [...new Set(accountIds)];
+    if (unique.length === 0) return new Map();
+    const staff = await this.prisma.staffUser.findMany({
+      where: { accountId: { in: unique } },
+      select: { accountId: true, fullName: true },
+    });
+    return new Map(staff.map((row) => [row.accountId, row.fullName]));
   }
 
   /**

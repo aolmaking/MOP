@@ -1,0 +1,202 @@
+<!--
+  Money leaving the workshop, and money never collected. Both were fully
+  implemented behind the API and reachable from nowhere; this is the page that
+  makes the two loops real for a person rather than for a test.
+-->
+<section class="approvals">
+  <header class="approvals-head">
+    <h1 class="approvals-title">Money approvals</h1>
+    @if (queue(); as q) {
+      <p class="approvals-count">{{ total() }} waiting on you</p>
+    }
+  </header>
+
+  @if (lastOutcome(); as outcome) {
+    <p class="outcome" role="status">{{ outcome }}</p>
+  }
+
+  @switch (state()) {
+    @case ('loading') {
+      <ul class="rows" aria-busy="true" aria-label="Loading">
+        @for (row of [1, 2]; track row) {
+          <li class="row row--skeleton"><span class="skeleton-bar"></span></li>
+        }
+      </ul>
+    }
+
+    @case ('forbidden') {
+      <div class="state">
+        <p class="state-title">Deciding money is not part of your role</p>
+        <p class="state-body">Refunds and discounts are decided by the workshop owner.</p>
+      </div>
+    }
+
+    @case ('error') {
+      <div class="state-error">
+        <app-error-banner [error]="error()" />
+        <button appButton variant="secondary" size="small" (click)="load()">Try again</button>
+      </div>
+    }
+
+    @case ('empty') {
+      <div class="state">
+        <p class="state-title">Nothing waiting</p>
+        <p class="state-body">Refund and discount requests appear here as they are raised.</p>
+      </div>
+    }
+
+    @case ('ready') {
+      @if (queue(); as q) {
+        @if (q.refunds.length) {
+          <section class="band">
+            <h2 class="band-title">Refunds</h2>
+            <p class="band-note">Money already taken, going back to the customer.</p>
+            <ul class="rows">
+              @for (row of q.refunds; track row.id) {
+                <li class="row row--refund">
+                  <a class="row-link" [routerLink]="['/branch/work-orders', row.workOrderId]">
+                    <span class="row-identity">
+                      <mop-identifier [value]="row.identifier" />
+                      <span class="row-customer">{{ row.customerName }}</span>
+                    </span>
+                    <span class="row-amount">{{ row.amount }}</span>
+                  </a>
+
+                  <p class="row-meta">
+                    <span class="row-invoice">{{ row.invoiceNumber }}</span>
+                    <span class="row-of">of {{ row.invoiceTotal }}</span>
+                    @if (row.reasonCategory !== 'ROUTINE') {
+                      <!-- A disputed charge carries different audit and
+                           reporting weight, and the person deciding has to
+                           see which kind this is before they sign it. -->
+                      <span class="row-flag">Disputed charge</span>
+                    }
+                  </p>
+                  <p class="row-reason">{{ row.reason }}</p>
+                  <p class="row-asked">{{ row.requestedBy }} · {{ asked(row.requestedAt) }}</p>
+
+                  @if (rejecting() === row.id) {
+                    <div class="reject">
+                      <label class="reject-label" [attr.for]="'reject-' + row.id">Why not?</label>
+                      <input
+                        class="reject-input"
+                        [id]="'reject-' + row.id"
+                        type="text"
+                        [value]="rejectReason()"
+                        (input)="setRejectReason($any($event.target).value)"
+                        placeholder="The requester will see this"
+                      />
+                      <div class="reject-actions">
+                        <button
+                          appButton
+                          variant="secondary"
+                          size="small"
+                          type="button"
+                          [disabled]="!rejectReason().trim() || deciding() === row.id"
+                          (click)="rejectRefund(row.id)"
+                        >
+                          {{ deciding() === row.id ? 'Declining…' : 'Decline refund' }}
+                        </button>
+                        <button appButton variant="ghost" size="small" type="button" (click)="askToReject(row.id)">
+                          Keep it open
+                        </button>
+                      </div>
+                    </div>
+                  } @else {
+                    <div class="row-actions">
+                      <button
+                        appButton
+                        variant="primary"
+                        size="small"
+                        type="button"
+                        [disabled]="deciding() === row.id"
+                        (click)="approveRefund(row.id)"
+                      >
+                        {{ deciding() === row.id ? 'Refunding…' : 'Approve refund' }}
+                      </button>
+                      <button appButton variant="secondary" size="small" type="button" (click)="askToReject(row.id)">
+                        Decline
+                      </button>
+                    </div>
+                  }
+                </li>
+              }
+            </ul>
+          </section>
+        }
+
+        @if (q.discounts.length) {
+          <section class="band">
+            <h2 class="band-title">Discounts</h2>
+            <p class="band-note">Taken off the job before it is invoiced.</p>
+            <ul class="rows">
+              @for (row of q.discounts; track row.id) {
+                <li class="row row--discount">
+                  <a class="row-link" [routerLink]="['/branch/work-orders', row.workOrderId]">
+                    <span class="row-identity">
+                      <mop-identifier [value]="row.identifier" />
+                      <span class="row-customer">{{ row.customerName }}</span>
+                    </span>
+                    <span class="row-amount">{{ row.amount }}</span>
+                  </a>
+
+                  <p class="row-reason">{{ row.reason }}</p>
+                  <p class="row-asked">{{ row.requestedBy }} · {{ asked(row.requestedAt) }}</p>
+
+                  @if (rejecting() === row.id) {
+                    <div class="reject">
+                      <label class="reject-label" [attr.for]="'reject-' + row.id">Why not?</label>
+                      <input
+                        class="reject-input"
+                        [id]="'reject-' + row.id"
+                        type="text"
+                        [value]="rejectReason()"
+                        (input)="setRejectReason($any($event.target).value)"
+                        placeholder="The requester will see this"
+                      />
+                      <div class="reject-actions">
+                        <button
+                          appButton
+                          variant="secondary"
+                          size="small"
+                          type="button"
+                          [disabled]="!rejectReason().trim() || deciding() === row.id"
+                          (click)="rejectDiscount(row.id)"
+                        >
+                          {{ deciding() === row.id ? 'Declining…' : 'Decline discount' }}
+                        </button>
+                        <button appButton variant="ghost" size="small" type="button" (click)="askToReject(row.id)">
+                          Keep it open
+                        </button>
+                      </div>
+                    </div>
+                  } @else {
+                    <div class="row-actions">
+                      <button
+                        appButton
+                        variant="primary"
+                        size="small"
+                        type="button"
+                        [disabled]="deciding() === row.id"
+                        (click)="approveDiscount(row.id)"
+                      >
+                        {{ deciding() === row.id ? 'Approving…' : 'Approve discount' }}
+                      </button>
+                      <button appButton variant="secondary" size="small" type="button" (click)="askToReject(row.id)">
+                        Decline
+                      </button>
+                    </div>
+                  }
+                </li>
+              }
+            </ul>
+          </section>
+        }
+
+        @if (decisionError(); as message) {
+          <p class="decision-error" role="alert">{{ message }}</p>
+        }
+      }
+    }
+  }
+</section>

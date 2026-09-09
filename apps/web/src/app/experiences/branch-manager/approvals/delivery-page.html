@@ -67,6 +67,117 @@
                     }
                   </ul>
 
+
+                  @if (awaitingInvoice(row)) {
+                    <!--
+                      What the invoice will say, before it is signed. This
+                      endpoint had no caller anywhere, so the press below fixed
+                      an amount nobody on this page could see.
+                    -->
+                    <button
+                      appButton
+                      variant="ghost"
+                      size="small"
+                      type="button"
+                      class="row-total-toggle"
+                      (click)="toggleTotal(row)"
+                    >
+                      {{ openTotal() === row.workOrderId ? 'Hide what this costs' : 'What this costs' }}
+                    </button>
+
+                    @if (openTotal() === row.workOrderId) {
+                      @if (loadingTotal() === row.workOrderId) {
+                        <p class="row-total-loading" aria-busy="true">Reading the job…</p>
+                      } @else if (totals()[row.workOrderId]; as t) {
+                        <dl class="job-total">
+                          @for (line of t.lines; track line.id) {
+                            <div class="job-line">
+                              <dt class="job-line-name">{{ line.name }} × {{ line.quantity }}</dt>
+                              <dd class="job-line-value">{{ line.total }}</dd>
+                            </div>
+                          }
+                          <div class="job-line job-line--sum">
+                            <dt class="job-line-name">Subtotal</dt>
+                            <dd class="job-line-value">{{ t.subtotal }}</dd>
+                          </div>
+                          @if (t.discount !== '0.00') {
+                            <div class="job-line">
+                              <dt class="job-line-name">Discount</dt>
+                              <dd class="job-line-value">{{ t.discount }}</dd>
+                            </div>
+                          }
+                          @if (t.tax !== '0.00') {
+                            <div class="job-line">
+                              <dt class="job-line-name">Tax</dt>
+                              <dd class="job-line-value">{{ t.tax }}</dd>
+                            </div>
+                          }
+                          <div class="job-line job-line--total">
+                            <dt class="job-line-name">Total</dt>
+                            <dd class="job-line-value">{{ t.total }}</dd>
+                          </div>
+                        </dl>
+                      }
+
+                      @if (totalError(); as message) {
+                        <p class="release-error" role="alert">{{ message }}</p>
+                      }
+                    }
+
+                    @if (mayRequestDiscount()) {
+                      @if (discountRequestedFor() === row.workOrderId) {
+                        <p class="discount-sent" role="status">
+                          Discount requested. It is applied once the owner approves it.
+                        </p>
+                      } @else if (discountFor() === row.workOrderId) {
+                        <div class="discount">
+                          <label class="discount-label" [attr.for]="'discount-amount-' + row.workOrderId">
+                            How much off
+                          </label>
+                          <input
+                            class="discount-input"
+                            [id]="'discount-amount-' + row.workOrderId"
+                            type="text"
+                            inputmode="decimal"
+                            [value]="discountAmount()"
+                            (input)="setDiscountAmount($any($event.target).value)"
+                          />
+                          <label class="discount-label" [attr.for]="'discount-reason-' + row.workOrderId">Why</label>
+                          <input
+                            class="discount-input"
+                            [id]="'discount-reason-' + row.workOrderId"
+                            type="text"
+                            [value]="discountReason()"
+                            (input)="setDiscountReason($any($event.target).value)"
+                            placeholder="The owner sees this when they decide"
+                          />
+                          @if (discountError(); as message) {
+                            <p class="release-error" role="alert">{{ message }}</p>
+                          }
+                          <div class="discount-actions">
+                            <button
+                              appButton
+                              variant="secondary"
+                              size="small"
+                              type="button"
+                              [disabled]="!canRequestDiscount()"
+                              (click)="requestDiscount(row)"
+                            >
+                              {{ discountSubmitting() ? 'Sending…' : 'Send request' }}
+                            </button>
+                            <button appButton variant="ghost" size="small" type="button" (click)="openDiscount(row)">
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      } @else {
+                        <button appButton variant="ghost" size="small" type="button" (click)="openDiscount(row)">
+                          Ask for a discount
+                        </button>
+                      }
+                    }
+                  }
+
                   @if (awaitingInvoice(row) && mayIssueInvoice()) {
                     <!--
                       The step before "Take payment", and the one the

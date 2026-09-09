@@ -37,6 +37,39 @@ export interface Settlement {
   readonly settled: boolean;
 }
 
+export interface RefundApprovalRow {
+  readonly id: string;
+  readonly invoiceId: string;
+  readonly invoiceNumber: string;
+  readonly invoiceTotal: Money;
+  readonly workOrderId: string;
+  readonly identifier: string;
+  readonly customerName: string;
+  readonly amount: Money;
+  readonly reason: string;
+  readonly reasonCategory: string;
+  readonly requestedBy: string;
+  readonly requestedAt: string;
+}
+
+export interface DiscountApprovalRow {
+  readonly id: string;
+  readonly workOrderId: string;
+  readonly identifier: string;
+  readonly customerName: string;
+  readonly amount: Money;
+  readonly reason: string;
+  readonly requestedBy: string;
+  readonly requestedAt: string;
+}
+
+export interface MoneyApprovals {
+  readonly refunds: readonly RefundApprovalRow[];
+  readonly discounts: readonly DiscountApprovalRow[];
+  readonly canDecideRefunds: boolean;
+  readonly canDecideDiscounts: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class FinanceApi {
   private readonly http = inject(HttpClient);
@@ -79,5 +112,55 @@ export class FinanceApi {
       method,
       idempotencyKey,
     });
+  }
+
+  /**
+   * Everything about money waiting on a decision.
+   *
+   * Both loops behind this -- refunds and discounts -- could be requested and
+   * decided over HTTP since Phase 8 and were reachable from no page at all.
+   * The endpoints existed, were permission-gated, produced real credit notes,
+   * and nothing in the product ever called them.
+   */
+  moneyApprovals(): Observable<MoneyApprovals> {
+    return this.http.get<MoneyApprovals>('/api/v1/finance/approvals');
+  }
+
+  /**
+   * Ask for money to go back to the customer.
+   *
+   * A request on its own moves nothing: approval is what produces the credit
+   * note. That separation is why this is a request and not a "refund" button.
+   */
+  requestRefund(invoiceId: string, amount: Money, reason: string): Observable<{ id: string }> {
+    return this.http.post<{ id: string }>(`/api/v1/finance/invoices/${invoiceId}/refunds`, { amount, reason });
+  }
+
+  approveRefund(refundId: string): Observable<{ id: string; creditNoteNumber: string }> {
+    return this.http.post<{ id: string; creditNoteNumber: string }>(`/api/v1/finance/refunds/${refundId}/approve`, {});
+  }
+
+  rejectRefund(refundId: string, reason: string): Observable<{ id: string }> {
+    return this.http.post<{ id: string }>(`/api/v1/finance/refunds/${refundId}/reject`, { reason });
+  }
+
+  /**
+   * Ask to take money off a job before it is invoiced.
+   *
+   * The amount is a money string, not a percentage: what the workshop's
+   * DISCOUNT_AUTHORITY policy compares against its threshold is the amount,
+   * and asking the counter for a percentage would mean two different numbers
+   * describing one concession.
+   */
+  requestDiscount(workOrderId: string, amount: Money, reason: string): Observable<{ id: string }> {
+    return this.http.post<{ id: string }>(`/api/v1/finance/work-orders/${workOrderId}/discounts`, { amount, reason });
+  }
+
+  approveDiscount(discountId: string): Observable<{ id: string }> {
+    return this.http.post<{ id: string }>(`/api/v1/finance/discounts/${discountId}/approve`, {});
+  }
+
+  rejectDiscount(discountId: string, reason: string): Observable<{ id: string }> {
+    return this.http.post<{ id: string }>(`/api/v1/finance/discounts/${discountId}/reject`, { reason });
   }
 }
