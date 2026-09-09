@@ -1,4 +1,6 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { MOTORCYCLES_INSPECTION_CHECKPOINTS } from "../../systems/inventory/master-catalog/motorcycles-catalog.dataset";
+import { HEAVY_EQUIPMENT_INSPECTION_CHECKPOINTS } from "../../systems/inventory/master-catalog/heavy-equipment-catalog.dataset";
 import {
   PART_REQUEST_GRAPH,
   canTransition,
@@ -153,15 +155,56 @@ export interface InspectionBoxItem {
   readonly id: string;
   readonly partKey: string;
   readonly nameEn: string;
-  readonly nameAr: string;
+  /** Null where the source list carries no Arabic label -- absent, not the English text twice. */
+  readonly nameAr: string | null;
   readonly systemCategoryEn: string;
-  readonly systemCategoryAr: string;
-  readonly icon: string;
-  readonly color: string;
+  readonly systemCategoryAr: string | null;
+  readonly icon: string | null;
+  readonly color: string | null;
   readonly customerDetails: InspectionBoxCustomerDetails;
   readonly isDone: boolean;
   readonly completedAt: string | null;
   readonly symptoms: readonly string[];
+}
+
+/**
+ * The checkpoints for one vehicle category.
+ *
+ * Cars keep `DEFAULT_SUBSYSTEMS`, which carries Arabic labels, icons and
+ * symptom text the studio screen draws. The other two categories are built
+ * from the master catalogue's own checkpoint definitions -- the same data the
+ * `inspection-checkpoints` endpoint serves -- because there is no second,
+ * hand-written motorcycle list and inventing one would be a third source of
+ * truth for what a bike has on it.
+ *
+ * What those lists do not carry is Arabic copy or per-system colour. Both come
+ * back null rather than filled with the English text or a made-up hex: a label
+ * that claims to be Arabic and is not is worse on a bilingual shop floor than
+ * one that is plainly missing.
+ */
+function subsystemsForCategory(category: string): readonly InspectionSubsystem[] {
+  if (category === "CARS") return DEFAULT_SUBSYSTEMS;
+
+  const master =
+    category === "MOTORCYCLES"
+      ? MOTORCYCLES_INSPECTION_CHECKPOINTS
+      : category === "HEAVY_EQUIPMENT"
+        ? HEAVY_EQUIPMENT_INSPECTION_CHECKPOINTS
+        : [];
+
+  return master.map((checkpoint) => ({
+    id: checkpoint.systemSlug,
+    nameEn: checkpoint.title,
+    nameAr: null,
+    systemCategoryEn: checkpoint.title,
+    systemCategoryAr: null,
+    icon: null,
+    color: null,
+    // The targets are what a technician actually looks at on this checkpoint,
+    // and they are the closest thing the master list has to the symptom
+    // prompts the car list carries.
+    symptoms: checkpoint.targets.map((target) => target.label),
+  }));
 }
 
 export interface WorkCard {
@@ -250,16 +293,26 @@ const PART_STATE: Record<
   CANCELLED: { text: "Cancelled.", waitingOn: "NOBODY", actions: [] },
 };
 
-export const DEFAULT_SUBSYSTEMS: readonly {
-  id: string;
-  nameEn: string;
-  nameAr: string;
-  systemCategoryEn: string;
-  systemCategoryAr: string;
-  icon: string;
-  color: string;
-  symptoms: string[];
-}[] = [
+/**
+ * One checkpoint on the studio inspection screen.
+ *
+ * `nameAr`, `systemCategoryAr`, `icon` and `color` are nullable because only
+ * the car list carries them: the motorcycle and heavy-equipment checkpoints
+ * come from the master catalogue, which has titles and targets and no Arabic
+ * copy. Absent beats a copy of the English text under an Arabic label.
+ */
+export interface InspectionSubsystem {
+  readonly id: string;
+  readonly nameEn: string;
+  readonly nameAr: string | null;
+  readonly systemCategoryEn: string;
+  readonly systemCategoryAr: string | null;
+  readonly icon: string | null;
+  readonly color: string | null;
+  readonly symptoms: readonly string[];
+}
+
+export const DEFAULT_SUBSYSTEMS: readonly InspectionSubsystem[] = [
   {
     id: "ac",
     nameEn: "A/C & Climate",
@@ -892,16 +945,32 @@ export class TechnicianWorkViewService {
       if (partsMatch) {
         targetKeys = partsMatch[1].split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
       } else {
-        const detected = DEFAULT_SUBSYSTEMS.filter((s) => {
-          return lower.includes(s.id) || lower.includes(s.nameEn.toLowerCase()) || lower.includes(s.nameAr);
-        }).map((s) => s.id);
+        const forCategory = subsystemsForCategory(workOrder.asset.category);
+        const detected = forCategory
+          .filter((s) => {
+            return (
+              lower.includes(s.id) ||
+              lower.includes(s.nameEn.toLowerCase()) ||
+              (s.nameAr !== null && lower.includes(s.nameAr))
+            );
+          })
+          .map((s) => s.id);
 
-        targetKeys = detected.length > 0 ? detected : DEFAULT_SUBSYSTEMS.map((s) => s.id);
+        targetKeys = detected.length > 0 ? detected : forCategory.map((s) => s.id);
       }
     }
 
-    const activeSubsystems = DEFAULT_SUBSYSTEMS.filter((s) => targetKeys.includes(s.id));
-    const finalSubsystems = activeSubsystems.length > 0 ? activeSubsystems : DEFAULT_SUBSYSTEMS;
+    // Which checkpoints this vehicle even has.
+    //
+    // `DEFAULT_SUBSYSTEMS` is a car list -- "A/C & Climate", "Transmission" --
+    // and it was the ONLY list, for every job. A motorcycle arrived and its
+    // technician was asked to inspect its air conditioning; a wheel loader got
+    // the same. The master catalogue has carried real per-category checkpoints
+    // all along (`GET /technician/inspection-checkpoints` serves them), and
+    // nothing on the work card had ever read them.
+    const catalogue = subsystemsForCategory(workOrder.asset.category);
+    const activeSubsystems = catalogue.filter((s) => targetKeys.includes(s.id));
+    const finalSubsystems = activeSubsystems.length > 0 ? activeSubsystems : catalogue;
 
     const inspectionBoxes: InspectionBoxItem[] = finalSubsystems.map((sub) => {
       const doneInfo = completedBoxes[sub.id];

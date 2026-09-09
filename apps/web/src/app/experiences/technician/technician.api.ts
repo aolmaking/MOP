@@ -103,7 +103,8 @@ export interface InspectionBoxItem {
   readonly id: string;
   readonly partKey: string;
   readonly nameEn: string;
-  readonly nameAr: string;
+  /** Null for categories whose checkpoints come from the master catalogue. */
+  readonly nameAr: string | null;
   readonly systemCategoryEn: string;
   readonly systemCategoryAr: string;
   readonly icon: string;
