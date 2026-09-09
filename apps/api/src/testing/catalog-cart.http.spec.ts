@@ -644,7 +644,12 @@ describe("Catalog-driven part requests (real HTTP, real Postgres)", () => {
       .query({ q: "brake pad" })
       .set("Cookie", shop.technician.cookie);
     expectCode(byName, 200);
-    expect(byName.body.items.map((i: { id: string }) => i.id)).toEqual([padItemId]);
+    // Found, and the non-matching part is not -- rather than "and nothing
+    // else exists". A workshop is provisioned with a master catalogue now, so
+    // asserting an exact result set was really asserting an empty shop, which
+    // is a fact about the fixture and not about search.
+    expect(byName.body.items.map((i: { id: string }) => i.id)).toContain(padItemId);
+    expect(byName.body.items.map((i: { id: string }) => i.id)).not.toContain(airFilterId);
 
     const bySku = await http(booted)
       .get("/api/v1/technician/parts-catalog")
@@ -660,7 +665,8 @@ describe("Catalog-driven part requests (real HTTP, real Postgres)", () => {
       .query({ q: "Toyota" })
       .set("Cookie", shop.technician.cookie);
     expectCode(byBrand, 200);
-    expect(byBrand.body.items.map((i: { id: string }) => i.id)).toEqual([padItemId]);
+    expect(byBrand.body.items.map((i: { id: string }) => i.id)).toContain(padItemId);
+    expect(byBrand.body.items.map((i: { id: string }) => i.id)).not.toContain(airFilterId);
   }, 120_000);
 
   it("the storekeeper's preview is the technician's browse, not a drawing of it", async () => {
