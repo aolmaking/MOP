@@ -7,6 +7,7 @@ import { TechnicianWorkService } from "../../systems/operations/technician-work.
 import { WorkflowJourneyService } from "../../systems/operations/workflow-journey.service";
 import { TechnicianWorkViewService } from "./technician-work-view.service";
 import { CustomerDecisionService } from "../../systems/customer/decision.service";
+import { FinanceConfigurationService } from "../../systems/finance/finance-configuration.service";
 import { PartRequestService } from "../../systems/inventory/part-request.service";
 import { CatalogBrowseService } from "../../systems/inventory/catalog-browse.service";
 import { SmartSuggestionEngine } from "../../systems/inventory/master-catalog/smart-suggestion.engine";
@@ -57,6 +58,7 @@ export class TechnicianController {
     private readonly journey: WorkflowJourneyService,
     private readonly specialization: SpecializationService,
     private readonly inspectionService: TechnicianInspectionService,
+    private readonly financeConfig: FinanceConfigurationService,
     private readonly fitmentService?: VehicleFitmentService,
     private readonly smartSuggestions?: SmartSuggestionEngine,
   ) {}
@@ -332,7 +334,20 @@ export class TechnicianController {
     if (!canonicalPartSlug) {
       throw new BadRequestException("Query parameter 'canonicalPartSlug' is required.");
     }
-    return this.fitmentService?.resolveForWorkOrder(tenantId, id, canonicalPartSlug, position);
+    const resolved = await this.fitmentService?.resolveForWorkOrder(tenantId, id, canonicalPartSlug, position);
+    if (!resolved || (await this.pricesVisible(tenantId))) return resolved;
+
+    // Absent, not blanked. Every group holds the same items, so all four lists
+    // are rewritten rather than the one the page happens to read.
+    const strip = (items: readonly unknown[]) =>
+      items.map((item) => withoutMoney(withoutMoney(item, "sellingPrice"), "cost"));
+    return {
+      ...resolved,
+      exactMatches: strip(resolved.exactMatches),
+      compatibleMatches: strip(resolved.compatibleMatches),
+      universalMatches: strip(resolved.universalMatches),
+      allItems: strip(resolved.allItems),
+    };
   }
 
   /**
@@ -379,14 +394,18 @@ export class TechnicianController {
       findingKeys?: string[];
     },
   ) {
-    await this.requireTechnician(session, "task.view_assigned");
+    const { tenantId } = await this.requireTechnician(session, "task.view_assigned");
     const query = dto.context ? { ...dto.context, workOrderId: dto.workOrderId } : dto;
     const grouped = this.smartSuggestions?.suggestForContext(query as any);
+    const visible = await this.pricesVisible(tenantId);
+    const strip = (items: readonly unknown[]) =>
+      visible ? items : items.map((item) => withoutMoney(item, "laborPrice"));
+
     return {
-      recommended: grouped?.recommended ?? [],
-      related: grouped?.related ?? [],
-      diagnostic: grouped?.diagnostic ?? [],
-      suggestions: grouped?.all ?? (this.smartSuggestions?.suggestFor(dto) ?? []),
+      recommended: strip(grouped?.recommended ?? []),
+      related: strip(grouped?.related ?? []),
+      diagnostic: strip(grouped?.diagnostic ?? []),
+      suggestions: strip(grouped?.all ?? (this.smartSuggestions?.suggestFor(dto) ?? [])),
     };
   }
 
@@ -488,13 +507,28 @@ export class TechnicianController {
     @Query("page") page?: string,
   ) {
     const { tenantId } = await this.requireTechnician(session, "inventory.request.create");
-    return this.browse.browse(tenantId, {
+    const page$ = await this.browse.browse(tenantId, {
       query: q,
       categoryId,
       attributes: parseAttributeQuery(attributes),
       inStockOnly: inStockOnly === "true",
       page: page ? Number(page) : 1,
     });
+
+    if (await this.pricesVisible(tenantId)) return page$;
+    return { ...page$, items: page$.items.map((item) => withoutMoney(item, "sellingPrice")) };
+  }
+
+  /**
+   * Whether this workshop lets the shop floor see money.
+   *
+   * Read once per request rather than cached: a workshop that turns this off
+   * mid-shift means it for the next screen the technician opens, not for the
+   * one after their session expires.
+   */
+  private async pricesVisible(tenantId: string): Promise<boolean> {
+    const config = await this.financeConfig.get(tenantId);
+    return config.technicianPriceVisible;
   }
 
   /**
@@ -683,4 +717,19 @@ export class TechnicianController {
     }
     return { staffUserId: session.staffUserId, tenantId: session.tenantId };
   }
+}
+
+/**
+ * The same object without one money field.
+ *
+ * Absent rather than zeroed or blanked: a `sellingPrice: "0.00"` on a
+ * technician's screen is a lie about the price, and a blanked one in a
+ * template is still in the payload for anyone who opens developer tools.
+ * "Restricted data is absent from the response" is the project's rule, and
+ * this is the one place on this surface that applies it.
+ */
+function withoutMoney<T>(item: T, field: string): T {
+  if (!item || typeof item !== "object") return item;
+  const entries = Object.entries(item as Record<string, unknown>).filter(([key]) => key !== field);
+  return Object.fromEntries(entries) as T;
 }

@@ -4,7 +4,7 @@ import { IntakeService } from "../../systems/operations/intake.service";
 import { CatalogBrowseService } from "../../systems/inventory/catalog-browse.service";
 import { StockService } from "../../systems/inventory/stock.service";
 import { PartRequestService } from "../../systems/inventory/part-request.service";
-import { WORK_ORDER_GRAPH, type SessionContext } from "@mop/shared";
+import { WORK_ORDER_GRAPH, type SessionContext, percentage } from "@mop/shared";
 import { type CategoryCode, Prisma, type WorkOrderStatus } from "@mop/database";
 import { WorkOrderLifecycleService, type LifecycleActor } from "../../systems/operations/work-order-lifecycle.service";
 import type {
@@ -131,6 +131,26 @@ export class OperatorService {
    * `RESERVE` moves both buckets in one movement, so the shelf count and the
    * promised count can never disagree.
    */
+  /**
+   * The deposit this workshop asks for on a quote of this size.
+   *
+   * Percentage arithmetic happens in the money module, once, so the rounding
+   * is the same rounding every other percentage in the product uses.
+   */
+  private async depositFor(tenantId: string, quoteTotal: string): Promise<string | null> {
+    const config = await this.prisma.financeConfiguration.findUnique({
+      where: { tenantId },
+      select: { depositRequired: true, depositPercent: true },
+    });
+    if (!config?.depositRequired) return null;
+
+    // money-lint-ok: a percentage (0-100), not currency.
+    const percent = Number(config.depositPercent);
+    if (percent <= 0) return null;
+
+    return percentage(quoteTotal, percent);
+  }
+
   private async reserve(
     tenantId: string,
     inventoryItemId: string,
@@ -1067,6 +1087,21 @@ export class OperatorService {
     );
     const grandTotal = partsTotal + laborTotal;
 
+    // What the customer is asked for up front, if this workshop asks.
+    //
+    // `depositRequired` and `depositPercent` are settable on the owner's
+    // Pricing page and were read by nothing, so a workshop that configured a
+    // 30% deposit was configuring a checkbox. This is the point in the journey
+    // where a deposit is actually collected -- the moment the customer agrees
+    // to the work -- so it is the moment the number has to appear.
+    //
+    // MOP does not hold the deposit as its own record: money reaches the
+    // system as a payment against the invoice, and a deposit taken before an
+    // invoice exists has nothing to settle against. What the workshop gets is
+    // the amount to collect, computed from the quote it just approved,
+    // through the money module rather than the float arithmetic above.
+    const depositDue = await this.depositFor(tenantId, grandTotal.toFixed(2));
+
     // 5. Persisted OperatorRepairApproval Record (Audit Trail)
     const approvalRecord: OperatorRepairApprovalRecord = {
       workOrderId,
@@ -1364,6 +1399,9 @@ export class OperatorService {
       // under APPROVAL_REQUIRED_SCOPE the same intent routes to
       // AWAITING_CUSTOMER_APPROVAL, and the page must not be told otherwise.
       newStatus: authorized.to,
+      // Null when the workshop asks for no deposit -- an absent obligation,
+      // not a zero one, so the page can say nothing rather than "0.00 due".
+      depositDue,
       message: "Inspection quote approved and dispatched to technician for repair!",
       partsProcessed: parts.length,
       partsAllocated,

@@ -26,6 +26,7 @@ import {
 } from "./catalog-config.dto";
 import { CatalogConfigService } from "./catalog-config.service";
 import { CatalogBrowseService } from "./catalog-browse.service";
+import { FinanceConfigurationService } from "../finance/finance-configuration.service";
 import { InventoryHomeService } from "./inventory-home.service";
 import { CatalogService } from "./catalog.service";
 import { InventoryReportsService } from "./inventory-reports.service";
@@ -51,6 +52,7 @@ export class InventoryController {
     private readonly warehouses: WarehouseService,
     private readonly catalogConfig: CatalogConfigService,
     private readonly browse: CatalogBrowseService,
+    private readonly financeConfig: FinanceConfigurationService,
     private readonly stockService: StockService,
   ) {}
 
@@ -214,13 +216,28 @@ export class InventoryController {
     @Query("page") page?: string,
   ) {
     const tenantId = await this.require(session, "inventory.catalog.manage");
-    return this.browse.browse(tenantId, {
+    const preview = await this.browse.browse(tenantId, {
       query,
       categoryId,
       attributes: parseAttributeQuery(attributes),
       inStockOnly: inStockOnly === "true",
       page: page ? Number(page) : 1,
     });
+
+    // Including the price rule. A workshop that hides prices from its
+    // technicians hides them here too, or this preview shows the storekeeper a
+    // page the technician will never see.
+    const config = await this.financeConfig.get(tenantId);
+    if (config.technicianPriceVisible) return preview;
+    return {
+      ...preview,
+      items: preview.items.map((item) => {
+        const entries = Object.entries(item as unknown as Record<string, unknown>).filter(
+          ([key]) => key !== "sellingPrice",
+        );
+        return Object.fromEntries(entries) as unknown as (typeof preview.items)[number];
+      }),
+    };
   }
 
   @Get("catalog/:id")

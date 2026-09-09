@@ -115,7 +115,27 @@
               <span class="field-label">Deposit %</span>
               <input type="number" min="0" max="100" [ngModel]="c.depositPercent" (ngModelChange)="patch('depositPercent', $event)" />
             </label>
+            <p class="field-note">
+              Shown to the operator as the amount to collect when a repair is approved. It arrives in MOP as an
+              ordinary payment against the invoice.
+            </p>
           }
+        </section>
+
+        <section class="group">
+          <h2 class="group-title">What the shop floor sees</h2>
+          <label class="field field--checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="c.technicianPriceVisible"
+              (ngModelChange)="patch('technicianPriceVisible', $event)"
+            />
+            <span>Technicians can see prices</span>
+          </label>
+          <p class="field-note">
+            Off by default. With this off, prices are left out of everything a technician's screens load — the parts
+            catalogue, fitment results and suggested services — rather than hidden in the page.
+          </p>
         </section>
 
         <section class="group">

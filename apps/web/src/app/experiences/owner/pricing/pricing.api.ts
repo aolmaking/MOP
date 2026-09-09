@@ -8,6 +8,8 @@ export interface FinanceConfigView {
   readonly maxBranchDiscountPercent: string;
   readonly depositRequired: boolean;
   readonly depositPercent: string;
+  /** Whether the shop floor sees prices at all. */
+  readonly technicianPriceVisible: boolean;
   readonly taxRatePercent: string;
   readonly taxInclusive: boolean;
   readonly invoiceNumberPrefix: string;

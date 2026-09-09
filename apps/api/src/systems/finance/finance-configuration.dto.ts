@@ -28,6 +28,10 @@ export class UpdateFinanceConfigDto {
   depositPercent?: number;
 
   @IsOptional()
+  @IsBoolean()
+  technicianPriceVisible?: boolean;
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
   taxRatePercent?: number;

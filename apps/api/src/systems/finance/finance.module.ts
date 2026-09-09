@@ -10,9 +10,7 @@ import { AuditModule } from "../../audit/audit.module";
 import { BillingModule } from "../billing/billing.module";
 import { FinanceController } from "./finance.controller";
 import { FinanceService } from "./finance.service";
-import { FinanceConfigurationController } from "./finance-configuration.controller";
-import { FinanceConfigurationService } from "./finance-configuration.service";
-import { PriceCatalogService } from "./price-catalog.service";
+import { FinanceConfigurationModule } from "./finance-configuration.module";
 
 /**
  * Finance Core. `FinanceService` is the only writer of invoices and
@@ -39,9 +37,11 @@ import { PriceCatalogService } from "./price-catalog.service";
     BillingModule,
     AuditModule,
     PoliciesModule,
+    // The settings leaf, which Inventory and the technician surface also read.
+    FinanceConfigurationModule,
   ],
-  controllers: [FinanceController, FinanceConfigurationController],
-  providers: [FinanceService, FinanceConfigurationService, PriceCatalogService],
-  exports: [FinanceService],
+  controllers: [FinanceController],
+  providers: [FinanceService],
+  exports: [FinanceService, FinanceConfigurationModule],
 })
 export class FinanceModule {}

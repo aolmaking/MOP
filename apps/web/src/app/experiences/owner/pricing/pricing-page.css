@@ -203,3 +203,17 @@
   white-space: nowrap;
 }
 
+
+/*
+ * The sentence under a control that says what it actually does.
+ *
+ * Both settings it appears under were configurable and read by nothing for
+ * several phases; the note is here so the next reader can tell, from the page,
+ * what observable behaviour the switch is claiming.
+ */
+.field-note {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  max-inline-size: 46ch;
+}

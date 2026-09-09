@@ -853,15 +853,26 @@ export class OperatorHome {
         approvedServices,
         operatorNote: this.quoteNote(),
         tasks,
-        note: `Quote approved for $${this.quoteGrandTotal().toFixed(2)} (${approvedFindings.length} findings approved). Dispatched to repair floor.`,
+        // `$${total}` -- a literal dollar sign in a note stored on the work
+        // order, in a product whose workshops price in EGP and AED. The
+        // template sweep in REC-040 could not see this one: it is in
+        // TypeScript, not a template, so `lint-template-money` never read it.
+        note: `Quote approved for ${this.money(this.quoteGrandTotal())} (${approvedFindings.length} findings approved). Dispatched to repair floor.`,
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: () => {
+        next: (result) => {
           this.isDispatchingRepair.set(false);
           this.closeReportModal();
+          // The deposit, when the workshop asks for one, is the next thing
+          // that happens at the counter -- so it is said here, on the screen
+          // the operator is already looking at, and not left in a settings
+          // page nobody reads at the moment the customer is standing there.
+          const deposit = result?.depositDue
+            ? ` Collect a ${this.money(result.depositDue)} deposit before work starts.`
+            : '';
           this.showSuccessNotification(
-            `Work order for ${detail.vehicle.plateNumber || 'vehicle'} approved & dispatched to repair! Technician can now start fixing.`,
+            `Work order for ${detail.vehicle.plateNumber || 'vehicle'} approved & dispatched to repair!${deposit}`,
           );
           this.loadInspectionReports();
           this.loadOverview();

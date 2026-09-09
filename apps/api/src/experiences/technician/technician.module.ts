@@ -7,6 +7,7 @@ import { VehicleHistoryModule } from "../../systems/operations/vehicle-history/v
 import { WorkshopHistoryModule } from "../../systems/operations/history/history.module";
 import { CustomerModule } from "../../systems/customer/customer.module";
 import { InventoryModule } from "../../systems/inventory/inventory.module";
+import { FinanceConfigurationModule } from "../../systems/finance/finance-configuration.module";
 import { PoliciesModule } from "../../control/policies/policies.module";
 import { CapabilitiesModule } from "../../control/capabilities/capabilities.module";
 import { SpecializationModule } from "../../systems/people/specialization/specialization.module";
@@ -24,6 +25,7 @@ import { TechnicianInspectionService } from "./technician-inspection.service";
     WorkshopHistoryModule,
     CustomerModule,
     InventoryModule,
+    FinanceConfigurationModule,
     PoliciesModule,
     CapabilitiesModule,
     SpecializationModule,

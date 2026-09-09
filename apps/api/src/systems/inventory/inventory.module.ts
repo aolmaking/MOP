@@ -7,6 +7,9 @@ import { CapabilitiesModule } from "../../control/capabilities/capabilities.modu
 import { OperationEventsModule } from "../operations/operation-events.module";
 import { OperationsModule } from "../operations/operations.module";
 import { AuditModule } from "../../audit/audit.module";
+// A leaf, not Finance: Inventory must never reach the system that prices
+// things, and what it needs here is one visibility setting.
+import { FinanceConfigurationModule } from "../finance/finance-configuration.module";
 import { InventoryController } from "./inventory.controller";
 import { InventoryViewService } from "./inventory-view.service";
 import { StockModule } from "./stock.module";
@@ -38,6 +41,7 @@ import { VehicleFitmentService } from "./fitment/vehicle-fitment.service";
     CapabilitiesModule,
     OperationEventsModule,
     OperationsModule,
+    FinanceConfigurationModule,
     AuditModule,
     PoliciesModule,
     // The ledger is a leaf both systems import -- see stock.module.ts.

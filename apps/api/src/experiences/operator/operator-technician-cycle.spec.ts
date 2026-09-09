@@ -17,6 +17,11 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
 
   beforeEach(() => {
     mockPrisma = {
+      // The deposit the workshop asks for is read here on every approval.
+      // A mock without it is a mock of a database that cannot exist.
+      financeConfiguration: {
+        findUnique: jest.fn().mockResolvedValue({ depositRequired: false, depositPercent: 0 }),
+      },
       workOrder: {
         findMany: jest.fn(),
         findFirst: jest.fn(),

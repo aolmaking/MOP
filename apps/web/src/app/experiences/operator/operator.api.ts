@@ -151,6 +151,22 @@ export interface OperatorInspectionReportDetail {
   };
 }
 
+/**
+ * What the server answers when a repair is approved.
+ *
+ * `depositDue` is null when the workshop asks for no deposit -- an absent
+ * obligation rather than a zero one, so the page can say nothing instead of
+ * "0.00 due".
+ */
+export interface ApproveRepairResult {
+  readonly success: boolean;
+  readonly workOrderId: string;
+  readonly newStatus?: string;
+  readonly depositDue?: string | null;
+  readonly partsAllocated?: number;
+  readonly partsRequested?: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class OperatorApi {
   private readonly http = inject(HttpClient);
@@ -236,8 +252,8 @@ export class OperatorApi {
       technicianId?: string;
       tasks?: Array<{ title: string; estimatedMinutes?: number }>;
     },
-  ): Observable<{ success: boolean; workOrderId: string; status: string }> {
-    return this.http.post<{ success: boolean; workOrderId: string; status: string }>(
+  ): Observable<ApproveRepairResult> {
+    return this.http.post<ApproveRepairResult>(
       `${this.base}/work-orders/${encodeURIComponent(workOrderId)}/approve-repair`,
       payload,
     );

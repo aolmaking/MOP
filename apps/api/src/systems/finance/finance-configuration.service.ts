@@ -14,6 +14,17 @@ export interface FinanceConfigView {
   readonly maxBranchDiscountPercent: string;
   readonly depositRequired: boolean;
   readonly depositPercent: string;
+  /**
+   * Whether the shop floor sees money.
+   *
+   * A schema column since Phase 8 with no way to set it and nothing reading
+   * it. Plenty of workshops keep prices off the bay screens -- what a part
+   * costs is the counter's business, not the technician's -- and the rule this
+   * has to follow is the project's own: restricted data is ABSENT from the
+   * response, never blanked in a template, because anyone can open developer
+   * tools on a workshop tablet.
+   */
+  readonly technicianPriceVisible: boolean;
   readonly taxRatePercent: string;
   readonly taxInclusive: boolean;
   readonly invoiceNumberPrefix: string;
@@ -31,6 +42,7 @@ export interface UpdateFinanceConfigInput {
   readonly maxBranchDiscountPercent?: number;
   readonly depositRequired?: boolean;
   readonly depositPercent?: number;
+  readonly technicianPriceVisible?: boolean;
   readonly taxRatePercent?: number;
   readonly taxInclusive?: boolean;
   readonly invoiceNumberPrefix?: string;
@@ -126,6 +138,7 @@ export class FinanceConfigurationService {
       maxBranchDiscountPercent: unknown;
       depositRequired: boolean;
       depositPercent: unknown;
+      technicianPriceVisible: boolean;
       taxRatePercent: unknown;
       taxInclusive: boolean;
       invoiceNumberPrefix: string;
@@ -143,6 +156,7 @@ export class FinanceConfigurationService {
       maxBranchDiscountPercent: String(config.maxBranchDiscountPercent),
       depositRequired: config.depositRequired,
       depositPercent: String(config.depositPercent),
+      technicianPriceVisible: config.technicianPriceVisible,
       taxRatePercent: String(config.taxRatePercent),
       taxInclusive: config.taxInclusive,
       invoiceNumberPrefix: config.invoiceNumberPrefix,

@@ -24,11 +24,20 @@
 --        three-column index shares its leading columns, so every query the old
 --        index served is still served by the new one.
 
--- AlterTable
-ALTER TABLE "staff_users" ADD COLUMN "specializations" TEXT[] DEFAULT ARRAY[]::TEXT[];
+-- IF NOT EXISTS on both, and that is the whole point of this migration.
+--
+-- It exists to reconcile a database built from migrations with one built by
+-- `prisma migrate dev`/`db push`, which applies schema.prisma directly. On the
+-- second kind the columns are ALREADY THERE -- so a bare ADD COLUMN fails with
+-- 42701, marks the migration failed, and blocks every later migration on the
+-- very machines this was written to rescue. Idempotent, it produces exactly the
+-- same schema on a fresh database and succeeds on a drifted one.
 
 -- AlterTable
-ALTER TABLE "teams" ADD COLUMN "specializations" TEXT[] DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE "staff_users" ADD COLUMN IF NOT EXISTS "specializations" TEXT[] DEFAULT ARRAY[]::TEXT[];
+
+-- AlterTable
+ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "specializations" TEXT[] DEFAULT ARRAY[]::TEXT[];
 
 -- DropIndex
 DROP INDEX IF EXISTS "operation_events_tenantId_eventKey_idx";
