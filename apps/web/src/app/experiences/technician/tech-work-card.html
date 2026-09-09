@@ -217,10 +217,18 @@
                   </div>
                   <div class="photo3-vehicle-info">
                     <span class="photo3-in-progress-pill">In Progress</span>
-                    <h2 class="photo3-vehicle-name">{{ c.vehicleModel || 'Toyota Corolla 2021' }}</h2>
+                    <!--
+                      Invented specifics have no place on the screen a
+                      technician uses to confirm they have the right car. These
+                      read `|| 'Toyota Corolla 2021'` and `|| '1NXBR32E7MZ123456'`,
+                      so a vehicle with nothing on file was described as a
+                      specific Corolla with a specific VIN. Saying the field is
+                      empty is the only honest answer.
+                    -->
+                    <h2 class="photo3-vehicle-name">{{ c.vehicleModel || 'Vehicle model not recorded' }}</h2>
                     <div class="photo3-meta-line">
                       <span class="meta-icon">🚗</span>
-                      <span class="meta-text">VIN: {{ c.vin || '1NXBR32E7MZ123456' }}</span>
+                      <span class="meta-text">VIN: {{ c.vin || 'Not recorded' }}</span>
                     </div>
                     <div class="photo3-meta-line">
                       <span class="meta-icon">👤</span>
@@ -644,7 +652,7 @@
                     </div>
                     <div class="info-item">
                       <span class="info-label">Vehicle Category</span>
-                      <strong class="info-val">{{ modalBox.customerDetails.vehicleCategory || 'Sedan / Passenger' }}</strong>
+                      <strong class="info-val">{{ modalBox.customerDetails.vehicleCategory || 'Not recorded' }}</strong>
                     </div>
                     <div class="info-item">
                       <span class="info-label">Inspection Status</span>
