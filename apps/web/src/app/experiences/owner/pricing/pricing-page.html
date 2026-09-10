@@ -46,7 +46,7 @@
                 <tr>
                   <th>Service / Labor Item</th>
                   <th>Type</th>
-                  <th>Standard Time</th>
+                  <th>Standard time</th>
                   <th>Labor Price ({{ c.currency }})</th>
                   <th style="text-align: right;">Action</th>
                 </tr>
@@ -56,10 +56,14 @@
                   <tr>
                     <td style="font-weight: 500;">{{ item.itemKey }}</td>
                     <td><span class="service-badge">{{ item.itemType }}</span></td>
-                    <td style="color: #64748b; font-weight: 500;"><span class="hours-badge">{{ resolveStandardHours(item.itemKey) }}h <span title="Locked Operational Benchmark" style="font-size: 0.75rem;">🔒</span></span></td>
+                    <td class="hours-cell">
+                      <span class="hours-badge" [class.hours-badge--unset]="item.standardHours === null">
+                        {{ displayStandardHours(item) }}
+                      </span>
+                    </td>
                     <td class="labor-price-cell">{{ (item.laborPrice ?? item.unitPrice) }} {{ c.currency }}</td>
                     <td style="text-align: right;">
-                      <button appButton variant="secondary" size="small" (click)="openEditPrice(item)">Edit Price</button>
+                      <button appButton variant="secondary" size="small" (click)="openEditPrice(item)">Edit</button>
                     </td>
                   </tr>
                 }
@@ -191,7 +195,7 @@
   @if (showAddPrice()) {
     <div class="modal-backdrop" (click)="showAddPrice.set(false)">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="addprice-title" appDismissOnEscape (dismissed)="showAddPrice.set(false)" (click)="$event.stopPropagation()">
-        <h2 class="modal-title" id="addprice-title">{{ isEditing() ? 'Edit Service Labor Price' : 'Add / Update Service Labor Price' }}</h2>
+        <h2 class="modal-title" id="addprice-title">{{ isEditing() ? 'Edit service' : 'Add a service' }}</h2>
         <p class="hint" style="margin-top: -0.25rem; margin-bottom: 0.5rem;">
           Rate applies locally to <strong>this workshop only</strong>. Physical parts are managed and billed through the POS.
         </p>
@@ -207,12 +211,23 @@
             (ngModelChange)="priceDraft.set({ ...priceDraft(), itemKey: $event })"
           />
         </label>
-        <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 0.625rem 0.875rem; margin-bottom: 0.75rem;">
-          <span style="font-size: 0.85rem; color: #64748b; font-weight: 500;">Standard Flat-Rate Time</span>
-          <span style="font-size: 0.875rem; font-weight: 600; color: #2563eb; display: flex; align-items: center; gap: 0.25rem;">
-            {{ resolveStandardHours(priceDraft().itemKey) }} hours <span title="Locked Operational Benchmark" style="font-size: 0.75rem;">🔒</span>
+        <label class="field">
+          <span class="field-label">Standard time (hours)</span>
+          <input
+            type="number"
+            min="0"
+            max="999"
+            step="0.1"
+            placeholder="Leave blank if you would rather not say"
+            [ngModel]="priceDraft().standardHours"
+            (ngModelChange)="priceDraft.set({ ...priceDraft(), standardHours: $event })"
+          />
+          <span class="hint">
+            How long this job usually takes here. It is used for planning and shown to the technician as
+            guidance — nobody is held to finishing inside it, and no part of the product refuses work that
+            takes longer.
           </span>
-        </div>
+        </label>
         <label class="field">
           <span class="field-label">Labor Price ({{ config()?.currency ?? 'EGP' }})</span>
           <input
@@ -225,7 +240,9 @@
         </label>
         <div class="modal-actions">
           <button appButton variant="secondary" (click)="showAddPrice.set(false)">Cancel</button>
-          <button appButton variant="primary" [disabled]="!priceDraft().itemKey.trim()" (click)="submitPrice()">Save Labor Rate</button>
+          <button appButton variant="primary" [disabled]="!priceDraft().itemKey.trim()" (click)="submitPrice()">
+            {{ isEditing() ? 'Save changes' : 'Add service' }}
+          </button>
         </div>
       </div>
     </div>

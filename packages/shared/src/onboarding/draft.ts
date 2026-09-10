@@ -8,7 +8,7 @@ import { POLICY_DEFINITIONS } from "../policies/registry";
 import { isPolicyRelevant, policyCapabilityKey, type PolicyDefinition } from "../policies/types";
 import type { StaffRole } from "../session/session-context";
 import type { OperatingCategory } from "../operations/categories";
-import type { NavigationLayoutType } from "../contracts/cross-system";
+import type { NavigationLayoutType, WorkshopDensity, WorkshopThemeMode } from "../contracts/cross-system";
 import { definitionsSeededBy, specializationPack } from "./specialization-packs";
 import { applicableResponsibilities, grantsForResponsibilities, type ResponsibilityAnswer } from "./responsibility";
 
@@ -47,7 +47,7 @@ export type OnboardingStageKey =
   | "POLICIES"
   | "RESPONSIBILITY"
   | "STRUCTURE"
-  | "SERVICES"
+  | "APPEARANCE"
   | "REVIEW";
 
 export interface DraftBranch {
@@ -82,6 +82,10 @@ export interface WorkshopIdentityDraft {
   readonly themePalette?: string;
   readonly logoUrl?: string;
   readonly navigationLayout?: NavigationLayoutType;
+  /** Which appearance staff start in. Absent means the product default. */
+  readonly themeMode?: WorkshopThemeMode;
+  /** How tightly the screens are packed. Absent means COMFORTABLE. */
+  readonly density?: WorkshopDensity;
 }
 
 export interface WorkshopOwnerDraft {
@@ -117,13 +121,6 @@ export interface PlanLimits {
  * onboarding-only price list. A workshop that declares "Oil change,
  * 450 EGP" here can charge it on its first job.
  */
-export interface DraftService {
-  readonly name: string;
-  /** Minor units as a string, the same way money crosses every other API boundary in MOP. */
-  readonly price: string;
-  readonly category?: string;
-}
-
 export interface WorkshopDraft {
   readonly identity: WorkshopIdentityDraft;
   readonly owner: WorkshopOwnerDraft;
@@ -138,7 +135,6 @@ export interface WorkshopDraft {
   readonly responsibilities: Readonly<Record<string, ResponsibilityAnswer>>;
   readonly branches: readonly DraftBranch[];
   readonly warehouses: readonly DraftWarehouse[];
-  readonly services: readonly DraftService[];
 }
 
 export function emptyDraft(): WorkshopDraft {
@@ -161,7 +157,6 @@ export function emptyDraft(): WorkshopDraft {
     responsibilities: {},
     branches: [],
     warehouses: [],
-    services: [],
   };
 }
 
@@ -304,7 +299,6 @@ export interface DerivedFacts {
   readonly delegatedCapabilities: readonly CapabilityKey[];
   /** Extra permission rows those delegations will really write. */
   readonly extraPermissionGrants: number;
-  readonly serviceCount: number;
 }
 
 /** Roles that appear in the page registry -- the ones a workshop can actually staff. */
@@ -371,7 +365,6 @@ export function derivedFacts(draft: WorkshopDraft): DerivedFacts {
       })
       .map((question) => question.capability),
     extraPermissionGrants: grantsForResponsibilities(profile, draft.responsibilities).length,
-    serviceCount: draft.services.length,
   };
 }
 

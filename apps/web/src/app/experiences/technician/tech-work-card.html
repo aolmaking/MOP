@@ -202,11 +202,16 @@
 
                   <div class="quote-summary-badge">
                     <span class="quote-summary-label">Estimated Scope:</span>
-                    <span class="quote-summary-item">Parts <strong>{{ money(totalEstimatedQuote().partsSum) }}</strong></span>
-                    <span class="quote-summary-sep">+</span>
-                    <span class="quote-summary-item">Labor <strong>{{ money(totalEstimatedQuote().laborSum) }}</strong></span>
-                    <span class="quote-summary-sep">=</span>
-                    <strong class="quote-summary-total">{{ money(totalEstimatedQuote().grandTotal) }}</strong>
+                    @if (totalEstimatedQuote().pricesKnown) {
+                      <span class="quote-summary-item">Parts <strong>{{ money(totalEstimatedQuote().partsSum) }}</strong></span>
+                      <span class="quote-summary-sep">+</span>
+                      <span class="quote-summary-item">Labor <strong>{{ money(totalEstimatedQuote().laborSum) }}</strong></span>
+                      <span class="quote-summary-sep">=</span>
+                      <strong class="quote-summary-total">{{ money(totalEstimatedQuote().grandTotal) }}</strong>
+                    } @else {
+                      <span class="quote-summary-item">Labor <strong>{{ money(totalEstimatedQuote().laborSum) }}</strong></span>
+                      <span class="quote-summary-note">Parts are priced by the workshop on the operator's desk.</span>
+                    }
                   </div>
                 </div>
 
@@ -247,7 +252,9 @@
                         <p class="section-subtext">Each subsystem includes direct severity tagging, POS workshop stock inventory linking, and service suggestions.</p>
                       </div>
                     </div>
-                    <span class="boxes-count-pill">{{ findings().length }} Monitored Subsystems</span>
+                    <span class="boxes-count-pill">
+                      {{ findings().length }} Monitored Subsystems · {{ flaggedFindings().length }} flagged
+                    </span>
                   </div>
 
                   <!-- Large Component Boxes Grid -->
@@ -283,7 +290,7 @@
                               <button
                                 type="button"
                                 class="sev-pill-btn sev-pill-btn--critical"
-                                [class.sev-pill-btn--active]="f.severity === 'CRITICAL'"
+                                [class.sev-pill-btn--active]="f.flagged && f.severity === 'CRITICAL'"
                                 (click)="updateFindingSeverity(f.id, 'CRITICAL')"
                                 title="Mark as Critical condition"
                               >
@@ -292,7 +299,7 @@
                               <button
                                 type="button"
                                 class="sev-pill-btn sev-pill-btn--medium"
-                                [class.sev-pill-btn--active]="f.severity === 'MEDIUM' || f.severity === 'HIGH'"
+                                [class.sev-pill-btn--active]="f.flagged && (f.severity === 'MEDIUM' || f.severity === 'HIGH')"
                                 (click)="updateFindingSeverity(f.id, 'MEDIUM')"
                                 title="Mark as Medium condition"
                               >
@@ -301,11 +308,25 @@
                               <button
                                 type="button"
                                 class="sev-pill-btn sev-pill-btn--low"
-                                [class.sev-pill-btn--active]="f.severity === 'LOW'"
+                                [class.sev-pill-btn--active]="f.flagged && f.severity === 'LOW'"
                                 (click)="updateFindingSeverity(f.id, 'LOW')"
                                 title="Mark as Low condition"
                               >
                                 <span class="sev-dot">●</span> Low
+                              </button>
+                              <!--
+                                The resting state. A card with no condition set
+                                is a subsystem that was looked at and found
+                                sound, and it stays out of the report.
+                              -->
+                              <button
+                                type="button"
+                                class="sev-pill-btn sev-pill-btn--none"
+                                [class.sev-pill-btn--active]="!f.flagged"
+                                (click)="clearFindingSeverity(f.id)"
+                                title="Inspected, nothing wrong"
+                              >
+                                ✓ No problem
                               </button>
                             </div>
 
@@ -322,10 +343,17 @@
 
                         <!-- Card Two Action Buttons (Replaces separate POS and Services columns) -->
                         <div class="card-action-bar">
+                          <!--
+                            The workshop's real Point of Sale, not a picker of
+                            its own: same page, same catalogue tree, same
+                            filters and stock the counter uses. `finding` tells
+                            it which subsystem the technician is shopping for,
+                            so what they attach comes back onto this card.
+                          -->
                           <a
                             class="card-action-btn card-action-btn--pos"
                             [routerLink]="['/tech', 'card', id(), 'parts']"
-                            [queryParams]="{ category: f.partKey }"
+                            [queryParams]="{ category: f.partKey, finding: f.partKey, findingTitle: f.title }"
                             id="btn-nav-pos-{{ f.partKey }}"
                           >
                             <span class="btn-icon">🛒</span>
@@ -402,8 +430,14 @@
                                     <button type="button" class="qty-btn" (click)="updateBoxPartQty(f.partKey, part.sku, 1)">+</button>
                                   </div>
                                   <div class="part-cell-pricing">
-                                    <span class="part-unit-price">{{ money(part.unitPrice) }} / unit</span>
-                                    <strong class="part-subtotal">{{ money(lineTotal(part.unitPrice, part.quantity)) }}</strong>
+                                    @if (part.unitPrice !== null) {
+                                      <span class="part-unit-price">{{ money(part.unitPrice) }} / unit</span>
+                                      <strong class="part-subtotal">{{ money(lineTotal(part.unitPrice, part.quantity)) }}</strong>
+                                    } @else {
+                                      <!-- Prices are hidden from technicians in this workshop. A dash
+                                           says so; "0.00 EGP" said the part was free. -->
+                                      <span class="part-unit-price">Price set by the workshop</span>
+                                    }
                                   </div>
                                   <button type="button" class="btn-remove-item" (click)="removeBoxPart(f.partKey, part.sku)" title="Remove part">
                                     ✕
@@ -676,9 +710,14 @@
                       <h4 class="bar-title">Inspection Findings Configured?</h4>
                       <p class="bar-subtitle">
                         Estimated Scope:
-                        <strong>{{ money(totalEstimatedQuote().partsSum) }}</strong> Parts +
-                        <strong>{{ money(totalEstimatedQuote().laborSum) }}</strong> Labor =
-                        <strong class="highlight-total">{{ money(totalEstimatedQuote().grandTotal) }}</strong> Total
+                        @if (totalEstimatedQuote().pricesKnown) {
+                          <strong>{{ money(totalEstimatedQuote().partsSum) }}</strong> Parts +
+                          <strong>{{ money(totalEstimatedQuote().laborSum) }}</strong> Labor =
+                          <strong class="highlight-total">{{ money(totalEstimatedQuote().grandTotal) }}</strong> Total
+                        } @else {
+                          <strong>{{ money(totalEstimatedQuote().laborSum) }}</strong> Labor, plus parts the
+                          operator's desk will price.
+                        }
                       </p>
                     </div>
                   </div>
@@ -718,7 +757,8 @@
 
                 <div class="awaiting-summary-chips">
                   <div class="sum-chip">
-                    <strong>{{ findings().length }}</strong>
+                    <!-- Flagged, not monitored: this said 24 for one A/C fault. -->
+                    <strong>{{ flaggedFindings().length }}</strong>
                     <span>Findings Recorded</span>
                   </div>
                   <div class="sum-chip">

@@ -266,6 +266,10 @@ export class PlatformService {
               ...(dto.themePalette ? { palette: dto.themePalette } : {}),
               ...(dto.logoUrl ? { logoUrl: dto.logoUrl } : {}),
               ...(dto.navigationLayout ? { navigationLayout: dto.navigationLayout } : {}),
+              // Read back by the branding endpoint and applied to every page
+              // this workshop's staff open -- see WorkshopBrandingService.
+              ...(dto.themeMode ? { themeMode: dto.themeMode } : {}),
+              ...(dto.density ? { density: dto.density } : {}),
             },
             roleExperience: {},
             enabledFeatures: [],
@@ -465,30 +469,16 @@ export class PlatformService {
               : specializationNames.join(", ") + ".",
         });
 
-        const services = dto.services ?? [];
-        if (services.length > 0) {
-          await tx.priceCatalogEntry.createMany({
-            data: services.map((service) => ({
-              tenantId: tenant.id,
-              itemKey: service.name,
-              itemType: service.category?.trim() ? service.category.trim().toUpperCase() : "SERVICE",
-              // Decimal, from a string of minor units. Never parsed as a
-              // JS number on the way in -- Prisma takes the string and
-              // the database stores the exact value.
-              unitPrice: new Prisma.Decimal(service.price).dividedBy(100),
-              isActive: true,
-            })),
-          });
-        }
-        steps.push({
-          key: "SERVICES",
-          label: "Pricing the work",
-          count: services.length,
-          detail:
-            services.length === 0
-              ? "No catalogue prices — staff price each job as they go."
-              : `${services.length} service(s) priced. The running invoice reads these from the first job onward.`,
-        });
+        // Services are no longer typed in by hand at creation.
+        //
+        // There was a SERVICES stage where a platform admin listed the
+        // workshop's priced jobs one at a time. `provisionCatalog` above
+        // already creates the full standard service catalogue for this
+        // workshop's category from the master datasets -- it reports the count
+        // as `servicesCreated` on the CATALOG step -- so the stage asked for a
+        // second, thinner copy of a list the product already had, and the two
+        // could disagree from day one. The owner edits those prices, and the
+        // standard time on each, from the Pricing page.
 
         // The published configuration, snapshotted. A workshop's shape at
         // creation is exactly the kind of thing someone asks about a year
@@ -536,7 +526,12 @@ export class PlatformService {
               warehouses: (dto.warehouses ?? []).map((warehouse) => warehouse.code),
               specializationPacks: dto.specializationPacks ?? [],
               responsibilities: dto.responsibilities ?? {},
-              services: (dto.services ?? []).map((service) => service.name),
+              appearance: {
+                palette: dto.themePalette ?? null,
+                navigationLayout: dto.navigationLayout ?? null,
+                themeMode: dto.themeMode ?? null,
+                density: dto.density ?? null,
+              },
             },
             riskLevel: "HIGH",
           },
@@ -903,7 +898,6 @@ export class PlatformService {
       policies: Object.fromEntries(this.policyRowsFor(dto).map((row) => [row.key, row.value])),
       specializationPacks: dto.specializationPacks ?? [],
       responsibilities: dto.responsibilities ?? {},
-      services: (dto.services ?? []).map((service) => ({ name: service.name, price: service.price })),
       branches: (dto.branches ?? []).map((branch) => ({ code: branch.code, name: branch.name })),
       warehouses: (dto.warehouses ?? []).map((warehouse) => ({
         code: warehouse.code,

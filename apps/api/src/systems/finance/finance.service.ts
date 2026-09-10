@@ -894,6 +894,18 @@ export class FinanceService {
   ): Promise<{ id: string; status: "PENDING" }> {
     await this.requireFinance(tenantId);
 
+    // The job has to be this workshop's.
+    //
+    // `requireFinance` asks whether the CALLER has finance, which is a
+    // different question from whether the work order they named is theirs --
+    // the same distinction `issueInvoice` documents. Without this, a signed-in
+    // branch manager at one workshop could POST another workshop's work-order
+    // id and have a DiscountRequest created against it: verified against the
+    // running product, `POST /finance/work-orders/<other tenant's job>/discounts`
+    // answered 201 and wrote a row carrying this tenant's id and the victim's
+    // workOrderId.
+    await this.requireOwnedWorkOrder(tenantId, workOrderId);
+
     const authority = await this.policies.resolveValue(tenantId, "DISCOUNT_AUTHORITY");
     if (authority === "NONE") {
       throw new ForbiddenException({

@@ -5,7 +5,21 @@
       <div class="head-title-row">
         <div>
           <h1 class="catalog-title">Over-The-Counter Point of Sale (POS)</h1>
-          <p class="catalog-mode-subtitle">Workshop stock &amp; parts catalog. Requisition replacement parts directly from live workshop inventory.</p>
+          @if (attachMode()) {
+            <!--
+              Same POS, arrived at from one finding on the work card. Said out
+              loud, because attaching to a report and asking the store to move
+              stock are different acts with different rules: the store refuses
+              a requisition until the customer has approved the work.
+            -->
+            <p class="catalog-mode-subtitle">
+              Attaching to <strong>{{ findingTitle() || finding() }}</strong> on this job.
+              What you attach goes on the inspection report; the store is asked for it once the
+              customer approves.
+            </p>
+          } @else {
+            <p class="catalog-mode-subtitle">Workshop stock &amp; parts catalog. Requisition replacement parts directly from live workshop inventory.</p>
+          }
         </div>
         <button
           class="chip chip--external"
@@ -209,7 +223,9 @@
               }
 
               <p class="product-meta">
-                <span class="product-price">{{ item.sellingPrice }}</span>
+                @if (item.sellingPrice; as price) {
+                  <span class="product-price">{{ money(price) }}</span>
+                }
                 <span
                   class="product-stock"
                   [class.product-stock--out]="item.availability === 'OUT_OF_STOCK'"
@@ -225,7 +241,15 @@
               </p>
             </div>
 
-            @if (inCart(item) > 0) {
+            @if (attachMode()) {
+              <button class="tap tap--add" type="button" (click)="attachToFinding(item)">
+                @if (onFinding(item) > 0) {
+                  Attached ({{ onFinding(item) }}) · add another
+                } @else {
+                  Attach to this finding
+                }
+              </button>
+            } @else if (inCart(item) > 0) {
               <div class="quantity">
                 <button class="tap tap--quantity" type="button" [attr.aria-label]="'One fewer ' + item.name" (click)="add(item, -1)">
                   −
@@ -265,7 +289,18 @@
 </section>
 
 <!-- The basket. Always reachable while there is something in it -->
-@if (cartCount() > 0) {
+<!--
+  The way back, when this visit was about a finding. The count is what the work
+  card will show against that subsystem.
+-->
+@if (attachMode()) {
+  <a class="cart-tab tap" [routerLink]="['/tech', 'card', id()]">
+    <span class="cart-tab-count">{{ attachedHere() }}</span>
+    Done — back to the job
+  </a>
+}
+
+@if (cartCount() > 0 && !attachMode()) {
   <button class="cart-tab tap" type="button" (click)="toggleCart()" [attr.aria-expanded]="cartOpen()">
     <span class="cart-tab-count">{{ cartCount() }}</span>
     {{ cartOpen() ? (isTechMode() ? 'Hide request' : 'Hide basket') : (isTechMode() ? 'Review request' : 'Review basket') }}
@@ -285,7 +320,9 @@
           <div class="cart-line-body">
             <p class="cart-line-name">{{ line.item.name }}</p>
             <p class="cart-line-sku">{{ line.item.sku }}</p>
-            <p class="cart-line-price">{{ line.item.sellingPrice }}</p>
+            @if (line.item.sellingPrice; as price) {
+              <p class="cart-line-price">{{ money(price) }}</p>
+            }
             @if (line.item.stockTracked && line.item.onHand < line.quantity) {
               <p class="cart-line-warn">Only {{ line.item.onHand }} on the shelf — the store will order the rest.</p>
             }
@@ -323,11 +360,27 @@
       }
     </p>
 
+    <!--
+      The refusal has to be readable from where the button is. The page-level
+      banner sits ~1800px up the results column, so a technician who pressed
+      "Send to the store" before the customer approved the work saw nothing
+      happen at all -- a correctly enforced rule reading as a dead button.
+    -->
+    @if (error(); as message) {
+      <p class="cart-error" role="alert">{{ message }}</p>
+    }
+
     <button class="tap tap--primary tap--wide" type="button" [disabled]="submitting()" (click)="submit()">
       @if (submitting()) {
         {{ isTechMode() ? 'Sending…' : 'Processing order…' }}
       } @else {
-        {{ isTechMode() ? 'Send to the store' : ('Buy Parts (' + (cartTotalAmount() ?? '') + ')') }}
+        @if (isTechMode()) {
+          Send to the store
+        } @else if (cartTotalAmount(); as total) {
+          Buy Parts ({{ total }})
+        } @else {
+          Buy Parts
+        }
       }
     </button>
     <button class="tap cart-empty" type="button" [disabled]="submitting()" (click)="emptyCart()">Empty the cart</button>

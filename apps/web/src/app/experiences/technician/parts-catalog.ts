@@ -14,6 +14,14 @@ import {
   type CustomerPosOrderResult,
 } from '../customer/customer-portal.api';
 import { OperatorApi } from '../operator/operator.api';
+import { WorkshopBrandingService } from '../../ui/workshop-branding.service';
+import { formatMoney } from '../../ui/money';
+import {
+  attachFindingPart,
+  attachedQuantity,
+  readFindingParts,
+  type FindingParts,
+} from './finding-parts.store';
 
 export interface CartLine {
   readonly item: PartCard;
@@ -39,6 +47,7 @@ export class PartsCatalog {
   private readonly api = inject(TechnicianApi);
   private readonly customerApi = inject(CustomerPortalApi);
   private readonly operatorApi = inject(OperatorApi);
+  private readonly branding = inject(WorkshopBrandingService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -46,6 +55,19 @@ export class PartsCatalog {
   readonly id = input<string>('');
   /** Optional category name/slug passed via query param to pre-filter catalog */
   readonly category = input<string>('');
+
+  /**
+   * Set when a technician arrived here from one finding on their work card.
+   *
+   * The card's "Attach Parts (from POS)" opens this page -- the workshop's
+   * real Point of Sale, with the same catalogue tree, filters and stock the
+   * counter uses -- rather than a smaller picker of its own. This says which
+   * subsystem they are shopping for, so what they attach goes back onto that
+   * finding.
+   */
+  readonly finding = input<string>('');
+  /** The finding's own name, for saying it on screen rather than a slug. */
+  readonly findingTitle = input<string>('');
 
   /** Technician mode vs Operator reception POS vs Customer over-the-counter POS mode */
   readonly isTechMode = computed(() => this.router.url.includes('/tech'));
@@ -62,6 +84,14 @@ export class PartsCatalog {
   protected readonly pageNumber = signal(1);
   /** attributeId -> chosen valueIds. Empty until a filter is touched. */
   protected readonly selected = signal<Record<string, string[]>>({});
+
+  /** True when this visit is about attaching to a finding, not about a basket. */
+  readonly attachMode = computed(() => this.isTechMode() && !!this.finding());
+
+  /** What is already attached to each finding on this job. */
+  protected readonly attached = signal<FindingParts>({});
+
+  protected readonly attachedHere = computed(() => (this.attached()[this.finding()] ?? []).length);
 
   protected readonly cart = signal<readonly CartLine[]>([]);
   protected readonly cartOpen = signal(false);
@@ -130,13 +160,31 @@ export class PartsCatalog {
 
   protected readonly cartCount = computed(() => this.cart().reduce((sum, line) => sum + line.quantity, 0));
   protected readonly cartLines = computed(() => this.cart().length);
+  /**
+   * A money value printed in the workshop's own currency, never with a symbol.
+   * See `ui/money.ts` -- this page used to concatenate a literal `$`, which
+   * quoted an Egyptian workshop in dollars.
+   */
+  protected money(amount: string | null | undefined): string {
+    return formatMoney(amount, this.branding.activeWorkshop().currency);
+  }
+
+  /**
+   * The basket total, or `null` when it cannot honestly be stated.
+   *
+   * A card arrives without `sellingPrice` when the workshop has hidden prices
+   * from technicians, and there is no total to show then -- treating a missing
+   * price as zero would understate the basket, and reading `.replace` off it
+   * threw inside change detection and blanked the whole panel.
+   */
   protected readonly cartTotalAmount = computed(() => {
     let sum = 0;
     for (const line of this.cart()) {
-      const price = parseFloat(line.item.sellingPrice.replace(/[^0-9.]/g, '')) || 0;
-      sum += price * line.quantity;
+      const raw = line.item.sellingPrice;
+      if (raw == null || !/^-?\d+(\.\d+)?$/.test(raw.trim())) return null;
+      sum += Number(raw) * line.quantity;
     }
-    return sum > 0 ? `$${sum.toFixed(2)}` : null;
+    return sum > 0 ? this.money(sum.toFixed(2)) : null;
   });
 
   /** Categories flattened for the chip rail: parents, then their children. */
@@ -159,6 +207,37 @@ export class PartsCatalog {
     return this.cart().find((line) => line.item.id === item.id)?.quantity ?? 0;
   }
 
+  /** How many of this part are already on the finding being shopped for. */
+  protected onFinding(item: PartCard): number {
+    return attachedQuantity(this.attached(), this.finding(), item.sku);
+  }
+
+  /**
+   * Put this part on the finding the technician came here from.
+   *
+   * Not the basket. The basket asks the store to move stock, and the store
+   * refuses that before the customer has approved the work
+   * (`work_not_authorized`) -- which is correct, and exactly why attaching to
+   * an inspection finding has to be its own act. The part goes on the report;
+   * the store is asked for it when the operator approves.
+   */
+  protected attachToFinding(item: PartCard, quantity = 1): void {
+    const workOrderId = this.id();
+    if (!workOrderId || !this.attachMode()) return;
+    this.attached.set(
+      attachFindingPart(workOrderId, this.finding(), {
+        sku: item.sku,
+        name: item.name,
+        quantity,
+        // Null, never 0: the workshop may hide prices from technicians, and a
+        // part with no price is not a free part. The server prices the report
+        // from the workshop's own catalogue either way.
+        unitPrice: item.sellingPrice == null ? null : Number(item.sellingPrice),
+        stock: item.stockTracked ? item.onHand : null,
+      }),
+    );
+  }
+
   protected readonly activeFilterCount = computed(() =>
     Object.values(this.selected()).reduce((sum, values) => sum + values.length, 0),
   );
@@ -170,6 +249,14 @@ export class PartsCatalog {
       const targetId = this.isTechMode() ? this.id() : 'customer-pos';
       if (this.cartKey()) return;
       this.cartKey.set(this.restoreKey(targetId));
+    });
+
+    // What the work card already has attached, so the counts on the cards are
+    // right the moment this page opens.
+    effect(() => {
+      const workOrderId = this.id();
+      if (!workOrderId || !this.attachMode()) return;
+      untracked(() => this.attached.set(readFindingParts(workOrderId)));
     });
 
     effect(() => {

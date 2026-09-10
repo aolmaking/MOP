@@ -100,7 +100,7 @@
     </section>
   }
 
-  @if (facts().branchCount > 0 || facts().warehouseCount > 0 || facts().serviceCount > 0) {
+  @if (facts().branchCount > 0 || facts().warehouseCount > 0) {
     <section class="onb-summary-section">
       <h3>Structure</h3>
       <ul class="onb-summary-list">
@@ -109,9 +109,6 @@
         }
         @if (facts().warehouseCount > 0) {
           <li>{{ facts().warehouseCount }} store(s)</li>
-        }
-        @if (facts().serviceCount > 0) {
-          <li>{{ facts().serviceCount }} priced service(s)</li>
         }
       </ul>
     </section>

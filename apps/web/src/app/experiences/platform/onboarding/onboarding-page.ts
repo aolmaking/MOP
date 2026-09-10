@@ -16,7 +16,7 @@ import { StageSpecialization } from './stages/stage-specialization';
 import { StagePolicies } from './stages/stage-policies';
 import { StageResponsibility } from './stages/stage-responsibility';
 import { StageStructure } from './stages/stage-structure';
-import { StageServices } from './stages/stage-services';
+import { StageAppearance } from './stages/stage-appearance';
 import { StageReview } from './stages/stage-review';
 import { OnboardingRail } from './components/onboarding-rail';
 
@@ -51,7 +51,7 @@ type Phase = 'CONFIGURING' | 'PUBLISHING' | 'READY';
     StagePolicies,
     StageResponsibility,
     StageStructure,
-    StageServices,
+    StageAppearance,
     StageReview,
     OnboardingRail,
   ],
@@ -216,10 +216,12 @@ export class OnboardingPage implements OnInit {
         detail: `${facts.warehouseCount} store(s) exist and are empty. Parts can be requested the moment there is something in them.`,
       });
     }
-    if (draft.services.length === 0 && facts.activeCapabilities.includes('FINANCE_CORE')) {
+    if (facts.activeCapabilities.includes('FINANCE_CORE')) {
       steps.push({
-        title: 'Price the common jobs',
-        detail: 'No catalogue prices were set, so staff will price each job by hand until some exist.',
+        title: 'Check the prices',
+        detail:
+          'A standard service catalogue for this category was created with the workshop. The owner edits those prices, ' +
+          'and the standard time on each one, from the Pricing page.',
       });
     }
     if (facts.specializationDefinitionCount > 0) {

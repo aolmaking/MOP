@@ -196,22 +196,36 @@
     </div>
   </section>
 
-  @if (store.draft().services.length > 0) {
-    <section class="onb-review-section">
-      <div class="onb-review-section-head">
-        <h3>Prices</h3>
-        <button type="button" class="onb-review-edit" (click)="jumpTo.emit('SERVICES')">Edit</button>
-      </div>
-      <ul class="onb-review-list">
-        @for (service of store.draft().services; track service.name) {
-          <li>
-            <strong>{{ service.name }}</strong>
-            <span class="onb-review-note">{{ displayPrice(service.price) }} {{ store.draft().identity.currency }}</span>
-          </li>
-        }
-      </ul>
-    </section>
-  }
+  <!--
+    Appearance, reviewed like anything else that changes the workshop. The
+    prices section that used to sit here is gone with the SERVICES stage: the
+    standard service catalogue for this workshop's category is created by
+    provisioning, and the owner edits it on the Pricing page.
+  -->
+  <section class="onb-review-section">
+    <div class="onb-review-section-head">
+      <h3>Appearance</h3>
+      <button type="button" class="onb-review-edit" (click)="jumpTo.emit('APPEARANCE')">Edit</button>
+    </div>
+    <ul class="onb-review-list">
+      <li>
+        <strong>Colours</strong>
+        <span class="onb-review-note">{{ store.draft().identity.themePalette || 'crimson' }}</span>
+      </li>
+      <li>
+        <strong>Navigation</strong>
+        <span class="onb-review-note">{{ store.draft().identity.navigationLayout || 'SIDEBAR' }}</span>
+      </li>
+      <li>
+        <strong>Signs in as</strong>
+        <span class="onb-review-note">{{ store.draft().identity.themeMode || 'DARK' }}</span>
+      </li>
+      <li>
+        <strong>Density</strong>
+        <span class="onb-review-note">{{ store.draft().identity.density || 'COMFORTABLE' }}</span>
+      </li>
+    </ul>
+  </section>
 </div>
 
 <app-review-consequences

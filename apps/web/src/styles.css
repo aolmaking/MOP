@@ -152,6 +152,19 @@
   --space-7: 2.5rem;
   --space-8: 3rem;
 
+  /* --- density ---
+     The workshop's own answer to "how many rows do I want on screen",
+     chosen on the Appearance stage when the workshop is created and applied
+     to `<html>` by WorkshopBrandingService.
+
+     Compact tightens the middle of the spacing scale rather than all of it:
+     `--space-1` and `--space-2` are already the gaps between a label and its
+     value, and squeezing those makes text collide instead of fitting more in.
+     What compacts is the padding inside rows, cards and panels -- 3, 4 and 5
+     -- which is where the vertical space in an operational board actually
+     goes. Nothing outside this block knows about density, so every screen in
+     the product follows without a single conditional. */
+
   /* --- radius ---
      Revised on the product owner's direction: nothing in the interface
      should read as a hard corner. The scale still steps, so shape stays
@@ -202,6 +215,16 @@
      Declared here too so the other seven shells have one number to reach
      for rather than each picking its own. */
   --tap: 44px;
+}
+
+
+/* Compact: the same tokens, tightened. A workshop that chose COMPACT gets more
+   rows on every board in the product because these three values are what row,
+   card and panel padding are built from. */
+:root[data-density='compact'] {
+  --space-3: 0.5rem;
+  --space-4: 0.75rem;
+  --space-5: 1rem;
 }
 
 /*

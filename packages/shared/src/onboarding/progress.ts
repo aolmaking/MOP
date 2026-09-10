@@ -120,9 +120,10 @@ function unitsFor(draft: WorkshopDraft, stage: OnboardingStageId): readonly bool
         (question) => draft.responsibilities[question.capability] !== undefined,
       );
 
-    case "SERVICES":
-      // Optional, like specialisation: a workshop can price every job as
-      // it goes, and many do. Nothing to count.
+    case "APPEARANCE":
+      // Every choice here has a default that is already applied, so there is
+      // no decision outstanding -- but they are all real, and changing one
+      // changes the running product.
       return [];
 
     case "STRUCTURE": {

@@ -312,3 +312,10 @@
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
+
+/* Said in place of a control this person may not press. */
+.row-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}

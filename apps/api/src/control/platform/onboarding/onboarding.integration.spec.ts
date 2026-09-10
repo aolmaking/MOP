@@ -251,7 +251,6 @@ describe("Workshop onboarding (integration, real HTTP, real Postgres)", () => {
         policies: { TIME_TRACKING: "OFF" },
         specializationPacks: ["QUICK_SERVICE"],
         branches: [{ name: "The bay", code: "BAY", city: "Cairo" }],
-        services: [{ name: "Oil change", price: "45000" }],
       });
 
       expect(res.status).toBe(201);
@@ -271,7 +270,6 @@ describe("Workshop onboarding (integration, real HTTP, real Postgres)", () => {
         "RESPONSIBILITY",
         "STRUCTURE",
         "SPECIALIZATION",
-        "SERVICES",
         "VERSION",
         "AUDIT",
       ]);
@@ -338,18 +336,25 @@ describe("Workshop onboarding (integration, real HTTP, real Postgres)", () => {
       expect(warehouses).toBe(0);
     });
 
-    it("has the service cards its specialisation pack promised, and can charge its service", async () => {
-      const [definitions, prices] = await Promise.all([
-        prisma.specializationDefinition.findMany({ where: { tenantId }, select: { name: true, kind: true } }),
-        prisma.priceCatalogEntry.findMany({ where: { tenantId }, select: { itemKey: true, unitPrice: true } }),
-      ]);
+    it("has the service cards its specialisation pack promised", async () => {
+      const definitions = await prisma.specializationDefinition.findMany({
+        where: { tenantId },
+        select: { name: true, kind: true },
+      });
 
       expect(definitions.map((d) => d.name).sort()).toEqual(["Fluid Top-Up", "Oil Change"]);
-      expect(prices).toHaveLength(1);
-      expect(prices[0].itemKey).toBe("Oil change");
-      // 45000 minor units -> 450.00 major. Money is exact all the way
-      // through: no float ever touches this number.
-      expect(prices[0].unitPrice.toFixed(2)).toBe("450.00");
+    });
+
+    it("has no priced services, because it runs no store for the catalogue to be provisioned into", async () => {
+      // There used to be a SERVICES stage where the platform admin typed this
+      // workshop's priced jobs by hand, and this asserted the one it typed.
+      // The stage is gone: a workshop's standard service catalogue comes from
+      // the master dataset for its category, and provisioning only runs where
+      // INVENTORY is on and a store exists -- which is not this workshop. So
+      // the honest expectation is none, and the owner prices from the Pricing
+      // page, where the standard time on each service is editable too.
+      const prices = await prisma.priceCatalogEntry.findMany({ where: { tenantId } });
+      expect(prices).toHaveLength(0);
     });
 
     it("delivers unpaid, because that is the recommended answer it inherited", async () => {
@@ -425,10 +430,6 @@ describe("Workshop onboarding (integration, real HTTP, real Postgres)", () => {
         warehouses: [
           { name: "Central store", code: "CENTRAL", branchCodes: ["RYD-N", "RYD-S"] },
           { name: "Western store", code: "WEST", branchCodes: ["JED"] },
-        ],
-        services: [
-          { name: "Brake service", price: "120000" },
-          { name: "Diagnostic scan", price: "35000" },
         ],
       });
 

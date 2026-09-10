@@ -259,16 +259,30 @@ export class SubmitInspectionReportDto {
     name: string;
     sku?: string;
     quantity: number;
-    unitPrice: number;
+    /** Ignored when the workshop's catalogue knows the part -- the server prices it. */
+    unitPrice?: number;
+    /** Which finding this part belongs to, so a partial approval can be honoured. */
+    findingCode?: string;
   }>;
 
   @IsOptional()
   @IsArray()
+  /**
+   * `serviceName`, not `name`.
+   *
+   * The technician's work card and the operator's quote builder both write and
+   * read this key, and the stored JSON uses it -- this DTO and the service that
+   * consumed it were the outliers, so every catalogue lookup was made against
+   * `undefined` and every service on every report came back priced from the
+   * browser instead of from the workshop's own catalogue.
+   */
   services?: Array<{
     id?: string;
-    name: string;
-    laborPrice: number;
+    serviceName: string;
+    laborPrice?: number;
     hours?: number;
+    /** Which finding this labour belongs to. */
+    findingCode?: string;
   }>;
 
   @IsOptional()

@@ -55,10 +55,5 @@ export function draftFromDto(dto: CreateWorkshopDto): WorkshopDraft {
       branchCodes: warehouse.branchCodes ?? [],
       topologyType: warehouse.topologyType as any,
     })),
-    services: (dto.services ?? []).map((service) => ({
-      name: service.name,
-      price: service.price,
-      category: service.category,
-    })),
   };
 }

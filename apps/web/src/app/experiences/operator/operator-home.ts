@@ -179,11 +179,18 @@ export class OperatorHome {
   );
   protected readonly approvedFindingsCount = computed(() => this.approvedFindingIndices().size);
 
+  /**
+   * What the customer is being asked for, given what is ticked.
+   *
+   * The totals used to sum the whole report however much of it was approved,
+   * so the operator read one figure to the customer and the job was dispatched
+   * for another.
+   */
   protected readonly quotePartsTotal = computed(() =>
-    this.editableParts().reduce((acc, p) => acc + (Number(p.unitPrice) || 0) * (Number(p.quantity) || 1), 0),
+    this.approvedParts().reduce((acc, p) => acc + (Number(p.unitPrice) || 0) * (Number(p.quantity) || 1), 0),
   );
   protected readonly quoteLaborTotal = computed(() =>
-    this.editableServices().reduce((acc, s) => acc + (Number(s.laborPrice) || 0), 0),
+    this.approvedServices().reduce((acc, s) => acc + (Number(s.laborPrice) || 0), 0),
   );
   protected readonly quoteGrandTotal = computed(() =>
     this.quotePartsTotal() + this.quoteLaborTotal(),
@@ -535,11 +542,9 @@ export class OperatorHome {
   }
 
   protected closeReportModal(): void {
-    if (this.isSavingQuote() || this.isDispatchingRepair()) return;
+    if (this.isDispatchingRepair()) return;
     this.isReportModalOpen.set(false);
     this.selectedReportDetail.set(null);
-    this.closePosPicker();
-    this.closeServicePicker();
   }
 
   // Findings Approval Selection (Image 2)
@@ -569,244 +574,81 @@ export class OperatorHome {
     }
   }
 
-  // Findings Expansion
-  protected isFindingExpanded(index: number): boolean {
-    return this.expandedFindingIndices().has(index);
-  }
-
-  protected toggleFindingExpanded(index: number): void {
-    const next = new Set(this.expandedFindingIndices());
-    if (next.has(index)) {
-      next.delete(index);
-    } else {
-      next.add(index);
-    }
-    this.expandedFindingIndices.set(next);
-  }
-
-  // Finding Display & Category Helpers
+  // Finding display
   protected getFindingTitle(f: OperatorInspectionFinding): string {
     return f.recommendedService || f.description || 'Inspection Finding';
   }
 
-  protected getFindingCode(f: OperatorInspectionFinding, index: number): string {
-    if (f.code) return f.code;
-    const desc = `${f.description || ''} ${f.recommendedService || ''}`.toLowerCase();
-    if (desc.includes('oil') || desc.includes('lubric')) return 'ENG-03';
-    if (desc.includes('tir') || desc.includes('wheel')) return 'TIR-04';
-    if (desc.includes('filter') || desc.includes('air')) return 'AIR-05';
-    if (desc.includes('brake') || desc.includes('pad')) return 'BRK-01';
-    if (desc.includes('battery')) return 'ELC-02';
-    return `FND-0${index + 1}`;
+  /**
+   * What the technician attached to this finding.
+   *
+   * Read-only on this screen, and grouped by the key the technician attached
+   * it under. Before parts carried a `findingCode` the report reached the
+   * front desk as one flat list, which made "approve this finding but not that
+   * one" meaningless: the operator could approve a subset of the findings and
+   * still dispatch — and charge for — every part on the job.
+   */
+  protected partsForFinding(f: OperatorInspectionFinding): readonly OperatorInspectionPart[] {
+    const code = f.code;
+    if (!code) return [];
+    return this.editableParts().filter((p) => p.findingCode === code);
   }
 
-  protected getFindingIconType(f: OperatorInspectionFinding): 'oil' | 'tire' | 'filter' | 'brake' | 'battery' | 'suspension' | 'general' {
-    const text = `${f.description || ''} ${f.recommendedService || ''} ${f.code || ''}`.toLowerCase();
-    if (text.includes('oil') || text.includes('lubric') || text.includes('fluid') || text.includes('eng-')) return 'oil';
-    if (text.includes('tir') || text.includes('wheel') || text.includes('alignment')) return 'tire';
-    if (text.includes('filter') || text.includes('air') || text.includes('intake') || text.includes('cabin')) return 'filter';
-    if (text.includes('brake') || text.includes('pad') || text.includes('disc') || text.includes('rotor')) return 'brake';
-    if (text.includes('battery') || text.includes('electric') || text.includes('alternator')) return 'battery';
-    if (text.includes('shock') || text.includes('strut') || text.includes('suspension')) return 'suspension';
-    return 'general';
+  protected servicesForFinding(f: OperatorInspectionFinding): readonly OperatorInspectionService[] {
+    const code = f.code;
+    if (!code) return [];
+    return this.editableServices().filter((s) => s.findingCode === code);
   }
 
-  protected openPosPickerForFinding(index: number): void {
-    this.targetFindingIndex.set(index);
-    const f = this.editableFindings()[index];
-    if (f) {
-      this.posSearch.set(f.recommendedService || f.description || '');
-    }
-    this.openPosPicker();
-  }
-
-  protected openServicePickerForFinding(index: number): void {
-    this.targetFindingIndex.set(index);
-    const f = this.editableFindings()[index];
-    if (f) {
-      this.customServiceName.set(f.recommendedService || f.description || '');
-    }
-    this.openServicePicker();
-  }
-
-  // Findings Severity & Editing
-  protected updateFindingSeverity(index: number, severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'): void {
-    const list = [...this.editableFindings()];
-    if (list[index]) {
-      list[index] = { ...list[index], severity };
-      this.editableFindings.set(list);
-    }
-  }
-
-  protected addFinding(): void {
-    this.editableFindings.update((prev) => [
-      ...prev,
-      {
-        description: 'New vehicle inspection finding',
-        severity: 'MEDIUM',
-        recommendedService: 'Inspection & Repair',
-      },
-    ]);
-    const newIdx = this.editableFindings().length - 1;
-    this.toggleFindingApproval(newIdx);
-  }
-
-  protected removeFinding(index: number): void {
-    this.editableFindings.update((prev) => prev.filter((_, i) => i !== index));
-    const nextApproved = new Set<number>();
-    this.approvedFindingIndices().forEach((idx) => {
-      if (idx < index) nextApproved.add(idx);
-      else if (idx > index) nextApproved.add(idx - 1);
-    });
-    this.approvedFindingIndices.set(nextApproved);
-  }
-
-  // POS Parts
-  protected openPosPicker(): void {
-    this.isPosPickerOpen.set(true);
-    this.posSearch.set('');
-    this.posSelectedQty.set(1);
-    this.searchPosCatalog();
-  }
-
-  protected closePosPicker(): void {
-    this.isPosPickerOpen.set(false);
-  }
-
-  protected searchPosCatalog(): void {
-    this.isSearchingPos.set(true);
-    const q = this.posSearch().trim();
-    this.api
-      .posCatalog({ q: q || undefined, inStockOnly: false })
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (res) => {
-          this.isSearchingPos.set(false);
-          this.posCatalogItems.set(res?.items ?? []);
-        },
-        error: () => {
-          this.isSearchingPos.set(false);
-          this.posCatalogItems.set([]);
-        },
-      });
+  /** The codes this report's findings actually use. */
+  private findingCodes(): ReadonlySet<string> {
+    return new Set(this.editableFindings().map((f) => f.code).filter((c): c is string => !!c));
   }
 
   /**
-   * Put a catalogued part on the quote, at the price the workshop set.
+   * Lines that name no finding, or name one this report does not contain.
    *
-   * Every field here used to be read from a name the server has never sent.
-   * `item.price || item.unitPrice || item.retailPrice || 50` therefore always
-   * fell through to the literal, so an operator adding any part to any
-   * customer's quote charged them 50 -- a number nobody in the workshop had
-   * ever entered -- while the tile beside it advertised a different invented
-   * figure, 45. The SKU fell through to a timestamp, so the line could not be
-   * matched back to the shelf it came from either.
-   *
-   * The server's contract has always said `sku`, `name` and `sellingPrice`,
-   * and has always said the price is a string. The read was untyped
-   * (`Observable<any>`), which is the only reason this could compile.
+   * Shown rather than hidden: they are part of what is being approved, and an
+   * approval screen that omits half the bill is worse than one that looks
+   * untidy. Reports written before parts carried a finding key land here too.
    */
-  protected addPartFromPos(item: OperatorCatalogItem): void {
-    const sku = item.sku;
-    const name = item.name;
-    const unitPrice = Number(item.sellingPrice);
-    const quantity = Math.max(1, Number(this.posSelectedQty()) || 1);
-
-    // If already in list, increase quantity
-    const existingIndex = this.editableParts().findIndex((p) => p.sku === sku);
-    if (existingIndex >= 0) {
-      const updated = [...this.editableParts()];
-      updated[existingIndex] = {
-        ...updated[existingIndex],
-        quantity: updated[existingIndex].quantity + quantity,
-      };
-      this.editableParts.set(updated);
-    } else {
-      this.editableParts.update((prev) => [
-        ...prev,
-        { sku, name, quantity, unitPrice },
-      ]);
-    }
-
-    this.closePosPicker();
+  protected unassignedParts(): readonly OperatorInspectionPart[] {
+    const known = this.findingCodes();
+    return this.editableParts().filter((p) => !p.findingCode || !known.has(p.findingCode));
   }
 
-  protected removePart(index: number): void {
-    this.editableParts.update((prev) => prev.filter((_, i) => i !== index));
+  protected unassignedServices(): readonly OperatorInspectionService[] {
+    const known = this.findingCodes();
+    return this.editableServices().filter((s) => !s.findingCode || !known.has(s.findingCode));
   }
 
-  protected updatePartQty(index: number, quantity: number): void {
-    if (quantity < 1) return;
-    const list = [...this.editableParts()];
-    if (list[index]) {
-      list[index] = { ...list[index], quantity };
-      this.editableParts.set(list);
-    }
+  /**
+   * The lines the operator is actually approving: everything attached to a
+   * ticked finding, plus everything attached to no finding at all.
+   */
+  protected approvedParts(): readonly OperatorInspectionPart[] {
+    const approved = new Set(
+      this.editableFindings()
+        .filter((_, i) => this.isFindingApproved(i))
+        .map((f) => f.code)
+        .filter((c): c is string => !!c),
+    );
+    return this.editableParts().filter(
+      (p) => !p.findingCode || !this.findingCodes().has(p.findingCode) || approved.has(p.findingCode),
+    );
   }
 
-  // Services
-  protected openServicePicker(): void {
-    this.isServicePickerOpen.set(true);
-    this.customServiceName.set('');
-    this.customServiceLabor.set(50);
+  protected approvedServices(): readonly OperatorInspectionService[] {
+    const approved = new Set(
+      this.editableFindings()
+        .filter((_, i) => this.isFindingApproved(i))
+        .map((f) => f.code)
+        .filter((c): c is string => !!c),
+    );
+    return this.editableServices().filter(
+      (s) => !s.findingCode || !this.findingCodes().has(s.findingCode) || approved.has(s.findingCode),
+    );
   }
-
-  protected closeServicePicker(): void {
-    this.isServicePickerOpen.set(false);
-  }
-
-  protected addPresetService(srv: { name: string; labor: number }): void {
-    this.editableServices.update((prev) => [
-      ...prev,
-      { serviceName: srv.name, laborPrice: srv.labor },
-    ]);
-    this.closeServicePicker();
-  }
-
-  protected addCustomService(): void {
-    const name = this.customServiceName().trim();
-    if (!name) return;
-    const labor = Number(this.customServiceLabor()) || 0;
-    this.editableServices.update((prev) => [
-      ...prev,
-      { serviceName: name, laborPrice: labor },
-    ]);
-    this.closeServicePicker();
-  }
-
-  protected removeService(index: number): void {
-    this.editableServices.update((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  // Save Quote
-  protected saveQuote(): void {
-    const detail = this.selectedReportDetail();
-    if (!detail) return;
-
-    this.isSavingQuote.set(true);
-    this.quoteError.set(null);
-
-    this.api
-      .updateQuote(detail.workOrderId, {
-        findings: this.editableFindings(),
-        parts: this.editableParts(),
-        services: this.editableServices(),
-        note: this.quoteNote(),
-      })
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.isSavingQuote.set(false);
-          this.showSuccessNotification(`Quote updated successfully for ${detail.vehicle.plateNumber || 'work order'}!`);
-          this.loadInspectionReports();
-        },
-        error: (err) => {
-          this.isSavingQuote.set(false);
-          this.quoteError.set(err.message ?? 'Failed to save quote.');
-        },
-      });
-  }
-
   // Dispatch to Repair (Technician stage 2)
   protected dispatchToRepair(): void {
     const detail = this.selectedReportDetail();
@@ -821,11 +663,17 @@ export class OperatorHome {
       .map((f, i) => (this.isFindingApproved(i) ? (f.id || f.code || String(i)) : null))
       .filter((id): id is string => id !== null);
 
-    // Filter parts and services associated with approved findings or selected
-    const approvedParts = this.editableParts();
+    // Only what belongs to an approved finding.
+    //
+    // This said "Filter parts and services associated with approved findings"
+    // and then sent `this.editableParts()` -- every part on the job. So an
+    // operator who approved one finding out of twenty-four still dispatched,
+    // reserved and charged for the whole report, and the checkbox beside each
+    // finding decided nothing but the task list.
+    const approvedParts = this.approvedParts();
     const approvedPartIds = approvedParts.map((p) => String(p.id || p.sku || p.name));
 
-    const approvedServices = this.editableServices();
+    const approvedServices = this.approvedServices();
     const approvedServiceIds = approvedServices.map((s) => String(s.id || s.serviceName));
 
     const tasks: Array<{ title: string; estimatedMinutes?: number }> = [];
@@ -850,7 +698,7 @@ export class OperatorHome {
         approvedPartIds,
         approvedServiceIds,
         approvedFindings,
-        approvedServices,
+        approvedServices: [...approvedServices],
         operatorNote: this.quoteNote(),
         tasks,
         // `$${total}` -- a literal dollar sign in a note stored on the work

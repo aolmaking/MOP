@@ -87,6 +87,15 @@ export class DeliveryPage {
   protected readonly error = signal<PresentedError | null>(null);
   protected readonly state = signal<State>('loading');
   /** Which row is mid-release, so only its own button shows the wait. */
+  /**
+    * Same rule as `mayTakePayment` and `mayIssueInvoice`, and for the same
+    * reason: `workorders.branch.release_delivery` is held by BRANCH_MANAGER and
+    * not by TENANT_OWNER, so the owner -- the only role that can issue the
+    * invoice and take the payment -- was shown a "Hand over" button that
+    * answered `403 You cannot release a vehicle.` every time.
+    */
+  protected readonly mayRelease = signal(false);
+
   protected readonly releasing = signal<string | null>(null);
   protected readonly releaseError = signal<string | null>(null);
 
@@ -95,6 +104,7 @@ export class DeliveryPage {
     this.access.can('finance.payment.record').subscribe((allowed) => this.mayTakePayment.set(allowed));
     this.access.can('finance.invoice.issue').subscribe((allowed) => this.mayIssueInvoice.set(allowed));
     this.access.can('finance.discount.request').subscribe((allowed) => this.mayRequestDiscount.set(allowed));
+    this.access.can('workorders.branch.release_delivery').subscribe((allowed) => this.mayRelease.set(allowed));
   }
 
   /**

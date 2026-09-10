@@ -22,6 +22,13 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
       financeConfiguration: {
         findUnique: jest.fn().mockResolvedValue({ depositRequired: false, depositPercent: 0 }),
       },
+      // The report is priced from the workshop's own catalogue now, so the
+      // service reads InventoryItem for parts. A mock without it is a mock of
+      // a database that cannot exist.
+      inventoryItem: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       workOrder: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
@@ -124,7 +131,7 @@ describe('Operator-Technician Complete Inspection & Repair Cycle', () => {
           ],
           services: [
             {
-              name: 'Front Brake Pads Replacement',
+              serviceName: 'Front Brake Pads Replacement',
               laborPrice: 80.0,
             },
           ],

@@ -9,6 +9,17 @@ export interface PriceCatalogItemView {
   readonly itemType: string;
   readonly unitPrice: string;
   readonly laborPrice: string | null;
+  /**
+   * How long this job usually takes, in hours, as the workshop set it.
+   *
+   * Guidance rather than a deadline -- nothing in the product gates on it and
+   * no technician is measured against finishing inside it. Null means this
+   * workshop has not said, which is different from "one hour": the Pricing
+   * page used to compute a number in the browser by matching words in the
+   * service's name and display it under a padlock, so every workshop was shown
+   * the same invented figure and none of them could correct it.
+   */
+  readonly standardHours: string | null;
   readonly isActive: boolean;
   readonly effectiveFrom: string;
 }
@@ -20,6 +31,8 @@ export interface ResolvedPrice {
   /** Decimal as string, never a JS number -- money crosses this boundary as text. */
   readonly unitPrice: string;
   readonly laborPrice: string | null;
+  /** Hours, or null when this workshop has not set one. Never enforced. */
+  readonly standardHours: string | null;
 }
 
 export interface SetPriceInput {
@@ -27,6 +40,8 @@ export interface SetPriceInput {
   readonly itemType: string;
   readonly unitPrice: number;
   readonly laborPrice?: number;
+  /** Hours, or null to say this workshop has not set one. */
+  readonly standardHours?: number | null;
   readonly isActive?: boolean;
 }
 
@@ -82,7 +97,7 @@ export class PriceCatalogService {
 
     const row = await this.prisma.priceCatalogEntry.findFirst({
       where: { tenantId, itemKey: key, effectiveTo: null, isActive: true },
-      select: { itemKey: true, itemType: true, unitPrice: true, laborPrice: true },
+      select: { itemKey: true, itemType: true, unitPrice: true, laborPrice: true, standardHours: true },
     });
     if (!row) return null;
 
@@ -91,6 +106,7 @@ export class PriceCatalogService {
       itemType: row.itemType,
       unitPrice: String(row.unitPrice),
       laborPrice: row.laborPrice === null ? null : String(row.laborPrice),
+      standardHours: row.standardHours === null ? null : String(row.standardHours),
     };
   }
 
@@ -104,7 +120,7 @@ export class PriceCatalogService {
 
     const rows = await this.prisma.priceCatalogEntry.findMany({
       where: { tenantId, itemKey: { in: keys }, effectiveTo: null, isActive: true },
-      select: { itemKey: true, itemType: true, unitPrice: true, laborPrice: true },
+      select: { itemKey: true, itemType: true, unitPrice: true, laborPrice: true, standardHours: true },
     });
 
     return new Map(
@@ -115,6 +131,7 @@ export class PriceCatalogService {
           itemType: row.itemType,
           unitPrice: String(row.unitPrice),
           laborPrice: row.laborPrice === null ? null : String(row.laborPrice),
+          standardHours: row.standardHours === null ? null : String(row.standardHours),
         },
       ]),
     );
@@ -144,6 +161,9 @@ export class PriceCatalogService {
           itemType: input.itemType,
           unitPrice: input.unitPrice,
           laborPrice: input.laborPrice ?? null,
+          // Carried forward when the caller does not mention it, so editing a
+          // price does not silently erase the workshop's own time estimate.
+          standardHours: input.standardHours === undefined ? (current?.standardHours ?? null) : input.standardHours,
           isActive: input.isActive ?? true,
           effectiveFrom: now,
         },
@@ -158,7 +178,7 @@ export class PriceCatalogService {
       targetType: "PriceCatalogEntry",
       targetId: created.id,
       action: "price_catalog.set",
-      after: { itemKey, itemType: input.itemType, unitPrice: input.unitPrice },
+      after: { itemKey, itemType: input.itemType, unitPrice: input.unitPrice, standardHours: input.standardHours },
       riskLevel: "MEDIUM",
     });
 
@@ -171,6 +191,7 @@ export class PriceCatalogService {
     itemType: string;
     unitPrice: unknown;
     laborPrice: unknown;
+    standardHours: unknown;
     isActive: boolean;
     effectiveFrom: Date;
   }): PriceCatalogItemView {
@@ -180,6 +201,7 @@ export class PriceCatalogService {
       itemType: row.itemType,
       unitPrice: String(row.unitPrice),
       laborPrice: row.laborPrice === null ? null : String(row.laborPrice),
+      standardHours: row.standardHours === null ? null : String(row.standardHours),
       isActive: row.isActive,
       effectiveFrom: row.effectiveFrom.toISOString(),
     };

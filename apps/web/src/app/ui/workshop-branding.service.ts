@@ -1,7 +1,13 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { type WorkshopPaletteKey, type NavigationLayoutType, getWorkshopPalette } from '@mop/shared';
+import {
+  type WorkshopPaletteKey,
+  type NavigationLayoutType,
+  type WorkshopDensity,
+  type WorkshopThemeMode,
+  getWorkshopPalette,
+} from '@mop/shared';
 import { ThemeService } from './theme.service';
 
 const BRANDING_STORAGE_KEY = 'mop_active_workshop_branding';
@@ -17,6 +23,16 @@ export interface WorkshopBranding {
   address?: string | null;
   /** ISO code, e.g. 'EGP'. Never a symbol -- see ui/money.ts. */
   currency?: string | null;
+  /**
+   * What this workshop's staff see when they first sign in, and how tightly
+   * its screens are packed. Both are set on the Appearance stage when the
+   * workshop is created and both are applied here, to the running product:
+   * the mode seeds `data-theme` for anyone who has not chosen their own, and
+   * the density becomes `data-density`, which the shells read for row height,
+   * control size and spacing.
+   */
+  themeMode?: WorkshopThemeMode | null;
+  density?: WorkshopDensity | null;
 }
 
 const DEFAULT_BRANDING: WorkshopBranding = {
@@ -29,6 +45,8 @@ const DEFAULT_BRANDING: WorkshopBranding = {
   city: 'Cairo',
   address: 'Main Operations Hub',
   currency: 'EGP',
+  themeMode: 'DARK',
+  density: 'COMFORTABLE',
 };
 
 @Injectable({
@@ -43,9 +61,40 @@ export class WorkshopBrandingService {
   constructor() {
     // Synchronize initial palette with theme
     this.theme.setPalette(this.activeWorkshop().palette);
-    if (typeof document !== 'undefined') {
-      document.documentElement.setAttribute('data-layout', this.activeWorkshop().navigationLayout || 'SIDEBAR');
+    this.applyPresentation(this.activeWorkshop());
+  }
+
+  /**
+   * The workshop's own appearance, put onto the document.
+   *
+   * Layout and density are attributes the stylesheets read directly. The mode
+   * is different: it is the workshop's *starting point*, not an override, so a
+   * member of staff who has already chosen light or dark on this device keeps
+   * their choice. `SYSTEM` hands the decision to the device.
+   */
+  private applyPresentation(branding: WorkshopBranding): void {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    root.setAttribute('data-layout', branding.navigationLayout || 'SIDEBAR');
+    root.setAttribute('data-density', (branding.density || 'COMFORTABLE').toLowerCase());
+
+    const chosenByThisPerson = (() => {
+      try {
+        return localStorage.getItem('mop_theme_mode');
+      } catch {
+        return null;
+      }
+    })();
+    if (chosenByThisPerson) return;
+
+    const mode = branding.themeMode ?? 'DARK';
+    if (mode === 'SYSTEM') {
+      const prefersDark =
+        typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+      this.theme.setTheme(prefersDark ? 'dark' : 'light');
+      return;
     }
+    this.theme.setTheme(mode === 'LIGHT' ? 'light' : 'dark');
   }
 
   setBranding(branding: Partial<WorkshopBranding> & { name: string; code: string }): void {
@@ -57,9 +106,7 @@ export class WorkshopBrandingService {
     };
     this.activeWorkshop.set(updated);
     this.theme.setPalette(updated.palette);
-    if (typeof document !== 'undefined') {
-      document.documentElement.setAttribute('data-layout', updated.navigationLayout || 'SIDEBAR');
-    }
+    this.applyPresentation(updated);
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(BRANDING_STORAGE_KEY, JSON.stringify(updated));
     }

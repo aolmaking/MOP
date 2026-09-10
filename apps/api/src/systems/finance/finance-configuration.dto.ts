@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Length, Min } from "class-validator";
+import { IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Length, Max, Min, ValidateIf } from "class-validator";
 
 const PAYMENT_METHODS = ["CASH", "CARD", "BANK_TRANSFER", "WALLET", "DEPOSIT"] as const;
 
@@ -85,6 +85,19 @@ export class SetPriceDto {
   @IsNumber()
   @Min(0)
   laborPrice?: number;
+
+  /**
+   * How long this job usually takes, in hours. Guidance for planning and for
+   * what the technician sees on the card -- never a deadline, and nothing in
+   * the product gates on it. Omit it to leave the workshop's existing estimate
+   * alone; send null to clear it.
+   */
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsNumber()
+  @Min(0)
+  @Max(999)
+  standardHours?: number | null;
 
   @IsOptional()
   @IsBoolean()

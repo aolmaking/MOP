@@ -217,3 +217,15 @@
   color: var(--text-muted);
   max-inline-size: 46ch;
 }
+
+/* Standard time: the workshop's own estimate, or a plain statement that it has
+   not made one. It used to be rendered with a padlock beside a number computed
+   in the browser from the service's name. */
+.hours-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+.hours-badge--unset {
+  color: var(--text-muted);
+  font-style: italic;
+}

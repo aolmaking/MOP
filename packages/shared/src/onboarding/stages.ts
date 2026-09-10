@@ -18,9 +18,18 @@
  *                  nothing to ask about a capability that is off
  *   STRUCTURE      needs CAPABILITIES (does a store exist at all?) and
  *                  PLAN (how many may there be?)
- *   SERVICES       needs IDENTITY's currency, and FINANCE_CORE to be on
- *                  at all -- a price in no currency is not a price
+ *   APPEARANCE     needs nothing -- it is how this workshop's own pages
+ *                  look and navigate, and every choice on it is applied
+ *                  to the running product rather than stored and admired
  *   REVIEW         needs everything
+ *
+ * There was a SERVICES stage here, where a platform admin typed the
+ * workshop's priced jobs by hand. It is gone. Provisioning already
+ * creates a full standard service catalogue for the workshop's category
+ * from the master datasets -- `provisionCatalog` reports its
+ * `servicesCreated` alongside the parts it creates -- so the stage asked
+ * for a second, worse copy of a list the product already has, and the
+ * owner's Pricing page is where those prices are edited afterwards.
  *
  * Every stage answers the same three questions, and they are fields
  * rather than prose in a template so no stage can quietly ship without
@@ -35,7 +44,7 @@ export const ONBOARDING_STAGE_IDS = [
   "POLICIES",
   "RESPONSIBILITY",
   "STRUCTURE",
-  "SERVICES",
+  "APPEARANCE",
   "REVIEW",
 ] as const;
 
@@ -102,11 +111,11 @@ export const ONBOARDING_STAGES: readonly OnboardingStage[] = [
     changes: "Creates real branches and stores, and grants each branch the stores it may draw from.",
   },
   {
-    id: "SERVICES",
-    title: "Services",
-    what: "The named jobs this workshop sells, and what each one costs.",
-    why: "A price typed fresh onto every job is a price that drifts between staff, and the running total has nothing to look up.",
-    changes: "Creates real catalogue prices the running invoice reads from the first job onward. Optional — a workshop can price as it goes.",
+    id: "APPEARANCE",
+    title: "Appearance",
+    what: "How this workshop's own pages look, and how its staff move around them.",
+    why: "A workshop tablet on a bay floor and a desktop at a twelve-branch dealership are not the same machine, and neither are the people using them.",
+    changes: "Skins every page in this workshop's colours, sets where the navigation lives, whether staff start in light or dark, and how tightly the screens are packed.",
   },
   {
     id: "REVIEW",

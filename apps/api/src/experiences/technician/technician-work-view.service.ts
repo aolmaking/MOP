@@ -18,6 +18,7 @@ import type { TechnicianHistoryBrief } from "../../systems/operations/history/wo
 import { SpecializationService, type DefinitionSummary, type EntrySummary } from "../../systems/people/specialization/specialization.service";
 import { ConcurrentModificationError, InspectionRepository } from "../../systems/operations/inspection/inspection.repository";
 import { InspectionAggregate } from "../../systems/operations/inspection/domain/inspection.aggregate";
+import { PriceCatalogService } from "../../systems/finance/price-catalog.service";
 
 export interface TechnicianJob {
   readonly workOrderId: string;
@@ -744,6 +745,7 @@ export class TechnicianWorkViewService {
     private readonly capabilities: CapabilityResolutionService,
     private readonly specialization?: SpecializationService,
     private readonly inspectionRepo?: InspectionRepository,
+    private readonly prices?: PriceCatalogService,
   ) {}
 
   async myWork(staffUserId: string, tenantId: string): Promise<readonly TechnicianJob[]> {
@@ -1230,13 +1232,19 @@ export class TechnicianWorkViewService {
         name: string;
         sku?: string;
         quantity: number;
-        unitPrice: number;
+        /** Ignored when the workshop's own catalogue knows the part. */
+        unitPrice?: number;
+        /** The subsystem it was attached to, so approving one finding orders its parts. */
+        findingCode?: string;
       }>;
       services?: Array<{
         id?: string;
-        name: string;
-        laborPrice: number;
+        /** `serviceName`, matching the work card, the quote builder and the stored JSON. */
+        serviceName: string;
+        /** Ignored when the workshop's own price catalogue knows the service. */
+        laborPrice?: number;
         hours?: number;
+        findingCode?: string;
       }>;
       note?: string;
     },
@@ -1250,15 +1258,75 @@ export class TechnicianWorkViewService {
 
     const nowIso = new Date().toISOString();
     const currentFields = (inspection?.fields as Record<string, any>) ?? {};
+    /** Why the inspection aggregate is not SUBMITTED, when it is not. */
+    let aggregateSubmitRefusal: string | null = null;
 
-    const partsTotal = (dto.parts ?? []).reduce(
-      (sum, p) => sum + (Number(p.unitPrice) || 0) * (Number(p.quantity) || 1),
+    // What the workshop charges, asked of the workshop.
+    //
+    // These numbers used to be whatever the browser posted: the client sent
+    // `unitPrice` and `laborPrice` and the server multiplied them, so the
+    // figure a customer approved was set by the tablet rather than by the
+    // catalogue the owner maintains. A technician session could name any
+    // price, and turning on `technicianPriceVisible = false` -- which removes
+    // prices from the technician's responses -- left the client with nothing
+    // to send, so the report reached the operator quoting zero.
+    //
+    // `InventoryItem.sellingPrice` answers for a part and
+    // `PriceCatalogEntry` for a service. A submitted price is used only for a
+    // line neither of them knows, which is the genuinely one-off case (a part
+    // fetched from outside, a labour charge the workshop has not catalogued),
+    // and each line records which of the two it was so the operator can see it.
+    const submittedParts = dto.parts ?? [];
+    const submittedServices = dto.services ?? [];
+
+    const catalogueParts = submittedParts.length
+      ? await this.prisma.inventoryItem.findMany({
+          where: {
+            tenantId,
+            OR: [
+              { sku: { in: submittedParts.map((p) => p.sku).filter((v): v is string => !!v) } },
+              { id: { in: submittedParts.map((p) => p.inventoryItemId).filter((v): v is string => !!v) } },
+            ],
+          },
+          select: { id: true, sku: true, sellingPrice: true },
+        })
+      : [];
+    const priceBySku = new Map(catalogueParts.map((row) => [row.sku, Number(row.sellingPrice)]));
+    const priceById = new Map(catalogueParts.map((row) => [row.id, Number(row.sellingPrice)]));
+
+    const servicePrices = this.prices
+      ? await this.prices.resolveMany(
+          tenantId,
+          submittedServices.map((s) => s.serviceName).filter(Boolean),
+        )
+      : new Map<string, { unitPrice: string; laborPrice: string | null }>();
+
+    const pricedParts = submittedParts.map((part) => {
+      const catalogued =
+        (part.sku ? priceBySku.get(part.sku) : undefined) ??
+        (part.inventoryItemId ? priceById.get(part.inventoryItemId) : undefined);
+      return {
+        ...part,
+        unitPrice: catalogued ?? (Number(part.unitPrice) || 0),
+        pricedFrom: catalogued === undefined ? ("SUBMITTED" as const) : ("CATALOGUE" as const),
+      };
+    });
+
+    const pricedServices = submittedServices.map((service) => {
+      const resolved = servicePrices.get(service.serviceName);
+      const catalogued = resolved ? Number(resolved.laborPrice ?? resolved.unitPrice) : undefined;
+      return {
+        ...service,
+        laborPrice: catalogued ?? (Number(service.laborPrice) || 0),
+        pricedFrom: catalogued === undefined ? ("SUBMITTED" as const) : ("CATALOGUE" as const),
+      };
+    });
+
+    const partsTotal = pricedParts.reduce(
+      (sum, p) => sum + p.unitPrice * (Number(p.quantity) || 1),
       0,
     );
-    const laborTotal = (dto.services ?? []).reduce(
-      (sum, s) => sum + (Number(s.laborPrice) || 0),
-      0,
-    );
+    const laborTotal = pricedServices.reduce((sum, s) => sum + s.laborPrice, 0);
     const grandTotal = partsTotal + laborTotal;
     const noteText = dto.note ?? currentFields.note ?? "";
     const updatedFields = {
@@ -1267,8 +1335,8 @@ export class TechnicianWorkViewService {
       submittedAt: nowIso,
       submittedBy: staffUserId,
       findings: dto.findings ?? currentFields.findings ?? [],
-      parts: dto.parts ?? currentFields.parts ?? [],
-      services: dto.services ?? currentFields.services ?? [],
+      parts: dto.parts ? pricedParts : (currentFields.parts ?? []),
+      services: dto.services ? pricedServices : (currentFields.services ?? []),
       note: noteText,
       findingsSummary: noteText || "Inspection findings and requirements submitted by technician",
       inspectionReport: noteText || "Inspection report completed and sent to Operator Desk",
@@ -1354,8 +1422,15 @@ export class TechnicianWorkViewService {
 
       try {
         aggregate.submit(staffUserId);
-      } catch {
-        // If incomplete targets exist, aggregate submit might be skipped in freeform mode
+      } catch (error) {
+        // The aggregate refuses to submit while any checkpoint is still
+        // uninspected. That is a real domain rule, and the screen lets a
+        // technician send a report after inspecting one checkpoint of
+        // twenty-four -- so this refusal is the normal case, not an edge one.
+        // It is recorded rather than discarded, and reported to the caller
+        // below, because the alternative is a UI that says "sent" over an
+        // inspection record still sitting at IN_PROGRESS.
+        aggregateSubmitRefusal = (error as Error).message;
       }
     }
 
@@ -1447,13 +1522,29 @@ export class TechnicianWorkViewService {
       select: { status: true },
     });
 
+    // The version that was actually stored, not the one the in-memory
+    // aggregate optimistically counted to. `repo.save` can decline to persist
+    // -- and did, on every inspection submitted from a partly-inspected
+    // vehicle -- so returning `aggregate.aggregateVersion` handed the client a
+    // number one ahead of the database, and its follow-up call answered
+    // `409 expected aggregateVersion 3, but current is 2`.
+    const persisted = await this.prisma.inspection.findFirst({
+      where: { workOrderId, tenantId },
+      orderBy: { startedAt: "desc" },
+      select: { fields: true },
+    });
+    const persistedFields = (persisted?.fields as Record<string, any>) ?? {};
+
     return {
       success: true,
       workOrderId,
       status: current?.status ?? "UNDER_INSPECTION",
       submittedAt: nowIso,
       pricing: { partsTotal, laborTotal, grandTotal },
-      aggregateVersion: aggregate.aggregateVersion,
+      aggregateVersion: Number(persistedFields.aggregateVersion ?? aggregate.aggregateVersion),
+      aggregateState: String(persistedFields.state ?? aggregate.state),
+      /** Null when the inspection record closed cleanly. */
+      aggregateSubmitRefusal,
     };
   }
 

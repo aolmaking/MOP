@@ -39,7 +39,21 @@ export class PricingPage {
 
   protected readonly showAddPrice = signal(false);
   protected readonly isEditing = signal(false);
-  protected readonly priceDraft = signal({ itemKey: '', itemType: 'SERVICE', unitPrice: 0, laborPrice: 0 });
+  protected readonly priceDraft = signal<{
+    itemKey: string;
+    itemType: string;
+    unitPrice: number;
+    laborPrice: number;
+    /**
+     * Empty means "not set", which is not the same as zero hours.
+     *
+     * Typed as `string | number` because that is what the control actually
+     * produces: `ngModel` on `<input type="number">` emits a number once the
+     * field parses and the empty string while it does not, so treating it as
+     * a string threw on `.trim()` and the save silently did nothing.
+     */
+    standardHours: string | number;
+  }>({ itemKey: '', itemType: 'SERVICE', unitPrice: 0, laborPrice: 0, standardHours: '' });
   protected readonly priceError = signal<PresentedError | null>(null);
 
   constructor() {
@@ -105,7 +119,7 @@ export class PricingPage {
   }
 
   protected openAddPrice(): void {
-    this.priceDraft.set({ itemKey: '', itemType: 'SERVICE', unitPrice: 0, laborPrice: 0 });
+    this.priceDraft.set({ itemKey: '', itemType: 'SERVICE', unitPrice: 0, laborPrice: 0, standardHours: '' });
     this.isEditing.set(false);
     this.priceError.set(null);
     this.showAddPrice.set(true);
@@ -118,6 +132,7 @@ export class PricingPage {
       itemType: item.itemType || 'SERVICE',
       unitPrice: rate,
       laborPrice: rate,
+      standardHours: item.standardHours ?? '',
     });
     this.isEditing.set(true);
     this.priceError.set(null);
@@ -128,12 +143,16 @@ export class PricingPage {
     const draft = this.priceDraft();
     this.priceError.set(null);
     const labor = Number(draft.laborPrice ?? draft.unitPrice ?? 0);
+    const hours = String(draft.standardHours ?? '').trim();
     this.api
       .setPrice({
         itemKey: draft.itemKey,
         itemType: draft.itemType || 'SERVICE',
         unitPrice: labor,
         laborPrice: labor,
+        // Blank clears it rather than storing a zero: "we have not set a time"
+        // and "this job takes no time" are different statements.
+        standardHours: hours === '' ? null : Number(hours),
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -145,21 +164,18 @@ export class PricingPage {
       });
   }
 
-  protected resolveStandardHours(itemKey: string): number {
-    const k = (itemKey || '').toLowerCase();
-    if (k.includes('battery') && k.includes('bms')) return 0.7;
-    if (k.includes('battery')) return 0.5;
-    if (k.includes('brake pad') && k.includes('front')) return 0.8;
-    if (k.includes('brake pad') && k.includes('rear')) return 1.0;
-    if (k.includes('brake') && k.includes('fluid')) return 0.8;
-    if (k.includes('caliper')) return 1.2;
-    if (k.includes('oil') && k.includes('filter')) return 0.6;
-    if (k.includes('spark') || k.includes('coil')) return 0.8;
-    if (k.includes('tire') || k.includes('alignment')) return 1.2;
-    if (k.includes('strut') || k.includes('shock')) return 1.8;
-    if (k.includes('compressor')) return 2.5;
-    if (k.includes('cylinder') || k.includes('overhaul')) return 4.0;
-    if (k.includes('chain')) return 1.3;
-    return 1.0;
+  /**
+   * How this workshop's estimate is shown, or that it has not made one.
+   *
+   * There was a `resolveStandardHours` here that produced a number by matching
+   * words in the service's name -- "battery" meant 0.5 hours, "compressor"
+   * 2.5, anything unrecognised 1.0 -- and the table rendered it beside a
+   * padlock captioned "Locked Operational Benchmark". Nothing was locked and
+   * nothing was a benchmark: every workshop in the product saw the same
+   * invented figures and none of them could correct one. The number now comes
+   * from the workshop's own catalogue row and this page is where it is set.
+   */
+  protected displayStandardHours(item: PriceCatalogItemView): string {
+    return item.standardHours === null ? 'Not set' : `${Number(item.standardHours)}h`;
   }
 }

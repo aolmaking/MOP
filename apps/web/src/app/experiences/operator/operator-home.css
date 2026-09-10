@@ -2190,3 +2190,48 @@
 .flex-2 {
   flex: 2;
 }
+
+/* --- the approval screen -------------------------------------------------
+   What the technician attached, shown as a list under the finding it belongs
+   to. Read-only on purpose: the operator approves a report, they do not write
+   one, so there are no steppers, no price inputs and no remove buttons here. */
+
+.finding-attached {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.finding-attached-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.finding-attached-name {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.finding-attached-qty,
+.finding-attached-price {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.finding-attached-price {
+  color: var(--text);
+}
+
+/* Said where the numbers are, because the operator can no longer change one. */
+.cost-provenance {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: 1.4;
+}

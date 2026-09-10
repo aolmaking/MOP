@@ -79,12 +79,7 @@ export type DraftFindingCode =
   | "POLICY_NOT_APPLICABLE"
   // responsibility
   | "CAPABILITY_HAS_NO_OPERATOR"
-  | "RESPONSIBILITY_NOT_ANSWERED"
-  // services
-  | "SERVICE_INCOMPLETE"
-  | "SERVICE_PRICE_INVALID"
-  | "DUPLICATE_SERVICE_NAME"
-  | "SERVICES_WITHOUT_FINANCE";
+  | "RESPONSIBILITY_NOT_ANSWERED";
 
 export interface DraftFinding {
   readonly code: DraftFindingCode;
@@ -126,7 +121,6 @@ export function validateDraft(draft: WorkshopDraft, planLimits?: PlanLimits): Dr
   validatePolicies(draft, add);
   validateResponsibility(draft, add);
   validateStructure(draft, planLimits, add);
-  validateServices(draft, add);
 
   const blockerCount = findings.filter((finding) => finding.severity === "BLOCKER").length;
   return {
@@ -468,69 +462,6 @@ function validateResponsibility(draft: WorkshopDraft, add: (finding: DraftFindin
       message: `"${question.question}" is unanswered — this workshop will expect to staff a ${humanRole(question.dedicatedRole)}.`,
       subject: question.capability,
     });
-  }
-}
-
-/**
- * Prices, checked as money rather than as text.
- *
- * A price crosses every API boundary in MOP as a string of minor units,
- * never a JS number -- a float here would be a rounding error with a
- * customer's invoice on the other end of it.
- */
-function validateServices(draft: WorkshopDraft, add: (finding: DraftFinding) => void): void {
-  if (draft.services.length === 0) return;
-
-  if (!isCapabilityActive(draft.capabilities, "FINANCE_CORE")) {
-    add({
-      code: "SERVICES_WITHOUT_FINANCE",
-      severity: "BLOCKER",
-      stage: "SERVICES",
-      message:
-        "Services are priced here, but this workshop does not price work in MOP. Either turn pricing back on, or " +
-        "remove the services — a catalogue nothing can read from is a list that goes stale unnoticed.",
-      subject: "FINANCE_CORE",
-    });
-    return;
-  }
-
-  const seen = new Set<string>();
-  for (const service of draft.services) {
-    if (service.name.trim().length < 2) {
-      add({
-        code: "SERVICE_INCOMPLETE",
-        severity: "BLOCKER",
-        stage: "SERVICES",
-        message: "Every service needs a name staff will recognise on the job.",
-        subject: service.name,
-      });
-      continue;
-    }
-
-    // Minor units, as an integer string. Anything else -- "45.50",
-    // "45,50", a bare decimal point -- is refused here rather than
-    // silently truncated somewhere downstream.
-    if (!/^\d{1,12}$/.test(service.price)) {
-      add({
-        code: "SERVICE_PRICE_INVALID",
-        severity: "BLOCKER",
-        stage: "SERVICES",
-        message: `"${service.name}" has no valid price. A price is a whole number of ${draft.identity.currency || "currency"} minor units.`,
-        subject: service.name,
-      });
-    }
-
-    const identity = service.name.trim().toLowerCase();
-    if (seen.has(identity)) {
-      add({
-        code: "DUPLICATE_SERVICE_NAME",
-        severity: "BLOCKER",
-        stage: "SERVICES",
-        message: `Two services are both called "${service.name}". Staff picking one off a list cannot tell them apart.`,
-        subject: service.name,
-      });
-    }
-    seen.add(identity);
   }
 }
 

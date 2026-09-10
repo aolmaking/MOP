@@ -679,16 +679,29 @@
             </div>
 
             <!-- ═════════════════════════════════════════════════════════════ -->
-            <!-- ── TWO-COLUMN WORKSPACE: FINDINGS LEFT, SUMMARY & COST RIGHT ── -->
-            <!-- ═════════════════════════════════════════════════════════════ -->
+            <!-- ── THE DECISION ──────────────────────────────────────────── -->
+            <!--
+              The operator approves the technician's report, whole or in part.
+              That is the role, and this screen is now only that.
+
+              What used to be here: "Create Service" and "View Parts" on every
+              finding, "+ Add Finding", an editable parts table with quantity
+              steppers, an editable labour-rate column, "+ Add Service", and a
+              "Save Draft". Those make the front desk the author of the job --
+              rewriting what the technician observed, choosing parts they have
+              not seen, and setting labour rates on the customer's behalf. The
+              technician records the work; the operator says yes to it.
+
+              So the report is shown as it was submitted, read-only, with one
+              checkbox per finding and one button.
+            -->
             <div class="report-review-layout">
-              <!-- Left Column: Findings Cards with Icons, Badges, Pills & Approval Checkboxes -->
               <div class="report-review-main">
                 <div class="review-main-header">
                   <div class="main-header-left">
-                    <h3 class="review-section-title">Recorded Inspection Findings</h3>
+                    <h3 class="review-section-title">What the technician found</h3>
                     <span class="review-approval-badge">
-                      ✓ {{ approvedFindingsCount() }} of {{ editableFindings().length }} Approved
+                      {{ approvedFindingsCount() }} of {{ editableFindings().length }} approved
                     </span>
                   </div>
                   <div class="main-header-actions">
@@ -697,29 +710,21 @@
                       class="btn-toggle-all"
                       (click)="toggleAllFindings(approvedFindingsCount() !== editableFindings().length)"
                     >
-                      {{ approvedFindingsCount() === editableFindings().length ? 'Deselect All' : 'Select All' }}
-                    </button>
-                    <button type="button" class="btn-add-finding-sm" (click)="addFinding()">
-                      + Add Finding
+                      {{ approvedFindingsCount() === editableFindings().length ? 'Approve none' : 'Approve all' }}
                     </button>
                   </div>
                 </div>
 
                 @if (editableFindings().length === 0) {
                   <div class="empty-findings-box">
-                    <p>No inspection findings recorded. Click "+ Add Finding" to add one.</p>
+                    <p>This report has no findings. There is nothing here to approve.</p>
                   </div>
                 } @else {
                   <div class="findings-cards-stack">
                     @for (f of editableFindings(); track $index; let i = $index) {
-                      <div
-                        class="finding-item-card"
-                        [class.finding-item-card--approved]="isFindingApproved(i)"
-                      >
-                        <!-- Top Row: Checkbox, Icon, Info, Actions -->
+                      <div class="finding-item-card" [class.finding-item-card--approved]="isFindingApproved(i)">
                         <div class="finding-card-top">
-                          <!-- Approval Checkbox -->
-                          <div class="approval-chk-wrap" title="Confirm approval for this finding">
+                          <div class="approval-chk-wrap" title="Approve this finding for repair">
                             <input
                               type="checkbox"
                               class="approval-chk-input"
@@ -730,23 +735,6 @@
                             <label [for]="'chk-approve-' + i" class="approval-chk-label"></label>
                           </div>
 
-                          <!-- Category / Part Visual Icon -->
-                          <div
-                            class="finding-icon-container"
-                            [class]="'icon-type--' + getFindingIconType(f)"
-                          >
-                            @switch (getFindingIconType(f)) {
-                              @case ('oil') { <span class="cat-glyph">🛢️</span> }
-                              @case ('tire') { <span class="cat-glyph">🛞</span> }
-                              @case ('filter') { <span class="cat-glyph">♨️</span> }
-                              @case ('brake') { <span class="cat-glyph">🛑</span> }
-                              @case ('battery') { <span class="cat-glyph">🔋</span> }
-                              @case ('suspension') { <span class="cat-glyph">🪓</span> }
-                              @default { <span class="cat-glyph">🔍</span> }
-                            }
-                          </div>
-
-                          <!-- Content: Badge, Title, Description, Recommendation Pill -->
                           <div class="finding-card-body">
                             <div class="body-badge-row">
                               <span
@@ -759,417 +747,172 @@
                             <h4 class="finding-title-text">{{ getFindingTitle(f) }}</h4>
                             <p class="finding-obs-text">{{ f.description }}</p>
 
-                            <!-- Recommendation Tag matching Image 2 -->
-                            <div class="finding-rec-pill">
-                              <span class="rec-code-tag">{{ getFindingCode(f, i) }}</span>
-                              <span class="rec-text-tag">Recommended: {{ f.recommendedService || f.description }}</span>
-                            </div>
-                          </div>
-
-                          <!-- Action Buttons (Right) -->
-                          <div class="finding-card-actions">
-                            <button
-                              type="button"
-                              class="btn-card-action btn-create-srv"
-                              (click)="openServicePickerForFinding(i)"
-                              title="Add service labor procedure"
-                            >
-                              🔧 Create Service
-                            </button>
-                            <button
-                              type="button"
-                              class="btn-card-action btn-view-pts"
-                              (click)="openPosPickerForFinding(i)"
-                              title="Add part from POS inventory"
-                            >
-                              🛒 View Parts
-                            </button>
-                            <button
-                              type="button"
-                              class="btn-card-expand"
-                              (click)="toggleFindingExpanded(i)"
-                              [title]="isFindingExpanded(i) ? 'Collapse details' : 'Expand details'"
-                            >
-                              {{ isFindingExpanded(i) ? '▲' : '▼' }}
-                            </button>
+                            <!--
+                              What the technician attached to this finding, as
+                              they attached it. Read-only: the front desk is
+                              approving a report, not writing one.
+                            -->
+                            @if (partsForFinding(f).length > 0) {
+                              <ul class="finding-attached">
+                                @for (p of partsForFinding(f); track p.sku) {
+                                  <li class="finding-attached-line">
+                                    <span class="finding-attached-name">{{ p.name }}</span>
+                                    <span class="finding-attached-qty">× {{ p.quantity }}</span>
+                                    <span class="finding-attached-price">{{ money(lineTotal(p.unitPrice, p.quantity)) }}</span>
+                                  </li>
+                                }
+                              </ul>
+                            }
+                            @if (servicesForFinding(f).length > 0) {
+                              <ul class="finding-attached">
+                                @for (srv of servicesForFinding(f); track srv.serviceName) {
+                                  <li class="finding-attached-line">
+                                    <span class="finding-attached-name">🔧 {{ srv.serviceName }}</span>
+                                    <span class="finding-attached-price">{{ money(srv.laborPrice) }}</span>
+                                  </li>
+                                }
+                              </ul>
+                            }
                           </div>
                         </div>
-
-                        <!-- Expanded Section: Edit Finding, Linked Items -->
-                        @if (isFindingExpanded(i)) {
-                          <div class="finding-expanded-drawer">
-                            <div class="drawer-edit-row">
-                              <div class="drawer-input-field">
-                                <label class="drawer-label">Observation Details:</label>
-                                <input
-                                  type="text"
-                                  class="drawer-input"
-                                  [(ngModel)]="f.description"
-                                  placeholder="Describe the finding"
-                                />
-                              </div>
-                              <div class="drawer-input-field">
-                                <label class="drawer-label">Recommended Service:</label>
-                                <input
-                                  type="text"
-                                  class="drawer-input"
-                                  [(ngModel)]="f.recommendedService"
-                                  placeholder="e.g. Oil and filter change"
-                                />
-                              </div>
-                            </div>
-
-                            <div class="drawer-tools-row">
-                              <div class="sev-picker-inline">
-                                <span class="drawer-label">Severity:</span>
-                                <button
-                                  type="button"
-                                  class="sev-btn-sm sev-btn-sm--critical"
-                                  [class.active]="f.severity === 'CRITICAL' || f.severity === 'HIGH'"
-                                  (click)="updateFindingSeverity(i, 'CRITICAL')"
-                                >
-                                  Critical
-                                </button>
-                                <button
-                                  type="button"
-                                  class="sev-btn-sm sev-btn-sm--medium"
-                                  [class.active]="f.severity === 'MEDIUM'"
-                                  (click)="updateFindingSeverity(i, 'MEDIUM')"
-                                >
-                                  Medium
-                                </button>
-                                <button
-                                  type="button"
-                                  class="sev-btn-sm sev-btn-sm--low"
-                                  [class.active]="f.severity === 'LOW'"
-                                  (click)="updateFindingSeverity(i, 'LOW')"
-                                >
-                                  Low
-                                </button>
-                              </div>
-
-                              <button
-                                type="button"
-                                class="btn-drawer-remove"
-                                (click)="removeFinding(i)"
-                              >
-                                ✕ Delete Finding
-                              </button>
-                            </div>
-                          </div>
-                        }
                       </div>
                     }
                   </div>
                 }
 
-                <!-- Linked Parts & Services Tables below findings -->
-                @if (editableParts().length > 0) {
+                <!--
+                  Anything on the job that names no finding still has to be
+                  visible, or the operator would be approving something the
+                  screen never showed them.
+                -->
+                @if (unassignedParts().length > 0 || unassignedServices().length > 0) {
                   <section class="nested-quote-table-sec">
                     <div class="table-sec-head">
-                      <span class="table-sec-title">📦 Attached Parts ({{ editableParts().length }})</span>
-                      <button type="button" class="btn-add-nested" (click)="openPosPicker()">+ Add More Parts</button>
+                      <span class="table-sec-title">Also on this job</span>
                     </div>
-                    <table class="nested-mini-table">
-                      <thead>
-                        <tr>
-                          <th>SKU</th>
-                          <th>Part Name</th>
-                          <th class="col-center">Qty</th>
-                          <th class="col-right">Price</th>
-                          <th class="col-right">Subtotal</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        @for (p of editableParts(); track p.sku + $index; let pi = $index) {
-                          <tr>
-                            <td class="font-mono text-xs">{{ p.sku }}</td>
-                            <td><strong>{{ p.name }}</strong></td>
-                            <td class="col-center">
-                              <div class="qty-stepper-sm">
-                                <button type="button" (click)="updatePartQty(pi, p.quantity - 1)">-</button>
-                                <span>{{ p.quantity }}</span>
-                                <button type="button" (click)="updatePartQty(pi, p.quantity + 1)">+</button>
-                              </div>
-                            </td>
-                            <td class="col-right">{{ money(p.unitPrice) }}</td>
-                            <td class="col-right font-semibold">{{ money(lineTotal(p.unitPrice, p.quantity)) }}</td>
-                            <td class="col-right">
-                              <button type="button" class="btn-del-sm" (click)="removePart(pi)">✕</button>
-                            </td>
-                          </tr>
-                        }
-                      </tbody>
-                    </table>
-                  </section>
-                }
-
-                @if (editableServices().length > 0) {
-                  <section class="nested-quote-table-sec">
-                    <div class="table-sec-head">
-                      <span class="table-sec-title">🔧 Labor &amp; Services ({{ editableServices().length }})</span>
-                      <button type="button" class="btn-add-nested" (click)="openServicePicker()">+ Add Service</button>
-                    </div>
-                    <table class="nested-mini-table">
-                      <thead>
-                        <tr>
-                          <th>Service Description</th>
-                          <th class="col-right">Labor Rate ($)</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        @for (s of editableServices(); track s.serviceName + $index; let si = $index) {
-                          <tr>
-                            <td><strong>{{ s.serviceName }}</strong></td>
-                            <td class="col-right">
-                              <input
-                                type="number"
-                                class="input-labor-sm"
-                                min="0"
-                                [(ngModel)]="s.laborPrice"
-                              />
-                            </td>
-                            <td class="col-right">
-                              <button type="button" class="btn-del-sm" (click)="removeService(si)">✕</button>
-                            </td>
-                          </tr>
-                        }
-                      </tbody>
-                    </table>
+                    <ul class="finding-attached">
+                      @for (p of unassignedParts(); track p.sku) {
+                        <li class="finding-attached-line">
+                          <span class="finding-attached-name">{{ p.name }}</span>
+                          <span class="finding-attached-qty">× {{ p.quantity }}</span>
+                          <span class="finding-attached-price">{{ money(lineTotal(p.unitPrice, p.quantity)) }}</span>
+                        </li>
+                      }
+                      @for (srv of unassignedServices(); track srv.serviceName) {
+                        <li class="finding-attached-line">
+                          <span class="finding-attached-name">🔧 {{ srv.serviceName }}</span>
+                          <span class="finding-attached-price">{{ money(srv.laborPrice) }}</span>
+                        </li>
+                      }
+                    </ul>
                   </section>
                 }
               </div>
 
-              <!-- Right Column: Summary Card & Estimated Cost Card matching Image 2 -->
               <aside class="report-review-sidebar">
-                <!-- Summary Card -->
                 <div class="sidebar-card summary-breakdown-card">
                   <h3 class="sidebar-card-title">Summary</h3>
                   <div class="breakdown-list">
                     <div class="breakdown-row">
-                      <div class="breakdown-icon-wrap icon-wrap--blue">
-                        <span class="b-icon">👤</span>
-                      </div>
-                      <span class="b-label">Total Findings</span>
+                      <span class="b-label">Findings</span>
                       <strong class="b-value">{{ editableFindings().length }}</strong>
                     </div>
-
                     <div class="breakdown-row">
-                      <div class="breakdown-icon-wrap icon-wrap--red">
-                        <span class="b-icon">💧</span>
-                      </div>
                       <span class="b-label">Critical</span>
                       <strong class="b-value">{{ criticalCount() }}</strong>
                     </div>
-
                     <div class="breakdown-row">
-                      <div class="breakdown-icon-wrap icon-wrap--orange">
-                        <span class="b-icon">⚠️</span>
-                      </div>
                       <span class="b-label">High</span>
                       <strong class="b-value">{{ highCount() }}</strong>
                     </div>
-
                     <div class="breakdown-row">
-                      <div class="breakdown-icon-wrap icon-wrap--amber">
-                        <span class="b-icon">🔥</span>
-                      </div>
                       <span class="b-label">Medium</span>
                       <strong class="b-value">{{ mediumCount() }}</strong>
                     </div>
-
                     <div class="breakdown-row">
-                      <div class="breakdown-icon-wrap icon-wrap--green">
-                        <span class="b-icon">🌱</span>
-                      </div>
                       <span class="b-label">Low</span>
                       <strong class="b-value">{{ lowCount() }}</strong>
                     </div>
                   </div>
                 </div>
 
-                <!-- Estimated Cost Card -->
                 <div class="sidebar-card estimated-cost-card">
-                  <h3 class="sidebar-card-title">Estimated Cost</h3>
+                  <h3 class="sidebar-card-title">What this comes to</h3>
                   <div class="cost-rows-stack">
                     <div class="cost-item-row">
-                      <span class="cost-item-label">
-                        <span class="cost-icon">🚗</span> Parts
-                      </span>
+                      <span class="cost-item-label">Parts</span>
                       <strong class="cost-item-val">{{ money(quotePartsTotal()) }}</strong>
                     </div>
-
                     <div class="cost-item-row">
-                      <span class="cost-item-label">
-                        <span class="cost-icon">🪙</span> Labor
-                      </span>
+                      <span class="cost-item-label">Labour</span>
                       <strong class="cost-item-val">{{ money(quoteLaborTotal()) }}</strong>
                     </div>
-
                     <div class="cost-divider-line"></div>
-
                     <div class="cost-item-row cost-item-row--total">
                       <span class="cost-total-tag">Total <span class="cost-est-note">(est.)</span></span>
                       <strong class="cost-grand-val">{{ money(quoteGrandTotal()) }}</strong>
                     </div>
                   </div>
+                  <!--
+                    Said plainly, because the operator can no longer change a
+                    price on this screen and should know where these came from.
+                  -->
+                  <p class="cost-provenance">
+                    Priced from this workshop's own catalogue when the technician sent the report.
+                  </p>
                 </div>
 
-                <!-- Operator Notes Box -->
                 <div class="sidebar-card notes-card">
-                  <label class="notes-header-label" for="report-quote-notes">Operator Notes:</label>
+                  <label class="notes-header-label" for="report-quote-notes">A note for the technician</label>
                   <textarea
                     id="report-quote-notes"
                     class="notes-textarea"
-                    rows="2"
-                    placeholder="Notes or instructions for technician…"
+                    rows="3"
+                    placeholder="Anything the technician should know before starting…"
                     [(ngModel)]="quoteNote"
                   ></textarea>
                 </div>
               </aside>
             </div>
 
-            <!-- ═════════════════════════════════════════════════════════════ -->
-            <!-- ── BOTTOM BANNER: INSPECTION COMPLETE & APPROVE DONE ─────── -->
-            <!-- ═════════════════════════════════════════════════════════════ -->
             <div class="inspection-complete-banner">
               <div class="banner-content-left">
-                <div class="banner-icon-circle">
-                  <span class="banner-plane-icon">✈️</span>
-                </div>
                 <div class="banner-text-block">
-                  <h4 class="banner-heading">Inspection Review Complete?</h4>
+                  <h4 class="banner-heading">
+                    @if (approvedFindingsCount() === 0) {
+                      Nothing approved yet
+                    } @else if (approvedFindingsCount() === editableFindings().length) {
+                      Approving the whole report
+                    } @else {
+                      Approving {{ approvedFindingsCount() }} of {{ editableFindings().length }} findings
+                    }
+                  </h4>
                   <p class="banner-subtext">
-                    Review the technician findings and select the services and parts approved for repair.
+                    What you approve goes to the technician. What you leave unticked does not, and nothing
+                    is charged for it.
                   </p>
                 </div>
               </div>
 
               <div class="banner-actions-right">
                 <button type="button" class="btn-banner-cancel" (click)="closeReportModal()">
-                  Cancel
+                  Close
                 </button>
                 @if (canDispatchRepair()) {
                   <button
                     type="button"
-                    class="btn-banner-save"
-                    (click)="saveQuote()"
-                    [disabled]="isSavingQuote() || isDispatchingRepair()"
-                  >
-                    {{ isSavingQuote() ? 'Saving…' : '💾 Save Draft' }}
-                  </button>
-                  <button
-                    type="button"
                     class="btn-banner-send-done"
                     (click)="dispatchToRepair()"
-                    [disabled]="isSavingQuote() || isDispatchingRepair() || approvedFindingsCount() === 0"
+                    [disabled]="isDispatchingRepair() || approvedFindingsCount() === 0"
                     id="btn-approve-done-action"
                   >
-                    <span class="btn-plane-glyph">✓</span>
-                    <span>{{ isDispatchingRepair() ? 'Approving & Dispatching…' : '✓ Approve Selected & Dispatch Repair' }}</span>
+                    <span>{{ isDispatchingRepair() ? 'Approving…' : 'Approve and send to the technician' }}</span>
                   </button>
                 }
               </div>
             </div>
           </div>
         }
-      </div>
-    </div>
-  }
-
-  <!-- ================================================================= -->
-  <!-- POS INVENTORY CATALOG PICKER MODAL                                -->
-  <!-- ================================================================= -->
-  @if (isPosPickerOpen()) {
-    <div class="sub-modal-backdrop" (click)="closePosPicker()">
-      <div class="sub-modal-card" (click)="$event.stopPropagation()">
-        <div class="sub-modal-head">
-          <h3 class="sub-modal-title">Select Part from POS Inventory</h3>
-          <button type="button" class="btn-close-modal" (click)="closePosPicker()">✕</button>
-        </div>
-        <div class="sub-modal-body">
-          <div class="pos-search-bar">
-            <input
-              type="text"
-              class="search-input"
-              placeholder="Search parts by name, SKU, or category…"
-              [(ngModel)]="posSearch"
-              (keyup.enter)="searchPosCatalog()"
-            />
-            <button type="button" class="btn-search-action" (click)="searchPosCatalog()">
-              {{ isSearchingPos() ? 'Searching…' : 'Search' }}
-            </button>
-          </div>
-
-          @if (isSearchingPos()) {
-            <div class="state-loading"><span class="loading-spin"></span></div>
-          } @else if (posCatalogItems().length === 0) {
-            <p class="sec-empty">No items found. Try another search or use general inventory.</p>
-          } @else {
-            <div class="pos-items-grid">
-              @for (item of posCatalogItems(); track item.id || item.sku) {
-                <div class="pos-item-tile" (click)="addPartFromPos(item)">
-                  <div class="tile-header">
-                    <strong class="tile-name">{{ item.name }}</strong>
-                    <span class="tile-sku font-mono">{{ item.sku }}</span>
-                  </div>
-                  <div class="tile-footer">
-                    <span class="tile-price font-bold">{{ money(item.sellingPrice) }}</span>
-                    <button type="button" class="btn-select-part">+ Add</button>
-                  </div>
-                </div>
-              }
-            </div>
-          }
-        </div>
-      </div>
-    </div>
-  }
-
-  <!-- ================================================================= -->
-  <!-- SERVICE SELECTOR MODAL                                            -->
-  <!-- ================================================================= -->
-  @if (isServicePickerOpen()) {
-    <div class="sub-modal-backdrop" (click)="closeServicePicker()">
-      <div class="sub-modal-card" (click)="$event.stopPropagation()">
-        <div class="sub-modal-head">
-          <h3 class="sub-modal-title">Choose Service / Labor Procedure</h3>
-          <button type="button" class="btn-close-modal" (click)="closeServicePicker()">✕</button>
-        </div>
-        <div class="sub-modal-body">
-          <h4 class="preset-title">Standard Workshop Procedures</h4>
-          <div class="services-preset-list">
-            @for (srv of presetServices; track srv.name) {
-              <div class="service-preset-tile" (click)="addPresetService(srv)">
-                <span class="srv-name">🔧 {{ srv.name }}</span>
-                <span class="srv-labor font-bold">{{ money(srv.labor) }}</span>
-              </div>
-            }
-          </div>
-
-          <div class="custom-service-divider">
-            <span>or add custom service</span>
-          </div>
-
-          <div class="custom-service-row">
-            <input
-              type="text"
-              class="form-input flex-2"
-              placeholder="Custom service name"
-              [(ngModel)]="customServiceName"
-            />
-            <input
-              type="number"
-              class="form-input flex-1"
-              placeholder="Labor $"
-              min="0"
-              [(ngModel)]="customServiceLabor"
-            />
-            <button type="button" class="btn-search-action" (click)="addCustomService()">Add</button>
-          </div>
-        </div>
       </div>
     </div>
   }

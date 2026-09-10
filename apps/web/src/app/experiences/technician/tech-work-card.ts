@@ -23,6 +23,15 @@ import {
   type GroupedFitmentResponseView,
 } from './technician.api';
 import { WorkshopBrandingService } from '../../ui/workshop-branding.service';
+import {
+  clearFindingParts,
+  readDraftFindings,
+  readFindingParts,
+  writeDraftFindings,
+  writeFindingParts,
+  type AttachedFindingPart,
+  type FindingParts,
+} from './finding-parts.store';
 import { formatMoney } from '../../ui/money';
 import { Car3dViewerComponent } from '../../shared/components/car-3d/car-3d-viewer.component';
 import { AnimatedPartIconComponent } from '../../shared/components/animated-part/animated-part-icon.component';
@@ -206,13 +215,27 @@ export class TechWorkCard {
   protected readonly inspectionSubStep = signal<'checkpoints' | 'findings_and_parts' | 'awaiting_operator'>('checkpoints');
 
   // Findings list matching Photo 3
+  /**
+   * `flagged` is the difference between "I looked at this" and "this is wrong".
+   *
+   * Every inspected subsystem gets a card here, but only a card the technician
+   * actually gives a condition to is a finding. Without that distinction this
+   * screen submitted all twenty-four subsystems at MEDIUM, each carrying the
+   * checkpoint's prompt list as though the technician had observed it, and the
+   * server wrote a Fault for every one -- twenty-three defects invented on a
+   * car that had one.
+   */
   protected readonly findings = signal<Array<{
     id: string;
     partKey: string;
     title: string;
     description: string;
     severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    flagged: boolean;
   }>>([]);
+
+  /** Only these reach the report. */
+  protected readonly flaggedFindings = computed(() => this.findings().filter((f) => f.flagged));
 
   // Phase A-E Domain Aggregate Signals
   protected readonly inspectionAggregate = signal<any | null>(null);
@@ -231,54 +254,18 @@ export class TechWorkCard {
   protected readonly newFindingDesc = signal<string>('');
   protected readonly newFindingSeverity = signal<'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'>('MEDIUM');
 
-  protected readonly workshopInventory = signal<
-    Array<{ id: string; sku: string; name: string; category: string; unitPrice: number; stock: number }>
-  >([]);
-  protected readonly isInventoryLoading = signal<boolean>(false);
-  /** Why the stock list is empty, when it is empty because something failed. */
-  protected readonly inventoryError = signal<string | null>(null);
-
   // Two-Tier Context-Aware Smart Suggestions
   protected readonly smartSuggestions = signal<GroupedSuggestionsView | null>(null);
   protected readonly isSuggestionsLoading = signal<boolean>(false);
 
-  protected readonly posModalOpen = signal<boolean>(false);
-  protected readonly posSearchQuery = signal<string>('');
-  /**
-   * The workshop's own stock, and nothing else.
-   *
-   * There used to be a twelve-item `DEFAULT_POS_ITEMS` behind this — ceramic
-   * brake pads at 65, a battery at 165, a Michelin tyre at 110, each with an
-   * invented stock level — shown whenever the real inventory read came back
-   * empty, which includes when it failed and when the workshop genuinely has
-   * no catalogue yet. A technician could put a part the workshop has never
-   * stocked, at a price nobody set, onto a customer's job. It is the same
-   * defect as the fabricated prices on the operator's till (REC-040), one room
-   * over.
-   *
-   * An empty catalogue is now an empty list, and the modal says which of the
-   * three reasons it is.
-   */
-  protected readonly filteredPosCatalog = computed(() => {
-    const q = this.posSearchQuery().toLowerCase().trim();
-    const source = this.workshopInventory();
-    if (!q) return source;
-    return source.filter(
-      (item) =>
-        item.name.toLowerCase().includes(q) ||
-        item.sku.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q),
-    );
-  });
-
   protected readonly selectedPosParts = signal<
-    Array<{ sku: string; name: string; quantity: number; unitPrice: number }>
+    Array<{ sku: string; name: string; quantity: number; unitPrice: number | null }>
   >([]);
 
   // Per-Box Attached POS Parts & Services for Large Inspection Cards
-  protected readonly activeBoxPartKey = signal<string | null>(null);
   protected readonly openServicesBoxKey = signal<string | null>(null);
-  protected readonly boxAttachedParts = signal<Record<string, Array<{ sku: string; name: string; quantity: number; unitPrice: number; stock?: number }>>>({});
+  /** One shape, defined once, shared with the POS page that writes it. */
+  protected readonly boxAttachedParts = signal<FindingParts>({});
   protected readonly boxAttachedServices = signal<Record<string, Array<{ serviceName: string; laborPrice: number }>>>({});
 
   // Subsystem Predefined Service Suggestions
@@ -348,7 +335,7 @@ export class TechWorkCard {
     ],
   };
 
-  protected getPartsForFinding(partKey: string): Array<{ sku: string; name: string; quantity: number; unitPrice: number; stock?: number }> {
+  protected getPartsForFinding(partKey: string): readonly AttachedFindingPart[] {
     return this.boxAttachedParts()[partKey] ?? [];
   }
 
@@ -367,28 +354,72 @@ export class TechWorkCard {
     ];
   }
 
-  protected readonly totalEstimatedQuote = computed(() => {
-    let partsSum = 0;
-    for (const parts of Object.values(this.boxAttachedParts())) {
+  /**
+   * The parts and services this report will actually carry, deduplicated.
+   *
+   * `addServiceToBox` deliberately mirrors into `selectedServices` so the flat
+   * list is the union of every subsystem's attachments -- but the estimate used
+   * to add both collections, so attaching one 80 service quoted 160. The
+   * submitted payload deduplicated and the screen did not, which meant the
+   * number the technician read to the customer was never the number the
+   * operator received. One aggregation now feeds both.
+   */
+  /**
+   * `findingCode` rides along on every line.
+   *
+   * Without it the report reaches the operator as one flat list of parts and
+   * one of services, so "approve this finding but not that one" cannot mean
+   * anything about what gets ordered -- the front desk would be approving a
+   * subset of the findings and the whole of the bill. The technician attached
+   * each part to a subsystem; that is the fact, and it travels.
+   */
+  protected readonly aggregatedParts = computed(() => {
+    const bySku = new Map<
+      string,
+      { sku: string; name: string; quantity: number; unitPrice: number | null; findingCode: string | null }
+    >();
+    for (const [findingCode, parts] of Object.entries(this.boxAttachedParts())) {
       for (const p of parts) {
-        partsSum += p.unitPrice * p.quantity;
+        const existing = bySku.get(p.sku);
+        if (existing) bySku.set(p.sku, { ...existing, quantity: existing.quantity + p.quantity });
+        else
+          bySku.set(p.sku, {
+            sku: p.sku,
+            name: p.name,
+            quantity: p.quantity,
+            unitPrice: p.unitPrice,
+            findingCode,
+          });
       }
     }
     for (const p of this.selectedPosParts()) {
-      partsSum += p.unitPrice * p.quantity;
+      if (!bySku.has(p.sku)) bySku.set(p.sku, { ...p, findingCode: null });
     }
+    return Array.from(bySku.values());
+  });
 
-    let laborSum = 0;
-    for (const srvs of Object.values(this.boxAttachedServices())) {
-      for (const s of srvs) {
-        laborSum += s.laborPrice;
-      }
+  protected readonly aggregatedServices = computed(() => {
+    const byName = new Map<string, { serviceName: string; laborPrice: number; findingCode: string | null }>();
+    for (const [findingCode, services] of Object.entries(this.boxAttachedServices())) {
+      for (const s of services) byName.set(s.serviceName.toLowerCase(), { ...s, findingCode });
     }
     for (const s of this.selectedServices()) {
-      laborSum += s.laborPrice;
+      if (!byName.has(s.serviceName.toLowerCase()))
+        byName.set(s.serviceName.toLowerCase(), { ...s, findingCode: null });
     }
+    return Array.from(byName.values());
+  });
 
-    return { partsSum, laborSum, grandTotal: partsSum + laborSum };
+  /**
+   * `pricesKnown` is false when the workshop hides prices from technicians, and
+   * the screen says so instead of printing a total built from zeros.
+   */
+  protected readonly totalEstimatedQuote = computed(() => {
+    const parts = this.aggregatedParts();
+    const pricesKnown = parts.every((p) => p.unitPrice != null);
+    const partsSum = parts.reduce((sum, p) => sum + (p.unitPrice ?? 0) * p.quantity, 0);
+    const laborSum = this.aggregatedServices().reduce((sum, s) => sum + s.laborPrice, 0);
+    return { partsSum, laborSum, grandTotal: partsSum + laborSum, pricesKnown };
   });
 
   // Services & Labor
@@ -484,10 +515,14 @@ export class TechWorkCard {
       title: string;
       description: string;
       severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+      flagged: boolean;
     }> = [];
 
     for (const b of boxes) {
       const existing = this.findings().find((f) => f.partKey === b.partKey);
+      // The checkpoint's symptom prompts are what to look FOR, not what was
+      // found. They seed the description only once the technician flags the
+      // subsystem, so an unflagged card never carries them into the report.
       const desc = b.symptoms && b.symptoms.length > 0
         ? b.symptoms.join(', ')
         : `Comprehensive inspection and standards check for ${b.nameEn}.`;
@@ -497,19 +532,17 @@ export class TechWorkCard {
         title: b.nameEn,
         description: existing ? existing.description : desc,
         severity: existing ? existing.severity : 'MEDIUM',
+        flagged: existing ? existing.flagged : false,
       });
     }
 
-    if (list.length === 0) {
-      list.push(
-        { id: 'find-brakes', partKey: 'brakes', title: 'Brake System', description: 'Brake pads, rotors, caliper slide pins & brake fluid.', severity: 'CRITICAL' },
-        { id: 'find-battery', partKey: 'battery', title: 'Battery & Electrical', description: '12V battery state of health, terminals & alternator test.', severity: 'MEDIUM' },
-        { id: 'find-steering', partKey: 'steering', title: 'Steering & Mechanism', description: 'Rack, pinion, tie rod ends & power steering fluid.', severity: 'LOW' },
-        { id: 'find-tires', partKey: 'tires', title: 'Tires & Wheels', description: 'Tread depth, sidewall condition, balancing & TPMS sensor.', severity: 'MEDIUM' },
-      );
-    }
+    // No invented fallback. Four hardcoded findings -- brakes CRITICAL,
+    // battery MEDIUM, steering LOW, tires MEDIUM -- used to appear here for a
+    // vehicle with no checkpoints, which is to say for a vehicle nobody had
+    // looked at yet.
 
     this.findings.set(list);
+    this.persistFindings();
     this.inspectionSubStep.set('findings_and_parts');
     this.triggerSmartSuggestions();
   }
@@ -543,9 +576,12 @@ export class TechWorkCard {
         title,
         description: desc || 'Issue noted during technician inspection.',
         severity: sev,
+        // Typed in by hand, so it is a finding by definition.
+        flagged: true,
       },
     ]);
 
+    this.persistFindings();
     this.newFindingTitle.set('');
     this.newFindingDesc.set('');
     this.isAddFindingOpen.set(false);
@@ -568,11 +604,19 @@ export class TechWorkCard {
 
   protected removeFinding(id: string): void {
     this.findings.update((list) => list.filter((f) => f.id !== id));
+    this.persistFindings();
   }
 
   protected updateFindingSeverity(id: string, severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'): void {
-    this.findings.update((list) => list.map((f) => (f.id === id ? { ...f, severity } : f)));
+    this.findings.update((list) => list.map((f) => (f.id === id ? { ...f, severity, flagged: true } : f)));
+    this.persistFindings();
     this.triggerSmartSuggestions(undefined, undefined, severity);
+  }
+
+  /** "Nothing wrong here" -- the card stays on screen, out of the report. */
+  protected clearFindingSeverity(id: string): void {
+    this.findings.update((list) => list.map((f) => (f.id === id ? { ...f, flagged: false } : f)));
+    this.persistFindings();
   }
 
   // Two-Tier Context-Aware Smart Suggestions Trigger
@@ -796,7 +840,11 @@ export class TechWorkCard {
           if (existing) {
             return list.map((p) => (p.sku === part.sku ? { ...p, quantity: p.quantity + 1 } : p));
           }
-          return [...list, { sku: part.sku, name: part.partName, quantity: 1, unitPrice: Number(part.sellingPrice) || 0 }];
+          return [
+            ...list,
+            // Null, not 0, when the price is hidden -- see `openPosModal`.
+            { sku: part.sku, name: part.partName, quantity: 1, unitPrice: part.sellingPrice == null ? null : Number(part.sellingPrice) },
+          ];
         });
       },
       error: (err: PresentedError) => {
@@ -809,49 +857,18 @@ export class TechWorkCard {
     return this.selectedServices().some((s) => s.serviceName.toLowerCase() === serviceName.toLowerCase());
   }
 
-  // POS Parts helpers (Live Workshop Inventory)
-  protected openPosModal(): void {
-    this.posModalOpen.set(true);
-    if (this.workshopInventory().length === 0) {
-      this.isInventoryLoading.set(true);
-      this.api.getWorkshopInventory().subscribe({
-        next: (res) => {
-          this.isInventoryLoading.set(false);
-          if (res && res.items && res.items.length > 0) {
-            this.workshopInventory.set(
-              res.items.map((i) => ({
-                id: i.id,
-                sku: i.sku,
-                name: i.name,
-                category: 'Workshop Stock',
-                unitPrice: Number(i.sellingPrice) || 0,
-                stock: i.availableStock ?? 8,
-              })),
-            );
-          }
-        },
-        error: (err: PresentedError) => {
-          this.isInventoryLoading.set(false);
-          // Said out loud. Silently empty was indistinguishable from "this
-          // workshop stocks nothing", which is how the invented catalogue went
-          // unnoticed for as long as it did.
-          this.inventoryError.set(err.message ?? 'The workshop stock list could not be loaded.');
-        },
-      });
-    }
-  }
-
-  protected closePosModal(): void {
-    this.posModalOpen.set(false);
-    this.activeBoxPartKey.set(null);
-  }
-
-  protected openPosForFinding(finding: { partKey: string; title: string }): void {
-    this.activeBoxPartKey.set(finding.partKey);
-    this.posSearchQuery.set('');
-    this.openPosModal();
-  }
-
+  /**
+   * Attaching a part means going to the workshop's real Point of Sale.
+   *
+   * There was briefly a stock picker here -- a searchable list with an Attach
+   * button, living inside the card. It is gone. MOP already has a Point of
+   * Sale page, with the inventory manager's own category tree, attribute
+   * filters, search, stock levels and out-of-stock wording, and a second
+   * thinner version of it inside the work card is a second answer to one
+   * question. The finding's button routes to that page with
+   * `?finding=<subsystem>`; what the technician attaches there is written to
+   * `finding-parts.store` and read back by `restoreAttachedParts` below.
+   */
   protected toggleServicesForFinding(finding: { partKey: string; title: string }): void {
     const current = this.openServicesBoxKey();
     this.openServicesBoxKey.set(current === finding.partKey ? null : finding.partKey);
@@ -859,30 +876,6 @@ export class TechWorkCard {
       const slug = this.mapPartToSlug(finding.partKey);
       this.triggerSmartSuggestions(slug, 'FRONT');
     }
-  }
-
-  protected addPosPart(item: { sku: string; name: string; unitPrice: number; stock?: number }, quantity = 1): void {
-    const boxKey = this.activeBoxPartKey();
-    if (boxKey) {
-      this.boxAttachedParts.update((map) => {
-        const list = map[boxKey] ? [...map[boxKey]] : [];
-        const idx = list.findIndex((p) => p.sku === item.sku);
-        if (idx >= 0) {
-          list[idx] = { ...list[idx], quantity: list[idx].quantity + quantity };
-        } else {
-          list.push({ sku: item.sku, name: item.name, quantity, unitPrice: item.unitPrice, stock: item.stock ?? 10 });
-        }
-        return { ...map, [boxKey]: list };
-      });
-    }
-
-    this.selectedPosParts.update((list) => {
-      const existing = list.find((p) => p.sku === item.sku);
-      if (existing) {
-        return list.map((p) => (p.sku === item.sku ? { ...p, quantity: p.quantity + quantity } : p));
-      }
-      return [...list, { sku: item.sku, name: item.name, quantity, unitPrice: item.unitPrice }];
-    });
   }
 
   protected removePosPart(sku: string): void {
@@ -911,6 +904,7 @@ export class TechWorkCard {
       return { ...map, [partKey]: updated };
     });
     this.updatePosQuantity(sku, delta);
+    this.persistAttachedParts();
   }
 
   protected removeBoxPart(partKey: string, sku: string): void {
@@ -919,6 +913,7 @@ export class TechWorkCard {
       return { ...map, [partKey]: list };
     });
     this.removePosPart(sku);
+    this.persistAttachedParts();
   }
 
   protected addServiceToBox(partKey: string, name: string, price: number): void {
@@ -979,59 +974,42 @@ export class TechWorkCard {
    * Complete inspection, attach POS parts and services, and submit report directly to Operator.
    */
   protected submitFindingsAndPartsReport(): void {
-    const findingsList = this.findings().map((f) => ({
+    const findingsList = this.flaggedFindings().map((f) => ({
       description: `${f.title}: ${f.description}`,
       severity: f.severity,
       recommendedService: f.title,
       code: f.partKey,
     }));
 
-    // Aggregate all parts from all boxes
-    const allPartsMap = new Map<string, { sku: string; name: string; quantity: number; unitPrice: number }>();
-    for (const [_, parts] of Object.entries(this.boxAttachedParts())) {
-      for (const p of parts) {
-        const exist = allPartsMap.get(p.sku);
-        if (exist) exist.quantity += p.quantity;
-        else allPartsMap.set(p.sku, { ...p });
-      }
-    }
-    for (const p of this.selectedPosParts()) {
-      if (!allPartsMap.has(p.sku)) {
-        allPartsMap.set(p.sku, { ...p });
-      }
-    }
-    const partsList = Array.from(allPartsMap.values());
-
-    // Aggregate all services from all boxes
-    const allServicesMap = new Map<string, { serviceName: string; laborPrice: number }>();
-    for (const [_, srvs] of Object.entries(this.boxAttachedServices())) {
-      for (const s of srvs) {
-        allServicesMap.set(s.serviceName.toLowerCase(), { ...s });
-      }
-    }
-    for (const s of this.selectedServices()) {
-      if (!allServicesMap.has(s.serviceName.toLowerCase())) {
-        allServicesMap.set(s.serviceName.toLowerCase(), { ...s });
-      }
-    }
-    const servicesList = Array.from(allServicesMap.values());
+    // The same union the estimate on screen is computed from, so the customer
+    // is quoted what the operator receives.
+    const partsList = this.aggregatedParts();
+    const servicesList = this.aggregatedServices();
 
     const payload = {
-      findings:
-        findingsList.length > 0
-          ? findingsList
-          : [
-              {
-                description: 'Comprehensive inspection completed at technician workstation',
-                severity: 'LOW' as const,
-                recommendedService: 'Routine Maintenance',
-              },
-            ],
-      parts: partsList,
-      services: servicesList,
+      // An inspection that found nothing sends nothing. The placeholder that
+      // used to fill this in -- "Comprehensive inspection completed at
+      // technician workstation", severity LOW -- became a Fault row, so a clean
+      // vehicle acquired a defect. Where it belongs is the note.
+      findings: findingsList,
+      // Names and quantities only -- the server prices them from the
+       // workshop's catalogue. See `submitInspectionReport` on the API side.
+      parts: partsList.map((p) => ({
+        sku: p.sku,
+        name: p.name,
+        quantity: p.quantity,
+        findingCode: p.findingCode ?? undefined,
+      })),
+      services: servicesList.map((s) => ({
+        serviceName: s.serviceName,
+        laborPrice: s.laborPrice,
+        findingCode: s.findingCode ?? undefined,
+      })),
       note:
         this.inspectionNote().trim() ||
-        'Inspection findings, required POS parts, and labor services documented by technician. Awaiting operator approval & repair dispatch.',
+        (findingsList.length === 0
+          ? 'Inspection completed. No subsystem was flagged as defective.'
+          : 'Inspection findings, required POS parts, and labor services documented by technician. Awaiting operator approval & repair dispatch.'),
     };
 
     this.isSubmittingReport.set(true);
@@ -1039,19 +1017,32 @@ export class TechWorkCard {
 
     // Call submitInspectionReport directly to transition work order and create faults
     this.api.submitInspectionReport(this.id(), payload).subscribe({
-      next: () => {
-        // Also call aggregate submission if initialized
-        this.api
-          .submitInspectionAggregate(this.id(), {
-            expectedVersion: this.aggregateVersion(),
-            technicianNotes: payload.note,
-          })
-          .subscribe({
-            next: () => {},
-            error: () => {},
-          });
+      next: (report) => {
+        // No second submit call.
+        //
+        // This used to fire `POST .../inspection/submit` as well, with a
+        // `technicianNotes` property the server rejects outright, subscribed
+        // as `next: () => {}, error: () => {}`. It answered 400 for every
+        // inspection ever submitted and nothing said so. Correcting the
+        // property name only moved the failure: the report endpoint has
+        // already tried to submit the aggregate by the time it answers, so the
+        // second call raced its own write and answered
+        // `409 expected aggregateVersion 3, but current is 2`.
+        //
+        // The report endpoint owns the submission. What it cannot do is close
+        // an inspection whose checkpoints are not all inspected, and it now
+        // says so instead of leaving a record at IN_PROGRESS behind a screen
+        // reading "Sent to Operator Desk".
+        this.aggregateVersion.set(report.aggregateVersion ?? this.aggregateVersion());
+        if (report.aggregateSubmitRefusal) {
+          this.actionError.set(
+            'The findings reached the operator, but the inspection record could not be closed: ' +
+              report.aggregateSubmitRefusal,
+          );
+        }
 
         this.isSubmittingReport.set(false);
+        clearFindingParts(this.id());
         this.inspectionSubStep.set('awaiting_operator');
         this.reportSubmittedSuccess.set(
           '✓ Inspection Report successfully sent to Operator Desk! Quotation awaiting review and dispatch.',
@@ -1200,13 +1191,44 @@ export class TechWorkCard {
     this.selectedPosParts.set([]);
     this.selectedServices.set([]);
     this.isAddFindingOpen.set(false);
-    this.posModalOpen.set(false);
     this.isAddServiceOpen.set(false);
     this.liveTrackingDetailsOpen.set(false);
   }
 
+  /**
+   * Parts attached on the Point of Sale page, brought back onto the card.
+   *
+   * The technician leaves this component to attach a part -- the finding's
+   * button opens the workshop's real POS -- so the list has to survive the
+   * round trip. `finding-parts.store` is the one place both pages write.
+   */
+  private restoreAttachedParts(): void {
+    const stored = readFindingParts(this.id());
+    if (Object.keys(stored).length > 0) this.boxAttachedParts.set(stored);
+
+    // The severities too. Attaching a part means leaving this component for
+    // the Point of Sale, and a technician who had marked the brakes CRITICAL
+    // came back to a card that had forgotten -- so the finding list, and which
+    // of them are flagged, travel with the parts.
+    const findings = readDraftFindings(this.id());
+    if (findings.length > 0) {
+      this.findings.set(findings.map((f) => ({ ...f })));
+      this.inspectionSubStep.set('findings_and_parts');
+    }
+  }
+
+  private persistFindings(): void {
+    writeDraftFindings(this.id(), this.findings());
+  }
+
+  /** Kept in step with storage, so a trip to the POS and back never loses one. */
+  private persistAttachedParts(): void {
+    writeFindingParts(this.id(), this.boxAttachedParts());
+  }
+
   protected load(): void {
     this.state.set('loading');
+    this.restoreAttachedParts();
     this.loadInspection();
     this.api.workCard(this.id()).subscribe({
       next: (card) => {

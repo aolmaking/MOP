@@ -92,12 +92,24 @@ export interface OperatorInspectionPart {
   name: string;
   quantity: number;
   unitPrice: number;
+  /**
+   * The finding this part was attached to on the technician's card.
+   *
+   * Absent on reports written before parts carried one, and on anything the
+   * technician added outside a finding. The approval screen shows those under
+   * "Also on this job" rather than silently dropping them.
+   */
+  findingCode?: string | null;
+  /** `CATALOGUE` when the workshop's own catalogue priced it. */
+  pricedFrom?: 'CATALOGUE' | 'SUBMITTED';
 }
 
 export interface OperatorInspectionService {
   id?: string;
   serviceName: string;
   laborPrice: number;
+  findingCode?: string | null;
+  pricedFrom?: 'CATALOGUE' | 'SUBMITTED';
 }
 
 export interface OperatorInspectionReportItem {

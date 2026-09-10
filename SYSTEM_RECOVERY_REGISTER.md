@@ -582,3 +582,64 @@ one question of the code and following the answer: *what reads this?*
 | Finance capabilities reachable by a person | invoice, payment | **+ refunds, discounts, job total** |
 | Duplicate business paths (same act, two routes) | 2 | **0** |
 | Swallowed errors in the operator's dispatch path | 6 | **0** |
+
+---
+
+## Final System Reality Audit
+
+The product was driven through a browser as every role, against two tenants, with
+every claim checked against the database. Full report:
+[`FINAL_SYSTEM_REALITY_AUDIT.md`](./FINAL_SYSTEM_REALITY_AUDIT.md).
+
+**39 defects found · 22 fixed and re-verified · 17 open, 4 of them
+production-blocking.**
+
+### Production-blocking, fixed
+
+| ID | Defect | Evidence |
+|---|---|---|
+| F-30 | The inspection report invented a defect for every subsystem — one observation produced **24 `Fault` rows**, each carrying a catalogue prompt as an observed defect | runtime + database |
+| F-26 | A refused approval still dispatched the repair: `400` to the operator, `APPROVED_FOR_WORK` and two tasks in the database | runtime + database |
+| F-39 | Cross-tenant write — one workshop's session created a `DiscountRequest` against another workshop's work order | runtime + database |
+| F-18 / F-19 | No part could ever be attached to a finding: every writer of the attached-parts list was unreferenced by the template, and the stock lookup called a route that 404s | runtime + code |
+
+### Production-blocking, open
+
+| ID | Defect | Why it is open |
+|---|---|---|
+| F-33 | An approved discount is never applied — the request carries an amount, `issueInvoice` accepts only a percent, and nothing applies one. The customer is billed in full on an immutable invoice | The fix needs an absolute invoice-level discount in `@mop/shared/money`, allocated across lines against tax, with the exact-match guard holding. Changing invoice arithmetic in a hurry is the class of change this audit exists to catch |
+| F-08 (part) | Inspection money is stored as JS floats in `Inspection.fields` and re-totalled as floats at approval | The authority half is fixed — parts are priced from the workshop's catalogue. The representation change ripples through the operator DTOs, the quote, the invoice and many specs |
+| F-11 | Labour prices are a 46-entry constant in the browser, and the API's suggestion engine takes no `tenantId` — an owner can set every labour price and the quote will not change | Wiring it to `PriceCatalogService` is a product decision about where suggestions come from |
+| F-20 (part) | The `schemaVersion 2` inspection aggregate refuses to submit while any checkpoint is uninspected, and the work card offers "Complete Inspection" after one of twenty-four | Either the completeness rule is wrong for this product or the card must stop offering the button. Not the auditor's call |
+
+### Data defects in the seed
+
+| ID | Defect |
+|---|---|
+| F-24 | Neither seeded tenant has a single `BranchWarehouseAccess` row, so no repair needing a part can be dispatched from the data every developer and demo starts from |
+| F-37 | `seed-demo.ts` writes `WarehouseStockBalance` directly with no `StockMovement`, making it a second writer of the balance table; five rows cannot be reproduced from the ledger |
+
+### Product changes made on the owner's instruction
+
+| Change | State |
+|---|---|
+| "Attach Parts (from POS)" opens the workshop's **real** Point of Sale, carrying the finding, with what is attached returning to the card | done, verified |
+| Operator UI rebuilt to the approval decision only — Create Service, View Parts, Add Finding, the editable parts and labour tables, Save Draft and both pickers removed | done, verified |
+| Partial approval now decides something: parts and services carry `findingCode`, and only the lines under ticked findings are dispatched and charged | done, verified (225.00 EGP → 0.00 EGP on unticking) |
+| Onboarding `SERVICES` stage deleted — provisioning already creates the category's standard catalogue | done |
+| `APPEARANCE` is its own stage: colours, navigation, sign-in appearance and density, each applied to the running product | done, verified |
+| Standard time is a real, editable `PriceCatalogEntry.standardHours` — it was computed in the browser from the service's name and shown under a padlock | done, verified |
+
+### Measured final state
+
+| Signal | Result |
+|---|---|
+| API suites · tests | **147 · 1403**, all passing |
+| Web tests | **421**, all passing |
+| Shared tests | **251**, all passing |
+| `pnpm typecheck` | **0 errors** |
+| eslint | **0 errors** (148 pre-existing `no-explicit-any` warnings) |
+| Architectural linters | **11 of 11**, including migration drift |
+| Work orders driven end to end | 4, one to `CLOSED` |
+| Stock balances replayed against the ledger | 1077 (5 unreproducible, all seed-written — F-37) |
+| Cross-tenant probes | 11 (10 refused; the 1 that succeeded is fixed) |

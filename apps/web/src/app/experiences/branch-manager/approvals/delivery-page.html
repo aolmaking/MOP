@@ -237,6 +237,7 @@
 
                   <!-- The press that actually closes the job. Everything
                        above this line was a read; this is the write. -->
+                  @if (mayRelease()) {
                   <button
                     appButton
                     variant="primary"
@@ -247,6 +248,11 @@
                   >
                     {{ releasing() === row.workOrderId ? 'Releasing…' : 'Hand over' }}
                   </button>
+                  } @else {
+                    <p class="row-note">
+                      Ready to leave. A branch manager hands the keys over.
+                    </p>
+                  }
                 </li>
               }
             </ul>

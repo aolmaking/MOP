@@ -313,6 +313,13 @@ export class WorkshopCatalogProvisioningService {
             itemType: "SERVICE",
             unitPrice: new Prisma.Decimal(service.unitPrice),
             laborPrice: new Prisma.Decimal(service.laborPrice),
+            // The master catalogue's own figure, so a workshop starts with a
+            // real estimate for each job rather than nothing -- and can change
+            // it on the Pricing page, which is the whole point of storing it.
+            standardHours:
+              service.standardHours === undefined || service.standardHours === null
+                ? null
+                : new Prisma.Decimal(service.standardHours),
             isActive: true,
           },
         });

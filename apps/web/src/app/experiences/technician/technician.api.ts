@@ -222,8 +222,15 @@ export interface PartCard {
   readonly imageUrl: string | null;
   readonly categoryId: string | null;
   readonly categoryName: string | null;
-  /** Money as a string, always. */
-  readonly sellingPrice: string;
+  /**
+   * Money as a string -- and **absent** when the workshop has turned
+   * `technicianPriceVisible` off, because restricted data is removed from the
+   * response rather than hidden in the browser. Optional here so the compiler
+   * forces every reader to decide what a priceless card means; the previous
+   * non-optional type let `sellingPrice.replace(...)` ship, which threw inside
+   * change detection and blanked the entire basket panel.
+   */
+  readonly sellingPrice?: string;
   readonly stockTracked: boolean;
   readonly onHand: number;
   readonly availability: 'IN_STOCK' | 'LOW' | 'OUT_OF_STOCK' | 'NOT_TRACKED';
@@ -289,6 +296,7 @@ export interface CatalogBrowseQuery {
   readonly attributes?: Readonly<Record<string, readonly string[]>>;
   readonly inStockOnly?: boolean;
   readonly page?: number;
+  readonly pageSize?: number;
 }
 
 /**
@@ -317,6 +325,7 @@ export function browseParams(query: CatalogBrowseQuery): Record<string, string> 
   if (attributes) params['attributes'] = attributes;
   if (query.inStockOnly) params['inStockOnly'] = 'true';
   if (query.page && query.page > 1) params['page'] = String(query.page);
+  if (query.pageSize) params['pageSize'] = String(query.pageSize);
   return params;
 }
 
@@ -570,20 +579,29 @@ export class TechnicianApi {
         recommendedService?: string;
         code?: string;
       }>;
+      /**
+        * No `unitPrice`: the server prices a part from the workshop's own
+        * catalogue. What the browser thinks a part costs is not evidence, and
+        * when the workshop hides prices from technicians the browser does not
+        * know at all.
+        */
       parts?: Array<{
         sku: string;
         name: string;
         quantity: number;
-        unitPrice?: number;
+        /** The subsystem this part was attached to, so approving one finding orders its parts. */
+        findingCode?: string;
       }>;
+      /** `laborPrice` is a fallback the server uses only for a service its price catalogue does not know. */
       services?: Array<{
         serviceName: string;
         laborPrice?: number;
+        findingCode?: string;
       }>;
       note?: string;
     },
-  ): Observable<{ success: boolean; workOrderId: string; submittedAt: string }> {
-    return this.http.post<{ success: boolean; workOrderId: string; submittedAt: string }>(
+  ): Observable<InspectionReportResult> {
+    return this.http.post<InspectionReportResult>(
       `/api/v1/technician/work-orders/${encodeURIComponent(workOrderId)}/submit-inspection-report`,
       payload,
     );
@@ -687,9 +705,15 @@ export class TechnicianApi {
     );
   }
 
+  /**
+   * `submissionNote`, not `technicianNotes`. The server rejects an unknown
+   * property outright, so the old name meant this call answered 400 every
+   * time and the aggregate was never submitted -- see the swallowed
+   * subscription this used to be called from.
+   */
   submitInspectionAggregate(
     workOrderId: string,
-    dto: { expectedVersion?: number; technicianNotes?: string },
+    dto: { expectedVersion?: number; submissionNote?: string },
   ): Observable<SubmitInspectionResult> {
     return this.http.post<SubmitInspectionResult>(
       `/api/v1/technician/work-orders/${workOrderId}/inspection/submit`,
@@ -833,6 +857,19 @@ export interface SubmitInspectionResult {
   readonly submittedAt?: string | null;
   readonly snapshot?: unknown;
   readonly aggregateVersion: number;
+}
+
+/** What `submit-inspection-report` answers. */
+export interface InspectionReportResult {
+  readonly success: boolean;
+  readonly workOrderId: string;
+  readonly submittedAt: string;
+  readonly status?: string;
+  readonly pricing?: { partsTotal: number; laborTotal: number; grandTotal: number };
+  readonly aggregateVersion?: number;
+  readonly aggregateState?: string;
+  /** Null when the inspection record closed cleanly; otherwise why it did not. */
+  readonly aggregateSubmitRefusal?: string | null;
 }
 
 export interface ResolvedFitmentItemView {

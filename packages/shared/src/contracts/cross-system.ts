@@ -351,6 +351,25 @@ export function isValidPhoneNumber(raw: string): boolean {
 
 export type NavigationLayoutType = "SIDEBAR" | "NAVBAR" | "BOTTOM_BAR";
 
+/**
+ * Which appearance a workshop's staff start in.
+ *
+ * SYSTEM follows the device. A workshop chooses this because the bay floor and
+ * the front desk are lit differently, and the person on a tablet under
+ * fluorescent light should not have to find the toggle every shift. An
+ * individual's own toggle still wins for them once they touch it.
+ */
+export type WorkshopThemeMode = "LIGHT" | "DARK" | "SYSTEM";
+
+/**
+ * How tightly this workshop's screens are packed.
+ *
+ * COMPACT trades whitespace for rows on screen. It is a real choice, not a
+ * preference: a service advisor scanning forty jobs and a technician tapping
+ * one card on a greasy tablet want opposite things.
+ */
+export type WorkshopDensity = "COMFORTABLE" | "COMPACT";
+
 // ---------------------------------------------------------------------------
 // 24 Canonical Vehicle Subsystems Taxonomy
 // ---------------------------------------------------------------------------

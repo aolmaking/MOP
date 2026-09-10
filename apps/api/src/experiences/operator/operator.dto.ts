@@ -127,6 +127,25 @@ export class QuotePartDto {
   @IsNumber()
   @Min(0)
   unitPrice!: number;
+  /**
+   * Where the price on this line came from: the workshop's own catalogue, or a
+   * figure submitted for a line no catalogue knows. Written by
+   * `submitInspectionReport` and carried through the operator's approval so the
+   * provenance of every quoted number survives to the approval record.
+   */
+  @IsOptional()
+  @IsIn(["CATALOGUE", "SUBMITTED"])
+  pricedFrom?: "CATALOGUE" | "SUBMITTED";
+  /**
+   * The finding this line was attached to on the technician's card.
+   *
+   * Carried through the approval so a partial approval means something: the
+   * operator ticks findings, and the parts and labour that belong to the
+   * unticked ones are neither dispatched nor charged.
+   */
+  @IsOptional()
+  @IsString()
+  findingCode?: string;
 }
 
 export class QuoteServiceDto {
@@ -147,6 +166,25 @@ export class QuoteServiceDto {
   @IsNumber()
   @Min(0)
   laborPrice!: number;
+  /**
+   * Where the price on this line came from: the workshop's own catalogue, or a
+   * figure submitted for a line no catalogue knows. Written by
+   * `submitInspectionReport` and carried through the operator's approval so the
+   * provenance of every quoted number survives to the approval record.
+   */
+  @IsOptional()
+  @IsIn(["CATALOGUE", "SUBMITTED"])
+  pricedFrom?: "CATALOGUE" | "SUBMITTED";
+  /**
+   * The finding this line was attached to on the technician's card.
+   *
+   * Carried through the approval so a partial approval means something: the
+   * operator ticks findings, and the parts and labour that belong to the
+   * unticked ones are neither dispatched nor charged.
+   */
+  @IsOptional()
+  @IsString()
+  findingCode?: string;
 
   @IsOptional()
   @IsNumber()

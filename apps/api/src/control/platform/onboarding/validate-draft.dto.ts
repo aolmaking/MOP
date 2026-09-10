@@ -1,7 +1,7 @@
 import { Type } from "class-transformer";
 import { ArrayMaxSize, IsArray, IsObject, IsOptional, IsString, Length, ValidateNested } from "class-validator";
 import type { CapabilityProfile, OperatingCategory, ResponsibilityAnswer, WorkshopDraft } from "@mop/shared";
-import { CreateWorkshopBranchDto, CreateWorkshopServiceDto, CreateWorkshopWarehouseDto } from "../create-workshop.dto";
+import { CreateWorkshopBranchDto, CreateWorkshopWarehouseDto } from "../create-workshop.dto";
 
 /**
  * A draft on its way to being checked, not created.
@@ -30,6 +30,8 @@ export class ValidateDraftDto {
   @IsOptional() @IsString() @Length(0, 40) themePalette?: string;
   @IsOptional() @IsString() @Length(0, 500) logoUrl?: string;
   @IsOptional() @IsString() @Length(0, 40) navigationLayout?: string;
+  @IsOptional() @IsString() @Length(0, 20) themeMode?: string;
+  @IsOptional() @IsString() @Length(0, 20) density?: string;
 
   @IsOptional() @IsString() @Length(0, 120) ownerFullName?: string;
   @IsOptional() @IsString() @Length(0, 200) ownerEmail?: string;
@@ -61,13 +63,6 @@ export class ValidateDraftDto {
   @Type(() => CreateWorkshopWarehouseDto)
   @ArrayMaxSize(200)
   warehouses?: CreateWorkshopWarehouseDto[];
-
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CreateWorkshopServiceDto)
-  @ArrayMaxSize(200)
-  services?: CreateWorkshopServiceDto[];
 }
 
 export function draftFromValidateDto(dto: ValidateDraftDto): WorkshopDraft {
@@ -106,11 +101,6 @@ export function draftFromValidateDto(dto: ValidateDraftDto): WorkshopDraft {
       name: warehouse.name,
       code: warehouse.code,
       branchCodes: warehouse.branchCodes ?? [],
-    })),
-    services: (dto.services ?? []).map((service) => ({
-      name: service.name,
-      price: service.price,
-      category: service.category,
     })),
   };
 }

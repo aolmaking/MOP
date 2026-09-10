@@ -1102,6 +1102,52 @@ export class OperatorService {
     // through the money module rather than the float arithmetic above.
     const depositDue = await this.depositFor(tenantId, grandTotal.toFixed(2));
 
+    // 4b. Everything this approval needs, checked before anything is written.
+    //
+    // The serving-warehouse check used to live inside the part loop at step 9,
+    // after the inspection had been stamped approved, after the lifecycle had
+    // already applied APPROVE, and after the repair tasks had been created --
+    // none of it in a transaction. So a branch with no store answered
+    // `400 branch_has_no_serving_warehouse` to the operator while the database
+    // kept the approval: the work order sat in APPROVED_FOR_WORK with two
+    // ASSIGNED tasks, an approved quote naming a part, and no reservation, no
+    // part request and no part line anywhere. The operator was told the job
+    // could not be dispatched; the technician found it dispatched.
+    //
+    // Resolving the catalogued parts here also removes the per-part lookups
+    // the loop used to do.
+    const warehouseId = await this.servingWarehouseId(tenantId, order.branchId);
+    const resolvedParts = new Map<number, { id: string; sku: string; name: string }>();
+    for (const [index, part] of approvedParts.entries()) {
+      let item: { id: string; sku: string; name: string } | null = null;
+      if (part.inventoryItemId) {
+        item = await this.prisma.inventoryItem.findFirst({
+          where: { id: part.inventoryItemId, tenantId },
+          select: { id: true, sku: true, name: true },
+        });
+      }
+      if (!item && part.sku) {
+        item = await this.prisma.inventoryItem.findFirst({
+          where: { sku: part.sku, tenantId },
+          select: { id: true, sku: true, name: true },
+        });
+      }
+      if (item) resolvedParts.set(index, item);
+    }
+
+    // A catalogued part with nowhere to draw it from is a configuration answer
+    // the workshop owes, not something to slide past. Booking the customer for
+    // a part no shelf was ever asked for is how the technician finds out at
+    // the bay.
+    if (resolvedParts.size > 0 && !warehouseId) {
+      throw new BadRequestException({
+        code: "branch_has_no_serving_warehouse",
+        message:
+          "This branch is not served by any store, so parts cannot be reserved for it. " +
+          "Link a warehouse to the branch before dispatching a repair that needs stock.",
+      });
+    }
+
     // 5. Persisted OperatorRepairApproval Record (Audit Trail)
     const approvalRecord: OperatorRepairApprovalRecord = {
       workOrderId,
@@ -1200,10 +1246,7 @@ export class OperatorService {
     let partsAllocated = 0;
     let partsRequested = 0;
 
-    // The shelf the technician on this job will actually walk to.
-    const warehouseId = await this.servingWarehouseId(tenantId, order.branchId);
-
-    for (const p of parts) {
+    for (const [partIndex, p] of parts.entries()) {
       const requiredQty = Math.max(1, Number(p.quantity) || 1);
       const unitPrice = new Prisma.Decimal(Number(p.unitPrice) || 0);
       const partName = p.name || "Replacement Part";
@@ -1227,40 +1270,9 @@ export class OperatorService {
         continue;
       }
 
-      // Resolve inventory item from master/tenant inventory
-      // Which catalogued part this quote line means, by id then by SKU.
-      //
-      // Behind an `as any` cast and a swallow, a failure here left
-      // `inventoryItem` null -- which reads downstream as "not a stocked part
-      // at all", so nothing was reserved, no shortfall was requested, and the
-      // customer was charged for a part no shelf had been asked for.
-      let inventoryItem: { id: string; sku: string; name: string } | null = null;
-      if (p.inventoryItemId) {
-        inventoryItem = await this.prisma.inventoryItem.findFirst({
-          where: { id: p.inventoryItemId, tenantId },
-          select: { id: true, sku: true, name: true },
-        });
-      }
-      if (!inventoryItem && p.sku) {
-        inventoryItem = await this.prisma.inventoryItem.findFirst({
-          where: { sku: p.sku, tenantId },
-          select: { id: true, sku: true, name: true },
-        });
-      }
-
-      // A catalogued part with nowhere to draw it from is a configuration
-      // answer the workshop owes, not something to slide past. Letting it fall
-      // through to the workshop-sourced path below would book the customer for
-      // a part that no shelf was ever asked for, and the technician would find
-      // out at the bay.
-      if (inventoryItem && !warehouseId) {
-        throw new BadRequestException({
-          code: "branch_has_no_serving_warehouse",
-          message:
-            "This branch is not served by any store, so parts cannot be reserved for it. " +
-            "Link a warehouse to the branch before dispatching a repair that needs stock.",
-        });
-      }
+      // Which catalogued part this quote line means, resolved at step 4b
+      // before anything was written.
+      const inventoryItem = resolvedParts.get(partIndex) ?? null;
 
       // If inventory item and warehouse exist, check stock balance
       if (inventoryItem && warehouseId) {

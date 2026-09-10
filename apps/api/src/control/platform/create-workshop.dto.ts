@@ -56,33 +56,6 @@ export class CreateWorkshopBranchDto {
   address?: string;
 }
 
-/**
- * A priced service the workshop starts with.
- *
- * Written as a real `PriceCatalogEntry` -- the same table the running
- * invoice resolves a line's price from -- so a service declared here can
- * be charged on the workshop's first job. Deliberately not an
- * onboarding-only list.
- */
-export class CreateWorkshopServiceDto {
-  @IsString()
-  @Length(2, 120)
-  name!: string;
-
-  /**
-   * Minor units, as a string. Money crosses every API boundary in MOP as
-   * text and never as a JS number -- a float here would be a rounding
-   * error with a customer's invoice on the other end of it.
-   */
-  @IsString()
-  @Matches(/^\d{1,12}$/, { message: "price must be a whole number of minor units, as a string" })
-  price!: string;
-
-  @IsOptional()
-  @IsString()
-  @Length(0, 60)
-  category?: string;
-}
 
 export class CreateWorkshopWarehouseDto {
   @IsString()
@@ -199,6 +172,21 @@ export class CreateWorkshopDto {
   @Length(0, 40)
   navigationLayout?: string;
 
+  /**
+   * The appearance this workshop's staff start in, and how tightly its screens
+   * are packed. Both are configured on the Appearance stage and both change
+   * the running product: `themeMode` decides what a member of staff sees on
+   * their first sign-in, and `density` sets `data-density`, which every shell
+   * reads for row height, control size and spacing.
+   */
+  @IsOptional()
+  @IsIn(["LIGHT", "DARK", "SYSTEM"])
+  themeMode?: "LIGHT" | "DARK" | "SYSTEM";
+
+  @IsOptional()
+  @IsIn(["COMFORTABLE", "COMPACT"])
+  density?: "COMFORTABLE" | "COMPACT";
+
   // -----------------------------------------------------------------
   // The workshop's actual shape
   //
@@ -260,12 +248,6 @@ export class CreateWorkshopDto {
   @ArrayMaxSize(200)
   warehouses?: CreateWorkshopWarehouseDto[];
 
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CreateWorkshopServiceDto)
-  @ArrayMaxSize(200)
-  services?: CreateWorkshopServiceDto[];
 }
 
 /** Runtime guards for the two free-shape maps above, used by the service. */

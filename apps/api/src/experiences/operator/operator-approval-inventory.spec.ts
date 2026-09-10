@@ -66,7 +66,7 @@ describe('End-to-End Inspection → Operator Final Approval → Inventory Flow',
                   { inventoryItemId: 'item-brake-pads', name: 'Ceramic Brake Pads', sku: 'BP-CER-01', quantity: 2, unitPrice: 75 },
                 ],
                 services: [
-                  { name: 'Replace Front Brake Pads', laborPrice: 100 },
+                  { serviceName: 'Replace Front Brake Pads', laborPrice: 100 },
                 ],
                 findings: [
                   { description: 'Front brake pads worn below 2mm', severity: 'CRITICAL', code: 'BRAKES_FRONT' },
@@ -122,6 +122,17 @@ describe('End-to-End Inspection → Operator Final Approval → Inventory Flow',
         findFirst: jest.fn().mockResolvedValue({ id: warehouseId, code: 'WH-MAIN', name: 'Main Central Warehouse' }),
       },
       inventoryItem: {
+        // The report is priced from the workshop's catalogue, so the technician
+        // service reads the catalogue in bulk before it stores anything. The
+        // selling prices here are the same ones the submissions below carry, so
+        // every figure this suite asserts still means what it meant -- what has
+        // changed is where the figure comes from.
+        findMany: jest.fn().mockImplementation(async () => [
+          { id: 'item-brake-pads', sku: 'BP-CER-01', name: 'Ceramic Brake Pads', sellingPrice: 75 },
+          { id: 'item-oil-filter', sku: 'OF-SYNT-09', name: 'Synthetic Oil Filter', sellingPrice: 30 },
+          { id: 'item-rotor', sku: 'BR-VENT-02', name: 'Ventilated Brake Rotor', sellingPrice: 120 },
+          { id: 'item-battery', sku: 'BAT-AGM-90', name: 'AGM Battery', sellingPrice: 220 },
+        ]),
         findFirst: jest.fn().mockImplementation(async ({ where }) => {
           if (where.id === 'item-brake-pads' || where.sku === 'BP-CER-01') {
             return { id: 'item-brake-pads', sku: 'BP-CER-01', name: 'Ceramic Brake Pads' };
@@ -284,7 +295,7 @@ describe('End-to-End Inspection → Operator Final Approval → Inventory Flow',
             { inventoryItemId: 'item-brake-pads', name: 'Ceramic Brake Pads', sku: 'BP-CER-01', quantity: 2, unitPrice: 75 },
           ],
           services: [
-            { name: 'Replace Front Brake Pads', laborPrice: 100 },
+            { serviceName: 'Replace Front Brake Pads', laborPrice: 100 },
           ],
           note: 'Technician verified wear on driver side',
         },

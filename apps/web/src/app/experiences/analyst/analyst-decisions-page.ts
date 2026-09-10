@@ -5,6 +5,7 @@ import { ButtonDirective } from '../../ui/button/button.directive';
 import { BarList, type BarListItem } from '../../ui/charts/bar-list/bar-list';
 import { KpiCard } from '../../ui/charts/kpi-card/kpi-card';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
+import { WorkshopBrandingService } from '../../ui/workshop-branding.service';
 import { AnalystApi, type DecisionsAnalyticsReport } from './analyst.api';
 import { SavedViewAction } from './saved-view-action';
 import { ExportAction } from './export-action';
@@ -30,10 +31,15 @@ export class AnalystDecisionsPage {
   protected readonly error = signal<PresentedError | null>(null);
   protected readonly data = signal<DecisionsAnalyticsReport | null>(null);
 
+  protected readonly branding = inject(WorkshopBrandingService);
+
   protected readonly money = computed(() => new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }));
 
   protected fmtMoney(value: number): string {
-    const currency = this.data()?.value?.currency ?? 'USD';
+    // Not USD. No tenant in this product is priced in dollars by default, and a
+    // report that silently relabels EGP as USD is worse than one that shows no
+    // code at all.
+    const currency = this.data()?.value?.currency ?? this.branding.activeWorkshop().currency ?? '';
     return `${this.money().format(value)} ${currency}`;
   }
 

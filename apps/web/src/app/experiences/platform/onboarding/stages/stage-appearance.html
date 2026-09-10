@@ -1,0 +1,139 @@
+<div class="onb-stage">
+  <fieldset class="onb-field onb-field--cards">
+    <legend>Workshop colours</legend>
+    <p class="onb-hint">
+      Skins every page this workshop's staff open — rails, buttons, badges and focus rings.
+    </p>
+    <div class="app-grid app-grid--palettes">
+      @for (pal of palettes; track pal.key) {
+        @let selected = palette() === pal.key;
+        <button
+          type="button"
+          class="onb-choice app-card"
+          [class.onb-choice--selected]="selected"
+          [attr.aria-pressed]="selected"
+          (click)="onPalette(pal.key)"
+        >
+          <span class="app-card-head">
+            <span class="app-swatch" [style.background]="pal.previewColor"></span>
+            <span class="app-tag">{{ pal.key }}</span>
+          </span>
+          <strong class="app-card-name">{{ pal.name }}</strong>
+          <span class="app-card-detail">{{ pal.description }}</span>
+        </button>
+      }
+    </div>
+  </fieldset>
+
+  <fieldset class="onb-field onb-field--cards">
+    <legend>Where the navigation lives</legend>
+    <p class="onb-hint">
+      Every page in this workshop inherits it. Staff learn one shape and keep it.
+    </p>
+    <div class="app-grid">
+      @for (opt of layouts; track opt.key) {
+        @let selected = layout() === opt.key;
+        <button
+          type="button"
+          class="onb-choice app-card"
+          [class.onb-choice--selected]="selected"
+          [attr.aria-pressed]="selected"
+          (click)="onLayout(opt.key)"
+        >
+          <span class="app-card-head">
+            <span class="app-icon">{{ opt.icon }}</span>
+            <strong class="app-card-name">{{ opt.name }}</strong>
+          </span>
+          <span class="app-card-detail">{{ opt.detail }}</span>
+        </button>
+      }
+    </div>
+  </fieldset>
+
+  <fieldset class="onb-field onb-field--cards">
+    <legend>What staff see when they sign in</legend>
+    <p class="onb-hint">
+      The workshop's starting point. Anyone can still switch their own screen, and their choice sticks.
+    </p>
+    <div class="app-grid">
+      @for (opt of modes; track opt.key) {
+        @let selected = mode() === opt.key;
+        <button
+          type="button"
+          class="onb-choice app-card"
+          [class.onb-choice--selected]="selected"
+          [attr.aria-pressed]="selected"
+          (click)="onMode(opt.key)"
+        >
+          <span class="app-card-head">
+            <span class="app-icon">{{ opt.icon }}</span>
+            <strong class="app-card-name">{{ opt.name }}</strong>
+          </span>
+          <span class="app-card-detail">{{ opt.detail }}</span>
+        </button>
+      }
+    </div>
+  </fieldset>
+
+  <fieldset class="onb-field onb-field--cards">
+    <legend>How tightly the screens are packed</legend>
+    <p class="onb-hint">
+      Changes row height, control size and spacing across every board and table in this workshop.
+    </p>
+    <div class="app-grid">
+      @for (opt of densities; track opt.key) {
+        @let selected = density() === opt.key;
+        <button
+          type="button"
+          class="onb-choice app-card"
+          [class.onb-choice--selected]="selected"
+          [attr.aria-pressed]="selected"
+          (click)="onDensity(opt.key)"
+        >
+          <span class="app-card-head">
+            <span class="app-icon">{{ opt.icon }}</span>
+            <strong class="app-card-name">{{ opt.name }}</strong>
+          </span>
+          <span class="app-card-detail">{{ opt.detail }}</span>
+        </button>
+      }
+    </div>
+  </fieldset>
+
+  <!--
+    The preview is rendered with the same four choices the workshop will run
+    under, so what is shown here is what is being configured rather than a
+    picture of it.
+  -->
+  <section class="app-preview" [attr.data-density]="density().toLowerCase()">
+    <header class="app-preview-head">
+      <span class="app-preview-label">This workshop, as staff will see it</span>
+      <span class="app-preview-badge">
+        {{ layout() }} · {{ mode() }} · {{ density() }}
+      </span>
+    </header>
+
+    <div class="app-preview-chrome" [class.app-preview-chrome--light]="mode() === 'LIGHT'">
+      <div class="app-preview-brand">
+        <span class="app-preview-mark" [style.background]="previewColor()">
+          {{ (store.draft().identity.name || 'W').charAt(0).toUpperCase() }}
+        </span>
+        <span class="app-preview-names">
+          <strong>{{ store.draft().identity.name || 'Your workshop name' }}</strong>
+          <span class="app-preview-slug">mop.app/w/{{ store.draft().identity.slug || 'slug' }}</span>
+        </span>
+      </div>
+      <nav class="app-preview-nav" [attr.data-layout]="layout()">
+        <span class="app-preview-nav-item">Home</span>
+        <span class="app-preview-nav-item">Board</span>
+        <span class="app-preview-nav-item">Stock</span>
+      </nav>
+    </div>
+
+    <ul class="app-preview-rows">
+      <li class="app-preview-row"><span>AUDIT-7788</span><span>Under inspection</span></li>
+      <li class="app-preview-row"><span>DEMO-2011</span><span>Ready for intake</span></li>
+      <li class="app-preview-row"><span>DEMO-6621</span><span>Payment pending</span></li>
+    </ul>
+  </section>
+</div>

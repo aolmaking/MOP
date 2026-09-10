@@ -176,9 +176,18 @@
   color: var(--text);
 }
 
-.catalog-error {
+.catalog-error,
+.cart-error {
   background: var(--danger-bg);
   color: var(--text);
+}
+
+/* The same refusal, restated inside the basket where the button is. */
+.cart-error {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
 }
 
 /* --- product cards -------------------------------------------------- */

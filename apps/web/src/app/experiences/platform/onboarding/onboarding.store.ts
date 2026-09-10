@@ -16,7 +16,6 @@ import {
   type CapabilityKey,
   type CapabilityStatus,
   type DraftBranch,
-  type DraftService,
   type DraftWarehouse,
   type WarehouseTopologyType,
   type OnboardingStageId,
@@ -429,23 +428,6 @@ export class OnboardingStore {
     });
   }
 
-  // --- services ----------------------------------------------------------
-
-  addService(service: DraftService): void {
-    this._draft.update((draft) => ({ ...draft, services: [...draft.services, service] }));
-  }
-
-  updateService(index: number, patch: Partial<DraftService>): void {
-    this._draft.update((draft) => ({
-      ...draft,
-      services: draft.services.map((service, i) => (i === index ? { ...service, ...patch } : service)),
-    }));
-  }
-
-  removeService(index: number): void {
-    this._draft.update((draft) => ({ ...draft, services: draft.services.filter((_, i) => i !== index) }));
-  }
-
   // --- submission --------------------------------------------------------
 
   /**
@@ -489,7 +471,9 @@ export class OnboardingStore {
       specializationPacks: draft.specializationPacks,
       branches: draft.branches,
       warehouses: draft.warehouses,
-      services: draft.services,
+      themeMode: draft.identity.themeMode,
+      density: draft.identity.density,
+      navigationLayout: draft.identity.navigationLayout,
     };
   }
 
@@ -519,7 +503,9 @@ export class OnboardingStore {
       specializationPacks: draft.specializationPacks,
       branches: draft.branches,
       warehouses: draft.warehouses,
-      services: draft.services,
+      navigationLayout: draft.identity.navigationLayout || undefined,
+      themeMode: draft.identity.themeMode || undefined,
+      density: draft.identity.density || undefined,
     };
   }
 

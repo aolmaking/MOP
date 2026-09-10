@@ -1881,6 +1881,13 @@ model PriceCatalogEntry {
   itemType      String
   unitPrice     Decimal   @db.Decimal(12, 2)
   laborPrice    Decimal?  @db.Decimal(12, 2)
+  // How long this job usually takes, in hours. Guidance, never a deadline:
+  // nothing gates on it and no technician is held to finishing inside it. It
+  // is here so the workshop can set its own number -- the page used to derive
+  // one in the browser by matching words in the service's name and show it
+  // with a padlock, which meant every workshop in the product was quoted the
+  // same made-up hours and none of them could change it.
+  standardHours Decimal?  @db.Decimal(5, 2)
   isActive      Boolean   @default(true)
   effectiveFrom DateTime  @default(now())
   effectiveTo   DateTime?

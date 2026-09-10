@@ -27,6 +27,12 @@ export interface PriceCatalogItemView {
   readonly itemType: string;
   readonly unitPrice: string;
   readonly laborPrice: string | null;
+  /**
+   * How long this job usually takes, in hours, as this workshop set it.
+   * Null means they have not said. It is guidance for planning and for what
+   * the technician sees -- nothing measures a technician against it.
+   */
+  readonly standardHours: string | null;
   readonly isActive: boolean;
   readonly effectiveFrom: string;
 }
@@ -54,6 +60,8 @@ export class PricingApi {
     itemType: string;
     unitPrice: number;
     laborPrice?: number;
+    /** Omit to leave the existing estimate alone; null clears it. */
+    standardHours?: number | null;
   }): Observable<PriceCatalogItemView> {
     return this.http.post<PriceCatalogItemView>('/api/v1/organization/finance-configuration/catalog', input);
   }

@@ -1,9 +1,7 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
-import { country, searchCountries, type CountryEntry, type OperatingCategory, WORKSHOP_PALETTES, type WorkshopPaletteKey, type NavigationLayoutType } from '@mop/shared';
+import { country, searchCountries, type CountryEntry, type OperatingCategory } from '@mop/shared';
 import { OnboardingStore } from '../onboarding.store';
 import type { OnboardingBlueprint } from '../onboarding.api';
-
-import { APP_PALETTES } from '../../../../ui/palettes';
 
 function deriveSlug(name: string): string {
   return name
@@ -33,7 +31,6 @@ function deriveSlug(name: string): string {
 export class StageIdentity {
   readonly blueprint = input.required<OnboardingBlueprint>();
   protected readonly store = inject(OnboardingStore);
-  protected readonly palettes = APP_PALETTES;
 
   protected readonly countryQuery = signal('');
   protected readonly countryOpen = signal(false);
@@ -133,11 +130,4 @@ export class StageIdentity {
     this.store.patchIdentity({ logoUrl: value });
   }
 
-  protected onPalette(key: WorkshopPaletteKey): void {
-    this.store.patchIdentity({ themePalette: key });
-  }
-
-  protected onLayout(layout: NavigationLayoutType): void {
-    this.store.patchIdentity({ navigationLayout: layout });
-  }
 }

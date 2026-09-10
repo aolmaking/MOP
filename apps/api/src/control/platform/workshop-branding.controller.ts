@@ -52,6 +52,11 @@ export class WorkshopBrandingPublicController {
       logoUrl: themeConfig.logoUrl ?? null,
       palette: themeConfig.palette ?? "crimson",
       navigationLayout: themeConfig.navigationLayout ?? "SIDEBAR",
+      // The workshop's own answers to "what do staff see when they sign in"
+      // and "how tightly are the screens packed". Defaults match the product's
+      // own, so a workshop configured before these existed is unchanged.
+      themeMode: themeConfig.themeMode ?? "DARK",
+      density: themeConfig.density ?? "COMFORTABLE",
     };
   }
 }

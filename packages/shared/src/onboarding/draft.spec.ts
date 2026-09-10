@@ -444,29 +444,14 @@ describe("country decides currency, timezone and the working week", () => {
   });
 });
 
-describe("services become real catalogue prices", () => {
-  it("refuses a price that is not a whole number of minor units", () => {
-    const result = validateDraft(
-      completeDraft({
-        capabilities: { MULTI_BRANCH: "DISABLED", MULTI_WAREHOUSE: "DISABLED" },
-        warehouses: [{ name: "Main store", code: "WH1", branchCodes: [] }],
-        services: [{ name: "Oil change", price: "450.00" }],
-      }),
-    );
-    expect(result.findings.map((f) => f.code)).toContain("SERVICE_PRICE_INVALID");
-  });
-
-  it("refuses a priced catalogue for a workshop that does no pricing", () => {
-    const result = validateDraft(
-      completeDraft({
-        capabilities: { FINANCE_CORE: "DISABLED", BILLING: "DISABLED", MULTI_BRANCH: "DISABLED", MULTI_WAREHOUSE: "DISABLED" },
-        warehouses: [{ name: "Main store", code: "WH1", branchCodes: [] }],
-        services: [{ name: "Oil change", price: "45000" }],
-      }),
-    );
-    expect(result.findings.map((f) => f.code)).toContain("SERVICES_WITHOUT_FINANCE");
-  });
-});
+// The "services become real catalogue prices" suite lived here. It covered the
+// SERVICES onboarding stage's two validation rules -- a price that is not whole
+// minor units, and a priced catalogue on a workshop that does no pricing. The
+// stage was removed on the product owner's instruction: a workshop's standard
+// service catalogue is provisioned from the master dataset for its category,
+// and the owner edits those prices (and the standard time on each) from the
+// Pricing page. There is no longer a hand-typed list at creation for these
+// rules to be about, so the rules and their tests went together.
 
 describe("a workshop is never created with nowhere to take a job in", () => {
   it("warns rather than refuses when no branch is declared — one is created from the name", () => {
