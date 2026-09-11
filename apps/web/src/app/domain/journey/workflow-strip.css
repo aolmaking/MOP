@@ -561,3 +561,40 @@
     transition-duration: 0.01ms;
   }
 }
+
+/*
+  See `wrapStages` -- every step visible at once, for a screen read at
+  arm's length rather than operated.
+
+  `.stages` is `inline-size: max-content` precisely so the rail scrolls;
+  wrapping means undoing that and letting the row break instead. The
+  connector between stages is drawn on the item, so it keeps working
+  across a wrap.
+*/
+:host(.strip--wrap) .stages-rail {
+  /* No rail left to scroll: the row breaks instead. The connector is
+     drawn past the edge of the last stage in a row, so it is clipped
+     rather than allowed to push a scrollbar back onto the card. */
+  overflow: hidden;
+  scroll-snap-type: none;
+}
+
+:host(.strip--wrap) .stages {
+  inline-size: 100%;
+  max-inline-size: 100%;
+  flex-wrap: wrap;
+  row-gap: var(--space-4);
+}
+
+/*
+  Never fewer than two stages to a row.
+
+  The connector is drawn from one stage towards its neighbour, so a stage
+  sitting alone on its row trails a line into empty space and the strip
+  becomes a tall column of dots. Capping the basis at 45% of the row
+  guarantees a neighbour at every width, without naming a width.
+*/
+:host(.strip--wrap) .stage {
+  flex: 1 1 min(8.5rem, 45%);
+  min-inline-size: 0;
+}

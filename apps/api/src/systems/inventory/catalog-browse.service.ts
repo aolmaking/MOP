@@ -69,6 +69,25 @@ export interface BrowseQuery {
   /** attributeId -> chosen valueIds. AND across attributes, OR within one. */
   readonly attributes?: Readonly<Record<string, readonly string[]>>;
   readonly inStockOnly?: boolean;
+  /**
+   * Restricts the result to these SKUs.
+   *
+   * Used by "fits this car": the caller resolves which parts the fitment
+   * rules say suit the vehicle on the job, and the catalogue narrows to
+   * them. An empty array is an empty catalogue, not an absent filter --
+   * "nothing fits this car" is an answer, and silently browsing the whole
+   * workshop instead would be a filter that looks on and is off.
+   */
+  readonly skus?: readonly string[];
+  /**
+   * "Fits this car": the marque on the job.
+   *
+   * An item is kept when the workshop said it fits this marque, when the
+   * workshop said it fits everything, or -- for the thousands catalogued
+   * before anyone was asked -- when the fitment rules name its SKU. The
+   * caller resolves that last set and passes it as `skus`.
+   */
+  readonly fitsMake?: string;
   readonly page?: number;
   readonly pageSize?: number;
 }
@@ -117,7 +136,14 @@ export class CatalogBrowseService {
     const categoryIds = categoryId ? await this.withDescendants(tenantId, categoryId) : null;
 
     const selections = this.normaliseSelections(input.attributes);
-    const where = this.itemWhere(tenantId, { query, categoryIds, selections, inStockOnly: input.inStockOnly });
+    const where = this.itemWhere(tenantId, {
+      query,
+      categoryIds,
+      selections,
+      inStockOnly: input.inStockOnly,
+      skus: input.skus,
+      fitsMake: input.fitsMake,
+    });
 
     const [rows, total, categories, filters] = await Promise.all([
       this.prisma.inventoryItem.findMany({
@@ -137,7 +163,17 @@ export class CatalogBrowseService {
         },
       }),
       this.prisma.inventoryItem.count({ where }),
-      this.categoryTree(tenantId, { query, selections, inStockOnly: input.inStockOnly }),
+      // The counts have to be the counts under the filter that is on.
+      // Without the vehicle here, "Brakes 21" was the whole workshop's
+      // brakes while the grid showed the three that fit this car, and
+      // tapping the category produced a list that contradicted its badge.
+      this.categoryTree(tenantId, {
+        query,
+        selections,
+        inStockOnly: input.inStockOnly,
+        skus: input.skus,
+        fitsMake: input.fitsMake,
+      }),
       this.filtersFor(tenantId, { categoryIds, query, selections, inStockOnly: input.inStockOnly }),
     ]);
 
@@ -238,6 +274,8 @@ export class CatalogBrowseService {
       categoryIds: string[] | null;
       selections: { attributeId: string; valueIds: string[] }[];
       inStockOnly?: boolean;
+      skus?: readonly string[];
+      fitsMake?: string;
       skipAttributeId?: string;
     },
   ): Prisma.InventoryItemWhereInput {
@@ -251,6 +289,27 @@ export class CatalogBrowseService {
       // the workshop marked unusable on a work order is not merely
       // greyed out -- it is not in the result at all.
       workOrderUsable: true,
+      /*
+        "Fits this car", answered from the workshop's own catalogue first.
+
+        Three ways an item survives: this workshop said it fits this
+        marque, this workshop said it fits everything, or the static
+        fitment rules name its SKU (`skus`) -- which is the fallback for
+        every item catalogued before anyone was asked what it fits. An
+        item with no answer from either source is left out, because
+        "nobody knows" is not "yes".
+      */
+      ...(ctx.fitsMake
+        ? {
+            OR: [
+              { fitsMakes: { has: ctx.fitsMake } },
+              { fitsMakes: { has: "universal" } },
+              ...(ctx.skus && ctx.skus.length > 0 ? [{ sku: { in: [...ctx.skus] } }] : []),
+            ],
+          }
+        : ctx.skus
+          ? { sku: { in: [...ctx.skus] } }
+          : {}),
       ...(ctx.categoryIds ? { catalogCategoryId: { in: ctx.categoryIds } } : {}),
       ...(ctx.inStockOnly
         ? { OR: [{ stockTracked: false }, { stockBalances: { some: { availableQty: { gt: 0 } } } }] }
@@ -291,7 +350,13 @@ export class CatalogBrowseService {
    */
   private async categoryTree(
     tenantId: string,
-    ctx: { query: string | null; selections: { attributeId: string; valueIds: string[] }[]; inStockOnly?: boolean },
+    ctx: {
+      query: string | null;
+      selections: { attributeId: string; valueIds: string[] }[];
+      inStockOnly?: boolean;
+      skus?: readonly string[];
+      fitsMake?: string;
+    },
   ): Promise<BrowseCategoryNode[]> {
     const [categories, tallies] = await Promise.all([
       this.prisma.catalogCategory.findMany({

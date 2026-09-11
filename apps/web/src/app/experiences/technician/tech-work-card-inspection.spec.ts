@@ -71,6 +71,7 @@ async function render(result: WorkCard, apiOverrides: Record<string, unknown> = 
     reportBlocker: vi.fn(() => of({})),
     recordInspection: vi.fn(() => of({})),
     createFault: vi.fn(() => of({ id: 'fault1' })),
+    raiseExtraWork: vi.fn(() => of({ faultId: 'fault1', sentToFrontDesk: true })),
     partsCatalog: vi.fn(() => of({ items: [], total: 0, categories: [] })),
     journey: vi.fn(() => of(journeyFixture())),
     requestPart: vi.fn(() => of({})),
@@ -125,13 +126,13 @@ describe('the technician card decides which stage it is on', () => {
     expect(element.querySelector('.studio-inspection-page')).not.toBeNull();
     // And does not show the repair workspace: the tasks, the finish checklist
     // and the blocker tools belong to a job that is authorised.
-    expect(element.querySelector('.repair-stage-page')).toBeNull();
+    expect(element.querySelector('.bay')).toBeNull();
   });
 
   it('repairs a job once the work is approved', async () => {
     const { element } = await render(card({ status: 'APPROVED_FOR_WORK' }));
 
-    expect(element.querySelector('.repair-stage-page')).not.toBeNull();
+    expect(element.querySelector('.bay')).not.toBeNull();
     expect(element.querySelector('.studio-inspection-page')).toBeNull();
   });
 
@@ -140,7 +141,7 @@ describe('the technician card decides which stage it is on', () => {
     // somebody else owes the next move.
     const { element } = await render(card({ status: 'AWAITING_CUSTOMER_APPROVAL' }));
 
-    expect(element.querySelector('.repair-stage-page')).not.toBeNull();
+    expect(element.querySelector('.bay')).not.toBeNull();
   });
 });
 
@@ -181,7 +182,7 @@ describe('what the inspection stage tells the technician about the car', () => {
     (element.querySelector('#btn-toggle-live-header') as HTMLButtonElement).click();
     fixture.detectChanges();
 
-    const box = element.querySelector('.expanded-complaint-box');
+    const box = element.querySelector('.bay-complaint');
     expect(box).not.toBeNull();
     expect(box!.textContent).toContain('Grinding noise when braking downhill');
   });
@@ -193,7 +194,7 @@ describe('what the inspection stage tells the technician about the car', () => {
     (element.querySelector('#btn-toggle-live-header') as HTMLButtonElement).click();
     fixture.detectChanges();
 
-    expect(element.querySelector('.expanded-complaint-box')).toBeNull();
+    expect(element.querySelector('.bay-complaint')).toBeNull();
   });
 });
 
@@ -308,11 +309,11 @@ describe('the repair side stays honest about what is holding the job', () => {
       }),
     );
 
-    expect(element.querySelector('.tools-locked-why')?.textContent).toContain(
+    expect(element.querySelector('.bay-locked')?.textContent).toContain(
       'Start and record the inspection before any repair work.',
     );
     // And the Start control is inert while it is locked.
-    expect((element.querySelector('.task-start-btn') as HTMLButtonElement).disabled).toBe(true);
+    expect((element.querySelector('.bay-task-btn--start') as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('unlocks the work when the server says it is unlocked', async () => {
@@ -325,18 +326,76 @@ describe('the repair side stays honest about what is holding the job', () => {
       }),
     );
 
-    expect(element.querySelector('.tools-locked')).toBeNull();
-    expect((element.querySelector('.task-start-btn') as HTMLButtonElement).disabled).toBe(false);
+    expect(element.querySelector('.bay-locked')).toBeNull();
+    expect((element.querySelector('.bay-task-btn--start') as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it('keeps the exception tools available while a job is in repair', async () => {
-    // Inspection and exception handling are separate concerns: a job that
-    // finished its inspection can still hit a real problem.
+  /**
+   * Rewritten, not weakened: a job in repair still has to be able to say
+   * something is wrong. What changed is what the two controls do.
+   *
+   * "I'm blocked" is gone on the workshop owner's instruction. It parked
+   * the job in a state only a manager could clear and told nobody what
+   * the technician had actually found. What replaces it is the honest
+   * version of the same act -- the finding goes to the front desk to be
+   * approved, the way an inspection report does.
+   */
+  it('keeps a way to say something is wrong while a job is in repair', async () => {
     const { element } = await render(card({ status: 'IN_PROGRESS' }));
 
+    // The shop, opened for this car.
+    expect(element.querySelector('#btn-bay-parts')).not.toBeNull();
+    // And a finding that reaches somebody who can approve it.
+    expect(element.querySelector('#btn-bay-found')).not.toBeNull();
+
     const labels = [...element.querySelectorAll('button')].map((b) => b.textContent?.trim() ?? '');
-    expect(labels.some((l) => l.includes("I'm blocked"))).toBe(true);
-    expect(labels.some((l) => l.includes('Found a fault'))).toBe(true);
+    expect(labels.some((l) => l.includes("I'm blocked"))).toBe(false);
+  });
+
+  /**
+   * The act that replaced "I'm blocked".
+   *
+   * A technician who takes a wheel off and finds a seized caliper is in
+   * the position the inspection report exists for: somebody has to
+   * approve it before the customer is charged. This pins that the card
+   * sends it, rather than writing a fault into a drawer nobody reads.
+   */
+  it('sends work found mid-repair to the front desk', async () => {
+    const { api, fixture, element } = await render(card({ status: 'IN_PROGRESS' }));
+
+    (element.querySelector('#btn-bay-found') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    // Typed the way a technician types it, through the field itself.
+    const what = element.querySelector('#found-what') as HTMLTextAreaElement;
+    what.value = 'The caliper is seized';
+    what.dispatchEvent(new Event('input'));
+    // Third of LOW / MEDIUM / HIGH / CRITICAL, in the order the card
+    // renders them.
+    const severities = element.querySelectorAll('.bay-sev-btn');
+    expect(severities).toHaveLength(4);
+    (severities[2] as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    (element.querySelector('#btn-send-front-desk') as HTMLButtonElement).click();
+
+    expect(api.raiseExtraWork).toHaveBeenCalledWith('wo1', {
+      description: 'The caliper is seized',
+      severity: 'HIGH',
+      recommendedService: 'The caliper is seized',
+    });
+  });
+
+  it('refuses to send an empty finding', async () => {
+    const { api, fixture, element } = await render(card({ status: 'IN_PROGRESS' }));
+
+    (element.querySelector('#btn-bay-found') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    // Nothing typed: the front desk would receive a finding that says
+    // nothing, and would have to walk to the bay to ask what it was.
+    expect((element.querySelector('#btn-send-front-desk') as HTMLButtonElement).disabled).toBe(true);
+    expect(api.raiseExtraWork).not.toHaveBeenCalled();
   });
 
   it('does not put inspection controls on the repair side', async () => {

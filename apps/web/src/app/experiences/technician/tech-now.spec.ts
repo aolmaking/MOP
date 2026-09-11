@@ -8,14 +8,25 @@ import { TechnicianApi, type TechnicianJob } from './technician.api';
 /**
  * The technician's queue.
  *
- * This file used to describe a different page: a single "Now" hero panel for
- * one server-chosen active job, read from an `active()` endpoint. Both are
- * gone -- the page reads `myWork()` and shows the whole assigned queue with
- * the in-bay job marked -- and the spec was never rewritten, so every test in
- * it failed on `this.api.myWork is not a function` and then on selectors for
- * markup that no longer exists. The capability did not disappear with the
- * design: "what am I on right now" is the `queue-item--active` row and the
- * "in bay" count. These describe that.
+ * Rewritten against the rebuilt page, not weakened: the queue was
+ * reorganised around what the technician *does* with a job -- the car in
+ * their hands lifted out as a single card, everything else under "Start
+ * these" or "Waiting on someone else" -- so the selectors moved wholesale.
+ * Every guarantee the old tests held is re-expressed below against the
+ * markup that exists.
+ *
+ * Two are deliberately gone, and both because the capability was removed
+ * on the workshop owner's instruction to simplify this page as far as it
+ * will go:
+ *
+ *  - "filters to one kind of job without losing the others from the count"
+ *  - "says the filter is empty rather than that the queue is"
+ *
+ * The five filter pills (All / Ready / Inspection / In Progress / Blocked)
+ * no longer exist. Filtering made reading the price of admission to the
+ * page and hid whichever jobs the pill did not select; the grouping shows
+ * every job at once. These tests are not deleted for being inconvenient --
+ * they describe a control the page no longer has.
  */
 function makeJob(overrides: Partial<TechnicianJob> = {}): TechnicianJob {
   return {
@@ -68,87 +79,174 @@ describe('TechNow', () => {
 
   it('shows each job by the things a technician identifies a car by', async () => {
     const { element } = await renderTechNow({
-      jobs: [makeJob({ complaint: 'Vibration in steering wheel' })],
+      jobs: [
+        makeJob({ workOrderId: 'bay', active: true }),
+        makeJob({
+          workOrderId: 'next',
+          active: false,
+          status: 'APPROVED_FOR_WORK',
+          identifier: 'XYZ-9911',
+          complaint: 'Vibration in steering wheel',
+          myOpenTaskCount: 2,
+        }),
+      ],
     });
 
-    const item = element.querySelector('.queue-item') as HTMLElement;
-    expect(item).not.toBeNull();
-    expect(item.textContent).toContain('ABC-1234');
-    expect(item.textContent).toContain('Kareem Tarek');
-    expect(item.textContent).toContain('Vibration in steering wheel');
-    expect(item.textContent).toContain('2 tasks remaining');
+    const row = element.querySelector('.row') as HTMLElement;
+    expect(row).not.toBeNull();
+    expect(row.textContent).toContain('XYZ-9911');
+    expect(row.textContent).toContain('Vibration in steering wheel');
+    // How much is left, as a digit rather than the sentence "2 tasks
+    // remaining" -- a quantity to see, not a phrase to read.
+    expect(text(element, '.row-left')).toContain('2');
   });
 
-  it('marks the car that is actually in the bay', async () => {
+  it('draws the marque of the car, and invents one for nothing', async () => {
     const { element } = await renderTechNow({
-      jobs: [makeJob({ workOrderId: 'bay', active: true }), makeJob({ workOrderId: 'waiting', active: false, status: 'REGISTERED' })],
+      jobs: [
+        makeJob({ workOrderId: 'known', active: false, status: 'REGISTERED', make: 'bmw', category: 'CARS' }),
+        makeJob({ workOrderId: 'unknown', active: false, status: 'REGISTERED', make: null, category: 'CARS' }),
+      ],
     });
 
-    const rows = [...element.querySelectorAll('.queue-item')];
-    expect(rows).toHaveLength(2);
-    expect(rows[0].classList.contains('queue-item--active')).toBe(true);
-    expect(rows[1].classList.contains('queue-item--active')).toBe(false);
-    expect(text(element, '.badge-chip--active')).toContain('1 in bay');
+    const marks = element.querySelectorAll('.row mop-vehicle-mark');
+    expect(marks).toHaveLength(2);
+    // The marque's own badge, drawn, for the car whose make the front desk
+    // recorded -- that is what a technician recognises from across a bay.
+    expect(marks[0].querySelector('.mark-art svg')).not.toBeNull();
+    // ...and no badge at all for the one nobody recorded. A guessed marque
+    // on the screen someone uses to confirm they have the right car is
+    // worse than an empty space.
+    expect(marks[1].querySelector('.mark-art')).toBeNull();
+    expect(marks[1].querySelector('.mark-word')).toBeNull();
+  });
+
+  it('marks the car that is actually in the bay, and shows it only once', async () => {
+    const { element } = await renderTechNow({
+      jobs: [
+        makeJob({ workOrderId: 'bay', active: true }),
+        makeJob({ workOrderId: 'waiting', active: false, status: 'REGISTERED' }),
+      ],
+    });
+
+    // The job in their hands is lifted out of the list entirely: it is the
+    // answer to "which car do I touch" most of the time.
+    const now = element.querySelector('.now') as HTMLAnchorElement;
+    expect(now).not.toBeNull();
+    expect(now.getAttribute('href')).toBe('/tech/card/bay');
+    expect(text(element, '.now-label')).toContain('Working now');
+
+    // And it is not also in the list below, which would read as two cars.
+    const rowLinks = [...element.querySelectorAll('.row')].map((row) => row.getAttribute('href'));
+    expect(rowLinks).toEqual(['/tech/card/waiting']);
   });
 
   it('says a job is blocked rather than leaving it looking like any other', async () => {
-    const { element } = await renderTechNow({ jobs: [makeJob({ blocked: true })] });
+    const { element } = await renderTechNow({
+      jobs: [makeJob({ active: false, blocked: true, status: 'IN_PROGRESS' })],
+    });
 
-    expect(element.querySelector('.queue-item--blocked')).not.toBeNull();
-    expect(text(element, '.badge-chip--danger')).toContain('1 blocked');
-    expect(text(element, '.state-badge')).toContain('Blocked');
+    expect(element.querySelector('.row--stop')).not.toBeNull();
+    // The word as well as the border: colour alone excludes a colour-blind
+    // technician and dies in daylight.
+    expect(text(element, '.row-state')).toContain('Stopped');
+    // And it is grouped under what the technician can do about it, which is
+    // nothing until somebody else moves.
+    expect(text(element, '.group-head')).toContain('Waiting on someone else');
   });
 
   it('names the state in words, not as a status code', async () => {
-    const { element } = await renderTechNow({ jobs: [makeJob({ status: 'UNDER_INSPECTION', active: false })] });
+    const { element } = await renderTechNow({
+      jobs: [makeJob({ status: 'UNDER_INSPECTION', active: false })],
+    });
 
-    const badge = text(element, '.state-badge');
-    expect(badge).not.toContain('UNDER_INSPECTION');
-    expect(badge.length).toBeGreaterThan(0);
-    expect(text(element, '.badge-chip--inspection')).toContain('1 inspection');
+    // An inspection they have open is the car in their hands, so it is the
+    // card at the top rather than a row.
+    const label = text(element, '.now-label');
+    expect(label).not.toContain('UNDER_INSPECTION');
+    expect(label).toContain('Checking now');
+  });
+
+  it('groups a job by what the technician does with it, not by its status name', async () => {
+    const { element } = await renderTechNow({
+      jobs: [
+        makeJob({ workOrderId: 'start', active: false, status: 'APPROVED_FOR_WORK' }),
+        makeJob({ workOrderId: 'parts', active: false, status: 'WAITING_PARTS' }),
+      ],
+    });
+
+    const headings = [...element.querySelectorAll('.group-head')].map((h) =>
+      h.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    expect(headings[0]).toContain('Start these');
+    expect(headings[1]).toContain('Waiting on someone else');
+
+    const groups = element.querySelectorAll('.group');
+    expect(groups[0].querySelector('.row')?.getAttribute('href')).toBe('/tech/card/start');
+    expect(groups[1].querySelector('.row')?.getAttribute('href')).toBe('/tech/card/parts');
+  });
+
+  /**
+   * Migrated from the deleted "My work" page, which held this guarantee
+   * on its own: every assigned job is present, including the ones nobody
+   * can move today. A queue that quietly drops the waiting jobs tells a
+   * technician their workload is smaller than it is.
+   */
+  it('never hides a job, including the ones waiting on someone else', async () => {
+    const { element } = await renderTechNow({
+      jobs: [
+        makeJob({ workOrderId: 'bay', active: true }),
+        makeJob({ workOrderId: 'ready', active: false, status: 'APPROVED_FOR_WORK' }),
+        makeJob({ workOrderId: 'parts', active: false, status: 'WAITING_PARTS' }),
+        makeJob({ workOrderId: 'customer', active: false, status: 'AWAITING_CUSTOMER_APPROVAL' }),
+        makeJob({ workOrderId: 'stopped', active: false, blocked: true }),
+      ],
+    });
+
+    const shown = [
+      element.querySelector('.now')?.getAttribute('href'),
+      ...[...element.querySelectorAll('.row')].map((row) => row.getAttribute('href')),
+    ];
+    expect(shown).toHaveLength(5);
+    expect(shown).toContain('/tech/card/parts');
+    expect(shown).toContain('/tech/card/customer');
+    expect(shown).toContain('/tech/card/stopped');
+  });
+
+  it('says how long the car has been standing', async () => {
+    const { element } = await renderTechNow({
+      jobs: [makeJob({ active: false, status: 'APPROVED_FOR_WORK', sinceHours: 50 })],
+    });
+
+    // The difference between the job that arrived an hour ago and the one
+    // that has been in the corner since Tuesday.
+    expect(text(element, '.row-since')).toContain('2 days');
+  });
+
+  it('does not head an empty group', async () => {
+    const { element } = await renderTechNow({
+      jobs: [makeJob({ workOrderId: 'start', active: false, status: 'APPROVED_FOR_WORK' })],
+    });
+
+    // A heading over nothing is one more thing to read past.
+    expect(element.querySelectorAll('.group')).toHaveLength(1);
   });
 
   it('opens the work card for the row that was pressed', async () => {
-    const { element } = await renderTechNow({ jobs: [makeJob({ workOrderId: 'wo-404' })] });
-
-    const link = element.querySelector('.queue-link') as HTMLAnchorElement;
-    expect(link.getAttribute('href')).toBe('/tech/card/wo-404');
-  });
-
-  it('filters to one kind of job without losing the others from the count', async () => {
-    const { element, fixture } = await renderTechNow({
-      jobs: [makeJob({ workOrderId: 'a', blocked: true }), makeJob({ workOrderId: 'b', blocked: false })],
+    const { element } = await renderTechNow({
+      jobs: [makeJob({ workOrderId: 'wo-404', active: false, status: 'REGISTERED' })],
     });
 
-    const blockedPill = [...element.querySelectorAll('.filter-pill')].find(
-      (pill) => pill.textContent?.trim() === 'Blocked',
-    ) as HTMLButtonElement;
-    blockedPill.click();
-    fixture.detectChanges();
-
-    expect(element.querySelectorAll('.queue-item')).toHaveLength(1);
-    // The heading still counts the whole queue: filtering is a view, not a
-    // claim about how much work the technician has.
-    expect(text(element, '.queue-title')).toContain('(2)');
-  });
-
-  it('says the filter is empty rather than that the queue is', async () => {
-    const { element, fixture } = await renderTechNow({ jobs: [makeJob({ blocked: false })] });
-
-    const blockedPill = [...element.querySelectorAll('.filter-pill')].find(
-      (pill) => pill.textContent?.trim() === 'Blocked',
-    ) as HTMLButtonElement;
-    blockedPill.click();
-    fixture.detectChanges();
-
-    expect(text(element, '.queue-empty')).toContain('No vehicles match the selected filter');
+    const link = element.querySelector('.row') as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('/tech/card/wo-404');
   });
 
   it('renders an empty queue without pretending there is work', async () => {
     const { element } = await renderTechNow({ jobs: [] });
 
-    expect(element.querySelector('.queue-item')).toBeNull();
-    expect(text(element, '.queue-title')).toContain('(0)');
+    expect(element.querySelector('.row')).toBeNull();
+    expect(element.querySelector('.now')).toBeNull();
+    expect(text(element, '.state-title')).toContain('No vehicles');
   });
 
   it('renders forbidden state when the user has no technician access', async () => {

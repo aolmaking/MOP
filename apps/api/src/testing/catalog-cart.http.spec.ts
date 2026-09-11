@@ -162,7 +162,11 @@ describe("Catalog-driven part requests (real HTTP, real Postgres)", () => {
     const res = await http(booted)
       .post("/api/v1/inventory/catalog")
       .set("Cookie", workshop.storekeeper.cookie)
-      .send(body);
+      // What a part fits is required at creation (see CatalogService.create).
+      // These fixtures are about carts, journeys and part loops, not about
+      // fitment, so they say the honest thing for a test double: it fits
+      // anything.
+      .send({ fitsMakes: ["universal"], ...body });
     expectCode(res, 201);
     return res.body.id;
   }
@@ -459,6 +463,8 @@ describe("Catalog-driven part requests (real HTTP, real Postgres)", () => {
       .post("/api/v1/inventory/catalog")
       .set("Cookie", shop.storekeeper.cookie)
       .send({
+        // Fitment is required at creation; these fixtures are not about it.
+        fitsMakes: ["universal"],
         sku: `LEAK-${SUFFIX}`,
         name: "Leaky part",
         itemType: "PART",
@@ -472,6 +478,8 @@ describe("Catalog-driven part requests (real HTTP, real Postgres)", () => {
       .post("/api/v1/inventory/catalog")
       .set("Cookie", shop.storekeeper.cookie)
       .send({
+        // Fitment is required at creation; these fixtures are not about it.
+        fitsMakes: ["universal"],
         sku: `LEAK2-${SUFFIX}`,
         name: "Leaky part 2",
         itemType: "PART",

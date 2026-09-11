@@ -823,7 +823,7 @@ async function createStuckJobs(tenantId: string, branchId: string, technicianSta
     { plate: "DEMO-6621", customer: "Tarek Selim", kind: "awaitingPayment" as const },
   ];
 
-  for (const job of jobs) {
+  for (const [jobIndex, job] of jobs.entries()) {
     // An account each, so the Customer Portal can be opened as the person
     // whose car is actually in the bay. Email is derived from the name so
     // the demo credentials are guessable from the job list itself.
@@ -847,7 +847,13 @@ async function createStuckJobs(tenantId: string, branchId: string, technicianSta
       },
     });
     const asset = await prisma.asset.create({
-      data: { tenantId, category: "CARS", plateNumber: job.plate, currentOwnerCustomerId: customer.id },
+      data: {
+        tenantId,
+        category: "CARS",
+        plateNumber: job.plate,
+        currentOwnerCustomerId: customer.id,
+        ...demoCar(jobIndex),
+      },
     });
 
     // Both halves, exactly as IntakeService writes them. currentOwnerCustomerId
@@ -1126,6 +1132,32 @@ const FINISHED_JOBS: readonly {
   { plate: "DEMO-2012", customer: "Waleed Hegazy", daysAgo: 80, services: [1], method: "CASH", paidFraction: 0 },
 ];
 
+/**
+ * A make and model for a demo vehicle.
+ *
+ * Seed vehicles carried neither, which left every demo car with no marque
+ * badge on the technician's queue and -- more importantly -- no marque for
+ * `VehicleFitmentService` to match parts on, so a demonstration of "what
+ * fits this car?" had nothing to answer with. Drawn from the same ids the
+ * fitment rules use (`applicableMakes` in `fitment-rules.dataset.ts`) and
+ * spread deterministically by index, so the demo covers several marques
+ * and the same plate always gets the same car.
+ */
+const DEMO_CARS = [
+  { make: "toyota", model: "Corolla", modelYear: 2021 },
+  { make: "hyundai", model: "Elantra", modelYear: 2019 },
+  { make: "bmw", model: "320i", modelYear: 2020 },
+  { make: "mercedes", model: "C 200", modelYear: 2018 },
+  { make: "kia", model: "Cerato", modelYear: 2022 },
+  { make: "honda", model: "Civic", modelYear: 2017 },
+  { make: "nissan", model: "Sunny", modelYear: 2021 },
+  { make: "volkswagen", model: "Passat", modelYear: 2016 },
+] as const;
+
+function demoCar(index: number) {
+  return DEMO_CARS[index % DEMO_CARS.length];
+}
+
 async function createFinancialHistory(tenantId: string, branchId: string): Promise<void> {
   const manager = await prisma.staffUser.findFirst({ where: { tenantId, role: "BRANCH_MANAGER" } });
   const issuedById = manager?.id ?? "seed-demo";
@@ -1137,7 +1169,13 @@ async function createFinancialHistory(tenantId: string, branchId: string): Promi
       data: { tenantId, fullName: job.customer, phone: `0101${Math.floor(Math.random() * 9_000_000 + 1_000_000)}` },
     });
     const asset = await prisma.asset.create({
-      data: { tenantId, category: "CARS", plateNumber: job.plate, currentOwnerCustomerId: customer.id },
+      data: {
+        tenantId,
+        category: "CARS",
+        plateNumber: job.plate,
+        currentOwnerCustomerId: customer.id,
+        ...demoCar(index),
+      },
     });
     await prisma.assetOwnershipHistory.create({
       data: { tenantId, assetId: asset.id, customerId: customer.id },

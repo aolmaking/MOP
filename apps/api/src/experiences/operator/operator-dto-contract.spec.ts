@@ -118,6 +118,25 @@ describe("operator DTO contract (the real pipe, the real page payloads)", () => 
       ).resolves.toBeDefined();
     });
 
+    /**
+     * A full inspection is a recorded decision, not an empty list.
+     *
+     * The work card falls back to reading system names out of the
+     * complaint when nothing was requested, so "Brake System: squeals when
+     * cold" would have narrowed a full inspection to the brakes -- the
+     * opposite of what the front desk chose.
+     */
+    it("carries an explicit full inspection through the intake", async () => {
+      const parsed = (await through(OperatorIntakeDto, {
+        assetId: "a1",
+        complaint: "Brake System & ABS: squeals when cold",
+        fullInspection: true,
+      })) as OperatorIntakeDto;
+
+      expect(parsed.fullInspection).toBe(true);
+      expect(parsed.inspectionParts).toBeUndefined();
+    });
+
     it("accepts a counter sale", async () => {
       await expect(
         through(OperatorPosOrderDto, { lines: [{ inventoryItemId: "i1", quantity: 2 }] }),

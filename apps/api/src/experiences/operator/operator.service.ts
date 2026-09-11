@@ -4,7 +4,7 @@ import { IntakeService } from "../../systems/operations/intake.service";
 import { CatalogBrowseService } from "../../systems/inventory/catalog-browse.service";
 import { StockService } from "../../systems/inventory/stock.service";
 import { PartRequestService } from "../../systems/inventory/part-request.service";
-import { WORK_ORDER_GRAPH, type SessionContext, percentage } from "@mop/shared";
+import { WORK_ORDER_GRAPH, findVehicleMake, type SessionContext, percentage } from "@mop/shared";
 import { type CategoryCode, Prisma, type WorkOrderStatus } from "@mop/database";
 import { WorkOrderLifecycleService, type LifecycleActor } from "../../systems/operations/work-order-lifecycle.service";
 import type {
@@ -24,8 +24,25 @@ export function isAwaitingOperatorReview(
   order: { status: string } | null | undefined,
   insp?: { fields?: any; state?: string } | null,
 ): boolean {
-  if (!order || order.status !== "UNDER_INSPECTION" || !insp) return false;
+  if (!order || !insp) return false;
   const fields = (insp.fields as Record<string, any>) ?? {};
+
+  /*
+    Work found after the job started.
+
+    A technician who takes a wheel off and finds a seized caliper is in
+    exactly the position the inspection report exists for -- somebody has
+    to say yes and the customer has to be charged -- but the job is
+    IN_PROGRESS by then, so it could never reach this queue. The
+    technician's only options were to do unauthorised work or to walk to
+    the front desk and describe it.
+
+    It arrives here the same way an inspection does, on the same screen,
+    and is approved by the same press.
+  */
+  if (fields.extraWorkPending === true) return true;
+
+  if (order.status !== "UNDER_INSPECTION") return false;
   return (
     insp.state === "SUBMITTED" ||
     insp.state === "OPERATOR_REVIEW" ||
@@ -35,11 +52,34 @@ export function isAwaitingOperatorReview(
   );
 }
 
+/**
+ * What to call the vehicle on the approval screen.
+ *
+ * The operator is confirming they are quoting the right car, so this says
+ * what it is -- "BMW 320i" -- rather than repeating the plate they can
+ * already see with the category in brackets after it. Falls back to the
+ * category alone when nobody recorded a make; it never guesses one.
+ */
+function describeVehicle(asset: {
+  category?: string | null;
+  make?: string | null;
+  model?: string | null;
+}): string {
+  const known = findVehicleMake(asset.make);
+  const words = [known?.label, asset.model?.trim() || null].filter((word): word is string => !!word);
+  if (words.length > 0) return words.join(" ");
+  return asset.category ? asset.category.replace(/_/g, " ") : "Vehicle";
+}
+
 export interface OperatorVehicleSummary {
   id: string;
   plateNumber: string | null;
   vinOrChassisNumber: string | null;
   category: string;
+  /** The VEHICLE_MAKES id, or null for an asset registered before the field existed. */
+  make: string | null;
+  model: string | null;
+  modelYear: number | null;
   ownedSince: string;
   ownerName: string | null;
   ownerPhone: string | null;
@@ -216,6 +256,9 @@ export class OperatorService {
           plateNumber: true,
           vinOrChassisNumber: true,
           category: true,
+          make: true,
+          model: true,
+          modelYear: true,
           createdAt: true,
           ownershipHistory: {
             where: { endedAt: null },
@@ -269,6 +312,9 @@ export class OperatorService {
         plateNumber: a.plateNumber,
         vinOrChassisNumber: a.vinOrChassisNumber,
         category: a.category,
+        make: a.make,
+        model: a.model,
+        modelYear: a.modelYear,
         ownedSince: a.ownershipHistory[0]?.startedAt ? a.ownershipHistory[0].startedAt.toISOString() : a.createdAt.toISOString(),
         ownerName: owner?.fullName ?? null,
         ownerPhone: owner?.phone ?? null,
@@ -338,6 +384,9 @@ export class OperatorService {
         plateNumber: true,
         vinOrChassisNumber: true,
         category: true,
+        make: true,
+        model: true,
+        modelYear: true,
         createdAt: true,
         ownershipHistory: {
           where: { endedAt: null },
@@ -382,6 +431,9 @@ export class OperatorService {
         plateNumber: a.plateNumber,
         vinOrChassisNumber: a.vinOrChassisNumber,
         category: a.category,
+        make: a.make,
+        model: a.model,
+        modelYear: a.modelYear,
         ownedSince: a.ownershipHistory[0]?.startedAt ? a.ownershipHistory[0].startedAt.toISOString() : a.createdAt.toISOString(),
         ownerName: owner?.fullName ?? null,
         ownerPhone: owner?.phone ?? null,
@@ -438,6 +490,11 @@ export class OperatorService {
         plateNumber: cleanPlate,
         vinOrChassisNumber: dto.vinOrChassisNumber?.trim() || null,
         category: (dto.category ?? "CARS") as CategoryCode,
+        // Stored lower-case because that is the key the fitment rules
+        // match on; the label is a presentation concern.
+        make: dto.make?.trim().toLowerCase() || null,
+        model: dto.model?.trim() || null,
+        modelYear: dto.modelYear ?? null,
       },
     });
 
@@ -456,6 +513,9 @@ export class OperatorService {
       plateNumber: asset.plateNumber,
       vinOrChassisNumber: asset.vinOrChassisNumber,
       category: asset.category,
+      make: asset.make,
+      model: asset.model,
+      modelYear: asset.modelYear,
       ownedSince: ownership.startedAt.toISOString(),
       ownerName: customer.fullName,
       ownerPhone: customer.phone,
@@ -574,6 +634,8 @@ export class OperatorService {
           type: "QUICK",
           fields: {
             requestedParts: dto.inspectionParts && dto.inspectionParts.length > 0 ? dto.inspectionParts : undefined,
+            // A recorded decision, not an absence -- see the note on the DTO.
+            fullInspection: dto.fullInspection === true ? true : undefined,
             completedBoxes: {},
           },
         },
@@ -741,7 +803,7 @@ export class OperatorService {
         status: { notIn: ["CLOSED", "CANCELLED"] },
       },
       include: {
-        asset: { select: { id: true, plateNumber: true, category: true, vinOrChassisNumber: true } },
+        asset: { select: { id: true, plateNumber: true, category: true, vinOrChassisNumber: true, make: true, model: true } },
         customer: { select: { id: true, fullName: true, phone: true } },
         inspections: {
           orderBy: { startedAt: "desc" },
@@ -772,8 +834,7 @@ export class OperatorService {
               }));
 
         const plate = o.asset.plateNumber ?? "Vehicle";
-        const catLabel = o.asset.category ? o.asset.category.replace(/_/g, " ") : "Vehicle";
-        const vehicleModel = `${plate} (${catLabel})`;
+        const vehicleModel = describeVehicle(o.asset);
         const vin = o.asset.vinOrChassisNumber ?? "VIN-UNSPECIFIED";
 
         return {
@@ -817,7 +878,7 @@ export class OperatorService {
     const order = await this.prisma.workOrder.findFirst({
       where: { id: workOrderId, tenantId },
       include: {
-        asset: { select: { id: true, plateNumber: true, category: true, vinOrChassisNumber: true } },
+        asset: { select: { id: true, plateNumber: true, category: true, vinOrChassisNumber: true, make: true, model: true } },
         customer: { select: { id: true, fullName: true, phone: true } },
         inspections: {
           orderBy: { startedAt: "desc" },
@@ -851,8 +912,7 @@ export class OperatorService {
     const grandTotal = partsTotal + laborTotal;
 
     const plate = order.asset.plateNumber ?? "Vehicle";
-    const catLabel = order.asset.category ? order.asset.category.replace(/_/g, " ") : "Vehicle";
-    const vehicleModel = `${plate} (${catLabel})`;
+    const vehicleModel = describeVehicle(order.asset);
     const vin = order.asset.vinOrChassisNumber ?? "VIN-UNSPECIFIED";
 
     return {

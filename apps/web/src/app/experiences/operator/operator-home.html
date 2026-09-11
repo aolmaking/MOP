@@ -1,621 +1,845 @@
-<section class="operator-cockpit">
-  <!-- Top Navigation Bar -->
-  <header class="operator-nav">
-    <div class="nav-brand-group">
-      <div class="brand-badge">
-        <span class="brand-logo" [title]="branding.activeWorkshop().name">{{ branding.activeWorkshop().name }}</span>
-        <span class="role-pill">OPERATOR DESK</span>
-      </div>
-      <div>
-        <h1 class="nav-title">Front-Desk Reception &amp; Service Intake</h1>
-        <p class="nav-subtitle">Vehicle intake, symptom diagnostics, walk-in customer registration, and counter POS.</p>
-      </div>
-    </div>
+<!--
+  The front desk.
 
-    <div class="nav-actions">
-      <a class="btn-pos-trigger" routerLink="/operator/pos" id="btn-operator-pos">
-        <span class="btn-icon">🛒</span> Over-The-Counter POS
-      </a>
-      <button type="button" class="btn-register-trigger" (click)="openRegisterModal()" id="btn-operator-register-customer">
-        <span class="btn-icon">+</span> Register Customer &amp; Vehicle
-      </button>
-      @if (session(); as s) {
-        <div class="user-profile">
-          <span class="user-name">{{ s.displayName || 'Operator' }}</span>
-          <button type="button" class="btn-logout" (click)="logout()">Sign out</button>
-        </div>
-      }
+  Two rules shape this screen, both given by the workshop owner:
+
+  1. The two things an operator does all day -- sell over the counter, and
+     put a new customer on the books -- are the two biggest controls on the
+     page, and they sit at opposite ends of it so neither is ever hunted for.
+
+  2. Everything else is a list of records, so it is a table with a search
+     box above it -- not a wall of cards. A card grid makes the eye scan in
+     two dimensions to find one plate; a table makes it scan one column.
+
+  Every control carries an icon as well as a word, because the counter is
+  staffed by people who cannot all read the English label. The icon and the
+  colour have to carry the meaning on their own; the word confirms it.
+-->
+<section class="op">
+
+  <!-- ── Who and where ────────────────────────────────────────────── -->
+  <header class="op-top">
+    <div class="op-who">
+      <span class="op-shop" [title]="branding.activeWorkshop().name">{{ branding.activeWorkshop().name }}</span>
+      <span class="op-role">
+        <span class="op-role-icon" aria-hidden="true">🧑‍💼</span>
+        <span>Front desk</span>
+      </span>
     </div>
+    @if (session(); as s) {
+      <div class="op-user">
+        <span class="op-user-name">{{ s.displayName || 'Operator' }}</span>
+        <button type="button" class="op-signout" (click)="logout()">
+          <span aria-hidden="true">⏻</span>
+          <span>Sign out</span>
+        </button>
+      </div>
+    }
   </header>
 
-  <!-- Success Notification Banner -->
+  <!--
+    The two big ones, at opposite ends.
+
+    They were previously two ordinary buttons in the top bar, the same size
+    as "Sign out" and sitting beside it.
+  -->
+  <div class="op-actions">
+    <a class="op-big op-big--pos" routerLink="/operator/pos" id="btn-operator-pos">
+      <span class="op-big-icon" aria-hidden="true">🛒</span>
+      <span class="op-big-words">
+        <strong class="op-big-title">POS</strong>
+        <span class="op-big-sub">Sell parts over the counter</span>
+      </span>
+    </a>
+
+    <span class="op-big-gap" aria-hidden="true"></span>
+
+    <button
+      type="button"
+      class="op-big op-big--new"
+      (click)="openRegisterModal()"
+      id="btn-operator-register-customer"
+    >
+      <span class="op-big-icon" aria-hidden="true">➕</span>
+      <span class="op-big-words">
+        <strong class="op-big-title">Register New Customer</strong>
+        <span class="op-big-sub">A new customer and their vehicle</span>
+      </span>
+    </button>
+  </div>
+
   @if (successNotification(); as msg) {
-    <div class="success-banner" role="status">
-      <span class="success-icon">✓</span>
+    <div class="op-banner op-banner--ok" role="status">
+      <span class="op-banner-icon" aria-hidden="true">✓</span>
       <span>{{ msg }}</span>
     </div>
   }
 
-  <!-- Error Banner -->
   @if (errorMessage(); as err) {
-    <div class="error-banner" role="alert">
+    <div class="op-banner op-banner--bad" role="alert">
+      <span class="op-banner-icon" aria-hidden="true">!</span>
       <span>{{ err }}</span>
     </div>
   }
 
-  @switch (state()) {
-    @case ('loading') {
-      <div class="state-loading">
-        <span class="loading-spin"></span>
-        <p>Connecting to reception floor &amp; intake queue…</p>
-      </div>
+  <!-- ── Two lists ─────────────────────────────────────────────────── -->
+  <nav class="op-tabs" role="tablist" aria-label="Front desk lists">
+    <button
+      type="button"
+      role="tab"
+      class="op-tab"
+      [class.op-tab--on]="activeTab() === 'reception'"
+      [attr.aria-selected]="activeTab() === 'reception'"
+      (click)="switchTab('reception')"
+      id="tab-reception"
+    >
+      <span class="op-tab-icon" aria-hidden="true">🚗</span>
+      <span class="op-tab-word">Vehicles</span>
+      <span class="op-tab-count">{{ vehicles().length }}</span>
+    </button>
+
+    <button
+      type="button"
+      role="tab"
+      class="op-tab"
+      [class.op-tab--on]="activeTab() === 'inspection-reports'"
+      [attr.aria-selected]="activeTab() === 'inspection-reports'"
+      (click)="switchTab('inspection-reports')"
+      id="tab-inspection-reports"
+    >
+      <span class="op-tab-icon" aria-hidden="true">📋</span>
+      <span class="op-tab-word">To approve</span>
+      <span class="op-tab-count" [class.op-tab-count--waiting]="inspectionReports().length > 0">
+        {{ inspectionReports().length }}
+      </span>
+    </button>
+  </nav>
+
+  <!--
+    One search box for both lists.
+
+    On the vehicles list it asks the server, because the list on screen is
+    only the hundred most recent vehicles and the customer standing at the
+    counter may not be among them. On the approvals list it filters what is
+    already loaded, because that queue is the whole queue.
+  -->
+  <form class="op-search" (ngSubmit)="runSearch()">
+    <span class="op-search-icon" aria-hidden="true">🔍</span>
+    <input
+      type="search"
+      class="op-search-input"
+      id="op-search"
+      [attr.aria-label]="'Search by name, plate or number'"
+      placeholder="Name · Plate · Phone · VIN"
+      [ngModel]="searchQuery()"
+      (ngModelChange)="onSearchInput($event)"
+      name="opSearch"
+      autocomplete="off"
+    />
+    @if (searchQuery()) {
+      <button type="button" class="op-search-clear" (click)="clearSearch()" aria-label="Clear search">✕</button>
     }
-
-    @case ('error') {
-      <div class="state-card error-card">
-        <h3>Could not load reception overview</h3>
-        <p>{{ errorMessage() }}</p>
-        <button appButton variant="secondary" size="small" (click)="loadOverview()">Retry</button>
-      </div>
+    @if (isSearching()) {
+      <span class="op-search-busy" aria-hidden="true"></span>
     }
+  </form>
 
-    @case ('ready') {
-      <!-- Key Operational Metrics -->
-      @if (overviewData(); as overview) {
-        <section class="metrics-strip" aria-label="Reception Metrics">
-          <div class="metric-card">
-            <span class="metric-value">{{ overview.metrics.totalVehicles }}</span>
-            <span class="metric-label">Total Registered Vehicles</span>
-          </div>
-          <div class="metric-card metric-card--active">
-            <span class="metric-value">{{ overview.metrics.inServiceCount }}</span>
-            <span class="metric-label">Currently in Service</span>
-          </div>
-          <div class="metric-card metric-card--queue">
-            <span class="metric-value">{{ overview.metrics.intakeQueueCount }}</span>
-            <span class="metric-label">Intake Queue Waiting</span>
-          </div>
-        </section>
-      }
+  @if (state() === 'loading') {
+    <div class="op-state">
+      <span class="op-spin" aria-hidden="true"></span>
+      <p>Loading…</p>
+    </div>
+  } @else if (state() === 'error') {
+    <div class="op-state op-state--bad">
+      <p>{{ errorMessage() || 'The front desk could not be loaded.' }}</p>
+      <button type="button" class="op-btn op-btn--plain" (click)="loadOverview()">Try again</button>
+    </div>
+  } @else {
 
-      <!-- Cockpit View Switcher Tabs -->
-      <nav class="cockpit-tabs-nav" role="tablist" aria-label="Cockpit Sections">
-        <button
-          type="button"
-          class="cockpit-tab-btn"
-          [class.cockpit-tab-btn--active]="activeTab() === 'reception'"
-          (click)="switchTab('reception')"
-          id="tab-btn-reception"
-          role="tab"
-          [attr.aria-selected]="activeTab() === 'reception'"
-        >
-          <span class="tab-icon">🚗</span>
-          <span class="tab-label">Reception Floor &amp; Intake</span>
-        </button>
-
-        <button
-          type="button"
-          class="cockpit-tab-btn"
-          [class.cockpit-tab-btn--active]="activeTab() === 'inspection-reports'"
-          (click)="switchTab('inspection-reports')"
-          id="tab-btn-inspection-reports"
-          role="tab"
-          [attr.aria-selected]="activeTab() === 'inspection-reports'"
-        >
-          <span class="tab-icon">📑</span>
-          <span class="tab-label">Inspection Reports &amp; Quotes</span>
-          @if (inspectionReports().length > 0) {
-            <span class="tab-counter-badge">{{ inspectionReports().length }}</span>
-          }
-        </button>
-      </nav>
-
-      @if (activeTab() === 'reception') {
-        <!-- Omnibar Search & Filter Section -->
-        <section class="search-section" aria-label="Vehicle Search">
-          <form class="search-form" (ngSubmit)="onSearch()">
-            <div class="search-input-wrap">
-              <span class="search-icon">🔍</span>
-              <input
-                type="search"
-                class="search-input"
-                placeholder="Search by License Plate, Customer Name, Phone Number, or VIN / Chassis…"
-                [ngModel]="searchQuery()"
-                (ngModelChange)="searchQuery.set($event)"
-                name="receptionSearch"
-                id="reception-search-input"
-              />
-              @if (searchQuery()) {
-                <button type="button" class="btn-clear-search" (click)="clearSearch()">✕</button>
-              }
-            </div>
-            <button type="submit" class="btn-search-action" id="btn-reception-search">
-              {{ isSearching() ? 'Searching…' : 'Search' }}
-            </button>
-          </form>
-        </section>
-
-        <!-- Reception Floor Vehicle Cards Grid -->
-        <section class="vehicles-section" aria-label="Reception Floor Vehicles">
-          <div class="section-head">
-            <h2 class="section-title">
-              Workshop Vehicles ({{ vehicles().length }})
-            </h2>
-            <span class="section-hint">Select a vehicle to open one-click issue diagnostic &amp; service intake</span>
-          </div>
-
-          @if (vehicles().length === 0) {
-            <div class="empty-reception">
-              <div class="empty-icon">🚗</div>
-              <h3>No Vehicles Found</h3>
-              <p>No vehicle matches your search query. Register a walk-in customer and vehicle to check them into the workshop.</p>
-              <button type="button" class="btn-register-trigger" (click)="openRegisterModal()">
-                + Register Customer &amp; Vehicle
-              </button>
-            </div>
-          } @else {
-            <div class="vehicles-grid">
+    <!-- ══ VEHICLES ═══════════════════════════════════════════════════ -->
+    @if (activeTab() === 'reception') {
+      @if (vehicles().length === 0) {
+        <div class="op-state">
+          <span class="op-state-icon" aria-hidden="true">🚗</span>
+          <p>
+            @if (searchQuery()) {
+              Nothing matches “{{ searchQuery() }}”.
+            } @else {
+              No vehicles yet.
+            }
+          </p>
+          <button type="button" class="op-btn op-btn--new" (click)="openRegisterModal()">
+            <span aria-hidden="true">➕</span>
+            <span>Register New Customer</span>
+          </button>
+        </div>
+      } @else {
+        <div class="op-table-wrap">
+          <table class="op-table" id="table-vehicles">
+            <thead>
+              <tr>
+                <th scope="col" class="col-plate">Plate</th>
+                <th scope="col">Owner</th>
+                <th scope="col" class="col-phone">Phone</th>
+                <th scope="col" class="col-kind">Vehicle</th>
+                <th scope="col" class="col-status">Now</th>
+                <th scope="col" class="col-do"><span class="op-sr">Action</span></th>
+              </tr>
+            </thead>
+            <tbody>
               @for (v of vehicles(); track v.id) {
-                <article class="vehicle-card" [class.vehicle-card--in-service]="v.activeWorkOrder">
-                  <div class="vehicle-card-head">
-                    <div class="plate-box">
-                      <span class="plate-text">{{ v.plateNumber || 'NO PLATE' }}</span>
-                    </div>
-                    <span class="category-tag">{{ v.category }}</span>
-                  </div>
+                <tr class="op-row" [class.op-row--busy]="v.activeWorkOrder">
+                  <th scope="row" class="op-plate">{{ v.plateNumber || '—' }}</th>
 
-                  <div class="vehicle-body">
-                    <div class="customer-detail">
-                      <span class="detail-label">Owner:</span>
-                      <span class="detail-value font-semibold">{{ v.ownerName || 'Walk-in Customer' }}</span>
-                    </div>
-                    <div class="customer-detail">
-                      <span class="detail-label">Phone:</span>
-                      <span class="detail-value font-mono">{{ v.ownerPhone || 'Not recorded' }}</span>
-                    </div>
-                    <div class="customer-detail">
-                      <span class="detail-label">VIN / Chassis:</span>
-                      <span class="detail-value font-mono">{{ v.vinOrChassisNumber || 'Not recorded' }}</span>
-                    </div>
+                  <td class="op-owner">{{ v.ownerName || 'Walk-in' }}</td>
 
-                    <!-- Active Job Status if in workshop -->
+                  <td class="op-num">{{ v.ownerPhone || '—' }}</td>
+
+                  <!--
+                    The badge, then the words. Recognising a car by its
+                    marque is faster than reading a category, and works
+                    for an operator who does not read the label at all.
+                  -->
+                  <td class="op-kind">
+                    <mop-vehicle-mark [make]="v.make" [category]="v.category" />
+                    <span class="op-kind-word">{{ vehicleWords(v) }}</span>
+                  </td>
+
+                  <td class="op-status">
                     @if (v.activeWorkOrder; as order) {
-                      <div class="status-indicator-box status-active">
-                        <span class="pulse-dot"></span>
-                        <div>
-                          <span class="status-label">In Workshop — {{ order.status }}</span>
-                          <span class="job-id">Job #{{ order.id.slice(-6).toUpperCase() }}</span>
-                        </div>
-                      </div>
+                      @if (order.hasInspectionReport) {
+                        <span class="op-flag op-flag--wait">
+                          <span aria-hidden="true">📋</span>
+                          <span>Needs you</span>
+                        </span>
+                      } @else {
+                        <span class="op-flag op-flag--work">
+                          <span aria-hidden="true">🔧</span>
+                          <span>In workshop</span>
+                        </span>
+                      }
                     } @else {
-                      <div class="status-indicator-box status-ready">
-                        <span class="check-dot">✓</span>
-                        <span class="status-label">Ready for Intake</span>
-                      </div>
+                      <span class="op-flag op-flag--free">
+                        <span aria-hidden="true">✓</span>
+                        <span>Free</span>
+                      </span>
                     }
-                  </div>
+                  </td>
 
-                  <div class="vehicle-actions">
+                  <td class="op-do">
                     @if (v.activeWorkOrder; as order) {
                       @if (order.hasInspectionReport) {
                         <button
                           type="button"
-                          class="btn-intake-card btn-review-direct"
-                          style="background: linear-gradient(135deg, #0284c7, #0369a1); color: #ffffff; font-weight: 700;"
+                          class="op-btn op-btn--go"
                           (click)="openReportForWorkOrderId(order.id)"
-                          [id]="'btn-review-quote-' + order.id"
+                          [id]="'btn-review-' + v.id"
                         >
-                          <span class="btn-icon">📑</span> Review Inspection Report &amp; Quote
-                        </button>
-                      } @else if (order.status === 'UNDER_INSPECTION') {
-                        <button
-                          type="button"
-                          class="btn-intake-card"
-                          style="background: rgba(2, 132, 199, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);"
-                          (click)="openReportForWorkOrderId(order.id)"
-                          [id]="'btn-inspecting-' + order.id"
-                        >
-                          <span class="btn-icon">🔍</span> Under Inspection (View Findings)
+                          <span aria-hidden="true">📋</span>
+                          <span>Review</span>
                         </button>
                       } @else {
                         <button
                           type="button"
-                          class="btn-intake-card"
+                          class="op-btn op-btn--plain"
                           (click)="openIntakeForVehicle(v)"
-                          [id]="'btn-intake-' + v.id"
+                          [id]="'btn-add-' + v.id"
                         >
-                          <span class="btn-icon">🔧</span> Report Issue / Add Service
+                          <span aria-hidden="true">➕</span>
+                          <span>Add issue</span>
                         </button>
                       }
                     } @else {
                       <button
                         type="button"
-                        class="btn-intake-card"
+                        class="op-btn op-btn--go"
                         (click)="openIntakeForVehicle(v)"
-                        [id]="'btn-intake-' + v.id"
+                        [id]="'btn-book-' + v.id"
                       >
-                        <span class="btn-icon">🔧</span> Report Issue / Book Service
+                        <span aria-hidden="true">🔧</span>
+                        <span>Book in</span>
                       </button>
                     }
-                  </div>
-                </article>
+                  </td>
+                </tr>
               }
-            </div>
-          }
-        </section>
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+
+    <!-- ══ TO APPROVE ═════════════════════════════════════════════════ -->
+    @if (activeTab() === 'inspection-reports') {
+      @if (isLoadingReports()) {
+        <div class="op-state">
+          <span class="op-spin" aria-hidden="true"></span>
+          <p>Loading…</p>
+        </div>
+      } @else if (visibleReports().length === 0) {
+        <div class="op-state">
+          <span class="op-state-icon" aria-hidden="true">📋</span>
+          <p>
+            @if (searchQuery()) {
+              Nothing matches “{{ searchQuery() }}”.
+            } @else {
+              Nothing waiting for you. Technicians' reports arrive here.
+            }
+          </p>
+        </div>
       } @else {
-        <!-- ═════════════════════════════════════════════════════════════════ -->
-        <!-- ── INSPECTION REPORTS & QUOTES WORKSPACE ───────────────────────── -->
-        <!-- ═════════════════════════════════════════════════════════════════ -->
-        <section class="reports-workspace-section" aria-label="Inspection Reports Hub">
-          <div class="section-head">
-            <div>
-              <h2 class="section-title">Technician Inspection Reports &amp; Quotes</h2>
-              <p class="section-hint">Review inspection findings from technicians, add parts from POS, set labor services, and approve repair quotes.</p>
-            </div>
-            <button type="button" class="btn-refresh-reports" (click)="loadInspectionReports()" [disabled]="isLoadingReports()">
-              ↻ Refresh Reports
-            </button>
-          </div>
+        <div class="op-table-wrap">
+          <table class="op-table" id="table-reports">
+            <thead>
+              <tr>
+                <th scope="col" class="col-plate">Plate</th>
+                <th scope="col">Customer</th>
+                <th scope="col" class="col-phone">Phone</th>
+                <th scope="col" class="col-count">Found</th>
+                <th scope="col" class="col-money">Total</th>
+                <th scope="col" class="col-do"><span class="op-sr">Action</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (rep of visibleReports(); track rep.workOrderId) {
+                <tr class="op-row">
+                  <th scope="row" class="op-plate">{{ rep.vehicle.plateNumber || '—' }}</th>
 
-          @if (isLoadingReports()) {
-            <div class="state-loading">
-              <span class="loading-spin"></span>
-              <p>Loading incoming inspection reports…</p>
-            </div>
-          } @else if (inspectionReports().length === 0) {
-            <div class="empty-reception">
-              <div class="empty-icon">📋</div>
-              <h3>No Pending Inspection Reports</h3>
-              <p>When a technician completes vehicle inspection at their bay and sends the report, it will arrive here for part selection, pricing, and repair dispatch.</p>
-            </div>
-          } @else {
-            <div class="reports-grid">
-              @for (rep of inspectionReports(); track rep.workOrderId) {
-                <article
-                  class="report-card"
-                  (click)="openReportDetail(rep)"
-                  role="button"
-                  tabindex="0"
-                  title="Click to view inspection report and quote builder"
-                >
-                  <div class="report-card-header">
-                    <div class="report-vehicle-title">
-                      <span class="report-plate">{{ rep.vehicle.plateNumber || 'NO PLATE' }}</span>
-                      <span class="report-model">{{ rep.vehicle.model || 'Vehicle' }}</span>
-                    </div>
-                    <span class="report-status-badge">{{ rep.status }}</span>
-                  </div>
+                  <td class="op-owner">{{ rep.customer.name }}</td>
 
-                  <div class="report-card-body">
-                    <div class="report-meta-row">
-                      <span class="report-meta-label">Customer:</span>
-                      <strong class="report-meta-value">{{ rep.customer.name }} ({{ rep.customer.phone || 'No phone' }})</strong>
-                    </div>
-                    <div class="report-meta-row">
-                      <span class="report-meta-label">VIN:</span>
-                      <span class="report-meta-value font-mono">{{ rep.vehicle.vin || 'Not provided' }}</span>
-                    </div>
-                    <div class="report-meta-row">
-                      <span class="report-meta-label">Submitted:</span>
-                      <span class="report-meta-value">{{ rep.submittedAt ? rep.submittedAt.slice(0, 16).replace('T', ' ') : 'Just now' }}</span>
-                    </div>
+                  <td class="op-num">{{ rep.customer.phone || '—' }}</td>
 
-                    <div class="report-counts-bar">
-                      <span class="count-chip chip-findings">
-                        <strong>{{ rep.findingsCount }}</strong> Findings
-                      </span>
-                      <span class="count-chip chip-parts">
-                        <strong>{{ rep.partsCount }}</strong> Parts
-                      </span>
-                      <span class="count-chip chip-services">
-                        <strong>{{ rep.servicesCount }}</strong> Services
-                      </span>
-                    </div>
+                  <td class="op-count">
+                    <span class="op-flag op-flag--wait">
+                      <span aria-hidden="true">🔍</span>
+                      <span>{{ rep.findingsCount }}</span>
+                    </span>
+                  </td>
 
-                    <div class="report-price-summary">
-                      <span class="price-label">Estimated Total:</span>
-                      <strong class="price-value">{{ money(rep.totalEstimate) }}</strong>
-                    </div>
-                  </div>
+                  <td class="op-money">{{ money(rep.totalEstimate) }}</td>
 
-                  <div class="report-card-footer">
+                  <td class="op-do">
                     <button
                       type="button"
-                      class="btn-review-quote"
+                      class="op-btn op-btn--go"
                       (click)="openReportDetail(rep)"
-                      [id]="'btn-review-report-' + rep.workOrderId"
+                      [id]="'btn-open-report-' + rep.workOrderId"
                     >
-                      Review &amp; Build Quote →
+                      <span aria-hidden="true">📋</span>
+                      <span>Review</span>
                     </button>
-                  </div>
-                </article>
+                  </td>
+                </tr>
               }
-            </div>
-          }
-        </section>
+            </tbody>
+          </table>
+        </div>
       }
     }
   }
 
-  <!-- ================================================================= -->
-  <!-- PRE-SELECTED VEHICLE INTAKE MODAL (Locked Vehicle - No Selector)    -->
-  <!-- ================================================================= -->
+  <!-- ══════════════════════════════════════════════════════════════════
+       BOOK A VEHICLE IN
+       ══════════════════════════════════════════════════════════════════ -->
   @if (isIntakeModalOpen() && selectedVehicle(); as v) {
-    <div class="modal-backdrop" (click)="closeIntakeModal()">
+    <div class="op-veil" (click)="closeIntakeModal()">
       <div
-        class="modal-dialog"
+        class="op-sheet op-sheet--parts"
         role="dialog"
         aria-modal="true"
         aria-labelledby="intake-modal-title"
         (click)="$event.stopPropagation()"
       >
-        <header class="modal-header">
-          <div>
-            <h2 class="modal-title" id="intake-modal-title">Service Intake &amp; Vehicle Diagnostics</h2>
-            <p class="modal-sub">Log symptoms across vehicle subsystems and register the job into the workshop queue.</p>
-          </div>
-          <button type="button" class="btn-close-modal" (click)="closeIntakeModal()" aria-label="Close modal">✕</button>
+        <header class="op-sheet-top">
+          <h2 class="op-sheet-title" id="intake-modal-title">
+            <span aria-hidden="true">🔧</span>
+            <span>Book in {{ v.plateNumber || 'this vehicle' }}</span>
+          </h2>
+          <button type="button" class="op-sheet-x" (click)="closeIntakeModal()" aria-label="Close">✕</button>
         </header>
 
-        <!-- CRUCIAL USER REQUIREMENT: LOCKED VEHICLE SUMMARY CARD -->
-        <div class="locked-vehicle-banner">
-          <div class="locked-vehicle-info">
-            <span class="locked-plate">{{ v.plateNumber || 'No Plate' }}</span>
-            <span class="locked-category">{{ v.category }}</span>
-          </div>
-          <div class="locked-owner-info">
-            <span><strong>Customer:</strong> {{ v.ownerName || 'Walk-in' }}</span>
-            <span><strong>Phone:</strong> {{ v.ownerPhone || '—' }}</span>
-            @if (v.vinOrChassisNumber) {
-              <span><strong>VIN:</strong> {{ v.vinOrChassisNumber }}</span>
-            }
-          </div>
+        <div class="op-sheet-who">
+          <span class="op-plate op-plate--big">{{ v.plateNumber || 'No plate' }}</span>
+          <span class="op-sheet-who-name">{{ v.ownerName || 'Walk-in' }}</span>
+          <span class="op-num">{{ v.ownerPhone || '—' }}</span>
         </div>
 
         @if (intakeError(); as err) {
-          <div class="modal-error-alert" role="alert">
+          <div class="op-banner op-banner--bad" role="alert">
+            <span class="op-banner-icon" aria-hidden="true">!</span>
             <span>{{ err }}</span>
           </div>
         }
 
-        <div class="modal-scroll-body">
-          <!-- 24 SUBSYSTEMS VISUAL GRID -->
-          <section class="subsystems-section">
-            <div class="section-instructions">
-              <h3 class="instructions-title">Select Problematic Subsystems (24 Systems)</h3>
-              <p class="instructions-sub">Click a subsystem to toggle inspection, then choose common symptoms below.</p>
-            </div>
+        <div class="op-sheet-body">
+          <section>
+            <h3 class="op-step">
+              <span class="op-step-n" aria-hidden="true">1</span>
+              <span>Where is the problem?</span>
+            </h3>
 
-            <div class="subsystems-grid">
+            <div class="op-parts">
               @for (part of allSubsystems(); track part.id) {
                 <button
                   type="button"
-                  class="subsystem-box"
-                  [class.subsystem-box--active]="selectedSubsystemKeys().includes(part.id)"
+                  class="op-part"
+                  [class.op-part--on]="selectedSubsystemKeys().includes(part.id)"
                   (click)="toggleSubsystem(part.id)"
                   [id]="'subsystem-' + part.id"
                 >
-                  <div class="box-icon-wrap">
-                    <app-animated-part-icon [part]="part.id" />
-                  </div>
-                  <span class="box-name-en">{{ part.nameEn }}</span>
-                  <span class="box-check" [class.box-check--selected]="selectedSubsystemKeys().includes(part.id)">
-                    {{ selectedSubsystemKeys().includes(part.id) ? '✓' : '+' }}
+                  <app-animated-part-icon [part]="part.id" />
+                  <span class="op-part-word">{{ part.nameEn }}</span>
+                  <span class="op-part-tick" aria-hidden="true">
+                    {{ selectedSubsystemKeys().includes(part.id) ? '✓' : '' }}
                   </span>
                 </button>
               }
             </div>
           </section>
 
-          <!-- 5 SYMPTOMS PER SELECTED SUBSYSTEM WITH BARRIER DIVIDERS -->
           @if (selectedSubsystemKeys().length > 0) {
-            <section class="symptoms-section">
-              <h3 class="symptoms-title">Reported Symptoms &amp; Diagnostic Indications</h3>
-              <p class="symptoms-sub">Click any symptom to automatically append it to the technical complaint.</p>
+            <section>
+              <h3 class="op-step">
+                <span class="op-step-n" aria-hidden="true">2</span>
+                <span>What does the customer say?</span>
+              </h3>
 
               @for (key of selectedSubsystemKeys(); track key) {
                 @if (getSubsystem(key); as sub) {
-                  <div class="symptom-subsystem-group">
-                    <div class="group-header">
-                      <span class="group-bullet">•</span>
-                      <h4 class="group-name">{{ sub.nameEn }}</h4>
-                      <span class="group-count">5 standard checkpoints</span>
-                    </div>
-
-                    <div class="symptoms-chips-row">
+                  <div class="op-symptoms">
+                    <h4 class="op-symptoms-of">{{ sub.nameEn }}</h4>
+                    <div class="op-symptoms-row">
                       @for (symptom of sub.symptoms; track symptom.en) {
                         <button
                           type="button"
-                          class="symptom-chip"
-                          [class.symptom-chip--active]="isSymptomAdded(symptom)"
+                          class="op-chip"
+                          [class.op-chip--on]="isSymptomAdded(symptom)"
                           (click)="toggleSymptomInComplaint(symptom)"
                         >
-                          <span class="chip-state-icon">{{ isSymptomAdded(symptom) ? '✓' : '+' }}</span>
-                          <span class="chip-text">{{ symptom.en }}</span>
+                          <span aria-hidden="true">{{ isSymptomAdded(symptom) ? '✓' : '+' }}</span>
+                          <span>{{ symptom.en }}</span>
                         </button>
                       }
                     </div>
 
-                    <!-- Visual barrier divider between parts -->
-                    <div class="subsystem-barrier-divider" aria-hidden="true"></div>
+                    <!--
+                      A place to write it down.
+
+                      The five suggestions under each system are the common
+                      ones, and the customer standing at the desk regularly
+                      says a sixth. Without this the operator either forced
+                      the nearest wrong chip or dropped what they were told,
+                      and the technician then inspected for something nobody
+                      had reported.
+                    -->
+                    <div class="op-own">
+                      <span class="op-own-icon" aria-hidden="true">&#9998;</span>
+                      <input
+                        type="text"
+                        class="op-own-input"
+                        [id]="'own-' + sub.id"
+                        [attr.aria-label]="'Write another problem with the ' + sub.nameEn"
+                        placeholder="Something else about this? Write it here"
+                        [ngModel]="ownSymptom()[sub.id] ?? ''"
+                        (ngModelChange)="setOwnSymptom(sub.id, $event)"
+                        (keydown.enter)="addOwnSymptom(sub)"
+                        [name]="'own-' + sub.id"
+                        autocomplete="off"
+                      />
+                      <button
+                        type="button"
+                        class="op-own-add"
+                        [disabled]="!(ownSymptom()[sub.id] ?? '').trim()"
+                        (click)="addOwnSymptom(sub)"
+                        [id]="'btn-own-' + sub.id"
+                      >
+                        <span aria-hidden="true">+</span>
+                        <span>Add</span>
+                      </button>
+                    </div>
                   </div>
                 }
               }
             </section>
           }
 
-          <!-- INTAKE COMPLAINT & NOTES -->
-          <section class="notes-section">
-            <label class="form-label" for="intake-complaint-input">
-              Technical Complaint &amp; Intake Notes
-            </label>
+          <section>
+            <h3 class="op-step">
+              <span class="op-step-n" aria-hidden="true">3</span>
+              <span>Anything else</span>
+            </h3>
             <textarea
               id="intake-complaint-input"
-              class="form-textarea"
+              class="op-field op-field--area"
               rows="3"
-              placeholder="Detailed description of the customer complaint or symptoms observed…"
+              placeholder="In the customer's own words…"
               [ngModel]="complaint()"
               (ngModelChange)="complaint.set($event)"
             ></textarea>
 
-            <label class="checkbox-row">
+          </section>
+
+          <!--
+            How much of the car the technician looks at.
+
+            This was a checkbox reading "Customer does not want the full
+            inspection - only what is ticked above", unticked by default.
+            So the normal case at a front desk -- somebody who came in
+            about one thing -- was the case the operator had to notice a
+            negative sentence and tick a box to get, while the default was
+            the whole car.
+
+            Two buttons now, and checking only what was ticked is the one
+            already chosen. Checking the whole car is a decision somebody
+            makes on purpose.
+          -->
+          <section>
+            <h3 class="op-step">
+              <span class="op-step-n" aria-hidden="true">4</span>
+              <span>How much to check</span>
+            </h3>
+
+            <div class="op-scope">
+              <button
+                type="button"
+                class="op-scope-choice"
+                [class.op-scope-choice--on]="!fullInspection()"
+                (click)="fullInspection.set(false)"
+                id="btn-scope-selected"
+              >
+                <span class="op-scope-icon" aria-hidden="true">&#127919;</span>
+                <span class="op-scope-words">
+                  <strong>Only what is ticked</strong>
+                  <span>
+                    @if (selectedSubsystemKeys().length > 0) {
+                      {{ selectedSubsystemKeys().length }}
+                      {{ selectedSubsystemKeys().length === 1 ? 'system' : 'systems' }}
+                    } @else {
+                      Nothing ticked yet
+                    }
+                  </span>
+                </span>
+                <span class="op-scope-tick" aria-hidden="true">{{ !fullInspection() ? '✓' : '' }}</span>
+              </button>
+
+              <button
+                type="button"
+                class="op-scope-choice"
+                [class.op-scope-choice--on]="fullInspection()"
+                (click)="fullInspection.set(true)"
+                id="btn-scope-full"
+              >
+                <span class="op-scope-icon" aria-hidden="true">&#128270;</span>
+                <span class="op-scope-words">
+                  <strong>Full inspection</strong>
+                  <span>Every system on the car</span>
+                </span>
+                <span class="op-scope-tick" aria-hidden="true">{{ fullInspection() ? '✓' : '' }}</span>
+              </button>
+            </div>
+
+            <!--
+              A third, genuinely different thing: the customer wants one
+              named job done and no inspection at all. Kept, because that
+              checkbox was the only way to say it -- but worded as what it
+              is rather than as a scope.
+            -->
+            <label class="op-check">
               <input
                 type="checkbox"
-                class="form-checkbox"
                 [ngModel]="inspectionDeclined()"
                 (ngModelChange)="inspectionDeclined.set($event)"
               />
-              <span class="checkbox-label">
-                Customer declined full comprehensive inspection (diagnostic intake on selected parts only)
-              </span>
+              <span>Customer refuses any inspection — just do the job they asked for</span>
             </label>
           </section>
         </div>
 
-        <footer class="modal-footer">
-          <button type="button" class="btn-modal-cancel" (click)="closeIntakeModal()" [disabled]="isSubmittingIntake()">
+        <footer class="op-sheet-feet">
+          <button type="button" class="op-btn op-btn--plain" (click)="closeIntakeModal()" [disabled]="isSubmittingIntake()">
             Cancel
           </button>
           <button
             type="button"
-            class="btn-modal-submit"
+            class="op-btn op-btn--go op-btn--wide"
             (click)="submitIntake()"
             [disabled]="isSubmittingIntake()"
             id="btn-submit-intake"
           >
-            {{ isSubmittingIntake() ? 'Registering Intake…' : '✓ Register Intake & Book Service' }}
+            <span aria-hidden="true">✓</span>
+            <span>{{ isSubmittingIntake() ? 'Booking…' : 'Book in' }}</span>
           </button>
         </footer>
       </div>
     </div>
   }
 
-  <!-- ================================================================= -->
-  <!-- REGISTER WALK-IN CUSTOMER & VEHICLE MODAL                          -->
-  <!-- ================================================================= -->
+  <!-- ══════════════════════════════════════════════════════════════════
+       REGISTER NEW CUSTOMER
+       ══════════════════════════════════════════════════════════════════ -->
   @if (isRegisterModalOpen()) {
-    <div class="modal-backdrop" (click)="closeRegisterModal()">
+    <div class="op-veil" (click)="closeRegisterModal()">
       <div
-        class="modal-dialog modal-dialog--sm"
+        class="op-sheet op-sheet--narrow"
         role="dialog"
         aria-modal="true"
         aria-labelledby="reg-modal-title"
         (click)="$event.stopPropagation()"
       >
-        <header class="modal-header">
-          <div>
-            <h2 class="modal-title" id="reg-modal-title">Register Walk-in Customer &amp; Vehicle</h2>
-            <p class="modal-sub">Onboard a new customer and vehicle record in a single step.</p>
-          </div>
-          <button type="button" class="btn-close-modal" (click)="closeRegisterModal()" aria-label="Close modal">✕</button>
+        <header class="op-sheet-top">
+          <h2 class="op-sheet-title" id="reg-modal-title">
+            <span aria-hidden="true">➕</span>
+            <span>Register New Customer</span>
+          </h2>
+          <button type="button" class="op-sheet-x" (click)="closeRegisterModal()" aria-label="Close">✕</button>
         </header>
 
         @if (registerError(); as err) {
-          <div class="modal-error-alert" role="alert">
+          <div class="op-banner op-banner--bad" role="alert">
+            <span class="op-banner-icon" aria-hidden="true">!</span>
             <span>{{ err }}</span>
           </div>
         }
 
-        <form class="register-form" (ngSubmit)="submitRegister()">
-          <div class="form-group">
-            <label class="form-label" for="reg-name">Customer Full Name *</label>
-            <input
-              id="reg-name"
-              type="text"
-              class="form-input"
-              placeholder="e.g. Mohamed Hassan"
-              [ngModel]="regFullName()"
-              (ngModelChange)="regFullName.set($event)"
-              name="regFullName"
-              required
-            />
-          </div>
+        <form class="op-sheet-body" (ngSubmit)="submitRegister()">
+          <label class="op-label" for="reg-name">
+            <span aria-hidden="true">🧑</span>
+            <span>Name</span>
+          </label>
+          <input
+            id="reg-name"
+            type="text"
+            class="op-field"
+            placeholder="Mohamed Hassan"
+            [ngModel]="regFullName()"
+            (ngModelChange)="regFullName.set($event)"
+            name="regFullName"
+            required
+          />
 
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label class="form-label" for="reg-phone">Phone Number *</label>
-              <input
-                id="reg-phone"
-                type="tel"
-                class="form-input"
-                placeholder="e.g. 01012345678"
-                [ngModel]="regPhone()"
-                (ngModelChange)="regPhone.set($event)"
-                name="regPhone"
-                required
-              />
+          <label class="op-label" for="reg-phone">
+            <span aria-hidden="true">📞</span>
+            <span>Phone</span>
+          </label>
+          <input
+            id="reg-phone"
+            type="tel"
+            class="op-field op-field--num"
+            placeholder="01012345678"
+            [ngModel]="regPhone()"
+            (ngModelChange)="regPhone.set($event)"
+            name="regPhone"
+            required
+          />
+
+          <label class="op-label" for="reg-plate">
+            <span aria-hidden="true">🔢</span>
+            <span>Plate</span>
+          </label>
+          <input
+            id="reg-plate"
+            type="text"
+            class="op-field op-field--num op-field--caps"
+            placeholder="ABC 1234"
+            [ngModel]="regPlate()"
+            (ngModelChange)="regPlate.set($event)"
+            name="regPlate"
+            required
+          />
+
+          <label class="op-label" for="reg-category">
+            <span aria-hidden="true">🚗</span>
+            <span>Type</span>
+          </label>
+          <select
+            id="reg-category"
+            class="op-field"
+            [ngModel]="regCategory()"
+            (ngModelChange)="setRegCategory($event)"
+            name="regCategory"
+          >
+            <option value="CARS">🚗 Car</option>
+            <option value="MOTORCYCLES">🏍️ Motorcycle</option>
+            <option value="HEAVY_EQUIPMENT">🚚 Heavy equipment</option>
+          </select>
+
+          <!--
+            The marque, then the model, each picked from its own column.
+
+            Picked rather than typed because the make is the key the parts
+            catalogue matches a vehicle on: a typo is not cosmetic, it
+            produces a car nothing is compatible with and the front desk
+            never sees why. Both lists are ordered by how often this market
+            meets them, so the common answer is the first one -- and both
+            carry a search box, because the long tail is long.
+          -->
+          <label class="op-label" for="reg-make-search">
+            <span aria-hidden="true">🏷️</span>
+            <span>Make</span>
+            @if (regMake()) {
+              <button type="button" class="op-clear-choice" (click)="chooseMake('')">Change</button>
+            }
+          </label>
+
+          @if (regMake()) {
+            <div class="op-chosen" id="reg-make-chosen">
+              <mop-vehicle-mark [make]="regMake()" [category]="regCategory()" />
+              <strong class="op-chosen-word">{{ chosenMakeLabel() }}</strong>
+              <span class="op-chosen-tick" aria-hidden="true">✓</span>
             </div>
+          } @else {
+            <div class="op-pick">
+              <div class="op-pick-search">
+                <span aria-hidden="true">🔍</span>
+                <input
+                  id="reg-make-search"
+                  type="search"
+                  placeholder="Search makes"
+                  autocomplete="off"
+                  [ngModel]="makeSearch()"
+                  (ngModelChange)="makeSearch.set($event)"
+                  name="makeSearch"
+                />
+              </div>
 
-            <div class="form-group flex-1">
-              <label class="form-label" for="reg-email">Email (Optional)</label>
-              <input
-                id="reg-email"
-                type="email"
-                class="form-input"
-                placeholder="customer@example.com"
-                [ngModel]="regEmail()"
-                (ngModelChange)="regEmail.set($event)"
-                name="regEmail"
-              />
+              <ul class="op-pick-list" role="listbox" aria-label="Vehicle make">
+                @for (make of visibleMakes(); track make.id) {
+                  <li>
+                    <button
+                      type="button"
+                      class="op-pick-row"
+                      role="option"
+                      [attr.aria-selected]="false"
+                      (click)="chooseMake(make.id)"
+                      [id]="'reg-make-' + make.id"
+                    >
+                      <mop-vehicle-mark [make]="make.id" [category]="regCategory()" />
+                      <span class="op-pick-word">{{ make.label }}</span>
+                    </button>
+                  </li>
+                } @empty {
+                  <li class="op-pick-none">Nothing matches “{{ makeSearch() }}”.</li>
+                }
+              </ul>
             </div>
-          </div>
+          }
 
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label class="form-label" for="reg-plate">License Plate Number *</label>
+          <!--
+            The model column only exists once a make is chosen, and only
+            ever holds that make's own models. Offering "Corolla" under
+            BMW is how a catalogue stops being worth trusting.
+          -->
+          @if (regMake()) {
+            <label class="op-label" for="reg-model-search">
+              <span aria-hidden="true">🔤</span>
+              <span>Model</span>
+              @if (regModel()) {
+                <button type="button" class="op-clear-choice" (click)="chooseModel('')">Change</button>
+              }
+            </label>
+
+            @if (regModel()) {
+              <div class="op-chosen" id="reg-model-chosen">
+                <strong class="op-chosen-word">{{ regModel() }}</strong>
+                <span class="op-chosen-tick" aria-hidden="true">✓</span>
+              </div>
+            } @else if (modelIsOther()) {
               <input
-                id="reg-plate"
+                id="reg-model"
                 type="text"
-                class="form-input font-mono uppercase"
-                placeholder="e.g. ABC 1234"
-                [ngModel]="regPlate()"
-                (ngModelChange)="regPlate.set($event)"
-                name="regPlate"
-                required
+                class="op-field"
+                placeholder="Type the model"
+                [ngModel]="regModel()"
+                (ngModelChange)="regModel.set($event)"
+                name="regModel"
               />
-            </div>
+              <button type="button" class="op-clear-choice op-clear-choice--block" (click)="modelIsOther.set(false)">
+                Back to the list
+              </button>
+            } @else {
+              <div class="op-pick">
+                <div class="op-pick-search">
+                  <span aria-hidden="true">🔍</span>
+                  <input
+                    id="reg-model-search"
+                    type="search"
+                    placeholder="Search models"
+                    autocomplete="off"
+                    [ngModel]="modelSearch()"
+                    (ngModelChange)="modelSearch.set($event)"
+                    name="modelSearch"
+                  />
+                </div>
 
-            <div class="form-group flex-1">
-              <label class="form-label" for="reg-category">Vehicle Category</label>
-              <select
-                id="reg-category"
-                class="form-select"
-                [ngModel]="regCategory()"
-                (ngModelChange)="regCategory.set($event)"
-                name="regCategory"
-              >
-                <option value="CARS">Cars / Passenger Vehicles</option>
-                <option value="MOTORCYCLES">Motorcycles</option>
-                <option value="HEAVY_EQUIPMENT">Heavy Equipment / Trucks</option>
-              </select>
-            </div>
-          </div>
+                <ul class="op-pick-list" role="listbox" aria-label="Vehicle model">
+                  @for (model of visibleModels(); track model) {
+                    <li>
+                      <button type="button" class="op-pick-row op-pick-row--plain" role="option" [attr.aria-selected]="false" (click)="chooseModel(model)">
+                        <span class="op-pick-word">{{ model }}</span>
+                      </button>
+                    </li>
+                  } @empty {
+                    <li class="op-pick-none">Nothing matches “{{ modelSearch() }}”.</li>
+                  }
+                </ul>
 
-          <div class="form-group">
-            <label class="form-label" for="reg-vin">VIN / Chassis Number (Optional)</label>
+                <!--
+                  No list of every trim in every market is worth
+                  maintaining, so the one that is not here is typed rather
+                  than refused.
+                -->
+                <button type="button" class="op-pick-other" id="btn-model-other" (click)="modelIsOther.set(true)">
+                  <span aria-hidden="true">✎</span>
+                  <span>Not in the list</span>
+                </button>
+              </div>
+            }
+          }
+
+          <details class="op-more">
+            <summary>Email and VIN (not required)</summary>
+
+            <label class="op-label" for="reg-email">
+              <span aria-hidden="true">✉️</span>
+              <span>Email</span>
+            </label>
+            <input
+              id="reg-email"
+              type="email"
+              class="op-field"
+              placeholder="customer@example.com"
+              [ngModel]="regEmail()"
+              (ngModelChange)="regEmail.set($event)"
+              name="regEmail"
+            />
+
+            <label class="op-label" for="reg-vin">
+              <span aria-hidden="true">🔧</span>
+              <span>VIN / chassis</span>
+            </label>
             <input
               id="reg-vin"
               type="text"
-              class="form-input font-mono"
-              placeholder="17-character VIN number"
+              class="op-field op-field--num"
+              placeholder="17 characters"
               [ngModel]="regVin()"
               (ngModelChange)="regVin.set($event)"
               name="regVin"
             />
-          </div>
+          </details>
 
-          <footer class="modal-footer">
-            <button type="button" class="btn-modal-cancel" (click)="closeRegisterModal()" [disabled]="isRegistering()">
+          <footer class="op-sheet-feet">
+            <button type="button" class="op-btn op-btn--plain" (click)="closeRegisterModal()" [disabled]="isRegistering()">
               Cancel
             </button>
             <button
               type="submit"
-              class="btn-modal-submit"
+              class="op-btn op-btn--new op-btn--wide"
               [disabled]="isRegistering()"
               id="btn-submit-register-vehicle"
             >
-              {{ isRegistering() ? 'Registering…' : '+ Register & Ready for Intake' }}
+              <span aria-hidden="true">✓</span>
+              <span>{{ isRegistering() ? 'Saving…' : 'Save' }}</span>
             </button>
           </footer>
         </form>
@@ -623,295 +847,201 @@
     </div>
   }
 
-  <!-- ================================================================= -->
-  <!-- INSPECTION REPORT & QUOTE BUILDER MODAL (With POS & Services)     -->
-  <!-- ================================================================= -->
+  <!-- ══════════════════════════════════════════════════════════════════
+       APPROVE THE TECHNICIAN'S REPORT
+
+       The operator approves what the technician found, whole or in part.
+       That is the whole of the role, so it is the whole of this screen:
+       one tick per finding, one total, one button. Nothing here writes the
+       report -- the technician does that -- and nothing here sets a price.
+       ══════════════════════════════════════════════════════════════════ -->
   @if (isReportModalOpen()) {
-    <div class="modal-backdrop" (click)="closeReportModal()">
+    <div class="op-veil" (click)="closeReportModal()">
       <div
-        class="quote-modal-dialog"
+        class="op-sheet op-sheet--wide"
         role="dialog"
         aria-modal="true"
         aria-labelledby="quote-modal-title"
         (click)="$event.stopPropagation()"
       >
-        <header class="modal-header quote-modal-header">
-          <div>
-            <div class="quote-header-tags">
-              <span class="quote-role-pill">QUOTE BUILDER &amp; REPAIR DISPATCH</span>
-              @if (selectedReportDetail(); as d) {
-                <span class="quote-plate-pill">{{ d.vehicle.plateNumber }}</span>
-                <span class="quote-model-pill">{{ d.vehicle.model }}</span>
-              }
-            </div>
-            <h2 class="modal-title" id="quote-modal-title">Inspection Report &amp; Work Order Quote</h2>
-          </div>
-          <button type="button" class="btn-close-modal" (click)="closeReportModal()" aria-label="Close modal">✕</button>
+        <header class="op-sheet-top">
+          <h2 class="op-sheet-title" id="quote-modal-title">
+            <span aria-hidden="true">📋</span>
+            <span>What the technician found</span>
+          </h2>
+          <button type="button" class="op-sheet-x" (click)="closeReportModal()" aria-label="Close">✕</button>
         </header>
 
         @if (isLoadingReportDetail()) {
-          <div class="state-loading modal-spinner">
-            <span class="loading-spin"></span>
-            <p>Loading inspection findings and pricing data…</p>
+          <div class="op-state">
+            <span class="op-spin" aria-hidden="true"></span>
+            <p>Loading…</p>
           </div>
         } @else if (selectedReportDetail(); as detail) {
-          <div class="quote-modal-body">
-            @if (quoteError(); as qErr) {
-              <div class="quote-error-banner">{{ qErr }}</div>
-            }
-
-            <!-- Vehicle & Customer Banner -->
-            <div class="quote-info-banner">
-              <div class="info-cell">
-                <span class="cell-label">Customer</span>
-                <strong class="cell-val">{{ detail.customer.name }}</strong>
-                <span class="cell-sub font-mono">{{ detail.customer.phone }}</span>
-              </div>
-              <div class="info-cell">
-                <span class="cell-label">Vehicle</span>
-                <strong class="cell-val">{{ detail.vehicle.plateNumber }} ({{ detail.vehicle.model }})</strong>
-                <span class="cell-sub font-mono">VIN: {{ detail.vehicle.vin || '—' }}</span>
-              </div>
-              <div class="info-cell">
-                <span class="cell-label">Work Order Status</span>
-                <span class="quote-status-badge">{{ detail.status }}</span>
-              </div>
-            </div>
-
-            <!-- ═════════════════════════════════════════════════════════════ -->
-            <!-- ── THE DECISION ──────────────────────────────────────────── -->
-            <!--
-              The operator approves the technician's report, whole or in part.
-              That is the role, and this screen is now only that.
-
-              What used to be here: "Create Service" and "View Parts" on every
-              finding, "+ Add Finding", an editable parts table with quantity
-              steppers, an editable labour-rate column, "+ Add Service", and a
-              "Save Draft". Those make the front desk the author of the job --
-              rewriting what the technician observed, choosing parts they have
-              not seen, and setting labour rates on the customer's behalf. The
-              technician records the work; the operator says yes to it.
-
-              So the report is shown as it was submitted, read-only, with one
-              checkbox per finding and one button.
-            -->
-            <div class="report-review-layout">
-              <div class="report-review-main">
-                <div class="review-main-header">
-                  <div class="main-header-left">
-                    <h3 class="review-section-title">What the technician found</h3>
-                    <span class="review-approval-badge">
-                      {{ approvedFindingsCount() }} of {{ editableFindings().length }} approved
-                    </span>
-                  </div>
-                  <div class="main-header-actions">
-                    <button
-                      type="button"
-                      class="btn-toggle-all"
-                      (click)="toggleAllFindings(approvedFindingsCount() !== editableFindings().length)"
-                    >
-                      {{ approvedFindingsCount() === editableFindings().length ? 'Approve none' : 'Approve all' }}
-                    </button>
-                  </div>
-                </div>
-
-                @if (editableFindings().length === 0) {
-                  <div class="empty-findings-box">
-                    <p>This report has no findings. There is nothing here to approve.</p>
-                  </div>
-                } @else {
-                  <div class="findings-cards-stack">
-                    @for (f of editableFindings(); track $index; let i = $index) {
-                      <div class="finding-item-card" [class.finding-item-card--approved]="isFindingApproved(i)">
-                        <div class="finding-card-top">
-                          <div class="approval-chk-wrap" title="Approve this finding for repair">
-                            <input
-                              type="checkbox"
-                              class="approval-chk-input"
-                              [checked]="isFindingApproved(i)"
-                              (change)="toggleFindingApproval(i)"
-                              [id]="'chk-approve-' + i"
-                            />
-                            <label [for]="'chk-approve-' + i" class="approval-chk-label"></label>
-                          </div>
-
-                          <div class="finding-card-body">
-                            <div class="body-badge-row">
-                              <span
-                                class="finding-sev-pill"
-                                [class]="'sev-pill--' + (f.severity?.toLowerCase() || 'medium')"
-                              >
-                                {{ f.severity || 'MEDIUM' }}
-                              </span>
-                            </div>
-                            <h4 class="finding-title-text">{{ getFindingTitle(f) }}</h4>
-                            <p class="finding-obs-text">{{ f.description }}</p>
-
-                            <!--
-                              What the technician attached to this finding, as
-                              they attached it. Read-only: the front desk is
-                              approving a report, not writing one.
-                            -->
-                            @if (partsForFinding(f).length > 0) {
-                              <ul class="finding-attached">
-                                @for (p of partsForFinding(f); track p.sku) {
-                                  <li class="finding-attached-line">
-                                    <span class="finding-attached-name">{{ p.name }}</span>
-                                    <span class="finding-attached-qty">× {{ p.quantity }}</span>
-                                    <span class="finding-attached-price">{{ money(lineTotal(p.unitPrice, p.quantity)) }}</span>
-                                  </li>
-                                }
-                              </ul>
-                            }
-                            @if (servicesForFinding(f).length > 0) {
-                              <ul class="finding-attached">
-                                @for (srv of servicesForFinding(f); track srv.serviceName) {
-                                  <li class="finding-attached-line">
-                                    <span class="finding-attached-name">🔧 {{ srv.serviceName }}</span>
-                                    <span class="finding-attached-price">{{ money(srv.laborPrice) }}</span>
-                                  </li>
-                                }
-                              </ul>
-                            }
-                          </div>
-                        </div>
-                      </div>
-                    }
-                  </div>
-                }
-
-                <!--
-                  Anything on the job that names no finding still has to be
-                  visible, or the operator would be approving something the
-                  screen never showed them.
-                -->
-                @if (unassignedParts().length > 0 || unassignedServices().length > 0) {
-                  <section class="nested-quote-table-sec">
-                    <div class="table-sec-head">
-                      <span class="table-sec-title">Also on this job</span>
-                    </div>
-                    <ul class="finding-attached">
-                      @for (p of unassignedParts(); track p.sku) {
-                        <li class="finding-attached-line">
-                          <span class="finding-attached-name">{{ p.name }}</span>
-                          <span class="finding-attached-qty">× {{ p.quantity }}</span>
-                          <span class="finding-attached-price">{{ money(lineTotal(p.unitPrice, p.quantity)) }}</span>
-                        </li>
-                      }
-                      @for (srv of unassignedServices(); track srv.serviceName) {
-                        <li class="finding-attached-line">
-                          <span class="finding-attached-name">🔧 {{ srv.serviceName }}</span>
-                          <span class="finding-attached-price">{{ money(srv.laborPrice) }}</span>
-                        </li>
-                      }
-                    </ul>
-                  </section>
-                }
-              </div>
-
-              <aside class="report-review-sidebar">
-                <div class="sidebar-card summary-breakdown-card">
-                  <h3 class="sidebar-card-title">Summary</h3>
-                  <div class="breakdown-list">
-                    <div class="breakdown-row">
-                      <span class="b-label">Findings</span>
-                      <strong class="b-value">{{ editableFindings().length }}</strong>
-                    </div>
-                    <div class="breakdown-row">
-                      <span class="b-label">Critical</span>
-                      <strong class="b-value">{{ criticalCount() }}</strong>
-                    </div>
-                    <div class="breakdown-row">
-                      <span class="b-label">High</span>
-                      <strong class="b-value">{{ highCount() }}</strong>
-                    </div>
-                    <div class="breakdown-row">
-                      <span class="b-label">Medium</span>
-                      <strong class="b-value">{{ mediumCount() }}</strong>
-                    </div>
-                    <div class="breakdown-row">
-                      <span class="b-label">Low</span>
-                      <strong class="b-value">{{ lowCount() }}</strong>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="sidebar-card estimated-cost-card">
-                  <h3 class="sidebar-card-title">What this comes to</h3>
-                  <div class="cost-rows-stack">
-                    <div class="cost-item-row">
-                      <span class="cost-item-label">Parts</span>
-                      <strong class="cost-item-val">{{ money(quotePartsTotal()) }}</strong>
-                    </div>
-                    <div class="cost-item-row">
-                      <span class="cost-item-label">Labour</span>
-                      <strong class="cost-item-val">{{ money(quoteLaborTotal()) }}</strong>
-                    </div>
-                    <div class="cost-divider-line"></div>
-                    <div class="cost-item-row cost-item-row--total">
-                      <span class="cost-total-tag">Total <span class="cost-est-note">(est.)</span></span>
-                      <strong class="cost-grand-val">{{ money(quoteGrandTotal()) }}</strong>
-                    </div>
-                  </div>
-                  <!--
-                    Said plainly, because the operator can no longer change a
-                    price on this screen and should know where these came from.
-                  -->
-                  <p class="cost-provenance">
-                    Priced from this workshop's own catalogue when the technician sent the report.
-                  </p>
-                </div>
-
-                <div class="sidebar-card notes-card">
-                  <label class="notes-header-label" for="report-quote-notes">A note for the technician</label>
-                  <textarea
-                    id="report-quote-notes"
-                    class="notes-textarea"
-                    rows="3"
-                    placeholder="Anything the technician should know before starting…"
-                    [(ngModel)]="quoteNote"
-                  ></textarea>
-                </div>
-              </aside>
-            </div>
-
-            <div class="inspection-complete-banner">
-              <div class="banner-content-left">
-                <div class="banner-text-block">
-                  <h4 class="banner-heading">
-                    @if (approvedFindingsCount() === 0) {
-                      Nothing approved yet
-                    } @else if (approvedFindingsCount() === editableFindings().length) {
-                      Approving the whole report
-                    } @else {
-                      Approving {{ approvedFindingsCount() }} of {{ editableFindings().length }} findings
-                    }
-                  </h4>
-                  <p class="banner-subtext">
-                    What you approve goes to the technician. What you leave unticked does not, and nothing
-                    is charged for it.
-                  </p>
-                </div>
-              </div>
-
-              <div class="banner-actions-right">
-                <button type="button" class="btn-banner-cancel" (click)="closeReportModal()">
-                  Close
-                </button>
-                @if (canDispatchRepair()) {
-                  <button
-                    type="button"
-                    class="btn-banner-send-done"
-                    (click)="dispatchToRepair()"
-                    [disabled]="isDispatchingRepair() || approvedFindingsCount() === 0"
-                    id="btn-approve-done-action"
-                  >
-                    <span>{{ isDispatchingRepair() ? 'Approving…' : 'Approve and send to the technician' }}</span>
-                  </button>
-                }
-              </div>
-            </div>
+          <div class="op-sheet-who">
+            <span class="op-plate op-plate--big">{{ detail.vehicle.plateNumber || 'No plate' }}</span>
+            <span class="op-sheet-who-name">{{ detail.customer.name }}</span>
+            <span class="op-num">{{ detail.customer.phone }}</span>
           </div>
+
+          @if (quoteError(); as qErr) {
+            <div class="op-banner op-banner--bad" role="alert">
+              <span class="op-banner-icon" aria-hidden="true">!</span>
+              <span>{{ qErr }}</span>
+            </div>
+          }
+
+          <div class="op-sheet-body">
+            @if (editableFindings().length === 0) {
+              <div class="op-state">
+                <p>This report has no findings. There is nothing here to approve.</p>
+              </div>
+            } @else {
+              <div class="op-approve-head">
+                <span class="op-approve-count">
+                  <strong>{{ approvedFindingsCount() }}</strong> of {{ editableFindings().length }} ticked
+                </span>
+                <button
+                  type="button"
+                  class="op-btn op-btn--plain"
+                  (click)="toggleAllFindings(approvedFindingsCount() !== editableFindings().length)"
+                >
+                  {{ approvedFindingsCount() === editableFindings().length ? 'Untick all' : 'Tick all' }}
+                </button>
+              </div>
+
+              <div class="op-table-wrap">
+                <table class="op-table op-table--approve" id="table-findings">
+                  <thead>
+                    <tr>
+                      <th scope="col" class="col-tick"><span class="op-sr">Approve</span></th>
+                      <th scope="col" class="col-sev">How bad</th>
+                      <th scope="col">What was found</th>
+                      <th scope="col" class="col-money">Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (f of editableFindings(); track $index; let i = $index) {
+                      <tr class="op-row" [class.op-row--ticked]="isFindingApproved(i)">
+                        <td class="op-tick">
+                          <input
+                            type="checkbox"
+                            class="op-tickbox"
+                            [checked]="isFindingApproved(i)"
+                            (change)="toggleFindingApproval(i)"
+                            [id]="'chk-approve-' + i"
+                            [attr.aria-label]="'Approve ' + getFindingTitle(f)"
+                          />
+                        </td>
+
+                        <td class="op-sev">
+                          <span class="op-sev-flag" [class]="'op-sev-flag--' + (f.severity?.toLowerCase() || 'medium')">
+                            <span aria-hidden="true">{{ severityIcon(f.severity) }}</span>
+                            <span>{{ f.severity || 'MEDIUM' }}</span>
+                          </span>
+                        </td>
+
+                        <td class="op-found">
+                          <strong class="op-found-title">{{ getFindingTitle(f) }}</strong>
+                          <span class="op-found-note">{{ f.description }}</span>
+
+                          @if (partsForFinding(f).length > 0 || servicesForFinding(f).length > 0) {
+                            <ul class="op-lines">
+                              @for (p of partsForFinding(f); track p.sku) {
+                                <li class="op-line">
+                                  <span aria-hidden="true">📦</span>
+                                  <span class="op-line-name">{{ p.name }}</span>
+                                  <span class="op-line-qty">× {{ p.quantity }}</span>
+                                  <span class="op-line-money">{{ money(lineTotal(p.unitPrice, p.quantity)) }}</span>
+                                </li>
+                              }
+                              @for (srv of servicesForFinding(f); track srv.serviceName) {
+                                <li class="op-line">
+                                  <span aria-hidden="true">🔧</span>
+                                  <span class="op-line-name">{{ srv.serviceName }}</span>
+                                  <span class="op-line-qty"></span>
+                                  <span class="op-line-money">{{ money(srv.laborPrice) }}</span>
+                                </li>
+                              }
+                            </ul>
+                          }
+                        </td>
+
+                        <td class="op-money">{{ money(findingTotal(f)) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+
+              <!--
+                Anything on the job that names no finding still has to be
+                visible, or the operator would be approving something the
+                screen never showed them.
+              -->
+              @if (unassignedParts().length > 0 || unassignedServices().length > 0) {
+                <section class="op-also">
+                  <h4 class="op-also-title">Also on this job</h4>
+                  <ul class="op-lines">
+                    @for (p of unassignedParts(); track p.sku) {
+                      <li class="op-line">
+                        <span aria-hidden="true">📦</span>
+                        <span class="op-line-name">{{ p.name }}</span>
+                        <span class="op-line-qty">× {{ p.quantity }}</span>
+                        <span class="op-line-money">{{ money(lineTotal(p.unitPrice, p.quantity)) }}</span>
+                      </li>
+                    }
+                    @for (srv of unassignedServices(); track srv.serviceName) {
+                      <li class="op-line">
+                        <span aria-hidden="true">🔧</span>
+                        <span class="op-line-name">{{ srv.serviceName }}</span>
+                        <span class="op-line-qty"></span>
+                        <span class="op-line-money">{{ money(srv.laborPrice) }}</span>
+                      </li>
+                    }
+                  </ul>
+                </section>
+              }
+
+              <label class="op-label" for="report-quote-notes">
+                <span aria-hidden="true">✎</span>
+                <span>A note for the technician</span>
+              </label>
+              <textarea
+                id="report-quote-notes"
+                class="op-field op-field--area"
+                rows="2"
+                placeholder="Anything they should know before starting…"
+                [(ngModel)]="quoteNote"
+              ></textarea>
+            }
+          </div>
+
+          <footer class="op-sheet-feet op-sheet-feet--total">
+            <div class="op-total">
+              <span class="op-total-word">Customer pays</span>
+              <strong class="op-total-money" id="quote-grand-total">{{ money(quoteGrandTotal()) }}</strong>
+              <span class="op-total-note">
+                {{ money(quotePartsTotal()) }} parts · {{ money(quoteLaborTotal()) }} labour
+              </span>
+            </div>
+
+            <div class="op-sheet-feet-do">
+              <button type="button" class="op-btn op-btn--plain" (click)="closeReportModal()">Close</button>
+              @if (canDispatchRepair()) {
+                <button
+                  type="button"
+                  class="op-btn op-btn--go op-btn--wide"
+                  (click)="dispatchToRepair()"
+                  [disabled]="isDispatchingRepair() || approvedFindingsCount() === 0"
+                  id="btn-approve-done-action"
+                >
+                  <span aria-hidden="true">✓</span>
+                  <span>{{ isDispatchingRepair() ? 'Approving…' : 'Approve' }}</span>
+                </button>
+              }
+            </div>
+          </footer>
         }
       </div>
     </div>

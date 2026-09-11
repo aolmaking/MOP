@@ -7,6 +7,15 @@ export interface TechnicianJob {
   readonly workOrderId: string;
   readonly identifier: string | null;
   readonly vehicleModel?: string | null;
+  /**
+   * What the vehicle is, as the front desk recorded it. `make` is the
+   * VEHICLE_MAKES id, which is what `mop-vehicle-mark` draws the badge
+   * from -- null when nobody said, and the mark then shows the kind of
+   * machine alone rather than a guessed marque.
+   */
+  readonly make?: string | null;
+  readonly model?: string | null;
+  readonly modelYear?: number | null;
   readonly category?: string | null;
   readonly vin?: string | null;
   readonly customerName: string;
@@ -119,6 +128,10 @@ export interface WorkCard {
   readonly workOrderId: string;
   readonly identifier: string | null;
   readonly vehicleModel?: string | null;
+  readonly make?: string | null;
+  readonly model?: string | null;
+  readonly modelYear?: number | null;
+  readonly category?: string | null;
   readonly vin?: string | null;
   readonly mileage?: string | null;
   readonly customerName: string;
@@ -295,6 +308,13 @@ export interface CatalogBrowseQuery {
   /** attributeId -> chosen valueIds. */
   readonly attributes?: Readonly<Record<string, readonly string[]>>;
   readonly inStockOnly?: boolean;
+  /**
+   * "Fits this car": the VEHICLE_MAKES id and the kind of machine, which
+   * the server turns into the set of parts its fitment rules say suit
+   * that marque. Sent only when the vehicle's make is actually recorded.
+   */
+  readonly fitsMake?: string;
+  readonly fitsCategory?: string;
   readonly page?: number;
   readonly pageSize?: number;
 }
@@ -324,6 +344,10 @@ export function browseParams(query: CatalogBrowseQuery): Record<string, string> 
   const attributes = encodeAttributeQuery(query.attributes);
   if (attributes) params['attributes'] = attributes;
   if (query.inStockOnly) params['inStockOnly'] = 'true';
+  if (query.fitsMake) {
+    params['fitsMake'] = query.fitsMake;
+    if (query.fitsCategory) params['fitsCategory'] = query.fitsCategory;
+  }
   if (query.page && query.page > 1) params['page'] = String(query.page);
   if (query.pageSize) params['pageSize'] = String(query.pageSize);
   return params;
@@ -432,6 +456,28 @@ export class TechnicianApi {
         ? { type: payloadOrType, ...(note ? { note } : {}) }
         : payloadOrType;
     return this.http.post(`/api/v1/technician/work-orders/${workOrderId}/inspection`, body);
+  }
+
+  /**
+   * "I found something else" -- to the front desk, not into a drawer.
+   *
+   * The same act the inspection report performs, at a different moment:
+   * a finding, the parts it needs, and somebody at the counter who has
+   * to say yes before the customer is charged for any of it.
+   */
+  raiseExtraWork(
+    workOrderId: string,
+    body: {
+      description: string;
+      severity: string;
+      recommendedService?: string;
+      parts?: ReadonlyArray<{ name: string; sku?: string; quantity: number }>;
+    },
+  ): Observable<{ faultId: string; sentToFrontDesk: boolean }> {
+    return this.http.post<{ faultId: string; sentToFrontDesk: boolean }>(
+      `/api/v1/technician/work-orders/${workOrderId}/extra-work`,
+      body,
+    );
   }
 
   createFault(

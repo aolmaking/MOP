@@ -119,7 +119,7 @@ describe('TechWorkCard', () => {
     );
 
     expect(element.querySelectorAll('.check').length).toBe(2);
-    expect(element.querySelector('.check--bad')?.textContent).toContain('still unanswered');
+    expect(element.querySelector('.bay-check--bad')?.textContent).toContain('still unanswered');
     expect(element.textContent).toContain('Clear the items above');
   });
 
@@ -135,17 +135,18 @@ describe('TechWorkCard', () => {
     expect(element.querySelector('.check-mark')?.textContent?.trim()).toBe('✓');
   });
 
-  it('offers blocker reasons as taps, never a text box', async () => {
-    // A technician with one free hand and a glove on will not type.
-    const { page, fixture, element } = await render(card());
+  /*
+    "I'm blocked" was removed from the technician's card on the workshop
+    owner's instruction, and with it the list of blocker reasons this test
+    described. It parked a job in a state only a manager could clear while
+    telling nobody what had actually been found.
 
-    page.panel.set('blocker');
-    fixture.detectChanges();
-
-    const reasons = element.querySelectorAll('.reasons .tap');
-    expect(reasons.length).toBeGreaterThan(3);
-    expect(element.querySelector('.reasons textarea')).toBeNull();
-  });
+    The replacement is pinned in `tech-work-card-inspection.spec.ts`
+    ("keeps a way to say something is wrong while a job is in repair"):
+    the finding goes to the front desk to be approved, the same way an
+    inspection report does. `reportBlocker` itself is untouched -- the
+    branch manager's board still raises and clears blockers.
+  */
 
   it('reloads from the server after a write rather than patching local state', async () => {
     // The server decides what a write did -- completing a task may have
@@ -172,7 +173,7 @@ describe('TechWorkCard', () => {
     page.reportBlocker('TOOL_MISSING');
     fixture.detectChanges();
 
-    expect(element.querySelector('.action-error')?.textContent).toContain('Resolve the blocker first');
+    expect(element.querySelector('.bay-error')?.textContent).toContain('Resolve the blocker first');
   });
 
   it('says a job is not yours rather than confirming it exists', async () => {
@@ -185,14 +186,14 @@ describe('TechWorkCard', () => {
     // The technician is the person who would otherwise do the extra work.
     const { element } = await render(card({ inspectionDeclined: true }));
 
-    expect(element.querySelector('.card-note')?.textContent).toContain('refused inspection');
+    expect(element.querySelector('.bay-declined')?.textContent).toContain('refused inspection');
   });
 
   it('hides the finish section entirely when finishing is not available', async () => {
     // A finish button that cannot work is worse than no button.
     const { element } = await render(card());
 
-    expect(element.querySelector('.checks')).toBeNull();
+    expect(element.querySelector('.bay-checks')).toBeNull();
   });
 
   it('requires whole minutes before completing a task when TIME_TRACKING is required', async () => {
@@ -203,10 +204,10 @@ describe('TechWorkCard', () => {
       }),
     );
 
-    const done = [...element.querySelectorAll('button')].find((button) => button.textContent?.trim() === 'Done') as HTMLButtonElement;
+    const done = [...element.querySelectorAll('button')].find((button) => button.textContent?.includes('Done')) as HTMLButtonElement;
     expect(done.disabled).toBe(true);
 
-    const input = element.querySelector('.time-entry input') as HTMLInputElement;
+    const input = element.querySelector('.bay-minutes input') as HTMLInputElement;
     input.value = '25';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -226,9 +227,9 @@ describe('TechWorkCard', () => {
       }),
     );
 
-    expect(element.querySelector('.time-entry')).toBeNull();
+    expect(element.querySelector('.bay-minutes')).toBeNull();
 
-    const done = [...element.querySelectorAll('button')].find((button) => button.textContent?.trim() === 'Done') as HTMLButtonElement;
+    const done = [...element.querySelectorAll('button')].find((button) => button.textContent?.includes('Done')) as HTMLButtonElement;
     done.click();
 
     expect(api.completeTask).toHaveBeenCalledWith('t1', undefined);

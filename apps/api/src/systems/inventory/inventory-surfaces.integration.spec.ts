@@ -16,7 +16,7 @@ process.env.DATABASE_URL ??= "postgresql://mop_dev:mop_dev_secret@localhost:5432
 
 import "reflect-metadata";
 import { PrismaClient } from "@mop/database";
-import { ConflictException } from "@nestjs/common";
+import { BadRequestException, ConflictException } from "@nestjs/common";
 import { InventoryHomeService } from "./inventory-home.service";
 import { CatalogService } from "./catalog.service";
 import { InventoryReportsService } from "./inventory-reports.service";
@@ -238,7 +238,13 @@ describe("Catalog Control", () => {
     await expect(
       catalog.create(
         tenantId,
-        { sku: `SPLIT-${SUFFIX}`, name: "Brake pad (copy)", itemType: "PART", sellingPrice: "10.00" },
+        {
+          sku: `SPLIT-${SUFFIX}`,
+          name: "Brake pad (copy)",
+          itemType: "PART",
+          sellingPrice: "10.00",
+          fitsMakes: ["universal"],
+        },
         false,
       ),
     ).rejects.toBeInstanceOf(ConflictException);
@@ -253,6 +259,7 @@ describe("Catalog Control", () => {
         itemType: "PART",
         sellingPrice: "95.50",
         compatibleCategories: ["CARS", "MOTORCYCLES"],
+        fitsMakes: ["universal"],
       },
       false,
     );
@@ -270,6 +277,59 @@ describe("Catalog Control", () => {
 
     expect(page.items).toHaveLength(1);
     expect(page.items[0]?.compatibleCategories).toEqual(["CARS", "MOTORCYCLES"]);
+  });
+
+  /**
+   * What a part fits is asked at the moment it enters the catalogue,
+   * because that is the only moment somebody is holding it -- and it is
+   * what lets the Point of Sale open already narrowed to the car on the
+   * job. Enforced here rather than by a disabled Save button, which is
+   * not a rule.
+   */
+  it("refuses a part that does not say which vehicles it fits", async () => {
+    await expect(
+      catalog.create(
+        tenantId,
+        { sku: `NOFIT-${SUFFIX}`, name: "Unclassified part", itemType: "PART", sellingPrice: "10.00" },
+        false,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("records the marques a part fits, lower-cased to match a vehicle's own make", async () => {
+    const created = await catalog.create(
+      tenantId,
+      {
+        sku: `GERMAN-${SUFFIX}`,
+        name: "Textar front pads",
+        itemType: "PART",
+        sellingPrice: "420.00",
+        // Entered as the picker offers them; stored as the ids an asset's
+        // `make` uses, or nothing would ever match.
+        fitsMakes: ["BMW", "mercedes"],
+        fitsModels: ["320i"],
+      },
+      false,
+    );
+
+    expect(created.fitsMakes).toEqual(["bmw", "mercedes"]);
+    expect(created.fitsModels).toEqual(["320i"]);
+  });
+
+  it("accepts oil and bulbs as fitting everything", async () => {
+    const created = await catalog.create(
+      tenantId,
+      {
+        sku: `UNIVERSAL-${SUFFIX}`,
+        name: "Screen wash",
+        itemType: "PART",
+        sellingPrice: "40.00",
+        fitsMakes: ["universal"],
+      },
+      false,
+    );
+
+    expect(created.fitsMakes).toEqual(["universal"]);
   });
 
   it("pages server-side and reports the full total", async () => {

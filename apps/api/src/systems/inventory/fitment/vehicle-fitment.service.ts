@@ -7,6 +7,7 @@ import {
   ResolvedFitmentItem,
   VehicleProfile,
 } from "./fitment.types";
+import { findVehicleMake } from "@mop/shared";
 import { MASTER_FITMENT_RULES } from "./fitment-rules.dataset";
 import { ComponentPosition } from "../master-catalog/cars-catalog.dataset";
 
@@ -33,11 +34,13 @@ export class VehicleFitmentService {
     const canonicalPartSlug = query.canonicalPartSlug.toLowerCase().trim();
     const normalizedPosition = query.position?.toString().toUpperCase();
 
+    // A caller that names no vehicle gets the universal rules, not an
+    // invented one. This defaulted to a 2021 Toyota Corolla, so asking
+    // "what fits?" without saying what for answered with Corolla parts.
     const vehicle: VehicleProfile = query.vehicleProfile || {
       category: "CARS",
-      make: "toyota",
-      model: "corolla",
-      year: 2021,
+      make: "universal",
+      model: "universal",
     };
 
     const make = vehicle.make.toLowerCase().trim();
@@ -268,6 +271,59 @@ export class VehicleFitmentService {
   /**
    * Helper to parse make, model, year, and category from WorkOrder and Asset records.
    */
+  /**
+   * What the vehicle in front of the technician actually is.
+   *
+   * This used to guess. It read the plate number and the VIN as one
+   * lower-case string and looked for substrings: a plate containing
+   * "hon" made the vehicle a Honda Civic, "bmw" made it a 320i, and
+   * everything else in the workshop -- every car of every marque -- was
+   * a 2021 Toyota Corolla. The list of parts a technician was offered
+   * for a brake job followed that guess, so an Audi got Corolla pads
+   * because nothing in its plate spelled a brand.
+   *
+   * The asset now carries its own make and model (`VEHICLE_MAKES`, the
+   * same vocabulary `applicableMakes` matches on), recorded at the front
+   * desk when the vehicle is registered. When it is present it is used.
+   *
+   * When it is absent -- every asset registered before the field existed
+   * -- the profile falls back to `universal`, which matches only the
+   * rules that declare themselves universal. That is deliberately
+   * narrower than the old behaviour: offering nothing and letting the
+   * technician search the catalogue is honest, while offering Corolla
+   * parts for an unknown vehicle is a fabricated recommendation wearing
+   * the words "exact match".
+   */
+  /**
+   * Every SKU the fitment rules say suits this marque of this kind of
+   * machine, plus everything declared universal.
+   *
+   * This is what "fits this car" narrows the Point of Sale to. It is
+   * deliberately the rules' own answer and not a text match on the part
+   * name: "BMW" appearing in a description is a coincidence, while
+   * `applicableMakes` is a statement somebody made on purpose.
+   *
+   * Returns null when the vehicle's make was never recorded -- there is
+   * no honest filter to build then, and the caller shows the catalogue
+   * whole rather than pretending to narrow it.
+   */
+  skusForVehicle(make: string | null | undefined, category: string | null | undefined): string[] | null {
+    const known = findVehicleMake(make);
+    if (!known) return null;
+
+    const kind = (category ?? "CARS").toUpperCase();
+    const skus = new Set<string>();
+    for (const rule of this.rules) {
+      if (rule.applicableVehicleCategory !== kind) continue;
+      const matches =
+        rule.applicableMakes.includes("universal") ||
+        rule.applicableMakes.some((m) => m.toLowerCase() === known.id);
+      if (!matches) continue;
+      for (const item of rule.compatibleSkus) skus.add(item.sku);
+    }
+    return [...skus];
+  }
+
   private extractVehicleProfile(workOrder: any): VehicleProfile {
     const asset = workOrder.asset;
     let category: "CARS" | "MOTORCYCLES" | "HEAVY_EQUIPMENT" = "CARS";
@@ -278,39 +334,13 @@ export class VehicleFitmentService {
       else if (cat.includes("HEAVY") || cat.includes("EQUIPMENT")) category = "HEAVY_EQUIPMENT";
     }
 
-    // Default to common workshop vehicle if unspecified
-    let make = "toyota";
-    let model = "corolla";
-    const year = 2021;
-
-    // Check if plateNumber or vin provides clues
-    const rawAsset = asset?.plateNumber || asset?.vinOrChassisNumber || "";
-    const lower = rawAsset.toLowerCase();
-
-    if (category === "MOTORCYCLES") {
-      make = "yamaha";
-      model = "mt-07";
-    } else if (category === "HEAVY_EQUIPMENT") {
-      make = "caterpillar";
-      model = "320";
-    } else {
-      if (lower.includes("hyu") || lower.includes("elantra")) {
-        make = "hyundai";
-        model = "elantra";
-      } else if (lower.includes("hon") || lower.includes("civic")) {
-        make = "honda";
-        model = "civic";
-      } else if (lower.includes("bmw")) {
-        make = "bmw";
-        model = "320i";
-      }
-    }
+    const recordedMake = findVehicleMake(asset?.make);
 
     return {
       category,
-      make,
-      model,
-      year,
+      make: recordedMake ? recordedMake.id : "universal",
+      model: (asset?.model as string | undefined)?.trim().toLowerCase() || "universal",
+      year: typeof asset?.modelYear === "number" ? asset.modelYear : undefined,
       vin: asset?.vinOrChassisNumber || undefined,
     };
   }

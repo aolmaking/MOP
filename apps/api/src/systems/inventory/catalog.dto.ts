@@ -1,5 +1,13 @@
 import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Length, Matches, Min } from "class-validator";
 import { CategoryCode } from "@mop/database";
+import { VEHICLE_MAKES } from "@mop/shared";
+
+/**
+ * What a part may say it fits: any marque the vehicle vocabulary knows,
+ * or "universal" for oil, bulbs, wipers and the rest of the shelf that
+ * does not care what badge is on the bonnet.
+ */
+const FITMENT_MAKES = ["universal", ...VEHICLE_MAKES.map((make) => make.id)];
 
 /** Money is a string in and a string out. Never a number, anywhere. */
 const MONEY = /^\d+(\.\d{1,2})?$/;
@@ -35,6 +43,24 @@ export class CatalogItemDto {
   @IsArray()
   @IsIn(Object.values(CategoryCode), { each: true })
   compatibleCategories?: CategoryCode[];
+
+  /**
+   * The marques this part fits. Required when the item is created --
+   * enforced in `CatalogService.create`, not merely on the form, because
+   * a disabled Save button is not a rule. Optional in the DTO so an
+   * item catalogued before the field existed can still have its price
+   * corrected without being classified first.
+   */
+  @IsOptional()
+  @IsArray()
+  @IsIn(FITMENT_MAKES, { each: true })
+  fitsMakes?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @Length(1, 60, { each: true })
+  fitsModels?: string[];
 
   @IsOptional()
   @IsInt()

@@ -136,6 +136,50 @@ describe('refreshInterceptor', () => {
     backend.verify();
   });
 
+  /**
+   * The one that mattered most, and the one that was excluded.
+   *
+   * `authGuard` resolves the session by calling `/api/v1/auth/me` on every
+   * guarded navigation. `me` was listed beside `login` and `refresh` as an
+   * endpoint not worth refreshing on -- but a 401 from `me` is not a wrong
+   * password or a spent refresh, it is precisely the expired access cookie
+   * this interceptor exists to renew. So twenty minutes after signing in,
+   * the next navigation asked `me`, got 401, refreshed nothing, and sent
+   * the technician to the login screen with a valid fourteen-day refresh
+   * cookie sitting in the jar.
+   */
+  it('renews the session on the guard own check instead of sending the user to sign in again', async () => {
+    const { http, backend, store } = setup();
+    const result = outcome(http.get('/api/v1/auth/me'));
+
+    backend.expectOne('/api/v1/auth/me').flush(null, { status: 401, statusText: 'Unauthorized' });
+    await settle();
+
+    backend.expectOne('/api/v1/auth/refresh').flush(SESSION);
+    await settle();
+
+    backend.expectOne('/api/v1/auth/me').flush(SESSION);
+
+    await expect(result).resolves.toEqual({ ok: true, value: SESSION });
+    expect(store.session()).toEqual(SESSION);
+    backend.verify();
+  });
+
+  /**
+   * The refresh itself still must not recurse: a spent refresh answers 401
+   * and that answer is final.
+   */
+  it('never tries to refresh the refresh', async () => {
+    const { http, backend } = setup();
+    const result = outcome(http.post('/api/v1/auth/refresh', {}));
+
+    backend.expectOne('/api/v1/auth/refresh').flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    await expect(result).resolves.toMatchObject({ ok: false, error: { httpStatus: 401 } });
+    backend.expectNone('/api/v1/auth/refresh');
+    backend.verify();
+  });
+
   it('leaves every other failure alone', async () => {
     const { http, backend } = setup();
     const result = outcome(http.get('/api/v1/technician/work-orders/wo1'));

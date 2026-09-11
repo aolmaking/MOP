@@ -144,6 +144,49 @@ export class ReturnPartDto {
   reason?: string;
 }
 
+/** One part the technician wants for work they just found. */
+export class ExtraWorkPartDto {
+  @IsString()
+  @Length(1, 200)
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 64)
+  sku?: string;
+
+  @IsInt()
+  @Min(1)
+  quantity!: number;
+}
+
+/**
+ * Work found once the job was already underway.
+ *
+ * Deliberately a different shape from `CreateFaultDto`: this one carries
+ * the parts it needs, because "the caliper is seized" and "I need a
+ * caliper" are one sentence at the bay and two records afterwards.
+ */
+export class RaiseExtraWorkDto {
+  @IsString()
+  @Length(3, 1000)
+  description!: string;
+
+  @IsEnum(SeverityLevel)
+  severity!: SeverityLevel;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 200)
+  recommendedService?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExtraWorkPartDto)
+  parts?: ExtraWorkPartDto[];
+}
+
 export class CreateFaultDto {
   @IsString()
   @Length(3, 1000)

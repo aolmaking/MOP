@@ -1,634 +1,305 @@
 /*
- * "Now" -- the page a technician sees when they pick the tablet back up.
+ * The technician's queue.
  *
- * Everything here is oversized on purpose. The technician is at arm's
- * length from a dirty screen in bad light, and this page is read rather
- * than operated: one glance has to answer "which car, how far in, is
- * anything wrong".
+ * Read at arm's length, off a dirty screen, in bad light, by someone who
+ * may not read the English words. Everything below follows from that:
+ *
+ *  - the badge of the marque is the first thing in every row, because it
+ *    is what a technician actually recognises a car by;
+ *  - a plate is 1.75rem of monospace, the largest thing on the row;
+ *  - a state is an icon AND a word AND a colour, never one of the three;
+ *  - a whole row is the target, because aiming at a chevron with gloves
+ *    on does not work.
+ *
+ * `--tap` (56px here, set on `.tech`) is the floor for anything
+ * touchable. Sizes come from the shell's own scale, which is already a
+ * step up from the desk's.
  */
+
+.tech-station {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* ── The car in their hands ────────────────────────────────────────── */
 
 .now {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-3);
+  align-items: center;
+  gap: var(--space-4);
+  min-block-size: var(--tap);
   inline-size: 100%;
-  padding: var(--space-5) var(--space-4);
+  padding: var(--space-5);
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-inline-start: 4px solid var(--brand);
-  border-radius: var(--radius-sm);
+  border: 2px solid var(--brand);
+  border-radius: var(--radius-md);
   color: var(--text);
-  text-align: start;
-  cursor: pointer;
+  text-decoration: none;
 }
 
-.now-state-badge-outside {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
-  color: #0369a1;
-  padding: 6px 14px;
-  border-radius: 9999px;
-  font-size: 13px;
-  font-weight: 700;
-  border: 1px solid #7dd3fc;
-  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.12);
-  margin-bottom: 2px;
+.now-mark {
+  --mark-size: 76px;
 }
 
-.now-state-badge-outside .badge-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #0284c7;
-  box-shadow: 0 0 8px #0284c7;
-  animation: pulse-dot 2s infinite ease-in-out;
-}
-
-@keyframes pulse-dot {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.3); opacity: 0.7; }
-}
-
-.queue-state-badge-outside {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #f1f5f9;
-  color: #334155;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  margin-bottom: 8px;
-  border: 1px solid #e2e8f0;
-}
-
-.queue-state-badge-outside .badge-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #64748b;
-}
-
-.queue-state-badge-outside .badge-dot--inspection {
-  background: #0284c7;
-  box-shadow: 0 0 6px rgba(2, 132, 199, 0.5);
-}
-
-.now:active {
-  background: var(--accent-muted);
+.now-words {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  flex: 1 1 auto;
 }
 
 .now-label {
-  color: var(--text-muted);
-  font-size: var(--tech-text-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--brand-text);
+  font-size: var(--tech-text);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: var(--tracking-label);
 }
 
-/*
- * The largest text in the entire product. It is what gets matched
- * against the car standing in front of them, and getting it wrong sends
- * a technician to the wrong vehicle -- an operational error, not a
- * cosmetic one.
- */
+.now-label-icon {
+  font-size: 1.2em;
+}
+
 .now-plate {
   font-size: var(--tech-text-xl);
-  font-weight: 700;
+  font-weight: 800;
   line-height: var(--leading-tight);
 }
 
-.now-customer {
+.now-vehicle {
+  color: var(--text-muted);
   font-size: var(--tech-text);
-  color: var(--text-muted);
-}
-
-.now-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-}
-
-.now-fact {
-  font-family: var(--font-mono);
-  font-size: var(--tech-text);
-  font-weight: 500;
-}
-
-.now-complaint {
-  margin: 0;
-  padding: var(--space-2) var(--space-3);
-  background: var(--surface-subtle, rgba(0, 0, 0, 0.03));
-  border-radius: var(--radius-sm);
-  font-size: var(--tech-text-sm);
-  color: var(--text);
-  line-height: var(--leading-normal);
-}
-
-.now-complaint-label {
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.now-status-banner {
-  inline-size: 100%;
-  padding: var(--space-2) var(--space-3);
-  background: var(--accent-muted, rgba(0, 0, 0, 0.05));
-  border-inline-start: 3px solid var(--brand);
-  border-radius: var(--radius-sm);
-  font-size: var(--tech-text-sm);
-  font-weight: 500;
-  line-height: var(--leading-normal);
-}
-
-.now-status-banner--danger {
-  background: var(--danger-bg);
-  border-inline-start-color: var(--danger);
-  color: var(--danger);
-  font-weight: 700;
-}
-
-/* The one red thing on this page, and only when it is true. */
-.now-blocked {
-  inline-size: 100%;
-  padding: var(--space-2) var(--space-3);
-  background: var(--danger-bg);
-  border-inline-start: 3px solid var(--danger);
-  border-radius: var(--radius-sm);
-  font-size: var(--tech-text-sm);
-  font-weight: 700;
-}
-
-/*
- * Not red. A refused inspection is an instruction, not an alarm -- and
- * colouring it the same as a blocker would make both mean less.
- */
-.now-note {
-  inline-size: 100%;
-  padding-inline-start: var(--space-3);
-  border-inline-start: 3px solid var(--border-strong);
-  color: var(--text-muted);
-  font-size: var(--tech-text-sm);
-  line-height: var(--leading-normal);
 }
 
 .now-go {
-  margin-block-start: var(--space-2);
+  font-size: var(--tech-text-xl);
   color: var(--brand-text);
-  font-size: var(--tech-text);
+  flex: none;
+}
+
+/* ── Groups ────────────────────────────────────────────────────────── */
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--tech-text-lg);
   font-weight: 700;
 }
 
-/* --- idle / error -------------------------------------------------- */
+.group-icon {
+  font-size: 1.2em;
+}
+
+.group-count {
+  min-inline-size: 32px;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--neutral-badge-bg);
+  color: var(--text-muted);
+  font-size: var(--tech-text);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ── One vehicle ───────────────────────────────────────────────────── */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-block-size: var(--tap);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.row:hover {
+  border-color: var(--border-strong);
+}
+
+/* Stopped work is the one thing allowed to interrupt the scan. */
+.row--stop {
+  border-color: var(--danger);
+}
+
+.row-mark {
+  --mark-size: 56px;
+}
+
+.row-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.row-plate {
+  font-size: var(--tech-text-lg);
+  font-weight: 800;
+  line-height: var(--leading-tight);
+}
+
+.row-vehicle {
+  color: var(--text);
+  font-size: var(--tech-text);
+}
+
+/* One line. The full concern is on the card, which is one tap away. */
+.row-why {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-since {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-faint);
+  font-size: var(--tech-text-sm);
+}
+
+.row-left {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--tech-text);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.row-left-n {
+  font-weight: 700;
+}
+
+.row-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  flex: none;
+}
+
+.row-state--start {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.row-state--wait {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.row--stop .row-state {
+  background: var(--danger-bg);
+  color: var(--danger-strong);
+}
+
+.row-go {
+  font-size: var(--tech-text-lg);
+  color: var(--text-muted);
+  flex: none;
+}
+
+/* ── States ────────────────────────────────────────────────────────── */
 
 .state {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-3);
-  padding-block: var(--space-6);
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
 }
 
 .state-title {
+  margin: 0;
   font-size: var(--tech-text-lg);
   font-weight: 700;
 }
 
 .state-body {
+  margin: 0;
   color: var(--text-muted);
-  font-size: var(--tech-text);
-  line-height: var(--leading-normal);
 }
 
-/*
- * Every actionable control on a technician page is at least one tap
- * target tall and wide enough to hit without looking. --tap is defined
- * on .tech in the shell and is 56px.
- */
 .big-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-block-size: var(--tap);
-  min-inline-size: 12rem;
-  padding: 0 var(--space-5);
+  padding-inline: var(--space-5);
   background: var(--accent);
-  border: none;
-  border-radius: var(--radius-sm);
   color: var(--on-accent);
+  border: none;
+  border-radius: var(--radius-md);
+  font: inherit;
   font-size: var(--tech-text);
   font-weight: 700;
-  text-decoration: none;
   cursor: pointer;
 }
-
-.big-button:active {
-  background: var(--accent-hover);
-}
-
-/* --- loading ------------------------------------------------------- */
 
 .skeleton {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding-block: var(--space-5);
 }
 
 .skeleton-bar {
   display: block;
-  inline-size: 40%;
-  block-size: var(--tech-text-lg);
-  background: var(--accent-muted);
-  border-radius: var(--radius-sm);
+  block-size: 72px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
 }
 
 .skeleton-bar--wide {
-  inline-size: 70%;
-  block-size: var(--tech-text-xl);
+  block-size: 108px;
 }
 
-/* MOP page-scoped visual polish — now */
-:where(.now) {
-  background-image: radial-gradient(circle at 92% 4%, rgb(255 255 255 / 0.035), transparent 15rem);
-}
+/* ── Narrow screens ────────────────────────────────────────────────── */
 
-/* Technician POS overview UX upgrade */
-.now { gap: var(--space-6); }
-.now-title { font-size: clamp(var(--tech-text-lg), 5vw, var(--tech-text-xl)); }
-/* A job card is the primary thing a gloved hand aims at on this page, and
-   nothing declared the floor for it -- the size came out of its content. */
-.job-link, .job-card { min-block-size: var(--tap); border-radius: var(--radius-lg); box-shadow: var(--shadow-1); transition: transform var(--duration-fast) var(--ease-spring), box-shadow var(--duration-fast) var(--easing); }
-.job-link:hover, .job-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-2); }
+@media (max-width: 560px) {
+  .row-state-word {
+    /* The icon and the colour still carry it, and the plate matters more
+       than the word when there is no room for both. */
+    display: none;
+  }
 
-/* Consolidated Station enhancements */
-.tech-station {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-}
-
-.section-label-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-}
-
-.pulse-indicator {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #10b981;
-  box-shadow: 0 0 8px #10b981;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
-  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-}
-
-.section-eyebrow {
-  font-size: var(--tech-text-sm);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-label);
-  color: var(--text-muted);
-}
-
-.station-idle-card {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-5);
-  background: var(--surface);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-md);
-}
-
-.idle-icon-wrap {
-  font-size: 2rem;
-  opacity: 0.6;
-}
-
-.idle-title {
-  font-size: var(--tech-text-lg);
-  font-weight: 700;
-  margin: 0 0 var(--space-1) 0;
-}
-
-.idle-desc {
-  font-size: var(--tech-text-sm);
-  color: var(--text-muted);
-  margin: 0;
-}
-
-/* Queue Section */
-.tech-queue-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.queue-header {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--border);
-}
-
-.queue-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.queue-title {
-  font-size: var(--tech-text-lg);
-  font-weight: 700;
-  margin: 0;
-}
-
-.queue-badges {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.badge-chip {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: var(--radius-sm);
-  text-transform: uppercase;
-}
-
-.badge-chip--active {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-}
-
-.badge-chip--danger {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-}
-
-.filter-pills {
-  display: flex;
-  gap: var(--space-2);
-  overflow-x: auto;
-}
-
-.filter-pill {
-  min-height: 44px;
-  padding: var(--space-2) var(--space-4);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  color: var(--text-muted);
-  font-size: var(--tech-text-sm);
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.filter-pill--active {
-  background: var(--primary, #3b82f6);
-  color: #ffffff;
-  border-color: var(--primary, #3b82f6);
-}
-
-.queue-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.queue-item {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.queue-item:hover {
-  transform: translateY(-2px);
-  border-color: var(--focus-ring, #3b82f6);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.queue-item--active {
-  border-inline-start: 4px solid #10b981;
-}
-
-.queue-item--blocked {
-  border-inline-start: 4px solid #ef4444;
-}
-
-.queue-link {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  color: var(--text);
-  text-decoration: none;
-  /* 56px, not the 44px floor: PHASE_6 section 2 calls 48-56 the size at
-     which gloved operation becomes reliable, and a queue is scanned and
-     tapped at speed. Logical, so it still means "tall" under any writing mode. */
-  min-block-size: 56px;
-}
-
-/* Top Row: Plate & State Badge */
-.card-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.vehicle-plate {
-  font-size: var(--tech-text-lg);
-  font-weight: 800;
-  letter-spacing: 0.05em;
-}
-
-/* Color-coded State Badges */
-.state-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border-radius: 9999px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.state-badge-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-}
-
-/* 1. Inspection: Electric Cyan */
-.state-badge--inspection {
-  background: rgba(14, 165, 233, 0.15);
-  color: #0ea5e9;
-  border: 1px solid rgba(14, 165, 233, 0.4);
-}
-.state-badge--inspection .state-badge-dot {
-  background: #0ea5e9;
-  box-shadow: 0 0 6px #0ea5e9;
-}
-
-/* 2. Ready to start / Approved: Emerald Green */
-.state-badge--ready {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.4);
-}
-.state-badge--ready .state-badge-dot {
-  background: #10b981;
-  box-shadow: 0 0 6px #10b981;
-}
-
-/* 3. In Progress: Royal Violet */
-.state-badge--progress {
-  background: rgba(139, 92, 246, 0.15);
-  color: #8b5cf6;
-  border: 1px solid rgba(139, 92, 246, 0.4);
-}
-.state-badge--progress .state-badge-dot {
-  background: #8b5cf6;
-  box-shadow: 0 0 6px #8b5cf6;
-}
-
-/* 4. Waiting on Parts: Amber / Orange */
-.state-badge--waiting {
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.4);
-}
-.state-badge--waiting .state-badge-dot {
-  background: #f59e0b;
-  box-shadow: 0 0 6px #f59e0b;
-}
-
-/* 5. Blocked: Crimson Red */
-.state-badge--blocked {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.4);
-}
-.state-badge--blocked .state-badge-dot {
-  background: #ef4444;
-  box-shadow: 0 0 6px #ef4444;
-}
-
-/* 6. Ready for Review: Sky Blue */
-.state-badge--review {
-  background: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.4);
-}
-.state-badge--review .state-badge-dot {
-  background: #38bdf8;
-}
-
-/* 7. Approval: Indigo */
-.state-badge--approval {
-  background: rgba(99, 102, 241, 0.15);
-  color: #6366f1;
-  border: 1px solid rgba(99, 102, 241, 0.4);
-}
-.state-badge--approval .state-badge-dot {
-  background: #6366f1;
-}
-
-/* Default */
-.state-badge--default {
-  background: rgba(100, 116, 139, 0.15);
-  color: #64748b;
-  border: 1px solid rgba(100, 116, 139, 0.4);
-}
-.state-badge--default .state-badge-dot {
-  background: #64748b;
-}
-
-/* Sub row: Customer & Vehicle */
-.vehicle-details-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  color: var(--text-muted);
-  font-size: var(--tech-text-sm);
-  font-weight: 500;
-}
-
-.vehicle-meta-dot {
-  color: var(--border);
-}
-
-/* Complaint text */
-.vehicle-complaint {
-  margin: 0;
-  font-size: var(--tech-text-sm);
-  color: var(--text);
-  background: var(--surface-subtle, rgba(0, 0, 0, 0.12));
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  border-inline-start: 3px solid var(--border-strong, #64748b);
-  line-height: 1.4;
-}
-
-.complaint-label {
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-/* Card footer row */
-.card-footer-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  padding-top: var(--space-1);
-}
-
-.footer-left {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  font-size: var(--tech-text-sm);
-  color: var(--text-muted);
-}
-
-.card-open-arrow {
-  font-size: var(--tech-text-sm);
-  font-weight: 700;
-  color: var(--primary, #3b82f6);
-}
-
-.queue-empty {
-  padding: var(--space-5);
-  text-align: center;
-  color: var(--text-muted);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-md);
+  .now-mark {
+    --mark-size: 60px;
+  }
 }

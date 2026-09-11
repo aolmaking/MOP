@@ -4,6 +4,7 @@ import { HEAVY_EQUIPMENT_INSPECTION_CHECKPOINTS } from "../../systems/inventory/
 import {
   PART_REQUEST_GRAPH,
   canTransition,
+  findVehicleMake,
   gateDefinition,
   type GateEvaluation,
   type GateKey,
@@ -20,10 +21,49 @@ import { ConcurrentModificationError, InspectionRepository } from "../../systems
 import { InspectionAggregate } from "../../systems/operations/inspection/domain/inspection.aggregate";
 import { PriceCatalogService } from "../../systems/finance/price-catalog.service";
 
+/**
+ * What to call the vehicle, in as many real words as are known.
+ *
+ * This was `${plate} (${category})` -- "AUDIT-9001 (CARS)" -- printed
+ * under the heading "model" on the technician's card, because no make or
+ * model was recorded anywhere. Now that the front desk records both, the
+ * card can say "Toyota Corolla 2021", and falls back to the category
+ * only when nobody has said what the vehicle is.
+ */
+function vehicleLabel(asset: {
+  plateNumber?: string | null;
+  serialNumber?: string | null;
+  category?: string | null;
+  make?: string | null;
+  model?: string | null;
+  modelYear?: number | null;
+}): string | null {
+  const known = findVehicleMake(asset.make);
+  const words = [known?.label, asset.model?.trim() || null, asset.modelYear ? String(asset.modelYear) : null].filter(
+    (word): word is string => !!word,
+  );
+  if (words.length > 0) return words.join(" ");
+
+  // Null, not `${plate} (${category})`. That fallback printed the plate a
+  // second line under the plate -- "AUDIT-9001" above "AUDIT-9001 (CARS)" --
+  // which is a line to read that says nothing new. Every caller already
+  // guards on this being present.
+  return null;
+}
+
 export interface TechnicianJob {
   readonly workOrderId: string;
   readonly identifier: string | null;
   readonly vehicleModel?: string | null;
+  /**
+   * What the vehicle is, as the front desk recorded it: the VEHICLE_MAKES
+   * id and the free-text model. Null on an asset registered before the
+   * field existed -- and null is the answer then, because the interface
+   * draws a marque mark from this and must not draw the wrong one.
+   */
+  readonly make?: string | null;
+  readonly model?: string | null;
+  readonly modelYear?: number | null;
   readonly category?: string | null;
   readonly vin?: string | null;
   readonly customerName: string;
@@ -220,6 +260,10 @@ export interface WorkCard {
   readonly workOrderId: string;
   readonly identifier: string | null;
   readonly vehicleModel?: string | null;
+  readonly make?: string | null;
+  readonly model?: string | null;
+  readonly modelYear?: number | null;
+  readonly category?: string | null;
   readonly vin?: string | null;
   readonly mileage?: string | null;
   readonly customerName: string;
@@ -778,7 +822,7 @@ export class TechnicianWorkViewService {
         status: true,
         updatedAt: true,
         inspectionDeclined: true,
-        asset: { select: { plateNumber: true, serialNumber: true, category: true, vinOrChassisNumber: true } },
+        asset: { select: { plateNumber: true, serialNumber: true, category: true, vinOrChassisNumber: true, make: true, model: true, modelYear: true } },
         customer: { select: { fullName: true, phone: true } },
         tasks: {
           where: { assignments: { some: { staffUserId } } },
@@ -797,13 +841,15 @@ export class TechnicianWorkViewService {
     return rows.map((row) => {
       const open = row.tasks.filter((task) => !["DONE", "CANCELLED"].includes(task.status));
       const plate = row.asset.plateNumber ?? row.asset.serialNumber ?? "Vehicle";
-      const catLabel = row.asset.category ? row.asset.category.replace(/_/g, " ") : "Vehicle";
-      const vehicleModel = `${plate} (${catLabel})`;
+      const vehicleModel = vehicleLabel(row.asset);
       const vin = row.asset.vinOrChassisNumber ?? row.asset.serialNumber ?? "VIN-UNSPECIFIED";
       return {
         workOrderId: row.id,
         identifier: plate,
         vehicleModel,
+        make: row.asset.make,
+        model: row.asset.model,
+        modelYear: row.asset.modelYear,
         category: row.asset.category,
         vin,
         customerName: row.customer.fullName,
@@ -876,7 +922,7 @@ export class TechnicianWorkViewService {
         status: true,
         inspectionDeclined: true,
         assetId: true,
-        asset: { select: { plateNumber: true, serialNumber: true, category: true, vinOrChassisNumber: true } },
+        asset: { select: { plateNumber: true, serialNumber: true, category: true, vinOrChassisNumber: true, make: true, model: true, modelYear: true } },
         customer: { select: { fullName: true, phone: true } },
         tasks: {
           select: {
@@ -981,7 +1027,12 @@ export class TechnicianWorkViewService {
 
     // Detect which subsystems were requested by the customer
     let targetKeys: string[] = [];
-    if (Array.isArray(inspectionFields.requestedParts) && inspectionFields.requestedParts.length > 0) {
+    if (inspectionFields.fullInspection === true) {
+      // The front desk chose the whole car. An empty list here means the
+      // whole catalogue further down, and nothing below is allowed to
+      // narrow it from words in the complaint.
+      targetKeys = [];
+    } else if (Array.isArray(inspectionFields.requestedParts) && inspectionFields.requestedParts.length > 0) {
       targetKeys = inspectionFields.requestedParts;
     } else {
       const lower = rawComplaint.toLowerCase();
@@ -1087,16 +1138,23 @@ export class TechnicianWorkViewService {
     });
 
     const plate = workOrder.asset.plateNumber ?? workOrder.asset.serialNumber ?? "Vehicle";
-    const catLabel = workOrder.asset.category ? workOrder.asset.category.replace(/_/g, " ") : "Vehicle";
-    const vehicleModel = `${plate} (${catLabel})`;
+    const vehicleModel = vehicleLabel(workOrder.asset);
     const vin = (workOrder.asset as any).vinOrChassisNumber ?? workOrder.asset.serialNumber ?? "VIN-UNSPECIFIED";
 
     return {
       workOrderId: workOrder.id,
       identifier: plate,
       vehicleModel,
+      make: workOrder.asset.make,
+      model: workOrder.asset.model,
+      modelYear: workOrder.asset.modelYear,
+      category: workOrder.asset.category,
       vin,
-      mileage: (workOrder.asset as any).hourMeter ? `${(workOrder.asset as any).hourMeter} hrs` : "42,150 km",
+      // Null, not "42,150 km". That literal was printed on every card in
+      // every workshop whose assets carry no hour meter, which is all of
+      // them -- an odometer reading the technician could have written
+      // down and acted on, invented by a template.
+      mileage: (workOrder.asset as any).hourMeter ? `${(workOrder.asset as any).hourMeter} hrs` : null,
       customerName: workOrder.customer.fullName,
       customerPhone: workOrder.customer.phone ?? null,
       status: workOrder.status,

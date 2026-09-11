@@ -2,8 +2,6 @@ import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { type Observable, map, switchMap } from 'rxjs';
 import { ErrorBanner } from '../../ui/error-banner/error-banner';
-import { ButtonDirective } from '../../ui/button/button.directive';
-import { FormField } from '../../ui/form-field/form-field';
 import { ToastService } from '../../ui/toast/toast.service';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import {
@@ -66,7 +64,7 @@ const NEW = 'new';
  */
 @Component({
   selector: 'app-catalog-builder',
-  imports: [ErrorBanner, ButtonDirective, FormField],
+  imports: [ErrorBanner],
   templateUrl: './catalog-builder.html',
   styleUrl: './catalog-builder.css',
 })
@@ -153,6 +151,21 @@ export class CatalogBuilder {
   });
 
   /** Filters attached to nothing at all -- reachable, never deleted. */
+  /**
+   * The labels a shelf offers, resolved for the list itself.
+   *
+   * The row used to print `attributeIds.length` -- "1 filter" -- which
+   * told the storekeeper something existed without saying what it was,
+   * so the only way to find out was to open the row. Showing the names
+   * costs a lookup and removes the reason to open anything.
+   */
+  protected labelsOf(category: ConfiguredCategory): readonly ConfiguredAttribute[] {
+    const all = this.allAttributes();
+    return category.attributeIds
+      .map((id) => all.find((attribute) => attribute.id === id))
+      .filter((attribute): attribute is ConfiguredAttribute => !!attribute);
+  }
+
   protected readonly orphanAttributes = computed(() =>
     this.allAttributes().filter((attribute) => attribute.usedByCategoryIds.length === 0),
   );

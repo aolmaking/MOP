@@ -709,3 +709,227 @@
   margin-block-start: var(--space-2);
 }
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   THE FRONT DESK
+
+   Same catalogue, read standing up while a customer is talking. Bigger
+   type, a search box that is unmistakably the search box, one border
+   weight, and a buy button that reads as a button from across the counter.
+
+   The product tiles keep their pictures rather than becoming a table:
+   a table is the right shape for finding a known record -- a plate, a name
+   -- and the wrong one for choosing a part you can recognise by sight but
+   cannot necessarily read the name of.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:host(.pos-desk) .catalog {
+  font-size: var(--text-md);
+}
+
+:host(.pos-desk) .catalog-title {
+  font-size: var(--text-2xl);
+}
+
+:host(.pos-desk) .card-back {
+  min-block-size: 48px;
+  font-size: var(--text-md);
+}
+
+:host(.pos-desk) .catalog-search input {
+  min-block-size: 56px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--border-strong);
+  font-size: var(--text-lg);
+}
+
+:host(.pos-desk) .catalog-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+
+:host(.pos-desk) .chip {
+  min-block-size: 48px;
+  padding-inline: var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+}
+
+:host(.pos-desk) .grid {
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: var(--space-4);
+}
+
+:host(.pos-desk) .product {
+  padding: var(--space-4);
+  border: 1px solid var(--border-strong);
+}
+
+:host(.pos-desk) .product-image {
+  block-size: 8rem;
+}
+
+:host(.pos-desk) .product-name {
+  font-size: var(--text-lg);
+}
+
+:host(.pos-desk) .product-summary,
+:host(.pos-desk) .product-stock {
+  font-size: var(--text-base);
+}
+
+:host(.pos-desk) .product-price {
+  font-size: var(--text-xl);
+}
+
+:host(.pos-desk) .tap {
+  min-block-size: 48px;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+
+/* ── "Fits this car" ───────────────────────────────────────────────── */
+
+.fits-bar {
+  display: flex;
+}
+
+.chip--fits {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  text-align: start;
+}
+
+.chip--fits mop-vehicle-mark {
+  --mark-size: 40px;
+}
+
+.fits-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.fits-sub {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.fits-state {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   POINT OF SALE — the shop floor, made readable
+
+   The catalogue is scanned, not read: somebody is looking for one part
+   among a hundred, usually while a customer or a car waits. So the two
+   facts a decision turns on -- the price, and whether it is on the shelf
+   -- are lifted out of the grey run of text they were buried in, and the
+   card gets a hierarchy: picture, name, price, shelf, one button.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.product {
+  gap: var(--space-3);
+  transition: border-color var(--duration-fast) var(--easing);
+}
+
+.product:hover {
+  border-color: var(--border-strong);
+}
+
+.product-image {
+  block-size: 7rem;
+  border: 1px solid var(--border);
+}
+
+.product-name {
+  /* Two lines, then it stops -- a five-line part name pushed the price
+     and the button off the bottom of the tile and made the grid ragged. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.product-summary {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Price and shelf state on one line, at the bottom, always in the same
+   place on every card. */
+.product-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-block-start: auto;
+  padding-block-start: var(--space-2);
+  border-block-start: 1px solid var(--border);
+}
+
+.product-price {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* A dot as well as a word as well as a colour: colour alone dies in
+   daylight and excludes a colour-blind technician. */
+.product-stock {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.stock-dot {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--success);
+  flex: none;
+}
+
+.product-stock--low .stock-dot {
+  background: var(--warning);
+}
+
+.product-stock--out .stock-dot {
+  background: var(--danger);
+}
+
+.tap--add {
+  gap: var(--space-2);
+  font-weight: 700;
+}
+
+/* The desk variant keeps the same shape, one size up. */
+:host(.pos-desk) .product-meta {
+  padding-block-start: var(--space-3);
+}
+
+:host(.pos-desk) .product-price {
+  font-size: var(--text-xl);
+}
+
+:host(.pos-desk) .stock-dot {
+  inline-size: 10px;
+  block-size: 10px;
+}

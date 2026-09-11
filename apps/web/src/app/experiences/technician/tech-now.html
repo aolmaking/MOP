@@ -1,6 +1,21 @@
 <!--
-  Technician Station -- Single Unified Vehicle Queue.
-  Clean, touch-friendly vehicle list with color-coded status badges.
+  The technician's queue.
+
+  One question, asked standing up, often with gloves on and sometimes by
+  someone who does not read the English words: **which car do I touch,
+  and what do I do with it?**
+
+  So the page answers in that order. The car in their hands is a single
+  large card at the top with the badge of the marque on it. Everything
+  else is grouped by what the technician does with it -- start it, or
+  wait -- rather than by the lifecycle status it happens to hold, and
+  each group is a heading with an icon, not a filter pill that has to be
+  found and pressed first.
+
+  What was here: five filter pills reading All / Ready / Inspection / In
+  Progress / Blocked, three counter chips, and a flat list of every job
+  in one pile, each row carrying its status as words in a coloured badge.
+  Reading was the only way through it.
 -->
 <div class="tech-station">
   @switch (state()) {
@@ -26,88 +41,94 @@
     }
 
     @default {
-      <!-- Unified Vehicles Queue -->
-      <section class="tech-queue-section">
-        <header class="queue-header">
-          <div class="queue-title-row">
-            <h1 class="queue-title">Assigned Vehicles ({{ queue().length }})</h1>
-            <div class="queue-badges">
-              @if (activeCount() > 0) {
-                <span class="badge-chip badge-chip--active">{{ activeCount() }} in bay</span>
-              }
-              @if (inspectionCount() > 0) {
-                <span class="badge-chip badge-chip--inspection">{{ inspectionCount() }} inspection</span>
-              }
-              @if (blockedCount() > 0) {
-                <span class="badge-chip badge-chip--danger">{{ blockedCount() }} blocked</span>
-              }
-            </div>
-          </div>
+      <!--
+        The car in their hands. One, never a list: a technician has two
+        hands and this is the job they are standing in front of.
+      -->
+      @if (currentJob(); as job) {
+        <a class="now" [routerLink]="['/tech/card', job.workOrderId]">
+          <mop-vehicle-mark class="now-mark" [make]="job.make" [category]="job.category" />
 
-          <div class="filter-pills" role="toolbar" aria-label="Filter queue">
-            <button type="button" class="filter-pill" [class.filter-pill--active]="filter() === 'ALL'" (click)="filter.set('ALL')">All</button>
-            <button type="button" class="filter-pill" [class.filter-pill--active]="filter() === 'READY'" (click)="filter.set('READY')">Ready</button>
-            <button type="button" class="filter-pill" [class.filter-pill--active]="filter() === 'INSPECTION'" (click)="filter.set('INSPECTION')">Inspection</button>
-            <button type="button" class="filter-pill" [class.filter-pill--active]="filter() === 'IN_PROGRESS'" (click)="filter.set('IN_PROGRESS')">In Progress</button>
-            <button type="button" class="filter-pill" [class.filter-pill--active]="filter() === 'BLOCKED'" (click)="filter.set('BLOCKED')">Blocked</button>
-          </div>
-        </header>
+          <span class="now-words">
+            <span class="now-label">
+              <span class="now-label-icon" aria-hidden="true">🔧</span>
+              <span>{{ job.status === 'UNDER_INSPECTION' ? 'Checking now' : 'Working now' }}</span>
+            </span>
+            <span class="now-plate"><mop-identifier [value]="job.identifier ?? '—'" /></span>
+            @if (job.vehicleModel) {
+              <span class="now-vehicle">{{ job.vehicleModel }}</span>
+            }
+          </span>
 
-        @if (filteredQueue().length > 0) {
-          <ul class="queue-list">
-            @for (item of filteredQueue(); track item.workOrderId) {
-              <li class="queue-item" [class.queue-item--active]="item.active" [class.queue-item--blocked]="item.blocked">
-                <a class="queue-link" [routerLink]="['/tech/card', item.workOrderId]">
-                  <!-- Top Row: Plate & State Badge with dedicated color -->
-                  <div class="card-header-row">
-                    <span class="vehicle-plate"><mop-identifier [value]="item.identifier ?? '—'" /></span>
-                    <span class="state-badge" [class]="statusColorClass(item.status, item.blocked)">
-                      <span class="state-badge-dot"></span>
-                      {{ statusLabel(item.status, item.blocked) }}
-                    </span>
-                  </div>
+          <span class="now-go" aria-hidden="true">→</span>
+        </a>
+      }
 
-                  <!-- Sub Row: Customer & Vehicle Model -->
-                  <div class="vehicle-details-row">
-                    <span class="vehicle-customer">👤 {{ item.customerName }}</span>
-                    <!--
-                      Shown only when the server actually sent one. This read
-                      `item.vehicleModel || 'Toyota Corolla 2021'`, so a car
-                      with no model on file was described to the technician as
-                      a Corolla -- a fabricated fact on the screen someone uses
-                      to confirm they are working on the right vehicle.
-                    -->
+      @if (queue().length === 0) {
+        <div class="state">
+          <p class="state-title">No vehicles</p>
+          <p class="state-body">Jobs assigned to you show up here.</p>
+        </div>
+      }
+
+      <!--
+        Grouped by what the technician does next. `group.jobs` is never
+        empty -- an empty group is not rendered at all, because a heading
+        over nothing is one more thing to read past.
+      -->
+      @for (group of groups(); track group.key) {
+        <section class="group">
+          <h2 class="group-head">
+            <span class="group-icon" aria-hidden="true">{{ group.icon }}</span>
+            <span class="group-word">{{ group.title }}</span>
+            <span class="group-count">{{ group.jobs.length }}</span>
+          </h2>
+
+          <ul class="rows">
+            @for (item of group.jobs; track item.workOrderId) {
+              <li>
+                <!-- The whole row is the target. No aiming with gloves on. -->
+                <a class="row" [class.row--stop]="item.blocked" [routerLink]="['/tech/card', item.workOrderId]">
+                  <mop-vehicle-mark class="row-mark" [make]="item.make" [category]="item.category" />
+
+                  <span class="row-words">
+                    <span class="row-plate"><mop-identifier [value]="item.identifier ?? '—'" /></span>
                     @if (item.vehicleModel) {
-                      <span class="vehicle-meta-dot">·</span>
-                      <span class="vehicle-model">🚗 {{ item.vehicleModel }}</span>
+                      <span class="row-vehicle">{{ item.vehicleModel }}</span>
                     }
-                  </div>
+                    @if (item.complaint) {
+                      <span class="row-why">{{ item.complaint }}</span>
+                    }
+                    <span class="row-since">
+                      <span aria-hidden="true">⏱</span>
+                      <span>{{ since(item.sinceHours) }}</span>
+                    </span>
+                  </span>
 
-                  <!-- Complaint Text -->
-                  @if (item.complaint) {
-                    <p class="vehicle-complaint">
-                      <span class="complaint-label">Concern:</span> {{ item.complaint }}
-                    </p>
+                  <!--
+                    How much is left, as a number rather than a sentence.
+                    "2 tasks remaining" is a phrase to read; a wrench and a
+                    digit is a quantity to see.
+                  -->
+                  @if (item.myOpenTaskCount > 0) {
+                    <span class="row-left" [attr.aria-label]="item.myOpenTaskCount + ' tasks left'">
+                      <span aria-hidden="true">🔧</span>
+                      <span class="row-left-n">{{ item.myOpenTaskCount }}</span>
+                    </span>
                   }
 
-                  <!-- Card Footer: Tasks & Timing -->
-                  <div class="card-footer-row">
-                    <div class="footer-left">
-                      <span class="tasks-count">{{ item.myOpenTaskCount }} tasks remaining</span>
-                      <span class="time-since">{{ since(item.sinceHours) }}</span>
-                    </div>
-                    <span class="card-open-arrow">Open Card &rarr;</span>
-                  </div>
+                  <span class="row-state" [class]="'row-state--' + group.key">
+                    <span aria-hidden="true">{{ stateIcon(item) }}</span>
+                    <span class="row-state-word">{{ statusLabel(item.status, item.blocked) }}</span>
+                  </span>
+
+                  <span class="row-go" aria-hidden="true">→</span>
                 </a>
               </li>
             }
           </ul>
-        } @else {
-          <div class="queue-empty">
-            <p>No vehicles match the selected filter in your queue.</p>
-          </div>
-        }
-      </section>
+        </section>
+      }
     }
   }
 </div>

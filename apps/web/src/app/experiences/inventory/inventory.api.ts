@@ -305,6 +305,8 @@ export interface CatalogItem {
   readonly catalogCategoryId: string | null;
   readonly categoryName: string | null;
   readonly compatibleCategories: readonly string[];
+  readonly fitsMakes: readonly string[];
+  readonly fitsModels: readonly string[];
   readonly lowStockThreshold: number;
   readonly criticalStockThreshold: number;
   readonly sellingPrice: string;
@@ -335,6 +337,12 @@ export interface CatalogDraft {
   itemType: string;
   catalogCategoryId?: string;
   compatibleCategories?: string[];
+  /**
+   * The marques this part fits, as VEHICLE_MAKES ids, or `['universal']`.
+   * Required by the server when an item is created.
+   */
+  fitsMakes?: string[];
+  fitsModels?: string[];
   lowStockThreshold?: number;
   criticalStockThreshold?: number;
   sellingPrice: string;

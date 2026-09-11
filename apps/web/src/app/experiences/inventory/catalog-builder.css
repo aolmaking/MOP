@@ -1,555 +1,447 @@
 /*
- * Catalog Builder.
- *
- * One authoring panel, full width, then the preview underneath. A
- * category used to live in one panel and its filters in a second one you
- * switched to -- now a category's row expands into everything about it,
- * fields and filters together, so building "Brakes needs Vehicle Type
- * with Sedan/SUV/Truck" never leaves the row you opened. The preview
- * reads last because it is the consequence of the authoring above it,
- * never the other way around.
- */
+  Shelves and labels.
+
+  Written for a storekeeper who reads a few words at a time: 52px fields,
+  48px buttons, plain nouns, and nothing important behind a control that
+  has to be pressed before it can be read. Every shelf shows its labels
+  and every label shows its words in the list itself, which is what made
+  the old "Manage" drill-in unnecessary.
+*/
 
 :host {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  max-inline-size: 100rem;
+  display: block;
+  /* Follows the window: the same page is read on a warehouse laptop and
+     a wide office monitor, and a fixed 1100px column wasted half of one
+     while cramping the other. */
+  max-inline-size: min(1400px, 100%);
+  padding: clamp(var(--space-3), 1.6vw, var(--space-6));
 }
 
-.page-head {
+.shelf-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-3);
-  padding-block-end: var(--space-3);
-  border-block-end: 1px solid var(--text);
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+  margin-block-end: var(--space-5);
+  padding-block-end: var(--space-4);
+  border-block-end: 1px solid var(--border);
 }
 
-.page-title {
+.shelf-title {
+  margin: 0;
+  font-size: clamp(1.4rem, 2.4vw, 2rem);
+  font-weight: 700;
+}
+
+.shelf-sub {
+  margin: var(--space-2) 0 0;
+  max-inline-size: 62ch;
+  color: var(--text-muted);
+  font-size: var(--text-md);
+}
+
+/* ── Shared controls ───────────────────────────────────────────────── */
+
+.sb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: 48px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
   font-size: var(--text-md);
   font-weight: 600;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
-.page-sub,
-.panel-sub {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  max-inline-size: 60ch;
+.sb-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
-.panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  background: var(--surface);
+.sb-btn--go {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.sb-btn--big {
+  min-block-size: 56px;
+  padding-inline: var(--space-5);
+  font-size: var(--text-lg);
+}
+
+.sb-move {
+  min-inline-size: 44px;
+  min-block-size: 44px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-}
-
-.panel-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.panel-title {
-  font-size: var(--text-base);
-  font-weight: 600;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-}
-
-.note,
-.warn,
-.form-error {
-  margin: 0;
-  padding: var(--space-3);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-}
-
-.note {
-  background: var(--surface-raised);
+  background: transparent;
   color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-md);
+  cursor: pointer;
 }
 
-.note-inline {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+.sb-move:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
-.warn {
-  background: var(--warning-bg);
-  color: var(--text);
-}
-
-.form-error {
-  background: var(--danger-bg);
-  color: var(--text);
-}
-
-/* --- editors -------------------------------------------------------- */
-
-.editor {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  background: var(--surface-raised);
-  border-radius: var(--radius-sm);
-}
-
-.editor input[type='text'],
-.editor select {
-  inline-size: 100%;
-  padding: var(--space-2) var(--space-3);
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  font-family: inherit;
-  font-size: var(--text-base);
-}
-
-.editor-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.check {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-base);
-}
-
-.hint {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
-/* An editor that sits inside another editor -- the "invent a new
-   filter" mini-form inside a category's own filter section. Same look,
-   tighter, so it reads as a nested step rather than a sibling panel. */
-.editor--inline {
-  padding: var(--space-3);
-  background: var(--bg);
-}
-
-/* --- rows ----------------------------------------------------------- */
-
-.rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  background: var(--surface-raised);
-  border-radius: var(--radius-sm);
-}
-
-/* The always-visible line: name, meta, move/manage controls. What
-   expands underneath is `.category-block`. */
-.row-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.row--child {
-  /* A sub-category is inset, not merely smaller: the relationship is
-     structural and the eye reads indentation as containment. */
-  margin-inline-start: var(--space-5);
-}
-
-.row-main {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-inline-size: 12rem;
-}
-
-.row-name {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-base);
-  font-weight: 600;
-}
-
-.row-meta {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
-.row-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-/*
- * Reorder controls. Square, quiet, and the same height as the small
- * buttons beside them -- they are used in bursts of two or three taps
- * and must not out-shout Edit, which is the destructive-ish one.
- */
-.move {
-  display: inline-grid;
-  place-items: center;
-  min-inline-size: 1.75rem;
-  min-block-size: 1.75rem;
-  padding: 0;
-  background: var(--bg);
-  color: var(--text-muted);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  font-family: inherit;
-  font-size: var(--text-base);
-  line-height: 1;
-}
-
-.move:disabled {
-  opacity: 0.35;
-}
-
-.move--tight {
-  min-inline-size: 1.25rem;
-  min-block-size: 1.25rem;
-  font-size: var(--text-xs);
-}
-
-/* Chip and its two nudges travel together when the row wraps. */
-.value {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.row-note {
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-}
-
-.tag {
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-xs);
-  font-weight: 400;
-  text-transform: lowercase;
-}
-
-.tag--off {
-  background: var(--neutral-badge-bg);
-  color: var(--neutral-badge);
-}
-
-/* --- the expanded category: fields + its filters, one block ---------- */
-
-.category-block {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  padding-block-start: var(--space-3);
-  border-block-start: 1px dashed var(--border-strong);
-}
-
-.category-block--new {
-  /* The not-yet-saved category sits above the list, not inside a row --
-     nothing to indent it against yet. */
-  padding: var(--space-3);
-  background: var(--surface-raised);
-  border-radius: var(--radius-sm);
-}
-
-.filters-block {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.filters-heading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-2);
-  margin: 0;
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.filter-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.filter-block {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  background: var(--bg);
-  border-radius: var(--radius-sm);
-}
-
-.filter-block-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.filter-name {
-  margin: 0;
-  margin-inline-end: auto;
-  font-size: var(--text-base);
-  font-weight: 600;
-}
-
-.rename-input {
-  flex: 1;
-  min-inline-size: 8rem;
-  padding: var(--space-1) var(--space-2);
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  font-family: inherit;
-  font-size: var(--text-base);
-}
-
-.filter-add-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--space-3);
-}
-
-.attach {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.attach select {
-  padding: var(--space-1) var(--space-2);
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  font-family: inherit;
-  font-size: var(--text-sm);
-}
-
-/* --- housekeeping: filters attached to nothing right now ------------- */
-
-.orphans {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding-block-start: var(--space-3);
-  border-block-start: 1px solid var(--border);
-}
-
-.orphans-toggle {
-  align-self: flex-start;
-  padding: 0;
-  background: none;
+.sb-link {
+  min-block-size: 40px;
+  padding-inline: var(--space-2);
   border: none;
+  background: transparent;
   color: var(--text-muted);
-  font-family: inherit;
-  font-size: var(--text-sm);
+  font: inherit;
+  font-size: var(--text-base);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
-/* --- chips ---------------------------------------------------------- */
-
-.values,
-.assign-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.filter-label {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  background: var(--bg);
+.sb-link:hover {
   color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-pill);
-  font-family: inherit;
-  font-size: var(--text-sm);
 }
 
-.chip--on {
-  background: var(--accent-muted);
-  border-color: var(--accent);
+.sb-link--off:hover {
+  color: var(--danger);
+}
+
+.sb-label {
+  display: block;
+  margin-block: var(--space-3) var(--space-2);
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
-.chip--off {
+.sb-field {
+  inline-size: 100%;
+  min-block-size: 52px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+}
+
+.sb-field:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+
+.sb-field--big {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.sb-field--auto {
+  inline-size: auto;
+  min-inline-size: 240px;
+}
+
+.sb-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: 44px;
+  font-size: var(--text-md);
+}
+
+.sb-check input {
+  inline-size: 22px;
+  block-size: 22px;
+  accent-color: var(--accent);
+}
+
+.sb-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: var(--space-4);
+}
+
+.sb-row-do {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-block-start: var(--space-4);
+}
+
+.sb-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sb-inline .sb-field {
+  inline-size: 200px;
+  min-block-size: 44px;
+}
+
+.sb-h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-6) 0 var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.sb-hint,
+.sb-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-base);
+}
+
+.sb-error {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--danger-bg);
+  color: var(--danger-strong);
+}
+
+.sb-warn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-md);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: var(--text-md);
+}
+
+.sb-tag {
+  margin-inline-start: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--neutral-badge-bg);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+/* ── A shelf ───────────────────────────────────────────────────────── */
+
+.shelves {
+  list-style: none;
+  margin: var(--space-5) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.shelf {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+/* A shelf inside another is stepped in, so the nesting is seen and not
+   inferred from a word. */
+.shelf--inside {
+  margin-inline-start: var(--space-6);
+}
+
+.shelf--open {
+  border-color: var(--accent);
+}
+
+.shelf-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: clamp(var(--space-2), 1.2vw, var(--space-4));
+  padding: clamp(var(--space-3), 1.2vw, var(--space-5));
+}
+
+.shelf-icon {
+  font-size: 1.8rem;
+  flex: none;
+}
+
+.shelf-words {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.shelf-name {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.shelf-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-base);
+}
+
+.shelf-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.shelf-labels--none {
   color: var(--text-faint);
+  font-size: var(--text-base);
+}
+
+.shelf-do {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.shelf-open {
+  padding: clamp(var(--space-4), 1.6vw, var(--space-6));
+  border-block-start: 1px solid var(--border);
+  background: var(--bg);
+}
+
+/* ── A label and its words ─────────────────────────────────────────── */
+
+.label-block {
+  padding: var(--space-4);
+  margin-block-start: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.label-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-block-end: var(--space-3);
+}
+
+.label-name {
+  margin: 0;
+  flex: 1 1 auto;
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+.label-values {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 44px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+/* Switched off: struck through as well as faded, so it is not colour
+   alone saying so. */
+.sb-chip--off {
+  opacity: 0.55;
   text-decoration: line-through;
 }
 
-/* The "+ value" chip that opens the inline add-value input. Dashed
-   border reads as "not a value yet, an action" against the solid chips
-   beside it. */
-.chip--dashed {
+.sb-chip--add {
   border-style: dashed;
   color: var(--text-muted);
 }
 
-.chip:disabled {
-  opacity: 0.45;
+/* The read-only ones in the list above -- not buttons, not pressable. */
+.sb-chip--quiet {
+  min-block-size: 30px;
+  padding-inline: var(--space-3);
+  border-color: var(--border);
+  background: var(--neutral-badge-bg);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  cursor: default;
 }
 
-.chip-count {
-  color: var(--text-faint);
-  font-size: var(--text-xs);
+.sb-chip-n {
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-}
-
-.value-add {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.value-add input {
-  min-inline-size: 8rem;
-  padding: var(--space-1) var(--space-2);
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  font-family: inherit;
   font-size: var(--text-sm);
 }
 
-/* --- preview -------------------------------------------------------- */
+/* ── Cards ─────────────────────────────────────────────────────────── */
 
-.panel--preview {
-  background: var(--surface-raised);
-}
-
-.preview-search input {
-  inline-size: 100%;
-  max-inline-size: 26rem;
-  padding: var(--space-2) var(--space-3);
-  background: var(--bg);
-  color: var(--text);
+.sb-card {
+  padding: var(--space-5);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  font-family: inherit;
-  font-size: var(--text-base);
-}
-
-.preview-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-}
-
-.preview-filter {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.preview-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.preview-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-3);
+  border-radius: var(--radius-md);
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
 }
 
-.preview-image {
-  display: grid;
-  place-items: center;
-  block-size: 4.5rem;
-  overflow: hidden;
-  background: var(--bg);
-  border-radius: var(--radius-sm);
+.sb-card--new {
+  border-color: var(--accent);
 }
 
-.preview-image img {
-  inline-size: 100%;
-  block-size: 100%;
-  object-fit: cover;
+.sb-card--inline {
+  margin-block-start: var(--space-4);
+  border-style: dashed;
 }
 
-.preview-initial {
-  color: var(--text-faint);
-  font-size: var(--text-xl);
+.sb-card-title {
+  margin: 0;
+  font-size: var(--text-lg);
   font-weight: 700;
 }
 
-.preview-name {
-  font-size: var(--text-base);
-  font-weight: 600;
+.sb-orphans {
+  margin-block-start: var(--space-6);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
 }
 
-.preview-summary,
-.preview-specs,
-.preview-stock {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
-.preview-specs {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.preview-meta {
+.sb-orphans > summary {
+  min-block-size: 44px;
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
+  align-items: center;
+  color: var(--text-muted);
+  cursor: pointer;
 }
+
+.sb-orphans .shelf-labels {
+  margin-block-start: var(--space-3);
+}
+
+/* No breakpoints left: `auto-fit` and `flex-wrap` above already let the
+   layout follow the window at every width. */

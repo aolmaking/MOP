@@ -154,297 +154,457 @@
   }
 
   @if (editing(); as mode) {
+    <!--
+      Adding a part, rebuilt as a workbench rather than a form.
+
+      What was here: a narrow drawer with fifteen stacked fields, a
+      category dropdown, and a filter section that asked the storekeeper
+      to understand "attributes" and "values" before they could say a
+      brake pad is for a Toyota. The workshop owner's brief was that
+      somebody who barely reads should manage this page.
+
+      So it is three columns, and each answers one plain question:
+
+        1. What is it?          -- name, code, price, picture
+        2. Which cars?          -- the marques it fits. Required.
+        3. What will it look like? -- the actual card the counter sees,
+                                      drawn live from what has been typed.
+
+      The preview in the middle is not decoration: it is the only place
+      the storekeeper finds out that "BRK-PAD-TOY-01" with no picture and
+      no description is what a technician will be asked to recognise.
+    -->
     <div class="editor-scrim" (click)="cancelEdit()"></div>
-    <aside class="editor" role="dialog" aria-modal="true" aria-label="Item details" appDismissOnEscape (dismissed)="cancelEdit()">
-      <header class="editor-head">
-        <div>
-          <h2 class="editor-title">{{ mode === 'new' ? 'New item' : 'Edit item' }}</h2>
-          <p class="editor-subtitle">Set up the item card technicians and stock staff will use.</p>
+    <section class="bench" role="dialog" aria-modal="true" aria-label="Item details" appDismissOnEscape (dismissed)="cancelEdit()">
+      <header class="bench-head">
+        <div class="bench-head-words">
+          <h2 class="bench-title">{{ mode === 'new' ? 'Add a part' : 'Edit part' }}</h2>
+          <p class="bench-sub">It appears on the counter and on the technician's Point of Sale exactly as you see it here.</p>
         </div>
-        <button type="button" class="editor-close" (click)="cancelEdit()" aria-label="Close">×</button>
+        <button type="button" class="bench-close" (click)="cancelEdit()" aria-label="Close">✕</button>
       </header>
 
-      <div class="editor-body">
-        @if (saveError(); as message) {
-          <p class="editor-error" role="alert">{{ message }}</p>
-        }
+      @if (saveError(); as message) {
+        <p class="bench-error" role="alert">{{ message }}</p>
+      }
 
-        <app-form-field label="Name" [required]="true">
-          <input type="text" [value]="draft().name" (input)="patch('name', $any($event.target).value)" />
-        </app-form-field>
+      <div class="bench-body">
+        <!-- ═══ 1. What is it ══════════════════════════════════════ -->
+        <section class="bench-col">
+          <h3 class="bench-step"><span class="bench-step-n">1</span> What is it?</h3>
 
-        <div class="editor-row">
-          <app-form-field label="SKU" [required]="true" hint="Unique in this workshop.">
-            <input type="text" [value]="draft().sku" (input)="patch('sku', $any($event.target).value)" />
-          </app-form-field>
+          <label class="bench-label" for="item-name">Name</label>
+          <input
+            id="item-name"
+            class="bench-field bench-field--big"
+            type="text"
+            placeholder="Front brake pads"
+            [value]="draft().name"
+            (input)="patch('name', $any($event.target).value)"
+          />
 
-          <app-form-field label="Barcode">
-            <input type="text" [value]="draft().barcode ?? ''" (input)="patch('barcode', $any($event.target).value)" />
-          </app-form-field>
-        </div>
+          <label class="bench-label" for="item-summary">One line about it <span class="bench-soft">(optional)</span></label>
+          <input
+            id="item-summary"
+            class="bench-field"
+            type="text"
+            placeholder="Ceramic, low dust"
+            [value]="draft().summary ?? ''"
+            (input)="patch('summary', $any($event.target).value)"
+          />
 
-        <app-form-field
-          label="Category"
-          hint="Where a technician will find it. Not there yet? Create it without leaving."
-        >
-          <!-- `[selected]` per option, not `[value]` on the select: the
-               options are rendered by @for in the same change-detection
-               pass, so a value set on the select before they exist falls
-               back to the first option. The symptom was an item that IS
-               filed reading "not filed" the moment you opened it, and
-               saving would then have unfiled it. -->
-          <select (change)="onCategorySelect($any($event.target).value)">
-            <option value="" [selected]="!draft().catalogCategoryId && !creatingCategory()">— not filed —</option>
-            @for (entry of categoryOptions(); track entry.id) {
-              <option [value]="entry.id" [selected]="entry.id === draft().catalogCategoryId">{{ entry.name }}</option>
-            }
-            <option value="__new__" [selected]="creatingCategory()">+ Create a new category…</option>
-          </select>
-        </app-form-field>
-
-        @if (creatingCategory()) {
-          <div class="inline-create">
-            <app-form-field label="New category name" [required]="true">
+          <div class="bench-two">
+            <div>
+              <label class="bench-label" for="item-sku">Code</label>
               <input
+                id="item-sku"
+                class="bench-field bench-field--mono"
                 type="text"
-                [value]="newCategoryName()"
-                (input)="newCategoryName.set($any($event.target).value)"
+                placeholder="BRK-PAD-01"
+                [value]="draft().sku"
+                (input)="patch('sku', $any($event.target).value)"
               />
-            </app-form-field>
-            <app-form-field label="Sits inside" hint="Optional. One level of nesting only.">
-              <select (change)="newCategoryParentId.set($any($event.target).value)">
-                <option value="" [selected]="!newCategoryParentId()">— top level —</option>
-                @for (top of topLevelCategories(); track top.id) {
-                  <option [value]="top.id" [selected]="top.id === newCategoryParentId()">{{ top.name }}</option>
-                }
-              </select>
-            </app-form-field>
-            <div class="inline-create-actions">
-              <button appButton variant="primary" size="small" type="button" [disabled]="saving()" (click)="saveNewCategory()">
-                {{ saving() ? 'Saving…' : 'Add category' }}
-              </button>
-              <button appButton variant="ghost" size="small" type="button" (click)="cancelNewCategory()">Cancel</button>
+            </div>
+            <div>
+              <label class="bench-label" for="item-barcode">Barcode <span class="bench-soft">(optional)</span></label>
+              <input
+                id="item-barcode"
+                class="bench-field bench-field--mono"
+                type="text"
+                [value]="draft().barcode ?? ''"
+                (input)="patch('barcode', $any($event.target).value)"
+              />
             </div>
           </div>
-        }
 
-        <!-- The filter values this part carries. Only the filters the
-             chosen category actually offers are shown: stamping "Engine
-             Size" on a windscreen wiper is a value nothing will ever
-             filter by, and offering it invites exactly that. Creating or
-             attaching one happens right here too -- no trip to Catalog
-             Builder to shape the taxonomy this one part needs. -->
-        @if (draft().catalogCategoryId) {
-          <fieldset class="chips">
-            <legend class="chips-legend">Filters</legend>
-            <p class="chips-hint">What a technician filtering this category will match on.</p>
-
-            @if (applicableFilters().length === 0) {
-              <p class="chips-hint">This category has no filters yet.</p>
-            }
-
-            @for (filter of applicableFilters(); track filter.id) {
-              <p class="chips-hint">{{ filter.label }}</p>
-              <div class="chips-row">
-                @for (value of filter.values; track value.id) {
-                  <button
-                    type="button"
-                    class="chip"
-                    [attr.aria-pressed]="hasValue(value.id)"
-                    (click)="toggleValue(value.id)"
-                  >
-                    {{ value.label }}
-                  </button>
-                }
-              </div>
-            }
-
-            <div class="inline-create-row">
-              @if (attachableFilters().length > 0) {
-                <label class="attach-filter">
-                  <span class="visually-hidden">Attach an existing filter</span>
-                  <select [value]="attachFilterChoice()" (change)="attachFilterChoice.set($any($event.target).value)">
-                    <option value="" disabled selected>Attach an existing filter…</option>
-                    @for (filter of attachableFilters(); track filter.id) {
-                      <option [value]="filter.id">{{ filter.label }}</option>
-                    }
-                  </select>
-                  <button
-                    appButton
-                    variant="secondary"
-                    size="small"
-                    type="button"
-                    [disabled]="!attachFilterChoice() || saving()"
-                    (click)="attachExistingFilter()"
-                  >
-                    Attach
-                  </button>
-                </label>
-              }
-
-              @if (creatingFilterForItem()) {
-                <div class="inline-create">
-                  <app-form-field label="New filter name" hint="e.g. Vehicle Type, Brand, Engine Size.">
-                    <input
-                      type="text"
-                      [value]="newFilterLabelForItem()"
-                      (input)="newFilterLabelForItem.set($any($event.target).value)"
-                    />
-                  </app-form-field>
-                  <app-form-field label="Its first value" hint="e.g. Sedan. This part gets stamped with it right away.">
-                    <input
-                      type="text"
-                      [value]="newFilterFirstValueForItem()"
-                      (input)="newFilterFirstValueForItem.set($any($event.target).value)"
-                      (keydown.enter)="saveNewFilterForItem()"
-                    />
-                  </app-form-field>
-                  <div class="inline-create-actions">
-                    <button appButton variant="primary" size="small" type="button" [disabled]="saving()" (click)="saveNewFilterForItem()">
-                      {{ saving() ? 'Saving…' : 'Add filter' }}
-                    </button>
-                    <button appButton variant="ghost" size="small" type="button" (click)="cancelNewFilterForItem()">Cancel</button>
-                  </div>
-                </div>
-              } @else {
-                <button appButton variant="secondary" size="small" type="button" (click)="startNewFilterForItem()">
-                  + New filter
-                </button>
-              }
-            </div>
-          </fieldset>
-        }
-
-        <app-form-field label="One-line description" hint="Shown under the name on the technician's card.">
-          <input type="text" [value]="draft().summary ?? ''" (input)="patch('summary', $any($event.target).value)" />
-        </app-form-field>
-
-        <app-form-field label="Image URL" hint="A technician recognises a part by sight before they read its name.">
-          <input type="text" [value]="draft().imageUrl ?? ''" (input)="patch('imageUrl', $any($event.target).value)" />
-        </app-form-field>
-
-        <fieldset class="chips">
-          <legend class="chips-legend">Fits</legend>
-          <p class="chips-hint">A part usable on cars and motorcycles is entered once, with both.</p>
-          <div class="chips-row">
-            @for (category of categories; track category.value) {
-              <button
-                type="button"
-                class="chip"
-                [attr.aria-pressed]="isCompatible(category.value)"
-                (click)="toggleCategory(category.value)"
-              >
-                {{ category.label }}
-              </button>
-            }
-          </div>
-        </fieldset>
-
-        <div class="editor-row">
-          <app-form-field label="Selling price" [required]="true" hint="In this workshop's currency.">
+          <label class="bench-label" for="item-price">Price</label>
+          <div class="bench-money">
+            <span class="bench-money-mark">{{ currencyCode() }}</span>
             <input
+              id="item-price"
+              class="bench-field bench-field--mono"
               type="text"
               inputmode="decimal"
+              placeholder="0.00"
               [value]="draft().sellingPrice"
               (input)="patch('sellingPrice', $any($event.target).value)"
             />
-          </app-form-field>
+          </div>
 
-          <!-- Absent entirely when this reader may not see cost. Not
-               disabled, not blanked: anyone can open developer tools. -->
           @if (maySeeCost()) {
-            <app-form-field label="Cost">
+            <label class="bench-label" for="item-cost">What it cost you <span class="bench-soft">(optional)</span></label>
+            <div class="bench-money">
+              <span class="bench-money-mark">{{ currencyCode() }}</span>
               <input
+                id="item-cost"
+                class="bench-field bench-field--mono"
                 type="text"
                 inputmode="decimal"
                 [value]="draft().cost ?? ''"
                 (input)="patch('cost', $any($event.target).value)"
               />
-            </app-form-field>
+            </div>
           }
-        </div>
 
-        <div class="editor-row">
-          <app-form-field label="Low stock threshold">
+          <label class="bench-label" for="item-image">Picture <span class="bench-soft">(a link)</span></label>
+          <input
+            id="item-image"
+            class="bench-field"
+            type="text"
+            placeholder="https://…"
+            [value]="draft().imageUrl ?? ''"
+            (input)="patch('imageUrl', $any($event.target).value)"
+          />
+          <p class="bench-hint">A technician knows a part by sight before they read its name.</p>
+
+          <label class="bench-label" for="item-category">Which shelf</label>
+          <select
+            id="item-category"
+            class="bench-field"
+            (change)="onCategorySelect($any($event.target).value)"
+          >
+            <option value="" [selected]="!draft().catalogCategoryId && !creatingCategory()">— not filed —</option>
+            @for (entry of categoryOptions(); track entry.id) {
+              <option [value]="entry.id" [selected]="entry.id === draft().catalogCategoryId">{{ entry.name }}</option>
+            }
+            <option value="__new__" [selected]="creatingCategory()">+ New shelf…</option>
+          </select>
+
+          @if (creatingCategory()) {
+            <div class="bench-inline">
+              <input
+                class="bench-field"
+                type="text"
+                placeholder="Name of the new shelf"
+                [value]="newCategoryName()"
+                (input)="newCategoryName.set($any($event.target).value)"
+              />
+              <select class="bench-field" (change)="newCategoryParentId.set($any($event.target).value)">
+                <option value="" [selected]="!newCategoryParentId()">— on its own —</option>
+                @for (top of topLevelCategories(); track top.id) {
+                  <option [value]="top.id" [selected]="top.id === newCategoryParentId()">inside {{ top.name }}</option>
+                }
+              </select>
+              <div class="bench-inline-do">
+                <button type="button" class="bench-btn bench-btn--go" [disabled]="saving()" (click)="saveNewCategory()">
+                  {{ saving() ? 'Saving…' : 'Add shelf' }}
+                </button>
+                <button type="button" class="bench-btn" (click)="cancelNewCategory()">Cancel</button>
+              </div>
+            </div>
+          }
+
+          <details class="bench-more">
+            <summary>Stock alerts, supplier and notes</summary>
+
+            <div class="bench-two">
+              <div>
+                <label class="bench-label" for="item-low">Warn me under</label>
+                <input
+                  id="item-low"
+                  class="bench-field bench-field--mono"
+                  type="number"
+                  min="0"
+                  [value]="draft().lowStockThreshold ?? 0"
+                  (input)="patchNumber('lowStockThreshold', $any($event.target).value)"
+                />
+              </div>
+              <div>
+                <label class="bench-label" for="item-critical">Urgent under</label>
+                <input
+                  id="item-critical"
+                  class="bench-field bench-field--mono"
+                  type="number"
+                  min="0"
+                  [value]="draft().criticalStockThreshold ?? 0"
+                  (input)="patchNumber('criticalStockThreshold', $any($event.target).value)"
+                />
+              </div>
+            </div>
+
+            <label class="bench-label" for="item-supplier">Who you buy it from</label>
             <input
-              type="number"
-              min="0"
-              [value]="draft().lowStockThreshold ?? 0"
-              (input)="patchNumber('lowStockThreshold', $any($event.target).value)"
+              id="item-supplier"
+              class="bench-field"
+              type="text"
+              [value]="draft().supplier ?? ''"
+              (input)="patch('supplier', $any($event.target).value)"
             />
-          </app-form-field>
 
-          <app-form-field label="Critical stock threshold">
-            <input
-              type="number"
-              min="0"
-              [value]="draft().criticalStockThreshold ?? 0"
-              (input)="patchNumber('criticalStockThreshold', $any($event.target).value)"
-            />
-          </app-form-field>
-        </div>
+            <label class="bench-label" for="item-notes">Your own note</label>
+            <textarea
+              id="item-notes"
+              class="bench-field bench-field--area"
+              rows="2"
+              [value]="draft().notes ?? ''"
+              (input)="patch('notes', $any($event.target).value)"
+            ></textarea>
 
-        <app-form-field label="Supplier">
-          <input type="text" [value]="draft().supplier ?? ''" (input)="patch('supplier', $any($event.target).value)" />
-        </app-form-field>
+            <label class="bench-check">
+              <input
+                type="checkbox"
+                [checked]="draft().workOrderUsable ?? true"
+                (change)="patch('workOrderUsable', $any($event.target).checked)"
+              />
+              <span>Technicians can ask for it</span>
+            </label>
+            <label class="bench-check">
+              <input
+                type="checkbox"
+                [checked]="draft().posVisible ?? true"
+                (change)="patch('posVisible', $any($event.target).checked)"
+              />
+              <span>Show it in the catalogue</span>
+            </label>
+            <label class="bench-check">
+              <input
+                type="checkbox"
+                [checked]="draft().stockTracked ?? true"
+                (change)="patch('stockTracked', $any($event.target).checked)"
+              />
+              <span>Count how many there are</span>
+            </label>
 
-        <fieldset class="toggles">
-          <legend class="visually-hidden">Availability</legend>
+            <p class="bench-hint">
+              How many you have is set on Stock, not here — it only changes through a recorded movement.
+            </p>
+          </details>
+        </section>
 
-          <label class="toggle">
-            <input
-              type="checkbox"
-              [checked]="draft().workOrderUsable ?? true"
-              (change)="patch('workOrderUsable', $any($event.target).checked)"
-            />
-            <span class="toggle-text">
-              <span class="toggle-label">Usable on work orders</span>
-              <span class="toggle-hint">Technicians can request it.</span>
+        <!-- ═══ 2. What it will look like ══════════════════════════ -->
+        <section class="bench-col bench-col--preview">
+          <h3 class="bench-step"><span class="bench-step-n">2</span> What the counter sees</h3>
+
+          <div class="preview-stage">
+            <article class="preview-card">
+              <div class="preview-image">
+                @if (draft().imageUrl) {
+                  <img [src]="draft().imageUrl" alt="" />
+                } @else {
+                  <span class="preview-initial">{{ (draft().name || '?').charAt(0) }}</span>
+                }
+              </div>
+
+              <p class="preview-name">{{ draft().name || 'Name of the part' }}</p>
+              @if (draft().summary) {
+                <p class="preview-summary">{{ draft().summary }}</p>
+              }
+
+              <p class="preview-price">{{ previewPrice() }}</p>
+
+              <div class="preview-foot">
+                <span class="preview-chip">
+                  <span aria-hidden="true">📦</span>
+                  <span>{{ (draft().stockTracked ?? true) ? 'Counted' : 'Not counted' }}</span>
+                </span>
+                @if (draft().catalogCategoryId) {
+                  <span class="preview-chip">{{ categoryNameFor(draft().catalogCategoryId) }}</span>
+                }
+              </div>
+
+              @if (chosenMakes().length > 0) {
+                <div class="preview-fits">
+                  @for (make of chosenMakes(); track make) {
+                    <mop-vehicle-mark [make]="make" category="CARS" />
+                  }
+                </div>
+              }
+            </article>
+
+            <p class="bench-hint preview-note">
+              This is the card, drawn from what you have typed. Nothing here is a mock-up.
+            </p>
+          </div>
+        </section>
+
+        <!-- ═══ 3. Which cars ══════════════════════════════════════ -->
+        <section class="bench-col">
+          <h3 class="bench-step"><span class="bench-step-n">3</span> Which cars does it fit?</h3>
+
+          <!--
+            Required, and asked here rather than left to a rules file:
+            this is what lets the Point of Sale open already narrowed to
+            the car on the job. The server refuses to create an item
+            without an answer -- a disabled button is not a rule.
+          -->
+          <button
+            type="button"
+            class="fits-all"
+            [class.fits-all--on]="fitsUniversal()"
+            (click)="toggleUniversal()"
+            id="btn-fits-all"
+          >
+            <span class="fits-all-icon" aria-hidden="true">🌐</span>
+            <span class="fits-all-words">
+              <strong>It fits any car</strong>
+              <span>Oil, bulbs, wipers, cleaning — anything that does not care about the badge.</span>
             </span>
-          </label>
+            <span class="fits-all-tick" aria-hidden="true">{{ fitsUniversal() ? '✓' : '' }}</span>
+          </button>
 
-          <label class="toggle">
+          @if (!fitsUniversal()) {
+            <div class="op-pick">
+              <div class="op-pick-search">
+                <span aria-hidden="true">🔍</span>
+                <input
+                  type="search"
+                  placeholder="Search makes"
+                  autocomplete="off"
+                  [value]="makeSearch()"
+                  (input)="makeSearch.set($any($event.target).value)"
+                />
+              </div>
+              <ul class="op-pick-list">
+                @for (make of visibleMakes(); track make.id) {
+                  <li>
+                    <button
+                      type="button"
+                      class="op-pick-row"
+                      [class.op-pick-row--on]="fitsMake(make.id)"
+                      (click)="toggleFitsMake(make.id)"
+                      [id]="'fits-' + make.id"
+                    >
+                      <mop-vehicle-mark [make]="make.id" category="CARS" />
+                      <span class="op-pick-word">{{ make.label }}</span>
+                      <span class="op-pick-tick" aria-hidden="true">{{ fitsMake(make.id) ? '✓' : '' }}</span>
+                    </button>
+                  </li>
+                } @empty {
+                  <li class="op-pick-none">Nothing matches “{{ makeSearch() }}”.</li>
+                }
+              </ul>
+            </div>
+
+            <label class="bench-label" for="item-models">Models <span class="bench-soft">(optional)</span></label>
             <input
-              type="checkbox"
-              [checked]="draft().posVisible ?? true"
-              (change)="patch('posVisible', $any($event.target).checked)"
+              id="item-models"
+              class="bench-field"
+              type="text"
+              placeholder="320i, 3 Series — leave empty for all of them"
+              [value]="(draft().fitsModels ?? []).join(', ')"
+              (input)="patchModels($any($event.target).value)"
             />
-            <span class="toggle-text">
-              <span class="toggle-label">Visible in the catalog</span>
-              <span class="toggle-hint">Off hides it from search without deleting it.</span>
-            </span>
-          </label>
+            <p class="bench-hint">Leave this empty and it fits every model of the makes you ticked.</p>
+          }
 
-          <label class="toggle">
-            <input
-              type="checkbox"
-              [checked]="draft().stockTracked ?? true"
-              (change)="patch('stockTracked', $any($event.target).checked)"
-            />
-            <span class="toggle-text">
-              <span class="toggle-label">Track quantity</span>
-              <span class="toggle-hint">Off means it exists for pricing only — no counting, no low-stock alerts.</span>
-            </span>
-          </label>
-        </fieldset>
+          <!-- ═══ Filters ══════════════════════════════════════════ -->
+          @if (draft().catalogCategoryId) {
+            <h3 class="bench-step bench-step--minor">Extra labels <span class="bench-soft">(optional)</span></h3>
+            <p class="bench-hint">
+              Anything else a technician might filter this shelf by — a size, a side, a grade.
+            </p>
 
-        <app-form-field label="Notes">
-          <textarea rows="3" [value]="draft().notes ?? ''" (input)="patch('notes', $any($event.target).value)"></textarea>
-        </app-form-field>
+            @for (filter of applicableFilters(); track filter.id) {
+              <div class="tagset">
+                <p class="tagset-name">{{ filter.label }}</p>
+                <div class="tagset-row">
+                  @for (value of filter.values; track value.id) {
+                    <button
+                      type="button"
+                      class="tag"
+                      [class.tag--on]="hasValue(value.id)"
+                      (click)="toggleValue(value.id)"
+                    >
+                      {{ value.label }}
+                    </button>
+                  }
+                  <button type="button" class="tag tag--add" (click)="startNewValueFor(filter.id)">+ Add</button>
+                </div>
 
-        <!-- Said plainly rather than shown as a disabled field, which
-             would read as broken instead of deliberate. -->
-        <p class="editor-note">
-          Quantity is set on Stock, not here — it changes only through a recorded movement.
-        </p>
+                @if (addingValueFor() === filter.id) {
+                  <div class="bench-inline-do">
+                    <input
+                      class="bench-field"
+                      type="text"
+                      placeholder="New {{ filter.label }}"
+                      [value]="newValueLabel()"
+                      (input)="newValueLabel.set($any($event.target).value)"
+                      (keydown.enter)="saveNewValue()"
+                    />
+                    <button type="button" class="bench-btn bench-btn--go" [disabled]="saving()" (click)="saveNewValue()">
+                      {{ saving() ? 'Saving…' : 'Add' }}
+                    </button>
+                    <button type="button" class="bench-btn" (click)="cancelNewValue()">Cancel</button>
+                  </div>
+                }
+              </div>
+            }
+
+            @if (creatingFilterForItem()) {
+              <div class="bench-inline">
+                <input
+                  class="bench-field"
+                  type="text"
+                  placeholder="What kind of label? e.g. Size"
+                  [value]="newFilterLabelForItem()"
+                  (input)="newFilterLabelForItem.set($any($event.target).value)"
+                />
+                <input
+                  class="bench-field"
+                  type="text"
+                  placeholder="Its first one, e.g. Large"
+                  [value]="newFilterFirstValueForItem()"
+                  (input)="newFilterFirstValueForItem.set($any($event.target).value)"
+                  (keydown.enter)="saveNewFilterForItem()"
+                />
+                <div class="bench-inline-do">
+                  <button type="button" class="bench-btn bench-btn--go" [disabled]="saving()" (click)="saveNewFilterForItem()">
+                    {{ saving() ? 'Saving…' : 'Add label' }}
+                  </button>
+                  <button type="button" class="bench-btn" (click)="cancelNewFilterForItem()">Cancel</button>
+                </div>
+              </div>
+            } @else {
+              <button type="button" class="bench-btn bench-btn--wide" (click)="startNewFilterForItem()">
+                + A different kind of label
+              </button>
+            }
+          }
+        </section>
       </div>
 
-      <footer class="editor-foot">
-        <button appButton variant="secondary" (click)="cancelEdit()">Cancel</button>
-        <button appButton variant="primary" [disabled]="saving()" (click)="save()">
-          {{ saving() ? 'Saving…' : mode === 'new' ? 'Add item' : 'Save changes' }}
-        </button>
+      <footer class="bench-foot">
+        <div class="bench-foot-state">
+          @if (!canSave()) {
+            <span class="bench-missing">
+              <span aria-hidden="true">!</span>
+              <span>{{ missingWhat() }}</span>
+            </span>
+          }
+        </div>
+        <div class="bench-foot-do">
+          <button type="button" class="bench-btn" (click)="cancelEdit()">Cancel</button>
+          <button
+            type="button"
+            class="bench-btn bench-btn--go bench-btn--wide"
+            [disabled]="saving() || !canSave()"
+            (click)="save()"
+            id="btn-save-item"
+          >
+            {{ saving() ? 'Saving…' : mode === 'new' ? '✓ Add the part' : '✓ Save' }}
+          </button>
+        </div>
       </footer>
-    </aside>
+    </section>
   }
 </section>

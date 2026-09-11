@@ -427,3 +427,603 @@
 .toggle:hover { border-color: var(--accent-cool); background: rgb(97 184 255 / .07); }
 .editor-foot { padding: var(--space-5); background: var(--surface-raised); }
 @media (max-width: 640px) { .catalog-count { margin-inline-start: 0; } .catalog-new { inline-size: 100%; } .editor-row { grid-template-columns: 1fr; } }
+
+/* ═══════════════════════════════════════════════════════════════════
+   THE BENCH — adding a part
+
+   Three columns instead of a drawer of stacked fields: what it is, what
+   the counter will see, and which cars it fits. The middle column is a
+   live drawing of the actual card, because a storekeeper cannot judge
+   "does this read as a brake pad?" from a form.
+
+   Sized and worded for somebody who barely reads: 52px fields, plain
+   labels ("Which shelf", "What it cost you"), and the reason Save is
+   unavailable printed beside the button rather than left to be guessed.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.editor-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: hsl(var(--shadow-color) / 0.62);
+}
+
+.bench {
+  position: fixed;
+  inset: 2vh 2vw;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-3);
+  overflow: hidden;
+}
+
+.bench-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border-block-end: 1px solid var(--border-strong);
+}
+
+.bench-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.bench-sub {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+}
+
+.bench-close {
+  min-inline-size: 48px;
+  min-block-size: 48px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-lg);
+  cursor: pointer;
+}
+
+.bench-close:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.bench-error {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  background: var(--danger-bg);
+  color: var(--danger-strong);
+}
+
+/*
+  Three columns where there is room for three, two where there is room
+  for two, one on a laptop -- decided by `auto-fit` rather than by a
+  breakpoint, so the bench fills whatever window it is opened in.
+*/
+.bench-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  flex: 1;
+  overflow-y: auto;
+}
+
+.bench-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: clamp(var(--space-4), 1.6vw, var(--space-6));
+  border-inline-end: 1px solid var(--border);
+}
+
+.bench-col:last-child {
+  border-inline-end: none;
+}
+
+/* The card sits on its own ground so it reads as a thing being previewed
+   rather than one more panel of the form. */
+.bench-col--preview {
+  background: var(--bg);
+  align-items: stretch;
+}
+
+.bench-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.bench-step--minor {
+  margin-block-start: var(--space-5);
+  font-size: var(--text-md);
+}
+
+.bench-step-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 30px;
+  block-size: 30px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--text-base);
+  flex: none;
+}
+
+.bench-label {
+  display: block;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.bench-soft {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.bench-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-base);
+}
+
+.bench-field {
+  inline-size: 100%;
+  min-block-size: 52px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+}
+
+.bench-field:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+
+.bench-field--big {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.bench-field--mono {
+  font-family: var(--font-mono);
+}
+
+.bench-field--area {
+  min-block-size: 76px;
+  resize: vertical;
+}
+
+.bench-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.bench-money {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.bench-money-mark {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+}
+
+.bench-inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+}
+
+.bench-inline-do {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.bench-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: 48px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bench-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.bench-btn--go {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.bench-btn--wide {
+  inline-size: 100%;
+}
+
+.bench-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: 44px;
+  font-size: var(--text-md);
+}
+
+.bench-check input {
+  inline-size: 22px;
+  block-size: 22px;
+  accent-color: var(--accent);
+}
+
+.bench-more {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+
+.bench-more > summary {
+  min-block-size: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.bench-more[open] > summary {
+  margin-block-end: var(--space-3);
+}
+
+.bench-more .bench-label {
+  margin-block: var(--space-3) var(--space-2);
+}
+
+.bench-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-block-start: 1px solid var(--border-strong);
+  background: var(--bg);
+}
+
+.bench-foot-do {
+  display: flex;
+  gap: var(--space-3);
+}
+
+/* Why Save is unavailable, in words, beside the button. */
+.bench-missing {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--warning);
+  font-size: var(--text-md);
+}
+
+/* ── The live card ─────────────────────────────────────────────── */
+
+.preview-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding-block: var(--space-4);
+}
+
+.preview-card {
+  inline-size: min(280px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+
+.preview-image {
+  display: grid;
+  place-items: center;
+  block-size: 9rem;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.preview-image img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.preview-initial {
+  color: var(--text-faint);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+}
+
+.preview-name {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.preview-summary {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-base);
+}
+
+.preview-price {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.preview-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.preview-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--neutral-badge-bg);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.preview-fits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-block-start: var(--space-2);
+  border-block-start: 1px solid var(--border);
+}
+
+.preview-fits mop-vehicle-mark {
+  --mark-size: 30px;
+}
+
+.preview-note {
+  text-align: center;
+  max-inline-size: 280px;
+}
+
+/* ── Which cars ────────────────────────────────────────────────── */
+
+.fits-all {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: 72px;
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.fits-all--on {
+  border-color: var(--success);
+  background: var(--success-bg);
+}
+
+.fits-all-icon {
+  font-size: 1.8rem;
+  flex: none;
+}
+
+.fits-all-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  font-size: var(--text-base);
+}
+
+.fits-all-words strong {
+  font-size: var(--text-md);
+}
+
+.fits-all-words span {
+  color: var(--text-muted);
+}
+
+.fits-all-tick {
+  color: var(--success);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+/* The marque column, the same shape as the front desk's, so one thing is
+   learned once. */
+.op-pick {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.op-pick-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-inline: var(--space-4);
+  border-block-end: 1px solid var(--border);
+}
+
+.op-pick-search input {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  min-block-size: 48px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+}
+
+.op-pick-search input:focus {
+  outline: none;
+}
+
+.op-pick-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-block-size: 300px;
+  overflow-y: auto;
+}
+
+.op-pick-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  inline-size: 100%;
+  min-block-size: 48px;
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  border-block-end: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+  text-align: start;
+  cursor: pointer;
+}
+
+.op-pick-row:hover {
+  background: var(--neutral-badge-bg);
+}
+
+.op-pick-row--on {
+  background: var(--accent-muted);
+  font-weight: 700;
+}
+
+.op-pick-row mop-vehicle-mark {
+  --mark-size: 32px;
+}
+
+.op-pick-word {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.op-pick-tick {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.op-pick-none {
+  padding: var(--space-4);
+  color: var(--text-muted);
+}
+
+/* ── Extra labels ──────────────────────────────────────────────── */
+
+.tagset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+}
+
+.tagset-name {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.tagset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.tag {
+  min-block-size: 44px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+.tag--on {
+  border-color: var(--accent);
+  background: var(--accent-muted);
+  font-weight: 700;
+}
+
+.tag--add {
+  border-style: dashed;
+  color: var(--text-muted);
+}
+
+/* The dividing line belongs between columns, and there are no columns
+   to divide once the grid has folded to one. */
+@media (max-width: 719px) {
+  .bench-col {
+    border-inline-end: none;
+    border-block-end: 1px solid var(--border);
+  }
+}

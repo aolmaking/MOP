@@ -1,5 +1,6 @@
 import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Min, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
+import { VEHICLE_MAKES } from "@mop/shared";
 
 export class RegisterCustomerVehicleDto {
   @IsString()
@@ -22,6 +23,29 @@ export class RegisterCustomerVehicleDto {
   @IsString()
   @IsOptional()
   vinOrChassisNumber?: string;
+
+  /**
+   * The marque, as one of the ids in VEHICLE_MAKES.
+   *
+   * Validated against that list rather than accepted as free text,
+   * because it is the key `VehicleFitmentService` matches parts on: a
+   * make the fitment rules have never heard of produces a vehicle
+   * nothing is compatible with, and the front desk would never see why.
+   */
+  @IsString()
+  @IsOptional()
+  @IsIn(VEHICLE_MAKES.map((make) => make.id))
+  make?: string;
+
+  /** Free text: no dataset of every trim in every market is worth maintaining. */
+  @IsString()
+  @IsOptional()
+  model?: string;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(1950)
+  modelYear?: number;
 }
 
 export class OperatorIntakeDto {
@@ -43,6 +67,19 @@ export class OperatorIntakeDto {
   @IsString({ each: true })
   @IsOptional()
   inspectionParts?: string[];
+
+  /**
+   * Look at the whole car.
+   *
+   * Said explicitly rather than inferred from an empty `inspectionParts`,
+   * because absence is ambiguous: the work card falls back to reading
+   * system names out of the complaint text, so "Brake System: squeals
+   * when cold" would have quietly narrowed a full inspection to the
+   * brakes -- the opposite of what the front desk chose.
+   */
+  @IsBoolean()
+  @IsOptional()
+  fullInspection?: boolean;
 }
 
 export class OperatorPosLineDto {

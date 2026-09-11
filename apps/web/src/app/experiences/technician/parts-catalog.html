@@ -71,6 +71,34 @@
       This workshop has not set up a parts catalogue yet. Ask the inventory manager to add categories and parts.
     </p>
   } @else {
+    <!--
+      "Fits this car", first in the rail and on by default.
+
+      The technician came here from one job, for one vehicle, and the
+      catalogue holds every part the workshop stocks for every marque it
+      serves. Narrowing to the car is the normal case; seeing everything
+      is the exception, so the exception is the thing you press.
+    -->
+    @if (knowsVehicle()) {
+      <div class="fits-bar">
+        <button
+          class="chip chip--fits"
+          type="button"
+          [class.chip--on]="fitsThisCar()"
+          [attr.aria-pressed]="fitsThisCar()"
+          (click)="toggleFitsThisCar()"
+          id="btn-fits-this-car"
+        >
+          <mop-vehicle-mark [make]="vehicleMake()" [category]="vehicleCategory()" />
+          <span class="fits-words">
+            <strong>{{ fitsThisCar() ? 'Showing parts for this car' : 'Showing the whole catalogue' }}</strong>
+            <span class="fits-sub">{{ vehicleLabel() || 'this vehicle' }}</span>
+          </span>
+          <span class="fits-state" aria-hidden="true">{{ fitsThisCar() ? '✓' : '' }}</span>
+        </button>
+      </div>
+    }
+
     <!-- Categories come from the server. Nothing here knows their names. -->
     <div class="chips" role="group" aria-label="Categories">
       <button
@@ -184,7 +212,12 @@
       <p class="catalog-note" aria-busy="true">Loading parts…</p>
     } @else if (state() === 'no-results') {
       <p class="catalog-note">
-        Nothing matches that. Try a different category, or clear the filters.
+        @if (fitFilterOn()) {
+          Nothing here is listed as fitting this car. The workshop may not have
+          classified it yet — press the button above to see the whole catalogue.
+        } @else {
+          Nothing matches that. Try a different category, or clear the filters.
+        }
         @if (isTechMode()) {
           <a class="card-back" [routerLink]="['/tech', 'card', id()]">Not stocked at all? Go back and say you're blocked.</a>
         } @else {
@@ -222,7 +255,14 @@
                 </ul>
               }
 
-              <p class="product-meta">
+              <!--
+                The two facts a person actually decides on -- what it costs
+                and whether it is on the shelf -- given a line of their own
+                at the bottom of the card, the price large and the shelf
+                state as a dot and a word rather than grey text at the end
+                of a sentence.
+              -->
+              <div class="product-meta">
                 @if (item.sellingPrice; as price) {
                   <span class="product-price">{{ money(price) }}</span>
                 }
@@ -231,14 +271,15 @@
                   [class.product-stock--out]="item.availability === 'OUT_OF_STOCK'"
                   [class.product-stock--low]="item.availability === 'LOW'"
                 >
+                  <span class="stock-dot" aria-hidden="true"></span>
                   @switch (item.availability) {
                     @case ('NOT_TRACKED') { Not counted }
-                    @case ('OUT_OF_STOCK') { None on the shelf }
+                    @case ('OUT_OF_STOCK') { None left }
                     @case ('LOW') { {{ item.onHand }} left }
                     @default { {{ item.onHand }} on the shelf }
                   }
                 </span>
-              </p>
+              </div>
             </div>
 
             @if (attachMode()) {
@@ -260,7 +301,10 @@
                 </button>
               </div>
             } @else {
-              <button class="tap tap--add" type="button" (click)="add(item, 1)">Add</button>
+              <button class="tap tap--add" type="button" (click)="add(item, 1)">
+                <span aria-hidden="true">+</span>
+                <span>Add</span>
+              </button>
             }
 
             <!-- Said, not blocked. The store can order it in, and a

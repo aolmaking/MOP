@@ -33,12 +33,24 @@ import type { PresentedError } from './error.interceptor';
  */
 
 /**
- * The auth endpoints themselves. A 401 from `login` means the password
- * was wrong and a 401 from `refresh` means the refresh is spent; neither
- * is a thing to recover from by refreshing.
+ * The endpoints a 401 is the final answer from.
+ *
+ * A 401 from `login` means the password was wrong, and a 401 from
+ * `refresh` means the refresh itself is spent -- refreshing on either
+ * would hide the real answer or recurse.
+ *
+ * `me` is deliberately NOT among them, though it was. `authGuard`
+ * resolves the session by calling `/api/v1/auth/me` on every guarded
+ * navigation, so `me` is the request most likely to be the one that
+ * meets an expired access cookie -- and a 401 from it is not a wrong
+ * password or a spent refresh, it is exactly the twenty-minute
+ * expiry this interceptor exists to renew. Listing it here meant a
+ * technician who put the tablet down between two cars came back, tapped
+ * a job, and was sent to the login screen with a valid fourteen-day
+ * refresh cookie still in the jar.
  */
 function isAuthEndpoint(req: HttpRequest<unknown>): boolean {
-  return /\/api\/v1\/auth\/(login|refresh|logout|me)$/.test(req.url);
+  return /\/api\/v1\/auth\/(login|refresh|logout)$/.test(req.url);
 }
 
 /**

@@ -18,6 +18,7 @@ import { parseAttributeQuery } from "../../systems/inventory/inventory.controlle
 import {
   ReportBlockerDto,
   CreateFaultDto,
+  RaiseExtraWorkDto,
   RequestPartDto,
   RecordInspectionDto,
   CompleteTaskDto,
@@ -427,6 +428,35 @@ export class TechnicianController {
     return { checkpoints: CARS_INSPECTION_CHECKPOINTS };
   }
 
+  /**
+   * "I found something else" -- straight to the front desk.
+   *
+   * Same permission as recording a fault, because that is what it does
+   * first; the difference is where it goes afterwards. See
+   * `TechnicianWorkService.raiseExtraWork`.
+   */
+  @Post("work-orders/:id/extra-work")
+  async raiseExtraWork(
+    @CurrentSession() session: SessionContext,
+    @Param("id") id: string,
+    @Body() dto: RaiseExtraWorkDto,
+  ) {
+    const { staffUserId, tenantId } = await this.requireTechnician(session, "inspection.full.create");
+    // Ownership first, the same rule as every other write here.
+    await this.view.workCard(staffUserId, tenantId, id);
+    return this.work.raiseExtraWork(
+      {
+        workOrderId: id,
+        description: dto.description,
+        severity: dto.severity,
+        recommendedService: dto.recommendedService,
+        parts: dto.parts,
+      },
+      tenantId,
+      this.actor(session),
+    );
+  }
+
   @Post("work-orders/:id/faults")
   async createFault(
     @CurrentSession() session: SessionContext,
@@ -507,13 +537,24 @@ export class TechnicianController {
     @Query("attributes") attributes?: string,
     @Query("inStockOnly") inStockOnly?: string,
     @Query("page") page?: string,
+    @Query("fitsMake") fitsMake?: string,
+    @Query("fitsCategory") fitsCategory?: string,
   ) {
     const { tenantId } = await this.requireTechnician(session, "inventory.request.create");
+
+    // "Fits this car": the catalogue narrowed to what the fitment rules
+    // say suits this marque. Null when the make was never recorded, which
+    // browses whole rather than pretending to filter -- the page only
+    // offers the toggle when it knows what the car is.
+    const skus = fitsMake ? (this.fitmentService?.skusForVehicle(fitsMake, fitsCategory) ?? null) : null;
+
     const page$ = await this.browse.browse(tenantId, {
       query: q,
       categoryId,
       attributes: parseAttributeQuery(attributes),
       inStockOnly: inStockOnly === "true",
+      ...(fitsMake ? { fitsMake: fitsMake.trim().toLowerCase() } : {}),
+      ...(skus ? { skus } : {}),
       page: page ? Number(page) : 1,
     });
 

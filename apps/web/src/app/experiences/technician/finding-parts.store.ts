@@ -47,8 +47,35 @@ export interface DraftFinding {
   readonly flagged: boolean;
 }
 
+/**
+ * A labour line the technician has put on the job, before the report is sent.
+ *
+ * Kept here for the same reason the findings are: attaching a part means
+ * leaving the work card for the Point of Sale. A technician who had added
+ * "Brake Fluid Bleed & Flush" and then went to fetch a master cylinder came
+ * back to a card quoting 0.00 for labour, with the service still ticked --
+ * so the number they would have read to the customer was wrong in the one
+ * direction nobody questions.
+ */
+export interface DraftService {
+  readonly serviceName: string;
+  readonly laborPrice: number;
+}
+
+/**
+ * `byFinding` is what was added against one subsystem; `loose` is what was
+ * added to the job as a whole. They are stored apart because the operator
+ * approves per finding, and a labour line that belongs to no finding is not
+ * cancelled by unticking one.
+ */
+export interface DraftServices {
+  readonly byFinding: Record<string, DraftService[]>;
+  readonly loose: DraftService[];
+}
+
 const PREFIX = 'mop.finding-parts.';
 const FINDINGS_PREFIX = 'mop.findings.';
+const SERVICES_PREFIX = 'mop.finding-services.';
 
 function storageKey(workOrderId: string): string {
   return `${PREFIX}${workOrderId}`;
@@ -56,6 +83,36 @@ function storageKey(workOrderId: string): string {
 
 function findingsKey(workOrderId: string): string {
   return `${FINDINGS_PREFIX}${workOrderId}`;
+}
+
+function servicesKey(workOrderId: string): string {
+  return `${SERVICES_PREFIX}${workOrderId}`;
+}
+
+export function readDraftServices(workOrderId: string): DraftServices {
+  const empty: DraftServices = { byFinding: {}, loose: [] };
+  if (!workOrderId) return empty;
+  try {
+    const raw = sessionStorage.getItem(servicesKey(workOrderId));
+    if (!raw) return empty;
+    const parsed = JSON.parse(raw) as DraftServices;
+    if (!parsed || typeof parsed !== 'object') return empty;
+    return {
+      byFinding: parsed.byFinding && typeof parsed.byFinding === 'object' ? parsed.byFinding : {},
+      loose: Array.isArray(parsed.loose) ? parsed.loose : [],
+    };
+  } catch {
+    return empty;
+  }
+}
+
+export function writeDraftServices(workOrderId: string, value: DraftServices): void {
+  if (!workOrderId) return;
+  try {
+    sessionStorage.setItem(servicesKey(workOrderId), JSON.stringify(value));
+  } catch {
+    // The copy in memory still works.
+  }
 }
 
 export function readDraftFindings(workOrderId: string): DraftFinding[] {
@@ -138,6 +195,7 @@ export function clearFindingParts(workOrderId: string): void {
   try {
     sessionStorage.removeItem(storageKey(workOrderId));
     sessionStorage.removeItem(findingsKey(workOrderId));
+    sessionStorage.removeItem(servicesKey(workOrderId));
   } catch {
     // Nothing to do: the caller has already cleared its own copy.
   }

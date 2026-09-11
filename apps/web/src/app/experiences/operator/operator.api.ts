@@ -7,6 +7,10 @@ export interface OperatorVehicle {
   plateNumber: string | null;
   vinOrChassisNumber: string | null;
   category: string;
+  /** The VEHICLE_MAKES id. Null on a vehicle registered before the field existed. */
+  make: string | null;
+  model: string | null;
+  modelYear: number | null;
   ownedSince: string;
   ownerName: string | null;
   ownerPhone: string | null;
@@ -38,6 +42,9 @@ export interface RegisterCustomerVehiclePayload {
   plateNumber: string;
   category?: 'CARS' | 'MOTORCYCLES' | 'HEAVY_EQUIPMENT';
   vinOrChassisNumber?: string;
+  make?: string;
+  model?: string;
+  modelYear?: number;
 }
 
 export interface OperatorIntakePayload {
@@ -46,6 +53,8 @@ export interface OperatorIntakePayload {
   complaint: string;
   inspectionDeclined?: boolean;
   inspectionParts?: string[];
+  /** Look at the whole car -- said, never inferred from an empty list. */
+  fullInspection?: boolean;
 }
 
 export interface OperatorIntakeResult {

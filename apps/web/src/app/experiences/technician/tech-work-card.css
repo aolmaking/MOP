@@ -2508,14 +2508,20 @@
   border: 1px solid #e2e8f0;
   box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
   display: grid;
-  grid-template-columns: 320px 1fr;
+  /* The picture column follows the window instead of holding 320px until
+     a breakpoint drops it, which left it wider than the words beside it
+     on a tablet held upright. */
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
   overflow: hidden;
   align-items: center;
 }
 
-@media (max-width: 768px) {
+/* The photograph is a confirmation, not the subject: once both columns
+   fit, the words take the larger share. Below that the grid above has
+   already folded them into one. */
+@media (min-width: 768px) {
   .photo3-vehicle-card {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 0.62fr) minmax(0, 1fr);
   }
 }
 
@@ -4591,4 +4597,741 @@
 .sev-pill-btn--none.sev-pill-btn--active {
   background: var(--success-bg);
   color: var(--text);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   THE BAY — the technician's screen while the car is on the lift
+
+   Two columns, four cards, and nothing else. The left column is the car
+   and what is wrong with it; the right column is what this person is
+   doing right now. That split is the whole design: a technician glancing
+   at the tablet mid-job is asking "what am I doing", and it was
+   previously four scrolls down a single column of panels.
+
+   Sizes come from the technician shell's own scale (`--tap` 56px,
+   `--tech-text` 16px), which is already a step up from the desk's.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.bay {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--space-3), 1.2vw, var(--space-5));
+  inline-size: 100%;
+}
+
+/* ── Which car ─────────────────────────────────────────────────────── */
+
+.bay-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.bay-wo {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+}
+
+.bay-mark {
+  --mark-size: 44px;
+}
+
+.bay-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.bay-vehicle {
+  font-size: var(--tech-text-lg);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.bay-customer {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+}
+
+.bay-state {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--accent-muted);
+  color: var(--brand-text);
+  font-size: var(--tech-text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.bay-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--tap);
+  padding-inline: var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  text-decoration: none;
+  font-size: var(--tech-text);
+}
+
+.bay-error {
+  margin: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--danger-bg);
+  color: var(--danger-strong);
+}
+
+/* ── The two columns ───────────────────────────────────────────────── */
+
+/*
+  Fluid, not fixed.
+
+  The two columns were a 1.35fr / 320px split with a hard breakpoint at
+  960px, so between about 900 and 1100 pixels the right column was a
+  sliver and below it everything snapped at once. `auto-fit` with a
+  minimum lets the browser decide how many columns fit at any width --
+  the layout follows the window instead of three sizes somebody picked.
+*/
+.bay-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+  gap: clamp(var(--space-3), 1.4vw, var(--space-5));
+  align-items: start;
+}
+
+/* The left column earns more room when there is room to give. */
+.bay-left {
+  grid-column: span 1;
+}
+
+@media (min-width: 1100px) {
+  .bay-grid {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  }
+}
+
+.bay-left,
+.bay-right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-inline-size: 0;
+}
+
+/* The right column follows the technician down a long left column: it
+   holds the only thing they press repeatedly. */
+.bay-right {
+  position: sticky;
+  inset-block-start: var(--space-4);
+}
+
+.bay-card {
+  padding: clamp(var(--space-4), 1.6vw, var(--space-6));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.bay-card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+  font-size: var(--tech-text-lg);
+  font-weight: 700;
+}
+
+.bay-count {
+  min-inline-size: 30px;
+  margin-inline-start: auto;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--neutral-badge-bg);
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* ── The parts of this job ─────────────────────────────────────────── */
+
+.bay-pieces {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(128px, 12vw, 168px), 1fr));
+  gap: clamp(var(--space-2), 1vw, var(--space-4));
+}
+
+.bay-piece {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  text-align: center;
+}
+
+/* The one being worked on, said with an edge and a word rather than a
+   colour on its own. */
+.bay-piece--now {
+  border-color: var(--accent);
+  border-width: 2px;
+}
+
+.bay-piece app-animated-part-icon {
+  inline-size: 62px;
+  block-size: 62px;
+}
+
+.bay-piece-name {
+  font-size: var(--tech-text-sm);
+  line-height: var(--leading-tight);
+}
+
+.bay-piece-state {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+}
+
+.bay-piece--now .bay-piece-state {
+  color: var(--brand-text);
+  font-weight: 700;
+}
+
+/* ── Something is wrong ────────────────────────────────────────────── */
+
+.bay-wrong {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.bay-wrong-btn {
+  display: flex;
+  align-items: center;
+  gap: clamp(var(--space-3), 1.2vw, var(--space-4));
+  min-block-size: calc(var(--tap) + var(--space-4));
+  padding: clamp(var(--space-4), 1.4vw, var(--space-5));
+  /* Two pixels, because nothing else frames them any more. */
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.bay-wrong-btn--open {
+  border-color: var(--accent);
+  background: var(--accent-muted);
+}
+
+.bay-wrong-icon {
+  font-size: clamp(1.6rem, 2.2vw, 2.2rem);
+  flex: none;
+}
+
+.bay-wrong-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.bay-wrong-words strong {
+  font-size: clamp(1rem, 1.3vw, 1.2rem);
+}
+
+.bay-wrong-words span {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+}
+
+.bay-wrong-go {
+  color: var(--text-muted);
+  font-size: var(--tech-text-lg);
+  flex: none;
+}
+
+.bay-found {
+  margin-block-start: var(--space-4);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--border);
+}
+
+.bay-label {
+  display: block;
+  margin-block: var(--space-3) var(--space-2);
+  font-size: var(--tech-text);
+  font-weight: 600;
+}
+
+.bay-field {
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--tech-text);
+  resize: vertical;
+}
+
+.bay-field:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+
+.bay-sev {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.bay-sev-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--tap);
+  padding-inline: var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--tech-text-sm);
+  cursor: pointer;
+}
+
+.bay-sev-btn--on {
+  border-color: var(--accent);
+  border-width: 2px;
+  background: var(--accent-muted);
+  font-weight: 700;
+}
+
+.bay-send {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  margin-block-start: var(--space-4);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-size: var(--tech-text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bay-send:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.bay-hint {
+  margin: var(--space-3) 0 0;
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+}
+
+/* ── Finish ────────────────────────────────────────────────────────── */
+
+.bay-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.bay-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--success);
+  font-size: var(--tech-text);
+}
+
+.bay-check--bad {
+  color: var(--danger-strong);
+}
+
+/* ── My jobs ───────────────────────────────────────────────────────── */
+
+.bay-card--tasks {
+  border-color: var(--border-strong);
+}
+
+.bay-locked {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: var(--tech-text-sm);
+}
+
+.bay-tasks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.bay-task {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.bay-task--done {
+  opacity: 0.6;
+}
+
+.bay-task-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bay-task-title {
+  font-size: var(--tech-text);
+  line-height: var(--leading-tight);
+}
+
+.bay-task-state {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+}
+
+.bay-task-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  border: none;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: var(--tech-text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bay-task-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.bay-task-btn--start {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* Done is the press this screen exists for, so it is the one full-width
+   green thing on it. */
+.bay-task-btn--done {
+  background: var(--success);
+  color: var(--on-accent);
+}
+
+.bay-minutes {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--tech-text-sm);
+  color: var(--text-muted);
+}
+
+.bay-minutes input {
+  inline-size: 90px;
+  min-block-size: var(--tap);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--tech-text);
+  text-align: center;
+}
+
+.bay-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-7) var(--space-4);
+  text-align: center;
+}
+
+.bay-empty-icon {
+  font-size: 2.6rem;
+}
+
+.bay-empty-title {
+  margin: 0;
+  font-size: var(--tech-text);
+  font-weight: 700;
+}
+
+.bay-empty-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+}
+
+/* On one column the jobs come first: it is what the technician opened
+   the card to press. Keyed to the layout actually collapsing rather than
+   to a pixel width, so it stays true whatever the window does. */
+@media (max-width: 1099px) {
+  .bay-right {
+    position: static;
+    order: -1;
+  }
+}
+
+.bay-complaint,
+.bay-declined {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-size: var(--tech-text);
+}
+
+.bay-declined {
+  border-color: var(--warning);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.bay-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin-block-end: var(--space-4);
+  padding-block-end: var(--space-4);
+  border-block-end: 1px solid var(--border);
+}
+
+.bay-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--tech-text);
+}
+
+.bay-fact-label {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+
+/* What the inspection recorded, kept readable on the repair side: a
+   technician mid-job regularly needs to check what was actually found. */
+.expanded-report-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-block-end: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.expanded-report-box .report-text {
+  margin: 0;
+  font-size: var(--tech-text);
+}
+
+/*
+  The journey strip, inside the bay.
+
+  The shared strip scrolls its rail sideways, which is right on a manager's
+  board where a dozen stages have to fit a column. In a bay it produced a
+  scrollbar under four steps and half a word -- a technician does not drag
+  a rail to find out what stage their own job is at. Here it wraps and
+  shows all of them.
+*/
+.bay-card .stages-rail {
+  overflow-x: visible;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.bay-card .stages-rail > * {
+  min-inline-size: 0;
+}
+
+
+/* ── Where this job is — the band across the top ──────────────────── */
+
+/*
+  Crosswise, and shut by default.
+
+  Boxed into a third of the page the stages wrapped into a block that had
+  to be parsed; a journey is one line of a story and reads sideways. What
+  a technician needs at a glance is the stage they are at and the one
+  after it, so that is all this shows until "More details" is pressed.
+*/
+.bay-stage {
+  inline-size: 100%;
+  border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--brand);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.bay-stage-now {
+  display: flex;
+  align-items: center;
+  gap: clamp(var(--space-3), 1.2vw, var(--space-5));
+  padding: clamp(var(--space-3), 1.2vw, var(--space-4)) clamp(var(--space-4), 1.6vw, var(--space-5));
+}
+
+.bay-stage-icon {
+  font-size: clamp(1.4rem, 2vw, 1.9rem);
+  flex: none;
+}
+
+.bay-stage-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.bay-stage-name {
+  font-size: clamp(1.05rem, 1.6vw, 1.45rem);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.bay-stage-next {
+  color: var(--text-muted);
+  font-size: var(--tech-text-sm);
+}
+
+.bay-stage-more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--tap);
+  padding-inline: clamp(var(--space-3), 1.2vw, var(--space-5));
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--tech-text);
+  font-weight: 600;
+  cursor: pointer;
+  flex: none;
+}
+
+.bay-stage-all {
+  padding: 0 clamp(var(--space-4), 1.6vw, var(--space-5)) clamp(var(--space-4), 1.6vw, var(--space-5));
+  border-block-start: 1px solid var(--border);
+  padding-block-start: var(--space-4);
+}
+
+/* ── The two things that go wrong, unboxed ────────────────────────── */
+
+/*
+  No card, no heading, no border around the pair. These are the controls
+  a technician reaches for in a hurry, and a titled box put two more
+  things between them and the press.
+
+  They sit side by side when the window allows and stack when it does
+  not -- `auto-fit`, so the window decides rather than a breakpoint.
+*/
+.bay-wrong {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: clamp(var(--space-3), 1.2vw, var(--space-4));
+}
+
+.bay-found {
+  padding: clamp(var(--space-4), 1.6vw, var(--space-5));
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+/*
+  The move, in the band.
+
+  `.now-action` is styled inside the workflow-strip component and cannot
+  reach out here, so the band dresses its own copy. It is the accent
+  button on this screen above the fold: the technician's eye should land
+  on the stage, then on the thing to press.
+*/
+.bay-stage-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.bay-stage-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--tap);
+  padding-inline: clamp(var(--space-4), 1.6vw, var(--space-6));
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-size: var(--tech-text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bay-stage-act:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }

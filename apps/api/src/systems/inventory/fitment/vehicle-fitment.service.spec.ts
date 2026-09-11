@@ -135,6 +135,12 @@ describe("VehicleFitmentService (Phase D & E Vehicle Fitment & POS Stock Integra
             category: "CARS",
             plateNumber: "ABC 1234",
             vinOrChassisNumber: "1NXBR32E7MZ123456",
+            // What the front desk recorded. The service used to have no
+            // such field to read and inferred the make from substrings
+            // of the plate and VIN instead.
+            make: "toyota",
+            model: "corolla",
+            modelYear: 2021,
           },
         }),
       },
@@ -303,6 +309,38 @@ describe("VehicleFitmentService (Phase D & E Vehicle Fitment & POS Stock Integra
       // BRK-PAD-TOY-02 has 14 in stock; BRK-PAD-REAR-03 has 0
       expect(res.allItems[0].sku).toBe("BRK-PAD-TOY-02");
       expect(res.allItems[0].inStock).toBe(true);
+    });
+
+    /**
+     * The defect this field exists to close.
+     *
+     * `extractVehicleProfile` read the plate and VIN as one lower-case
+     * string and looked for brand substrings, defaulting everything else
+     * to a 2021 Toyota Corolla. So a vehicle whose make nobody recorded
+     * was offered Corolla brake pads under the heading "exact match".
+     */
+    it("offers nothing marque-specific for a vehicle whose make was never recorded", async () => {
+      (prismaMock.workOrder.findFirst as jest.Mock).mockResolvedValueOnce({
+        id: "wo-fit-unknown",
+        tenantId: "tenant-demo",
+        asset: {
+          category: "CARS",
+          plateNumber: "ABC 1234",
+          vinOrChassisNumber: "1NXBR32E7MZ123456",
+          make: null,
+          model: null,
+          modelYear: null,
+        },
+      });
+
+      const res = await service.resolveForWorkOrder(
+        "tenant-demo",
+        "wo-fit-unknown",
+        "brake-pads-front",
+        "FRONT",
+      );
+
+      expect(res.exactMatches.map((item) => item.sku)).not.toContain("BRK-PAD-TOY-01");
     });
 
     it("resolves compatible parts from Work Order asset and adds selected part line directly", async () => {

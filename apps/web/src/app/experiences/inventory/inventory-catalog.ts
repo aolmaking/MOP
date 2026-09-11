@@ -3,9 +3,11 @@ import { Subject, debounceTime, map, switchMap } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ErrorBanner } from '../../ui/error-banner/error-banner';
 import { ButtonDirective } from '../../ui/button/button.directive';
-import { FormField } from '../../ui/form-field/form-field';
 import { ToastService } from '../../ui/toast/toast.service';
-import { OPERATING_CATEGORIES } from '@mop/shared';
+import { OPERATING_CATEGORIES, makesForCategory } from '@mop/shared';
+import { VehicleMark } from '../../ui/vehicle-mark/vehicle-mark';
+import { WorkshopBrandingService } from '../../ui/workshop-branding.service';
+import { formatMoney } from '../../ui/money';
 import type { PresentedError } from '../../runtime/http/error.interceptor';
 import {
   InventoryApi,
@@ -28,6 +30,8 @@ function emptyDraft(): CatalogDraft {
     itemType: 'PART',
     sellingPrice: '',
     compatibleCategories: [],
+    fitsMakes: [],
+    fitsModels: [],
     lowStockThreshold: 0,
     criticalStockThreshold: 0,
     workOrderUsable: true,
@@ -54,7 +58,7 @@ function emptyDraft(): CatalogDraft {
  */
 @Component({
   selector: 'app-inventory-catalog',
-  imports: [ErrorBanner, ButtonDirective, FormField, DismissOnEscapeDirective],
+  imports: [ErrorBanner, ButtonDirective, DismissOnEscapeDirective, VehicleMark],
   templateUrl: './inventory-catalog.html',
   styleUrl: './inventory-catalog.css',
 })
@@ -170,6 +174,164 @@ export class InventoryCatalog {
    * `CatalogAttribute` row, reusable by every other category exactly as
    * if it had been built there.
    * ------------------------------------------------------------------ */
+
+  private readonly branding = inject(WorkshopBrandingService);
+
+  /* ------------------------------------------------------------------ *
+   * Which cars this part fits
+   *
+   * Required at the moment a part is created, because that is the only
+   * moment somebody is holding it and knows. The server refuses a create
+   * without it; this side asks in the plainest terms it can -- a row of
+   * badges to tick, and one big button for the oil-and-bulbs case that
+   * fits everything.
+   * ------------------------------------------------------------------ */
+
+  protected readonly makeSearch = signal('');
+
+  /** Cars only: a workshop's parts shelf is not where a JCB is chosen. */
+  private readonly allMakes = makesForCategory('CARS');
+
+  protected readonly visibleMakes = computed(() => {
+    const needle = this.makeSearch().trim().toLowerCase();
+    if (!needle) return this.allMakes;
+    return this.allMakes.filter(
+      (make) => make.label.toLowerCase().includes(needle) || make.id.includes(needle),
+    );
+  });
+
+  protected readonly chosenMakes = computed(() =>
+    (this.draft().fitsMakes ?? []).filter((make) => make !== 'universal'),
+  );
+
+  protected readonly fitsUniversal = computed(() => (this.draft().fitsMakes ?? []).includes('universal'));
+
+  protected fitsMake(makeId: string): boolean {
+    return (this.draft().fitsMakes ?? []).includes(makeId);
+  }
+
+  protected toggleFitsMake(makeId: string): void {
+    const current = (this.draft().fitsMakes ?? []).filter((make) => make !== 'universal');
+    const next = current.includes(makeId)
+      ? current.filter((make) => make !== makeId)
+      : [...current, makeId];
+    this.draft.update((draft) => ({ ...draft, fitsMakes: next }));
+  }
+
+  /** "Fits everything" and a list of marques are different answers, not both. */
+  protected toggleUniversal(): void {
+    this.draft.update((draft) => ({
+      ...draft,
+      fitsMakes: (draft.fitsMakes ?? []).includes('universal') ? [] : ['universal'],
+    }));
+  }
+
+  protected patchModels(raw: string): void {
+    const models = raw
+      .split(',')
+      .map((model) => model.trim())
+      .filter(Boolean);
+    this.draft.update((draft) => ({ ...draft, fitsModels: models }));
+  }
+
+  /* ------------------------------------------------------------------ *
+   * The live card
+   * ------------------------------------------------------------------ */
+
+  protected currencyCode(): string {
+    // The workshop may not have said yet; `formatMoney` handles the
+    // absence, and the label beside the field should then say nothing
+    // rather than invent a currency.
+    return this.branding.activeWorkshop().currency ?? '';
+  }
+
+  /**
+   * The price as the counter will read it.
+   *
+   * Formatted through the one money formatter rather than pasted next to
+   * a currency symbol in the template, which is what `lint-template-money`
+   * refuses and what put a literal dollar sign in front of EGP prices
+   * across this product once already.
+   */
+  protected previewPrice(): string {
+    const raw = this.draft().sellingPrice?.trim();
+    if (!raw) return formatMoney(null, this.currencyCode());
+    return formatMoney(raw, this.currencyCode());
+  }
+
+  protected categoryNameFor(id: string | undefined): string {
+    if (!id) return '';
+    return this.categoryOptions().find((entry) => entry.id === id)?.name ?? '';
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Whether this can be saved, said out loud
+   *
+   * The Save button is disabled AND the reason is printed beside it: a
+   * greyed-out button with no explanation is the single most common way
+   * a form wastes somebody's afternoon.
+   * ------------------------------------------------------------------ */
+
+  protected canSave(): boolean {
+    return this.missingWhat() === null;
+  }
+
+  protected missingWhat(): string | null {
+    const draft = this.draft();
+    if (!draft.name?.trim()) return 'It needs a name.';
+    if (!draft.sku?.trim()) return 'It needs a code.';
+    if (!draft.sellingPrice?.trim()) return 'It needs a price.';
+    if ((draft.fitsMakes ?? []).length === 0) return 'Say which cars it fits, or tick "it fits any car".';
+    return null;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Adding one more value to a filter that already exists
+   * ------------------------------------------------------------------ */
+
+  protected readonly addingValueFor = signal<string | null>(null);
+  protected readonly newValueLabel = signal('');
+
+  protected startNewValueFor(attributeId: string): void {
+    this.saveError.set(null);
+    this.addingValueFor.set(attributeId);
+    this.newValueLabel.set('');
+  }
+
+  protected cancelNewValue(): void {
+    this.addingValueFor.set(null);
+  }
+
+  /**
+   * One field, one button.
+   *
+   * Adding "Large" to "Size" used to mean leaving the part, opening
+   * Catalog Builder, finding the attribute and adding a value there --
+   * for a storekeeper holding the part in their other hand.
+   */
+  protected saveNewValue(): void {
+    const attributeId = this.addingValueFor();
+    const label = this.newValueLabel().trim();
+    if (!attributeId || !label) return;
+
+    this.saving.set(true);
+    this.saveError.set(null);
+    this.api
+      .addAttributeValue(attributeId, { label })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (value) => {
+          this.saving.set(false);
+          this.addingValueFor.set(null);
+          this.toggleValue(value.id);
+          this.reloadConfiguration();
+        },
+        error: (err: PresentedError) => {
+          this.saving.set(false);
+          this.saveError.set(err.message ?? 'That could not be saved.');
+        },
+      });
+  }
 
   protected readonly creatingCategory = signal(false);
   protected readonly newCategoryName = signal('');
@@ -402,6 +564,8 @@ export class InventoryCatalog {
   }
 
   protected startNew(): void {
+    this.makeSearch.set('');
+    this.addingValueFor.set(null);
     this.saveError.set(null);
     this.draft.set(emptyDraft());
     this.editing.set('new');
@@ -415,6 +579,8 @@ export class InventoryCatalog {
       itemType: item.itemType,
       catalogCategoryId: item.catalogCategoryId ?? undefined,
       compatibleCategories: [...item.compatibleCategories],
+      fitsMakes: [...item.fitsMakes],
+      fitsModels: [...item.fitsModels],
       attributeValueIds: [...item.attributeValueIds],
       lowStockThreshold: item.lowStockThreshold,
       criticalStockThreshold: item.criticalStockThreshold,

@@ -11,6 +11,13 @@ export interface CatalogItem {
   readonly catalogCategoryId: string | null;
   readonly categoryName: string | null;
   readonly compatibleCategories: readonly string[];
+  /**
+   * The marques this part fits, as VEHICLE_MAKES ids, or `["universal"]`.
+   * Empty means nobody has classified it -- unknown fitment, which is
+   * neither "fits nothing" nor "fits everything".
+   */
+  readonly fitsMakes: readonly string[];
+  readonly fitsModels: readonly string[];
   readonly lowStockThreshold: number;
   readonly criticalStockThreshold: number;
   /** Money as a string, always. */
@@ -59,6 +66,8 @@ export interface CatalogInput {
   readonly itemType: string;
   readonly catalogCategoryId?: string | null;
   readonly compatibleCategories?: readonly string[];
+  readonly fitsMakes?: readonly string[];
+  readonly fitsModels?: readonly string[];
   readonly lowStockThreshold?: number;
   readonly criticalStockThreshold?: number;
   readonly sellingPrice: string;
@@ -172,6 +181,17 @@ export class CatalogService {
   }
 
   async create(tenantId: string, input: CatalogInput, maySeeCost: boolean): Promise<CatalogItem> {
+    // What it fits is asked for at the moment the part enters the
+    // catalogue, because that is the only moment somebody is holding it.
+    // Enforced here rather than on the form: a disabled Save button is
+    // not a rule, and the thousands of items catalogued before this field
+    // existed are exactly why the answer must not be guessed later.
+    if (!input.fitsMakes || input.fitsMakes.length === 0) {
+      throw new BadRequestException({
+        code: "fitment_required",
+        message: "Say which vehicles this part fits, or mark it as fitting all of them.",
+      });
+    }
     await this.requireFreeSku(tenantId, input.sku);
     await this.requireOwnedCategory(tenantId, input.catalogCategoryId);
     const values = await this.requireOwnedValues(tenantId, input.attributeValueIds);
@@ -307,6 +327,11 @@ export class CatalogService {
       // Entered once for every category it fits, never duplicated per
       // category -- the spec is explicit about this.
       compatibleCategories: (input.compatibleCategories ?? []) as never,
+      // Normalised to the ids the vehicle vocabulary uses, because this is
+      // matched against an asset's own `make` and a label stored here
+      // would never match.
+      fitsMakes: (input.fitsMakes ?? []).map((make) => make.trim().toLowerCase()).filter(Boolean),
+      fitsModels: (input.fitsModels ?? []).map((model) => model.trim()).filter(Boolean),
       lowStockThreshold: input.lowStockThreshold ?? 0,
       criticalStockThreshold: input.criticalStockThreshold ?? 0,
       sellingPrice: input.sellingPrice,
@@ -332,6 +357,8 @@ export class CatalogService {
       catalogCategory: { id: string; name: string } | null;
       attributeValues: { valueId: string }[];
       compatibleCategories: string[];
+      fitsMakes: string[];
+      fitsModels: string[];
       lowStockThreshold: number;
       criticalStockThreshold: number;
       sellingPrice: Prisma.Decimal;
@@ -356,6 +383,8 @@ export class CatalogService {
       catalogCategoryId: row.catalogCategoryId,
       categoryName: row.catalogCategory?.name ?? null,
       compatibleCategories: row.compatibleCategories,
+      fitsMakes: row.fitsMakes,
+      fitsModels: row.fitsModels,
       lowStockThreshold: row.lowStockThreshold,
       criticalStockThreshold: row.criticalStockThreshold,
       sellingPrice: row.sellingPrice.toFixed(2),

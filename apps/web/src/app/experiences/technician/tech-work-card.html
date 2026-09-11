@@ -37,18 +37,40 @@
           <!-- Top Vehicle Status & Navigation Bar -->
           <header class="studio-top-bar">
             <div class="top-bar-vehicle">
+              <mop-vehicle-mark class="top-bar-mark" [make]="c.make" [category]="c.category" />
               @if (c.vehicleModel) {
-                <span class="vehicle-meta-badge">🚗 {{ c.vehicleModel }}</span>
+                <span class="vehicle-meta-badge">{{ c.vehicleModel }}</span>
               }
               @if (c.vin) {
                 <span class="vehicle-meta-badge font-mono">VIN: {{ c.vin }}</span>
               }
-              <span class="vehicle-customer">👤 Customer: {{ c.customerName }}</span>
+              <span class="vehicle-customer">👤 {{ c.customerName }}</span>
             </div>
 
-            <a class="nav-back-button" routerLink="/tech" title="Back to Vehicles Queue">
-              ← Back to Queue
-            </a>
+            <div class="top-bar-actions">
+              <!--
+                The way into the Point of Sale, on the bar, on every stage.
+
+                It used to exist only as a button inside one finding and a
+                small link at the bottom of the repair stage, so a
+                technician who wanted a part before writing a finding had
+                nowhere to press. The catalogue opens already narrowed to
+                this car when the workshop recorded what it is.
+              -->
+              <a
+                class="nav-pos-button"
+                [routerLink]="['/tech', 'card', id(), 'parts']"
+                [queryParams]="posParams()"
+                id="btn-open-pos"
+              >
+                <span aria-hidden="true">🛒</span>
+                <span>Parts</span>
+              </a>
+
+              <a class="nav-back-button" routerLink="/tech" title="Back to Vehicles Queue">
+                ← Back to Queue
+              </a>
+            </div>
           </header>
 
           <!--
@@ -353,7 +375,7 @@
                           <a
                             class="card-action-btn card-action-btn--pos"
                             [routerLink]="['/tech', 'card', id(), 'parts']"
-                            [queryParams]="{ category: f.partKey, finding: f.partKey, findingTitle: f.title }"
+                            [queryParams]="posParams({ category: f.partKey, finding: f.partKey, findingTitle: f.title })"
                             id="btn-nav-pos-{{ f.partKey }}"
                           >
                             <span class="btn-icon">🛒</span>
@@ -762,11 +784,18 @@
                     <span>Findings Recorded</span>
                   </div>
                   <div class="sum-chip">
-                    <strong>{{ selectedPosParts().length }}</strong>
+                    <!--
+                      The aggregate, not the flat basket. `selectedPosParts`
+                      is only what was added outside a finding, so a report
+                      carrying a master cylinder attached to the brakes said
+                      "0 POS Parts Requested" on the very screen that confirms
+                      what was sent. The operator's desk had the part.
+                    -->
+                    <strong>{{ aggregatedParts().length }}</strong>
                     <span>POS Parts Requested</span>
                   </div>
                   <div class="sum-chip">
-                    <strong>{{ selectedServices().length }}</strong>
+                    <strong>{{ aggregatedServices().length }}</strong>
                     <span>Services Specified</span>
                   </div>
                 </div>
@@ -845,238 +874,304 @@
           }
         </div>
       } @else {
-        <!-- ═════════════════════════════════════════════════════════════════ -->
-        <!-- ── STAGE 2: REPAIRING / FIXING (Photo 1 Overhaul)                 ── -->
-        <!-- ═════════════════════════════════════════════════════════════════ -->
-        <div class="repair-stage-page">
-          <!-- Top Strip Header: Plate and Phone REMOVED per user instructions -->
-          <header class="live-strip-header">
-            <div class="live-strip-main">
-              <span class="live-pulse-dot"></span>
-              <span class="live-tag">WO #{{ c.workOrderId.slice(-6).toUpperCase() }}</span>
-              <span class="live-dot-sep">•</span>
-              <span class="live-vehicle-title">{{ c.vehicleModel || 'Vehicle' }}</span>
-              <span class="live-dot-sep">•</span>
-              <span class="live-customer-label">Customer: {{ c.customerName }}</span>
-              <span class="live-dot-sep">•</span>
-              <span class="live-status-pill" [class]="'pill-status-' + c.status.toLowerCase()">{{ label(c.status) }}</span>
-            </div>
+        <!--
+          THE BAY — the technician's screen while the car is on the lift.
 
-            <div class="live-strip-controls">
-              <button
-                type="button"
-                class="btn-toggle-live-view"
-                (click)="toggleHeaderExpanded()"
-                id="btn-toggle-live-header"
-              >
-                {{ headerExpanded() ? '▲ Collapse Info' : '▼ Expand Details' }}
-              </button>
-              <a class="nav-back-button" routerLink="/tech" title="Back to Vehicles Queue">
-                ← Back to Queue
-              </a>
+          Rebuilt from the layout the workshop owner sent, and the point of
+          the layout is that it answers three questions in three places
+          instead of scattering them down one column:
+
+            left, top     what stage is this job at
+            left, middle  which part of the car am I on
+            left, bottom  something is wrong
+            right         what am I actually doing right now
+
+          What went: a live-pulse strip, an "Expand Stages & Milestones"
+          toggle, a horizontal scrollbar through the journey, a blocked
+          panel, a reasons list, a fault form with four severity buttons, a
+          price field and an "ask the customer" checkbox -- eleven controls
+          competing on one page, most of them text.
+
+          "I am blocked" is gone on the owner's instruction. What replaces
+          it is the honest version of the same act: work found mid-repair
+          goes to the front desk to be approved, exactly the way an
+          inspection report does, instead of parking the job in a state
+          only a manager can clear.
+        -->
+        <div class="bay">
+          <!-- ── Which car, and where it is up to ──────────────────── -->
+          <header class="bay-top">
+            <span class="bay-wo">#{{ c.workOrderId.slice(-6).toUpperCase() }}</span>
+            <mop-vehicle-mark class="bay-mark" [make]="c.make" [category]="c.category" />
+            <div class="bay-who">
+              <strong class="bay-vehicle">{{ c.vehicleModel || c.identifier || 'Vehicle' }}</strong>
+              <span class="bay-customer">{{ c.customerName }}</span>
             </div>
+            <span class="bay-state">{{ label(c.status) }}</span>
+
+            <!--
+              The car's own record, one press away rather than gone.
+
+              The rebuild dropped it, which took the VIN, the mileage and
+              every previous visit off the technician's screen -- the
+              things that answer "has somebody already tried this?".
+            -->
+            <button
+              type="button"
+              class="bay-back"
+              (click)="toggleHeaderExpanded()"
+              id="btn-toggle-live-header"
+            >
+              <span aria-hidden="true">🕘</span>
+              <span>{{ headerExpanded() ? 'Hide this car' : 'This car' }}</span>
+            </button>
+
+            <a class="bay-back" routerLink="/tech">
+              <span aria-hidden="true">←</span>
+              <span>Queue</span>
+            </a>
           </header>
 
-          <!--
-            The customer refused the inspection.
-            
-            An operational instruction, not a status: a technician who looks
-            around anyway does work nobody authorised, which the customer
-            either refuses to pay for or the workshop absorbs. `inspectionDeclined`
-            reached the card and was read nowhere after the redesign.
-          -->
-          @if (c.inspectionDeclined) {
-            <p class="card-note">Customer refused inspection. Do only what was agreed.</p>
-          }
-
-          <!-- Extended Info & MERGED Vehicle History Panel (Photo 1 Requirement) -->
           @if (headerExpanded()) {
-            <section class="live-details-expanded" aria-label="Extended Vehicle Details and Service History">
-              <div class="details-row">
-                <div class="detail-cell">
-                  <span class="cell-label">Vehicle Model</span>
-                  <strong class="cell-value">{{ c.vehicleModel || '—' }}</strong>
-                </div>
-                <div class="detail-cell">
-                  <span class="cell-label">VIN / Chassis</span>
-                  <strong class="cell-value font-mono">{{ c.vin || '—' }}</strong>
-                </div>
-                <div class="detail-cell">
-                  <span class="cell-label">Mileage</span>
-                  <strong class="cell-value">{{ c.mileage || '—' }}</strong>
-                </div>
-                <div class="detail-cell">
-                  <span class="cell-label">Status</span>
-                  <strong class="cell-value">{{ label(c.status) }}</strong>
-                </div>
-              </div>
-
+            <section class="bay-card live-details-expanded" aria-label="This vehicle and what has happened to it">
               @if (c.inspectionReport) {
                 <div class="expanded-report-box">
-                  <span class="report-tag">📋 Inspection Findings Summary:</span>
+                  <span class="bay-fact-label">What the inspection found</span>
                   <p class="report-text">{{ c.inspectionReport }}</p>
                 </div>
               }
 
-              @if (c.complaint?.trim()) {
-                <div class="expanded-complaint-box">
-                  <span class="complaint-tag">Customer Complaint:</span>
-                  <p class="complaint-text">{{ c.complaint }}</p>
-                </div>
-              }
-
-              <!-- Unified Vehicle Service History inside top expandable box (merged as requested) -->
-              <div class="merged-top-history-wrap">
-                <app-tech-vehicle-history [workOrderId]="id()" />
+              <div class="bay-facts">
+                <span class="bay-fact">
+                  <span class="bay-fact-label">Vehicle</span>
+                  <strong>{{ c.vehicleModel || '—' }}</strong>
+                </span>
+                <span class="bay-fact">
+                  <span class="bay-fact-label">VIN</span>
+                  <strong class="font-mono">{{ c.vin || '—' }}</strong>
+                </span>
+                <span class="bay-fact">
+                  <span class="bay-fact-label">Mileage</span>
+                  <strong>{{ c.mileage || '—' }}</strong>
+                </span>
               </div>
+
+              <app-tech-vehicle-history [workOrderId]="id()" />
             </section>
           }
 
-          <!-- ═════════════════════════════════════════════════════════════ -->
-          <!-- ── REPAIR WORK APPROVED: "START WORKING" HERO MISSION BOX  ── -->
-          <!-- ═════════════════════════════════════════════════════════════ -->
-          @if (c.status === 'APPROVED_FOR_WORK') {
-            <section class="ready-to-work-hero" aria-label="Repair Approved Mission Box">
-              <div class="ready-hero-banner">
-                <div class="ready-badge-pill">
-                  <span class="ready-pulse-dot"></span>
-                  <span>✓ REPAIR WORK APPROVED BY OPERATOR</span>
-                </div>
-                <span class="ready-meta-time">Operator approved findings &amp; quote</span>
-              </div>
-
-              <div class="ready-hero-main">
-                <div class="ready-hero-icon-wrap">
-                  <span class="ready-hero-emoji">🚀</span>
-                </div>
-                <div class="ready-hero-text">
-                  <h2 class="ready-hero-title">Repair Work Approved — Ready to Start</h2>
-                  <p class="ready-hero-desc">
-                    The operator has reviewed the inspection report and approved repair work. 
-                    Assigned repair procedures and inventory parts are ready in your bay. Click below to start working.
-                  </p>
-                </div>
-              </div>
-
-              <!-- Quick Summary of approved tasks & parts -->
-              <div class="ready-summary-chips-row">
-                <div class="ready-sum-chip">
-                  <span class="ready-sum-num">{{ c.tasks.length }}</span>
-                  <span class="ready-sum-label">Repair Tasks</span>
-                </div>
-                @if (openParts().length > 0) {
-                  <div class="ready-sum-chip">
-                    <span class="ready-sum-num">{{ openParts().length }}</span>
-                    <span class="ready-sum-label">Parts Allocated</span>
-                  </div>
-                }
-                @if (c.inspectionReport) {
-                  <div class="ready-findings-preview">
-                    <span class="preview-tag">Findings:</span>
-                    <span class="preview-text">{{ c.inspectionReport }}</span>
-                  </div>
-                }
-              </div>
-
-              <div class="ready-hero-action-row">
-                <button
-                  type="button"
-                  class="btn-start-repair-hero"
-                  (click)="startRepairWork()"
-                  [disabled]="busy() !== null"
-                  id="btn-start-working-action"
-                >
-                  <span class="btn-hero-bolt">⚡</span>
-                  <span class="btn-hero-text">{{ busy() === 'start-work' ? 'Starting Work…' : 'Start Working' }}</span>
-                </button>
-              </div>
-            </section>
+          @if (actionError(); as message) {
+            <p class="bay-error" role="alert">{{ message }}</p>
           }
 
-          <!-- 2-Column Responsive Workspace Layout: Landscape Tracking Left, Tasks Right -->
-          <div class="repair-stage-layout">
-            <!-- Left Column: Landscape Live Tracking Rectangle with Piece Drawings & NO Time Settings -->
-            <div class="repair-column-left">
-              <div class="landscape-tracking-rectangle">
-                <div class="tracking-rect-head">
-                  <div class="rect-head-title-wrap">
-                    <span class="tracking-indicator-dot"></span>
-                    <h2 class="tracking-rect-title">Live Tracking &amp; Pieces Overview</h2>
-                  </div>
-                  <button
-                    type="button"
-                    class="btn-expand-tracking"
-                    (click)="toggleLiveTrackingDetails()"
-                  >
-                    {{ liveTrackingDetailsOpen() ? 'Hide Detailed Milestones' : 'Expand Stages & Milestones' }}
-                  </button>
-                </div>
+          <!--
+            What the customer actually said.
 
-                <!-- Workflow Strip: [showTimes]="false" removes time setting completely! -->
-                @if (journey(); as j) {
-                  <div class="workflow-strip-wrapper">
-                    <app-workflow-strip
-                      [journey]="j"
-                      [showTimes]="false"
-                      (act)="runJourneyAction($event)"
-                    />
-                  </div>
-                }
+            The one thing on this screen written by the person who owns the
+            car, and the reason the job exists. Shown only when there is
+            something to show -- a blank quote box is worse than no box.
+          -->
+          @if (c.complaint?.trim(); as words) {
+            <p class="bay-complaint">
+              <span aria-hidden="true">💬</span>
+              <span>{{ words }}</span>
+            </p>
+          }
 
-                <!-- Pieces Drawing Shelf: Simple 3D claymorphic style drawings of repair pieces -->
-                <div class="repair-pieces-shelf">
-                  <div class="pieces-shelf-head">
-                    <span class="pieces-icon">🧩</span>
-                    <h3 class="pieces-shelf-title">Repair Components &amp; Pieces</h3>
-                  </div>
+          @if (c.inspectionDeclined) {
+            <p class="bay-declined">
+              <span aria-hidden="true">🚫</span>
+              <span>The customer refused inspection. Do what was asked and nothing else.</span>
+            </p>
+          }
 
-                  <div class="pieces-shelf-grid">
-                    @for (piece of repairPieces(); track piece.partKey) {
-                      <div class="piece-drawing-card">
-                        <div class="piece-drawing-icon">
-                          <app-animated-part-icon [part]="piece.partKey" />
-                        </div>
-                        <div class="piece-drawing-info">
-                          <strong class="piece-name">{{ piece.name }}</strong>
-                          <span class="piece-status-badge">{{ piece.status }}</span>
-                        </div>
-                      </div>
-                    }
-                  </div>
-                </div>
-              </div>
+          <!--
+            Where this job is — across the top, not down a column.
 
-              @if (actionError(); as message) {
-                <p class="action-error" role="alert">{{ message }}</p>
-              }
-
-              @if (blockedTask(); as blocked) {
-                <section class="blocked">
-                  <p class="blocked-title">Blocked</p>
-                  <p class="blocked-why">{{ blocked.blockedReason }}</p>
-                  <p class="blocked-note">Your branch manager can see this. They have to clear it.</p>
-                </section>
+            The stages are one line of a story and reading them is a
+            sideways act; boxed into a third of the page they wrapped into
+            a block the eye has to parse. Full width, and folded shut by
+            default: what a technician needs at a glance is the stage they
+            are at and the one after it, so that is all the band shows
+            until somebody asks for the rest.
+          -->
+          <section class="bay-stage" [class.bay-stage--open]="liveTrackingDetailsOpen()">
+            <div class="bay-stage-now">
+              <span class="bay-stage-icon" aria-hidden="true">🕐</span>
+              @if (journey(); as j) {
+                <span class="bay-stage-words">
+                  <strong class="bay-stage-name">{{ j.current.label }}</strong>
+                  @if (j.next; as next) {
+                    <!-- The server already phrases this as "Next: …"; prefixing it here
+                         read "Next: Next: Team review." -->
+                    <span class="bay-stage-next">{{ next }}</span>
+                  } @else if (j.waitingOn; as who) {
+                    <span class="bay-stage-next">Waiting on {{ who.who }}</span>
+                  }
+                </span>
+              } @else {
+                <span class="bay-stage-words">
+                  <strong class="bay-stage-name">{{ label(c.status) }}</strong>
+                </span>
               }
 
               <!--
-                PARTS.
+                The one move the server says this technician may make,
+                in the band that says where the job is.
 
-                Above "Something's wrong" on purpose: when a car is
-                WAITING_PARTS this is the reason, and a technician should not
-                have to open a panel to find out what is holding their job.
-
-                Restored. `PartList` was still imported by the component and
-                rendered nowhere, which left `receivePart`, `usePart`,
-                `returnPart` and `answerClarification` with no caller. Three
-                delivery gates -- parts.received_used_or_returned,
-                parts.no_pending_return and parts.external_resolved -- are
-                satisfied only by those four acts, so a job with a part request
-                on it could never be handed back to its customer.
+                It used to arrive only inside the workflow strip, and
+                folding the strip shut took the move with it -- the
+                technician could see the job was theirs and had nothing
+                to press. It belongs beside the stage, not behind a
+                disclosure.
               -->
-              @if (openParts().length > 0) {
-                <section class="tools parts-section">
-                  <h2 class="tools-title">Parts</h2>
+              @if (journey()?.actions?.length) {
+                <div class="now-actions bay-stage-acts">
+                  @for (action of journey()!.actions; track action.key) {
+                    <button
+                      class="now-action bay-stage-act"
+                      type="button"
+                      [title]="action.hint ?? ''"
+                      [disabled]="busy() !== null"
+                      (click)="runJourneyAction(action)"
+                    >
+                      {{ busy() === 'primary' ? '…' : action.label }}
+                    </button>
+                  }
+                </div>
+              }
 
+              <button
+                type="button"
+                class="bay-stage-more"
+                (click)="toggleLiveTrackingDetails()"
+                id="btn-stage-details"
+              >
+                <span aria-hidden="true">{{ liveTrackingDetailsOpen() ? '▲' : '▼' }}</span>
+                <span>{{ liveTrackingDetailsOpen() ? 'Less' : 'More details' }}</span>
+              </button>
+            </div>
+
+            @if (liveTrackingDetailsOpen() && journey(); as j) {
+              <div class="bay-stage-all">
+                <app-workflow-strip [journey]="j" [showTimes]="false" [wrapStages]="true" (act)="runJourneyAction($event)" />
+              </div>
+            }
+          </section>
+
+          <!--
+            The two things that go wrong, on open ground.
+
+            They were inside a card headed "Something is wrong", which put
+            a title and a border between a technician and the only two
+            controls on this screen they press in a hurry. Nothing frames
+            them now.
+          -->
+          <div class="bay-wrong">
+            <a
+              class="bay-wrong-btn"
+              [routerLink]="['/tech', 'card', id(), 'parts']"
+              [queryParams]="posParams()"
+              id="btn-bay-parts"
+            >
+              <span class="bay-wrong-icon" aria-hidden="true">🛒</span>
+              <span class="bay-wrong-words">
+                <strong>I need a part</strong>
+                <span>Opens the shop, then asks the front desk</span>
+              </span>
+              <span class="bay-wrong-go" aria-hidden="true">→</span>
+            </a>
+
+            <button
+              type="button"
+              class="bay-wrong-btn"
+              [class.bay-wrong-btn--open]="panel() === 'fault'"
+              (click)="panel.set(panel() === 'fault' ? 'none' : 'fault')"
+              id="btn-bay-found"
+            >
+              <span class="bay-wrong-icon" aria-hidden="true">🔎</span>
+              <span class="bay-wrong-words">
+                <strong>I found something</strong>
+                <span>Sends a report to the front desk to approve</span>
+              </span>
+              <span class="bay-wrong-go" aria-hidden="true">→</span>
+            </button>
+          </div>
+
+          @if (panel() === 'fault') {
+            <div class="bay-found">
+              <label class="bay-label" for="found-what">What did you find?</label>
+              <textarea
+                id="found-what"
+                class="bay-field"
+                rows="2"
+                placeholder="The caliper is seized"
+                [value]="faultText()"
+                (input)="faultText.set($any($event.target).value)"
+              ></textarea>
+
+              <p class="bay-label">How bad is it?</p>
+              <div class="bay-sev">
+                @for (level of ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']; track level) {
+                  <button
+                    type="button"
+                    class="bay-sev-btn"
+                    [class.bay-sev-btn--on]="faultSeverity() === level"
+                    (click)="faultSeverity.set(level)"
+                  >
+                    <span aria-hidden="true">{{ severityIcon(level) }}</span>
+                    <span>{{ label(level) }}</span>
+                  </button>
+                }
+              </div>
+
+              <button
+                type="button"
+                class="bay-send"
+                [disabled]="busy() !== null || !faultText().trim()"
+                (click)="sendExtraWork()"
+                id="btn-send-front-desk"
+              >
+                <span aria-hidden="true">✓</span>
+                <span>{{ busy() === 'fault' ? 'Sending…' : 'Send to the front desk' }}</span>
+              </button>
+
+              <p class="bay-hint">
+                They approve it, then it comes back to you as a job — the same way an inspection does.
+              </p>
+            </div>
+          }
+
+          <div class="bay-grid">
+            <div class="bay-left">
+
+              <!-- ── 2. Which part of the car ─────────────────────── -->
+              @if (repairPieces().length > 0) {
+                <section class="bay-card">
+                  <h2 class="bay-card-title">
+                    <span aria-hidden="true">🧩</span>
+                    <span>The parts of this job</span>
+                  </h2>
+
+                  <div class="bay-pieces">
+                    @for (piece of repairPieces(); track piece.partKey) {
+                      <div class="bay-piece" [class.bay-piece--now]="piece.status === 'Active Repair'">
+                        <app-animated-part-icon [part]="piece.partKey" />
+                        <strong class="bay-piece-name">{{ piece.name }}</strong>
+                        <span class="bay-piece-state">{{ piece.status }}</span>
+                      </div>
+                    }
+                  </div>
+                </section>
+              }
+
+              <!-- ── Parts on their way ───────────────────────────── -->
+              @if (openParts().length > 0) {
+                <section class="bay-card">
+                  <h2 class="bay-card-title">
+                    <span aria-hidden="true">📦</span>
+                    <span>Parts</span>
+                  </h2>
                   <app-part-list
                     [parts]="openParts()"
                     [busy]="busy()"
@@ -1088,273 +1183,110 @@
                 </section>
               }
 
-              <!--
-                SOMETHING'S WRONG.
-
-                Restored. The redesign dropped every one of these controls
-                while leaving the methods behind them on the component, so a
-                technician could not ask for a part, record a customer-supplied
-                one, log a fault, or say they were blocked. `blocker.report` is
-                a permission the product grants and the `no_open_blocker`
-                delivery gate exists to read what it produces -- with no way to
-                report one, the gate could never hold anything back.
-              -->
-              <section class="tools exception-tools">
-                <h2 class="tools-title">Something's wrong</h2>
-
-                <div class="tool-row">
-                  <!-- A page, not a panel: asking for parts is browsing a
-                       catalogue and building a basket, which does not fit
-                       beside a fault form on a phone. -->
-                  <a class="tap" [routerLink]="['/tech', 'card', id(), 'parts']">Need parts</a>
-                  <button class="tap" type="button" (click)="panel.set(panel() === 'blocker' ? 'none' : 'blocker')">
-                    I'm blocked
-                  </button>
-                  <button class="tap" type="button" (click)="panel.set(panel() === 'fault' ? 'none' : 'fault')">
-                    Found a fault
-                  </button>
-                </div>
-
-                @if (panel() === 'blocker') {
-                  <!-- Reasons, not a text box. A technician with one free hand
-                       will not type, and the reason enum is what routes this to
-                       the right person. -->
-                  <ul class="reasons">
-                    @for (reason of reasons; track reason.key) {
-                      <li>
-                        <button class="tap tap--wide" type="button" (click)="reportBlocker(reason.key)">
-                          {{ reason.label }}
-                        </button>
-                      </li>
-                    }
-                  </ul>
-                }
-
-                @if (panel() === 'fault') {
-                  <div class="fault">
-                    <textarea
-                      class="fault-text"
-                      rows="3"
-                      placeholder="What did you find?"
-                      [value]="faultText()"
-                      (input)="faultText.set($any($event.target).value)"
-                    ></textarea>
-
-                    <div class="severity">
-                      @for (level of ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']; track level) {
-                        <button
-                          class="tap tap--severity"
-                          type="button"
-                          [class.tap--selected]="faultSeverity() === level"
-                          (click)="faultSeverity.set(level)"
-                        >
-                          {{ label(level) }}
-                        </button>
-                      }
-                    </div>
-
-                    <label class="ask-toggle">
-                      <input
-                        type="checkbox"
-                        [checked]="askCustomer()"
-                        (change)="askCustomer.set($any($event.target).checked)"
-                      />
-                      Ask the customer to approve this
-                    </label>
-
-                    @if (askCustomer()) {
-                      <div class="ask-price">
-                        <label class="ask-price-field">
-                          <span>Price</span>
-                          <input
-                            type="text"
-                            inputmode="decimal"
-                            placeholder="0.00"
-                            [value]="faultPrice()"
-                            (input)="faultPrice.set($any($event.target).value)"
-                          />
-                        </label>
-                        <label class="ask-price-field">
-                          <span>Labour (optional)</span>
-                          <input
-                            type="text"
-                            inputmode="decimal"
-                            placeholder="0.00"
-                            [value]="faultLaborPrice()"
-                            (input)="faultLaborPrice.set($any($event.target).value)"
-                          />
-                        </label>
-                        @if (!priceValid()) {
-                          <p class="ask-price-hint">Enter the price you'd charge for this, e.g. 450 or 450.00.</p>
-                        }
-                      </div>
-                    }
-
-                    <button
-                      class="tap tap--primary tap--wide"
-                      type="button"
-                      [disabled]="busy() !== null || (askCustomer() && !priceValid())"
-                      (click)="logFault()"
-                    >
-                      {{ busy() === 'fault' ? '…' : askCustomer() ? 'Log it and ask the customer' : 'Log it' }}
-                    </button>
-                  </div>
-                }
-              </section>
-
-              <!--
-                FINISH.
-
-                The gate result BEFORE the press, never as a failure after it.
-                This was dropped too, and `finish()` was left on the component
-                with no caller -- so a technician had no way to finish a job,
-                and it sat in IN_PROGRESS forever. The server does not offer
-                FINISH as a journey action for this audience by design, which
-                is exactly why the card has to own this control.
-              -->
+              <!-- ── Finish ───────────────────────────────────────── -->
               @if (c.finish.available) {
-                <section class="tools finish-tools">
-                  <h2 class="tools-title">Finish</h2>
+                <section class="bay-card">
+                  <h2 class="bay-card-title">
+                    <span aria-hidden="true">🏁</span>
+                    <span>Finish</span>
+                  </h2>
 
-                  <ul class="checks">
+                  <ul class="bay-checks">
                     @for (condition of c.finish.conditions; track condition.text) {
-                      <li class="check" [class.check--bad]="!condition.satisfied">
-                        <span class="check-mark">{{ condition.satisfied ? '✓' : '✗' }}</span>
-                        <span class="check-text">{{ condition.text }}</span>
+                      <li class="check bay-check" [class.bay-check--bad]="!condition.satisfied">
+                        <span class="check-mark" aria-hidden="true">{{ condition.satisfied ? '✓' : '✕' }}</span>
+                        <span>{{ condition.text }}</span>
                       </li>
                     }
                   </ul>
 
-                  @if (c.finish.passed) {
-                    <button
-                      class="tap tap--primary tap--wide"
-                      type="button"
-                      [disabled]="busy() !== null"
-                      (click)="finish()"
-                    >
-                      {{ busy() === 'finish' ? '…' : 'Ready to finish' }}
-                    </button>
-                  } @else {
-                    <p class="checks-note">Clear the items above before this job can finish.</p>
+                  @if (!c.finish.passed) {
+                    <p class="bay-hint">Clear the items above first.</p>
                   }
-                </section>
-              }
 
-              <!-- Primary Job Action (e.g. Start Work or Finish) -->
-              <!--
-                The job-level move, as the SERVER named it.
-
-                This was a `primaryJobAction` computed on the client from the
-                status alone -- REGISTERED means "Start inspection",
-                APPROVED_FOR_WORK means "Start work". That asks neither of the
-                two questions that decide whether the move is real: does this
-                workshop's own graph allow it from here, and does this
-                technician hold the permission. So the card could offer a
-                button the controller then refused, and could offer nothing at
-                all when the server had a move to give.
-
-                `journey().actions` is the answer to both, computed once on the
-                server and already used by the workflow strip beside this.
-              -->
-              @if (journey()?.actions?.length) {
-                <section class="tools primary-action-card">
-                  <h3 class="tools-title">Job Status Progression</h3>
-                  <div class="now-actions">
-                    @for (action of journey()!.actions; track action.key) {
-                      <button
-                        class="now-action tap tap--primary tap--wide"
-                        type="button"
-                        [title]="action.hint ?? ''"
-                        [disabled]="busy() !== null"
-                        (click)="runJourneyAction(action)"
-                      >
-                        {{ busy() === 'primary' ? '…' : action.label }}
-                      </button>
-                    }
-                  </div>
+                  <button
+                    type="button"
+                    class="bay-send"
+                    [disabled]="busy() !== null || !c.finish.passed"
+                    (click)="finish()"
+                  >
+                    {{ busy() === 'finish' ? '…' : 'Hand it over' }}
+                  </button>
                 </section>
               }
             </div>
 
-            <!-- Right Column: My tasks (Fixing / Repair) matching Photo 1 -->
-            <div class="repair-column-right">
-              <section class="tools tasks-right-section">
-                <div class="tasks-section-head">
-                  <h2 class="tools-title">MY TASKS (FIXING / REPAIR)</h2>
-                  <span class="tasks-count-badge">{{ c.tasks.length }} task{{ c.tasks.length === 1 ? '' : 's' }}</span>
-                </div>
+            <!-- ── What am I doing right now ──────────────────────── -->
+            <aside class="bay-right">
+              <section class="bay-card bay-card--tasks">
+                <h2 class="bay-card-title">
+                  <span aria-hidden="true">✅</span>
+                  <span>My jobs</span>
+                  <span class="bay-count">{{ c.tasks.length }}</span>
+                </h2>
 
                 @if (c.repairLocked) {
-                  <p class="tools-locked" role="status">
-                    <span class="tools-locked-title">Repair work is locked</span>
-                    <span class="tools-locked-why">{{ c.repairLockReason }}</span>
+                  <p class="bay-locked" role="status">
+                    <span aria-hidden="true">🔒</span>
+                    <span>{{ c.repairLockReason }}</span>
                   </p>
                 }
 
                 @if (c.tasks.length === 0) {
-                  <div class="tools-empty-card">
-                    <span class="empty-icon">✓</span>
-                    <p>No repair tasks currently assigned to you on this vehicle.</p>
+                  <div class="bay-empty">
+                    <span class="bay-empty-icon" aria-hidden="true">📋</span>
+                    <p class="bay-empty-title">Nothing to do yet</p>
+                    <p class="bay-empty-note">Jobs the front desk approves show up here.</p>
                   </div>
                 }
 
-                <ul class="tasks">
+                <ul class="bay-tasks">
                   @for (task of c.tasks; track task.id) {
-                    <li class="task" [class.task--done]="task.status === 'DONE'">
-                      <div class="task-main">
-                        <strong class="task-title">{{ task.title }}</strong>
-                        <span class="task-status">{{ label(task.status) }}</span>
+                    <li class="bay-task" [class.bay-task--done]="task.status === 'DONE'">
+                      <div class="bay-task-words">
+                        <strong class="bay-task-title">{{ task.title }}</strong>
+                        <span class="bay-task-state">{{ label(task.status) }}</span>
                       </div>
 
-                      <div class="task-action-wrap">
-                        @if (task.status === 'ASSIGNED' || task.status === 'RETURNED_FOR_REWORK') {
-                          <button
-                            class="task-start-btn"
-                            type="button"
-                            [disabled]="busy() !== null || c.repairLocked"
-                            (click)="start(task)"
-                          >
-                            {{ busy() === 'start-' + task.id ? '…' : 'Start' }}
-                          </button>
-                        } @else if (task.status === 'IN_PROGRESS') {
-                          <!--
-                            Time entry, when the workshop asks for it.
-                            `canComplete` refuses a task with no minutes under
-                            TIME_TRACKING: REQUIRED, and this field was dropped
-                            in the redesign while that rule stayed. So Done was
-                            permanently disabled and a technician in a
-                            time-tracking workshop could not finish a task at
-                            all -- a configuration option the product sells,
-                            switched on, bricking the page that uses it.
-                          -->
-                          @if (c.timeTracking !== 'OFF') {
-                            <label class="time-entry">
-                              <span>Minutes</span>
-                              <input
-                                type="number"
-                                inputmode="numeric"
-                                min="0"
-                                step="1"
-                                [value]="taskMinutes()[task.id] ?? ''"
-                                (input)="setTaskMinutes(task.id, $any($event.target).value)"
-                              />
-                            </label>
-                          }
-                          <button
-                            class="task-done-btn"
-                            type="button"
-                            [disabled]="busy() !== null || !canComplete(task)"
-                            (click)="complete(task)"
-                          >
-                            {{ busy() === 'done-' + task.id ? '…' : 'Done' }}
-                          </button>
+                      @if (task.status === 'ASSIGNED' || task.status === 'RETURNED_FOR_REWORK') {
+                        <button
+                          type="button"
+                          class="bay-task-btn bay-task-btn--start"
+                          [disabled]="busy() !== null || c.repairLocked"
+                          (click)="start(task)"
+                        >
+                          <span aria-hidden="true">▶</span>
+                          <span>{{ busy() === 'start-' + task.id ? '…' : 'Start' }}</span>
+                        </button>
+                      } @else if (task.status === 'IN_PROGRESS') {
+                        @if (c.timeTracking !== 'OFF') {
+                          <label class="bay-minutes">
+                            <span>Minutes</span>
+                            <input
+                              type="number"
+                              inputmode="numeric"
+                              min="0"
+                              step="1"
+                              [value]="taskMinutes()[task.id] ?? ''"
+                              (input)="setTaskMinutes(task.id, $any($event.target).value)"
+                            />
+                          </label>
                         }
-                      </div>
+                        <button
+                          type="button"
+                          class="bay-task-btn bay-task-btn--done"
+                          [disabled]="busy() !== null || !canComplete(task)"
+                          (click)="complete(task)"
+                        >
+                          <span aria-hidden="true">✓</span>
+                          <span>{{ busy() === 'done-' + task.id ? '…' : 'Done' }}</span>
+                        </button>
+                      }
                     </li>
                   }
                 </ul>
               </section>
-            </div>
+            </aside>
           </div>
         </div>
       }

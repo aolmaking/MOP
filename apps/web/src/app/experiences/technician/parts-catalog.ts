@@ -14,6 +14,7 @@ import {
   type CustomerPosOrderResult,
 } from '../customer/customer-portal.api';
 import { OperatorApi } from '../operator/operator.api';
+import { VehicleMark } from '../../ui/vehicle-mark/vehicle-mark';
 import { WorkshopBrandingService } from '../../ui/workshop-branding.service';
 import { formatMoney } from '../../ui/money';
 import {
@@ -39,9 +40,21 @@ const MAX_LINE = 999;
  */
 @Component({
   selector: 'app-parts-catalog',
-  imports: [RouterLink],
+  imports: [RouterLink, VehicleMark],
   templateUrl: './parts-catalog.html',
   styleUrl: './parts-catalog.css',
+  host: {
+    /*
+      The same catalogue, sized for the counter.
+
+      One POS serves three people -- a technician in a bay, a customer on
+      their phone, and the operator at the front desk -- and the front desk
+      is the one that reads it standing up with a customer talking. That is
+      a size and contrast difference, not a different page, so it is a class
+      on the host rather than a fourth component to keep in step.
+    */
+    '[class.pos-desk]': 'isOperatorMode()',
+  },
 })
 export class PartsCatalog {
   private readonly api = inject(TechnicianApi);
@@ -69,6 +82,18 @@ export class PartsCatalog {
   /** The finding's own name, for saying it on screen rather than a slug. */
   readonly findingTitle = input<string>('');
 
+  /**
+   * What the car is, carried from the work card.
+   *
+   * The technician opened this page from a job, and the job knows the
+   * vehicle -- so the catalogue can open already narrowed to the parts
+   * the fitment rules say suit that marque, instead of showing the whole
+   * workshop and leaving them to remember which pads are the German ones.
+   */
+  readonly vehicleMake = input<string>('');
+  readonly vehicleCategory = input<string>('');
+  readonly vehicleLabel = input<string>('');
+
   /** Technician mode vs Operator reception POS vs Customer over-the-counter POS mode */
   readonly isTechMode = computed(() => this.router.url.includes('/tech'));
   readonly isOperatorMode = computed(() => this.router.url.includes('/operator'));
@@ -81,12 +106,27 @@ export class PartsCatalog {
   protected readonly query = signal('');
   protected readonly categoryId = signal<string | null>(null);
   protected readonly inStockOnly = signal(false);
+  /**
+   * "Fits this car", on by default whenever the car's marque is known.
+   *
+   * On by default because the technician is shopping for one specific
+   * vehicle and the wrong pad fits nothing; a toggle rather than a rule
+   * because the fitment rules are a workshop's data, not physics, and a
+   * part they have not classified yet must stay reachable.
+   */
+  protected readonly fitsThisCar = signal(true);
   protected readonly pageNumber = signal(1);
   /** attributeId -> chosen valueIds. Empty until a filter is touched. */
   protected readonly selected = signal<Record<string, string[]>>({});
 
   /** True when this visit is about attaching to a finding, not about a basket. */
   readonly attachMode = computed(() => this.isTechMode() && !!this.finding());
+
+  /** Whether there is a car to filter by at all. */
+  readonly knowsVehicle = computed(() => this.isTechMode() && !!this.vehicleMake());
+
+  /** Whether the filter is actually narrowing the catalogue right now. */
+  readonly fitFilterOn = computed(() => this.knowsVehicle() && this.fitsThisCar());
 
   /** What is already attached to each finding on this job. */
   protected readonly attached = signal<FindingParts>({});
@@ -187,11 +227,23 @@ export class PartsCatalog {
     return sum > 0 ? this.money(sum.toFixed(2)) : null;
   });
 
-  /** Categories flattened for the chip rail: parents, then their children. */
+  /**
+   * Categories flattened for the chip rail: parents, then their children.
+   *
+   * Empty ones are left out. The workshop's taxonomy is fifty-odd
+   * categories deep and the rail rendered every one of them, most reading
+   * "0", which pushed the actual parts two screens down -- and once the
+   * catalogue is narrowed to one car, nearly all of them are empty. The
+   * currently-chosen category always stays, or pressing it would make it
+   * vanish from under the finger that pressed it.
+   */
   protected readonly categoryChips = computed(() => {
     const flatten = (nodes: readonly PartCategoryNode[], depth: number): { node: PartCategoryNode; depth: number }[] =>
       nodes.flatMap((node) => [{ node, depth }, ...flatten(node.children, depth + 1)]);
-    return flatten(this.page()?.categories ?? [], 0);
+    const chosen = this.categoryId();
+    return flatten(this.page()?.categories ?? [], 0).filter(
+      (entry) => entry.node.itemCount > 0 || entry.node.id === chosen,
+    );
   });
 
   protected readonly filters = computed(() => this.page()?.filters ?? []);
@@ -289,6 +341,20 @@ export class PartsCatalog {
         takeUntilDestroyed(),
       )
       .subscribe({ next: (result) => this.receive(result), error: (err: PresentedError) => this.fail(err) });
+
+    /*
+      The vehicle arrives as a route input, which is bound after the
+      constructor runs -- so the first fetch went out without it and the
+      page said "showing parts for this car" over the whole catalogue.
+      This asks again once, the moment the car is known.
+    */
+    effect(() => {
+      const make = this.vehicleMake();
+      if (!make || !this.isTechMode()) return;
+      untracked(() => {
+        if (this.fitsThisCar()) this.fetchNow();
+      });
+    });
 
     this.fetchNow();
   }
@@ -499,8 +565,17 @@ export class PartsCatalog {
       categoryId: this.categoryId() ?? undefined,
       attributes: this.selected(),
       inStockOnly: this.inStockOnly(),
+      ...(this.fitFilterOn()
+        ? { fitsMake: this.vehicleMake(), fitsCategory: this.vehicleCategory() || 'CARS' }
+        : {}),
       page: this.pageNumber(),
     };
+  }
+
+  protected toggleFitsThisCar(): void {
+    this.fitsThisCar.update((on) => !on);
+    this.pageNumber.set(1);
+    this.fetchNow();
   }
 
   private fetchNow(): void {
@@ -524,7 +599,9 @@ export class PartsCatalog {
       this.state.set('ready');
       return;
     }
-    const filtering = Boolean(this.query().trim() || this.categoryId() || this.activeFilterCount() || this.inStockOnly());
+    const filtering = Boolean(
+      this.query().trim() || this.categoryId() || this.activeFilterCount() || this.inStockOnly() || this.fitFilterOn(),
+    );
     if (filtering) {
       this.state.set('no-results');
       return;

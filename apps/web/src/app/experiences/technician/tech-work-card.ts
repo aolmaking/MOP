@@ -26,8 +26,10 @@ import { WorkshopBrandingService } from '../../ui/workshop-branding.service';
 import {
   clearFindingParts,
   readDraftFindings,
+  readDraftServices,
   readFindingParts,
   writeDraftFindings,
+  writeDraftServices,
   writeFindingParts,
   type AttachedFindingPart,
   type FindingParts,
@@ -35,6 +37,7 @@ import {
 import { formatMoney } from '../../ui/money';
 import { Car3dViewerComponent } from '../../shared/components/car-3d/car-3d-viewer.component';
 import { AnimatedPartIconComponent } from '../../shared/components/animated-part/animated-part-icon.component';
+import { VehicleMark } from '../../ui/vehicle-mark/vehicle-mark';
 import { MECHANIC_HERO_IMG } from '../../shared/components/car-3d/car-studio-assets';
 
 type State = 'loading' | 'ready' | 'not-mine' | 'forbidden' | 'error';
@@ -56,6 +59,7 @@ const BLOCKER_REASONS = [
     TechVehicleHistory,
     Car3dViewerComponent,
     AnimatedPartIconComponent,
+    VehicleMark,
   ],
   templateUrl: './tech-work-card.html',
   styleUrl: './tech-work-card.css',
@@ -225,6 +229,74 @@ export class TechWorkCard {
    * server wrote a Fault for every one -- twenty-three defects invented on a
    * car that had one.
    */
+  /**
+   * What to hand the Point of Sale about this car.
+   *
+   * The catalogue can only narrow itself to "fits this car" if it is told
+   * what the car is, and the work card is the one screen that already
+   * knows. Merged with whatever the caller adds -- a finding, a category
+   * -- so every route into the shop carries the vehicle.
+   */
+  /** Severity as a shape, so it is not colour alone in a bay. */
+  protected severityIcon(level: string): string {
+    switch (level) {
+      case 'CRITICAL':
+        return '\u{1F6D1}';
+      case 'HIGH':
+        return '\u26A0\uFE0F';
+      case 'LOW':
+        return '\u{1F535}';
+      default:
+        return '\u{1F7E1}';
+    }
+  }
+
+  /**
+   * Work found once the job was underway, sent to the front desk.
+   *
+   * Replaces "I'm blocked", which parked the job in a state only a
+   * manager could clear and told nobody what the technician had actually
+   * found. This is the same act an inspection report performs -- a
+   * finding somebody has to approve before the customer is charged --
+   * and it lands in the same queue.
+   */
+  protected sendExtraWork(): void {
+    const text = this.faultText().trim();
+    if (!text || this.busy() !== null) return;
+
+    this.busy.set('fault');
+    this.actionError.set(null);
+    this.api
+      .raiseExtraWork(this.id(), {
+        description: text,
+        severity: this.faultSeverity(),
+        recommendedService: text.slice(0, 200),
+      })
+      .subscribe({
+        next: () => {
+          this.busy.set(null);
+          this.panel.set('none');
+          this.faultText.set('');
+          this.faultSeverity.set('MEDIUM');
+          this.load();
+        },
+        error: (err: PresentedError) => {
+          this.busy.set(null);
+          this.actionError.set(err.message ?? 'That could not be sent.');
+        },
+      });
+  }
+
+  protected posParams(extra: Record<string, string> = {}): Record<string, string> {
+    const card = this.card();
+    return {
+      ...(card?.make ? { vehicleMake: card.make } : {}),
+      ...(card?.category ? { vehicleCategory: card.category } : {}),
+      ...(card?.vehicleModel ? { vehicleLabel: card.vehicleModel } : {}),
+      ...extra,
+    };
+  }
+
   protected readonly findings = signal<Array<{
     id: string;
     partKey: string;
@@ -925,6 +997,7 @@ export class TechWorkCard {
       return { ...map, [partKey]: list };
     });
     this.addService(name, price);
+    this.persistServices();
   }
 
   protected removeBoxService(partKey: string, name: string): void {
@@ -933,6 +1006,7 @@ export class TechWorkCard {
       return { ...map, [partKey]: list };
     });
     this.removeService(name);
+    this.persistServices();
   }
 
   protected isBoxServiceSelected(partKey: string, name: string): boolean {
@@ -954,6 +1028,7 @@ export class TechWorkCard {
       if (list.some((s) => s.serviceName === name)) return list;
       return [...list, { serviceName: name, laborPrice: price }];
     });
+    this.persistServices();
   }
 
   protected addCustomService(): void {
@@ -968,6 +1043,7 @@ export class TechWorkCard {
 
   protected removeService(name: string): void {
     this.selectedServices.update((list) => list.filter((s) => s.serviceName !== name));
+    this.persistServices();
   }
 
   /**
@@ -1210,6 +1286,13 @@ export class TechWorkCard {
     // the Point of Sale, and a technician who had marked the brakes CRITICAL
     // came back to a card that had forgotten -- so the finding list, and which
     // of them are flagged, travel with the parts.
+    // Labour too. A technician who had added a service and then walked to the
+    // Point of Sale for a part came back to a card quoting 0.00 for labour --
+    // the service still ticked on screen, the estimate silently short.
+    const services = readDraftServices(this.id());
+    if (Object.keys(services.byFinding).length > 0) this.boxAttachedServices.set(services.byFinding);
+    if (services.loose.length > 0) this.selectedServices.set([...services.loose]);
+
     const findings = readDraftFindings(this.id());
     if (findings.length > 0) {
       this.findings.set(findings.map((f) => ({ ...f })));
@@ -1219,6 +1302,13 @@ export class TechWorkCard {
 
   private persistFindings(): void {
     writeDraftFindings(this.id(), this.findings());
+  }
+
+  private persistServices(): void {
+    writeDraftServices(this.id(), {
+      byFinding: this.boxAttachedServices(),
+      loose: this.selectedServices(),
+    });
   }
 
   /** Kept in step with storage, so a trip to the POS and back never loses one. */

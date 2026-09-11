@@ -1093,6 +1093,19 @@ model Asset {
   tenantId               String
   category               CategoryCode
   plateNumber            String?
+  // What the vehicle actually is. Nullable because assets predate the
+  // field, and because a workshop that does not know the make must be
+  // able to say so rather than pick one -- `VehicleFitmentService` used
+  // to infer it from letters in the plate number, and the parts a
+  // technician was offered followed that guess.
+  //
+  // `make` holds the lower-case id from VEHICLE_MAKES in @mop/shared,
+  // which is the same key the fitment rules match on. `model` is free
+  // text: no dataset of every trim in every market is worth maintaining,
+  // and the fitment rules already match a model by substring.
+  make                   String?
+  model                  String?
+  modelYear              Int?
   vinOrChassisNumber     String?
   engineNumber           String?
   serialNumber           String?
@@ -1429,6 +1442,22 @@ model InventoryItem {
   // has decided where it belongs.
   catalogCategoryId      String?
   compatibleCategories   CategoryCode[]
+  // Which marques this part actually fits, as VEHICLE_MAKES ids from
+  // @mop/shared -- the same vocabulary an asset's `make` uses, so the
+  // Point of Sale can narrow itself to the car on the job from the
+  // workshop's own data rather than from a static rules dataset that
+  // knows nothing about what this workshop stocks. The single entry
+  // "universal" means it fits anything.
+  //
+  // Required on the form that creates an item, empty on the thousands
+  // catalogued before the field existed: an item nobody has classified
+  // is unknown fitment, which is a different thing from "fits nothing"
+  // and must not be silently treated as either.
+  fitsMakes              String[]
+  // Free text, optional, and only meaningful beside a make: "320i",
+  // "Corolla 2015-2019". No dataset of every trim in every market is
+  // worth maintaining, and fitment matches these by substring.
+  fitsModels             String[]
   lowStockThreshold      Int            @default(0)
   criticalStockThreshold Int            @default(0)
   sellingPrice           Decimal        @db.Decimal(12, 2)

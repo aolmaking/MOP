@@ -876,6 +876,135 @@ export class TechnicianWorkService {
    * Task.decisionItemId's own check exists to prevent -- one step earlier
    * in the Inspection → Fault → Recommendation → Task chain.
    */
+  /**
+   * Work found after the job started, sent to the front desk to approve.
+   *
+   * A technician takes a wheel off and finds a seized caliper. That is
+   * the same situation the inspection report exists for -- somebody has
+   * to say yes, and the customer has to be told what it costs -- except
+   * the job is IN_PROGRESS by then, so the report route was closed and
+   * the only options were to do unauthorised work or to walk to the
+   * counter and describe it.
+   *
+   * So it goes to the same queue, by the same rule: the finding is
+   * written as a real `Fault` (which is what history, the finish gate and
+   * the customer's own record read), and it is added to the inspection's
+   * `fields` with `extraWorkPending`, which is what
+   * `isAwaitingOperatorReview` looks for. The operator sees it on the
+   * screen they already use and approves it with the same press.
+   */
+  async raiseExtraWork(
+    input: {
+      workOrderId: string;
+      description: string;
+      severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+      recommendedService?: string;
+      parts?: ReadonlyArray<{ name: string; sku?: string; quantity: number }>;
+    },
+    tenantId: string,
+    actor: LifecycleActor,
+  ) {
+    const workOrder = await this.requireWorkOrder(input.workOrderId, tenantId);
+
+    // The inspection row is where the operator's queue reads from. A job
+    // that never had one -- the customer refused it -- still needs a way
+    // to have extra work approved, so one is opened for the purpose
+    // rather than the request being refused.
+    const inspection =
+      (await this.prisma.inspection.findFirst({
+        where: { workOrderId: input.workOrderId, tenantId },
+        orderBy: { startedAt: "desc" },
+      })) ??
+      (await this.prisma.inspection.create({
+        data: {
+          tenantId,
+          workOrderId: input.workOrderId,
+          technicianId: actor.accountId,
+          type: "QUICK",
+          fields: { completedBoxes: {} },
+        },
+      }));
+
+    const code = `extra-${Date.now().toString(36)}`;
+
+    const fault = await this.prisma.fault.create({
+      data: {
+        tenantId,
+        workOrderId: input.workOrderId,
+        inspectionId: inspection.id,
+        code,
+        description: input.description,
+        severity: input.severity,
+        recommendedService: input.recommendedService,
+        // The whole point: nobody may charge for this until the front
+        // desk has said yes.
+        customerApprovalRequired: true,
+      },
+    });
+
+    const fields = ((inspection.fields as Record<string, any>) ?? {});
+    const findings = Array.isArray(fields.findings) ? [...fields.findings] : [];
+    const parts = Array.isArray(fields.parts) ? [...fields.parts] : [];
+
+    findings.push({
+      id: fault.id,
+      code,
+      description: input.description,
+      severity: input.severity,
+      recommendedService: input.recommendedService ?? input.description,
+      // Marked, so the operator's screen can say this was found during
+      // the repair rather than at the inspection.
+      foundDuringRepair: true,
+    });
+
+    for (const part of input.parts ?? []) {
+      parts.push({
+        name: part.name,
+        sku: part.sku ?? part.name,
+        quantity: Math.max(1, part.quantity),
+        findingCode: code,
+      });
+    }
+
+    await this.prisma.inspection.update({
+      where: { id: inspection.id },
+      data: {
+        fields: {
+          ...fields,
+          findings,
+          parts,
+          extraWorkPending: true,
+          extraWorkRaisedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    await this.events.emit({
+      tenantId,
+      eventKey: "fault.created",
+      actorId: actor.accountId,
+      actorName: actor.displayName,
+      actorType: actor.actorType,
+      targetType: "Fault",
+      targetId: fault.id,
+      riskLevel: input.severity === "CRITICAL" ? "HIGH" : "LOW",
+      payload: {
+        faultId: fault.id,
+        workOrderId: input.workOrderId,
+        severity: input.severity,
+        foundDuringRepair: true,
+        partsRequested: (input.parts ?? []).length,
+      },
+    });
+
+    return {
+      faultId: fault.id,
+      code,
+      status: workOrder.status,
+      sentToFrontDesk: true,
+    };
+  }
+
   async createFault(input: CreateFaultInput, tenantId: string, actor: LifecycleActor) {
     const workOrder = await this.requireWorkOrder(input.workOrderId, tenantId);
 

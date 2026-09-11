@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './identity/auth.guard';
 import { rootRedirectGuard } from './identity/root-redirect.guard';
+import { surfaceGuard } from './identity/surface.guard';
 import { TEAM_API_BASE_PATH, TeamApi } from './experiences/branch-manager/team/team.api';
 
 export const routes: Routes = [
@@ -301,7 +302,10 @@ export const routes: Routes = [
   {
     // The Operator / Receptionist workstation
     path: 'operator',
-    canActivate: [authGuard],
+    // Signed in is not the same as "this is your screen": booking a
+    // vehicle in is what this surface is for, so that is the permission
+    // it is gated on. See identity/surface.guard.ts.
+    canActivate: [authGuard, surfaceGuard('customer.intake.create')],
     children: [
       {
         path: '',
@@ -321,7 +325,7 @@ export const routes: Routes = [
     // requirement to the technician's, which is why they are separate
     // shells. See docs/phases/PHASE_7.md.
     path: 'inventory',
-    canActivate: [authGuard],
+    canActivate: [authGuard, surfaceGuard('inventory.stock.view')],
     loadComponent: () =>
       import('./experiences/inventory/shell/inventory-shell').then((m) => m.InventoryShell),
     children: [
@@ -371,7 +375,7 @@ export const routes: Routes = [
     // The technician's own shell: three pages, no admin sidebar, and a
     // density layer built for a gloved hand. See docs/phases/PHASE_6.md.
     path: 'tech',
-    canActivate: [authGuard],
+    canActivate: [authGuard, surfaceGuard('task.view_assigned')],
     loadComponent: () =>
       import('./experiences/technician/shell/technician-shell').then((m) => m.TechnicianShell),
     children: [

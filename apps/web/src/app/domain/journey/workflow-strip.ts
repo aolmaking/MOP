@@ -65,6 +65,7 @@ export type PresentedStage = PresentedJourneyStage;
  */
 @Component({
   selector: 'app-workflow-strip',
+  host: { '[class.strip--wrap]': 'wrapStages()' },
   templateUrl: './workflow-strip.html',
   styleUrl: './workflow-strip.css',
 })
@@ -74,6 +75,18 @@ export class WorkflowStrip {
   readonly compact = input(false);
   /** When false, removes time settings (Since, In this stage, duration counters) */
   readonly showTimes = input<boolean>(true);
+
+  /**
+   * Wrap the stages instead of scrolling them sideways.
+   *
+   * The rail scrolls because a manager's board fits a dozen stages into a
+   * narrow column. In a workshop bay the same rail produced a scrollbar
+   * under four steps and half a word, and a technician does not drag a
+   * rail to find out what stage their own job is at -- they glance. An
+   * input rather than a parent stylesheet reaching in, because the
+   * component owns its own layout.
+   */
+  readonly wrapStages = input<boolean>(false);
 
   /**
    * A real, server-authorized action was pressed.
@@ -110,6 +123,14 @@ export class WorkflowStrip {
     const stages = this.journey().stages;
     const rail = this.rail()?.nativeElement;
     if (!rail) return;
+
+    // Nothing to bring into view when every stage is already on screen --
+    // and scrolling a wrapped rail sideways only clips the first column's
+    // labels, which is exactly what it did.
+    if (this.wrapStages()) {
+      rail.scrollLeft = 0;
+      return;
+    }
 
     const index = stages.findIndex((stage) => stage.state !== 'DONE' && stage.state !== 'AHEAD');
     if (index < 0) return;

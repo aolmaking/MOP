@@ -249,6 +249,8 @@ describe("Live work order journey (real HTTP, real Postgres)", () => {
       .post("/api/v1/inventory/catalog")
       .set("Cookie", storekeeperSession.cookie)
       .send({
+        // Fitment is required at creation; these fixtures are not about it.
+        fitsMakes: ["universal"],
         sku: `BRK-${SUFFIX}`,
         name: "Front brake pad set",
         itemType: "PART",

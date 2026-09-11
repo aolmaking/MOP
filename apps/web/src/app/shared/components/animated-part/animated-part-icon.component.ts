@@ -364,28 +364,23 @@ import { CommonModule } from '@angular/common';
             <!-- 3D Stainless Steel Muffler with Dual Chrome Tips -->
             <svg viewBox="0 0 64 64" class="clay-icon" aria-label="Exhaust">
               <defs>
-                <linearGradient id="muffler-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stop-color="#94a3b8" />
-                  <stop offset="50%" stop-color="#475569" />
-                  <stop offset="100%" stop-color="#1e293b" />
+                <linearGradient id="ex-can" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="#e2e8f0"/><stop offset="55%" stop-color="#94a3b8"/><stop offset="100%" stop-color="#475569"/>
                 </linearGradient>
-                <linearGradient id="pipe-chrome" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stop-color="#ffffff" />
-                  <stop offset="50%" stop-color="#cbd5e1" />
-                  <stop offset="100%" stop-color="#64748b" />
-                </linearGradient>
+                <filter id="ex-sh" x="-10%" y="-10%" width="120%" height="130%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.22"/>
+                </filter>
               </defs>
-              <g filter="url(#clay-shadow)">
-                <!-- Inlet Pipe from Engine -->
-                <path d="M10 32 L20 32" stroke="url(#pipe-chrome)" stroke-width="5" stroke-linecap="round" />
-                <!-- Main Muffler Canister Body -->
-                <rect x="18" y="21" width="28" height="22" rx="6" fill="url(#muffler-grad)" stroke="#1e293b" stroke-width="1.2" />
-                <line x1="22" y1="23" x2="42" y2="23" stroke="#cbd5e1" stroke-width="1" stroke-linecap="round" />
-                <!-- Dual Chrome Exhaust Tips on Right -->
-                <rect x="46" y="26" width="10" height="4" rx="2" fill="url(#pipe-chrome)" />
-                <circle cx="56" cy="28" r="2" fill="#0f172a" />
-                <rect x="46" y="34" width="10" height="4" rx="2" fill="url(#pipe-chrome)" />
-                <circle cx="56" cy="36" r="2" fill="#0f172a" />
+              <g filter="url(#ex-sh)">
+                <path d="M4 30h12l4-4h6" fill="none" stroke="#64748b" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+                <rect x="24" y="20" width="24" height="20" rx="9" fill="url(#ex-can)" stroke="#334155" stroke-width="2"/>
+                <path d="M48 30h8" stroke="#64748b" stroke-width="7" stroke-linecap="round"/>
+                <circle cx="58" cy="30" r="5" fill="#334155"/>
+                <g fill="#cbd5e1" opacity="0.75">
+                  <circle cx="54" cy="46" r="4"/>
+                  <circle cx="60" cy="52" r="3"/>
+                  <circle cx="48" cy="52" r="2.5"/>
+                </g>
               </g>
             </svg>
           }
@@ -509,6 +504,335 @@ import { CommonModule } from '@angular/common';
             </svg>
           }
 
+          @case ('electrical') {
+            <svg viewBox="0 0 64 64" class="clay-icon" aria-label="Battery & Electrical">
+              <defs>
+                <linearGradient id="el-body" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="#2a3f5f"/><stop offset="100%" stop-color="#141d2d"/>
+                </linearGradient>
+                <filter id="el-sh" x="-10%" y="-10%" width="120%" height="130%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.22"/>
+                </filter>
+              </defs>
+              <g filter="url(#el-sh)">
+                <rect x="18" y="11" width="8" height="6" rx="2" fill="#e2b168"/>
+                <rect x="38" y="11" width="8" height="6" rx="2" fill="#94a3b8"/>
+                <rect x="11" y="16" width="42" height="7" rx="3" fill="#3b5278"/>
+                <rect x="13" y="22" width="38" height="32" rx="4" fill="url(#el-body)"/>
+                <path d="M33 26 L26 37 H32 L29 48 L39 36 H33 Z" fill="#fde68a"/>
+              </g>
+            </svg>
+          }
+
+          @case ('lighting') {
+            <svg viewBox="0 0 64 64" class="clay-icon" aria-label="Headlights & Lighting">
+              <defs>
+                <linearGradient id="lg-lens" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#f8fafc"/><stop offset="60%" stop-color="#bfdbfe"/><stop offset="100%" stop-color="#60a5fa"/>
+                </linearGradient>
+                <filter id="lg-sh" x="-10%" y="-10%" width="120%" height="130%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.22"/>
+                </filter>
+              </defs>
+              <g filter="url(#lg-sh)">
+                <path d="M10 20h16c9 0 16 5 16 12s-7 12-16 12H10z" fill="url(#lg-lens)" stroke="#475569" stroke-width="1.5"/>
+                <rect x="8" y="18" width="6" height="28" rx="3" fill="#64748b"/>
+                <circle cx="24" cy="32" r="7" fill="#fff8dc" stroke="#cbd5e1" stroke-width="1.5"/>
+                <g stroke="#fbbf24" stroke-width="3" stroke-linecap="round">
+                  <line x1="46" y1="24" x2="58" y2="20"/>
+                  <line x1="46" y1="32" x2="60" y2="32"/>
+                  <line x1="46" y1="40" x2="58" y2="44"/>
+                </g>
+              </g>
+            </svg>
+          }
+
+          @case ('glass_wipers') {
+            <svg viewBox="0 0 64 64" class="clay-icon" aria-label="Windshield & Wipers">
+              <defs>
+                <linearGradient id="gw-glass" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#dbeafe"/><stop offset="100%" stop-color="#93c5fd"/>
+                </linearGradient>
+                <filter id="gw-sh" x="-10%" y="-10%" width="120%" height="130%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.22"/>
+                </filter>
+              </defs>
+              <g filter="url(#gw-sh)">
+                <path d="M12 42l7-22h26l7 22z" fill="url(#gw-glass)" stroke="#475569" stroke-width="1.5" stroke-linejoin="round"/>
+                <path d="M16 44l16-20" stroke="#1e293b" stroke-width="3" stroke-linecap="round"/>
+                <path d="M14 45h10" stroke="#0f172a" stroke-width="3" stroke-linecap="round"/>
+                <path d="M34 44l14-18" stroke="#1e293b" stroke-width="3" stroke-linecap="round"/>
+                <path d="M32 45h10" stroke="#0f172a" stroke-width="3" stroke-linecap="round"/>
+                <circle cx="40" cy="27" r="2" fill="#e0f2fe"/>
+              </g>
+            </svg>
+          }
+
+          @case ('interior') {
+            <svg viewBox="0 0 64 64" class="clay-icon" aria-label="Cabin Interior & Seats">
+              <defs>
+                <linearGradient id="in-seat" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#7c5b45"/><stop offset="100%" stop-color="#4a3325"/>
+                </linearGradient>
+                <filter id="in-sh" x="-10%" y="-10%" width="120%" height="130%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.22"/>
+                </filter>
+              </defs>
+              <g filter="url(#in-sh)">
+                <path d="M22 10h14c4 0 6 3 6 7v20H22c-4 0-6-3-6-7V17c0-4 2-7 6-7z" fill="url(#in-seat)"/>
+                <path d="M18 38h28c4 0 6 3 6 7v3H24c-4 0-6-2-6-6z" fill="#5b4131"/>
+                <g stroke="#8b6a52" stroke-width="1.5">
+                  <line x1="26" y1="14" x2="26" y2="34"/>
+                  <line x1="32" y1="14" x2="32" y2="34"/>
+                  <line x1="38" y1="14" x2="38" y2="34"/>
+                </g>
+                <rect x="46" y="46" width="5" height="10" rx="2" fill="#334155"/>
+              </g>
+            </svg>
+          }
+
+          @case ('body_exterior') {
+            <svg viewBox="0 0 64 64" class="clay-icon" aria-label="Body Panels & Paint">
+              <defs>
+                <linearGradient id="bx-panel" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#e2e8f0"/><stop offset="55%" stop-color="#8fa0b1"/><stop offset="100%" stop-color="#4b5b6b"/>
+                </linearGradient>
+                <filter id="bx-sh" x="-10%" y="-10%" width="120%" height="130%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.22"/>
+                </filter>
+              </defs>
+              <g filter="url(#bx-sh)">
+                <path d="M6 46V34c0-8 7-14 15-14h20c8 0 13 6 13 14v12z" fill="url(#bx-panel)" stroke="#1e293b" stroke-width="2" stroke-linejoin="round"/>
+                <circle cx="22" cy="46" r="9" fill="#0f172a"/>
+                <circle cx="22" cy="46" r="3.5" fill="#94a3b8"/>
+                <path d="M40 24h14v8H40z" fill="#2563eb"/>
+                <path d="M54 26h6v4h-6z" fill="#1d4ed8"/>
+                <g fill="#38bdf8">
+                  <circle cx="36" cy="26" r="2"/>
+                  <circle cx="33" cy="31" r="1.6"/>
+                  <circle cx="36" cy="35" r="1.6"/>
+                </g>
+              </g>
+            </svg>
+          }
+
+          @case ('adas_sensors') {
+            <svg viewBox="0 0 64 64" class="clay-icon" aria-label="ADAS & Parking Sensors">
+              <defs>
+                <linearGradient id="ad-body" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="#94a3b8"/><stop offset="100%" stop-color="#475569"/>
+                </linearGradient>
+                <filter id="ad-sh" x="-10%" y="-10%" width="120%" height="130%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.22"/>
+                </filter>
+              </defs>
+              <g filter="url(#ad-sh)">
+                <path d="M4 44V33c0-3 2-5 5-6l6-8h12v25z" fill="url(#ad-body)" stroke="#1e293b" stroke-width="2" stroke-linejoin="round"/>
+                <path d="M11 27l5-5h9v5z" fill="#bfdbfe"/>
+                <circle cx="12" cy="48" r="5" fill="#1e293b"/>
+                <rect x="24" y="34" width="6" height="6" rx="2" fill="#38bdf8"/>
+                <g fill="none" stroke="#38bdf8" stroke-width="3.5" stroke-linecap="round">
+                  <path d="M36 28a14 14 0 0 1 0 18"/>
+                  <path d="M45 22a24 24 0 0 1 0 30" opacity="0.65"/>
+                  <path d="M54 16a34 34 0 0 1 0 42" opacity="0.35"/>
+                </g>
+              </g>
+            </svg>
+          }
+
+          @case ('drivetrain') {
+            <svg viewBox="0 0 64 64" class="clay-icon" aria-label="Drivetrain & Differential">
+              <defs>
+                <linearGradient id="dt-shaft" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="#f1f5f9"/><stop offset="45%" stop-color="#94a3b8"/><stop offset="100%" stop-color="#475569"/>
+                </linearGradient>
+                <filter id="dt-sh" x="-10%" y="-10%" width="120%" height="130%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.22"/>
+                </filter>
+              </defs>
+              <g filter="url(#dt-sh)">
+                <rect x="4" y="27" width="34" height="10" rx="5" fill="url(#dt-shaft)"/>
+                <rect x="2" y="22" width="7" height="20" rx="3" fill="#334155"/>
+                <rect x="34" y="22" width="7" height="20" rx="3" fill="#334155"/>
+                <circle cx="48" cy="32" r="15" fill="#64748b" stroke="#1e293b" stroke-width="2.5"/>
+                <circle cx="48" cy="32" r="6" fill="#cbd5e1" stroke="#334155" stroke-width="2"/>
+                <rect x="44" y="8" width="8" height="11" rx="3" fill="#475569"/>
+                <path d="M48 47v9" stroke="#334155" stroke-width="5" stroke-linecap="round"/>
+              </g>
+            </svg>
+          }
+
+          @case ('chassis_frame') {
+            <svg viewBox="0 0 64 64" class="clay-icon" aria-label="Chassis & Underbody">
+              <defs>
+                <linearGradient id="ch-pan" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="#94a3b8"/><stop offset="100%" stop-color="#334155"/>
+                </linearGradient>
+                <filter id="ch-sh" x="-10%" y="-10%" width="120%" height="130%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.22"/>
+                </filter>
+              </defs>
+              <g filter="url(#ch-sh)">
+                <path d="M10 18h44a4 4 0 0 1 4 4v14a6 6 0 0 1-6 6H12a6 6 0 0 1-6-6V22a4 4 0 0 1 4-4z" fill="url(#ch-pan)" stroke="#1e293b" stroke-width="2"/>
+                <path d="M16 26h32M16 34h32" stroke="#64748b" stroke-width="3" stroke-linecap="round"/>
+                <circle cx="16" cy="48" r="8" fill="#1e293b"/>
+                <circle cx="16" cy="48" r="3" fill="#94a3b8"/>
+                <circle cx="48" cy="48" r="8" fill="#1e293b"/>
+                <circle cx="48" cy="48" r="3" fill="#94a3b8"/>
+                <path d="M24 48h16" stroke="#475569" stroke-width="4" stroke-linecap="round"/>
+              </g>
+            </svg>
+          }
+
+          @case ('hybrid_ev') {
+            <svg viewBox="0 0 64 64" class="clay-icon" aria-label="Hybrid & EV System">
+              <defs>
+                <linearGradient id="ev-pack" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="#16a34a"/><stop offset="100%" stop-color="#14532d"/>
+                </linearGradient>
+                <filter id="ev-sh" x="-10%" y="-10%" width="120%" height="130%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.22"/>
+                </filter>
+              </defs>
+              <g filter="url(#ev-sh)">
+                <rect x="10" y="20" width="36" height="26" rx="5" fill="url(#ev-pack)"/>
+                <rect x="46" y="27" width="6" height="12" rx="2" fill="#166534"/>
+                <path d="M28 24 L21 35 H27 L24 44 L34 33 H28 Z" fill="#ecfdf5"/>
+                <g stroke="#4ade80" stroke-width="3" stroke-linecap="round">
+                  <line x1="54" y1="24" x2="58" y2="20"/>
+                  <line x1="54" y1="42" x2="58" y2="46"/>
+                </g>
+              </g>
+            </svg>
+          }
+
+          @case ('airbags_safety') {
+            <svg viewBox="0 0 64 64" class="clay-icon" aria-label="Airbags & SRS">
+              <defs>
+                <radialGradient id="ab-bag" cx="40%" cy="35%" r="65%">
+                  <stop offset="0%" stop-color="#ffffff"/><stop offset="70%" stop-color="#e2e8f0"/><stop offset="100%" stop-color="#94a3b8"/>
+                </radialGradient>
+                <filter id="ab-sh" x="-10%" y="-10%" width="120%" height="130%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.22"/>
+                </filter>
+              </defs>
+              <g filter="url(#ab-sh)">
+                <path d="M12 46V30c0-4 3-7 7-7h6v23z" fill="#64748b"/>
+                <circle cx="38" cy="30" r="16" fill="url(#ab-bag)" stroke="#94a3b8" stroke-width="1.5"/>
+                <path d="M28 44h22c2 0 3 2 3 4H26z" fill="#475569"/>
+                <text x="38" y="35" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#dc2626">SRS</text>
+              </g>
+            </svg>
+          }
+
+          @case ('doors_locks') {
+            <svg viewBox="0 0 64 64" class="clay-icon" aria-label="Doors, Locks & Windows">
+              <defs>
+                <linearGradient id="dl-door" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#cbd5e1"/><stop offset="100%" stop-color="#64748b"/>
+                </linearGradient>
+                <filter id="dl-sh" x="-10%" y="-10%" width="120%" height="130%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.22"/>
+                </filter>
+              </defs>
+              <g filter="url(#dl-sh)">
+                <path d="M12 16h26c4 0 6 3 6 7v30H12z" fill="url(#dl-door)" stroke="#475569" stroke-width="1.5"/>
+                <path d="M17 21h20c2 0 3 1 3 3v8H17z" fill="#bfdbfe"/>
+                <rect x="16" y="36" width="16" height="3" rx="1.5" fill="#475569"/>
+                <rect x="46" y="30" width="12" height="12" rx="3" fill="#fbbf24"/>
+                <path d="M52 30v-4a3 3 0 0 1 6 0v4" fill="none" stroke="#fbbf24" stroke-width="2.5"/>
+                <circle cx="52" cy="36" r="2" fill="#78350f"/>
+              </g>
+            </svg>
+          }
+
+          @case ('turbo') {
+            <svg viewBox="0 0 64 64" class="clay-icon" aria-label="Turbocharger & Intake">
+              <defs>
+                <radialGradient id="tb-snail" cx="42%" cy="38%" r="62%">
+                  <stop offset="0%" stop-color="#e2e8f0"/><stop offset="60%" stop-color="#7c8a99"/><stop offset="100%" stop-color="#2f3a45"/>
+                </radialGradient>
+                <filter id="tb-sh" x="-10%" y="-10%" width="120%" height="130%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.22"/>
+                </filter>
+              </defs>
+              <g filter="url(#tb-sh)">
+                <path d="M40 8a24 24 0 1 1-24 24h12a12 12 0 1 0 12-12z" fill="url(#tb-snail)" stroke="#1e293b" stroke-width="2" stroke-linejoin="round"/>
+                <rect x="34" y="4" width="16" height="12" rx="4" fill="#475569" stroke="#1e293b" stroke-width="2"/>
+                <rect x="4" y="26" width="14" height="12" rx="4" fill="#475569" stroke="#1e293b" stroke-width="2"/>
+                <circle cx="40" cy="32" r="9" fill="#cbd5e1" stroke="#334155" stroke-width="2"/>
+                <g stroke="#475569" stroke-width="2.5" stroke-linecap="round">
+                  <path d="M40 25v7"/><path d="M46 36l-6-4"/><path d="M34 36l6-4"/>
+                </g>
+              </g>
+            </svg>
+          }
+
+          @case ('clutch') {
+            <svg viewBox="0 0 64 64" class="clay-icon" aria-label="Clutch & Gearshift">
+              <defs>
+                <radialGradient id="cl-disc" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stop-color="#f1f5f9"/><stop offset="60%" stop-color="#94a3b8"/><stop offset="100%" stop-color="#475569"/>
+                </radialGradient>
+                <filter id="cl-sh" x="-10%" y="-10%" width="120%" height="130%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.22"/>
+                </filter>
+              </defs>
+              <g filter="url(#cl-sh)">
+                <circle cx="32" cy="32" r="22" fill="url(#cl-disc)" stroke="#334155" stroke-width="2"/>
+                <circle cx="32" cy="32" r="8" fill="#64748b" stroke="#1e293b" stroke-width="2"/>
+                <g stroke="#334155" stroke-width="2.5">
+                  <line x1="32" y1="10" x2="32" y2="20"/>
+                  <line x1="32" y1="44" x2="32" y2="54"/>
+                  <line x1="10" y1="32" x2="20" y2="32"/>
+                  <line x1="44" y1="32" x2="54" y2="32"/>
+                  <line x1="17" y1="17" x2="24" y2="24"/>
+                  <line x1="40" y1="40" x2="47" y2="47"/>
+                  <line x1="47" y1="17" x2="40" y2="24"/>
+                  <line x1="24" y1="40" x2="17" y2="47"/>
+                </g>
+                <circle cx="32" cy="32" r="3" fill="#1e293b"/>
+              </g>
+            </svg>
+          }
+
+          @case ('belts') {
+            <svg viewBox="0 0 64 64" class="clay-icon" aria-label="Belts, Chains & Pulleys">
+              <defs>
+                <filter id="bl-sh" x="-10%" y="-10%" width="120%" height="130%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.22"/>
+                </filter>
+              </defs>
+              <g filter="url(#bl-sh)">
+                <path d="M22 12h20a16 16 0 0 1 0 32H22a16 16 0 0 1 0-32z" fill="none" stroke="#0f172a" stroke-width="9"/>
+                <path d="M22 12h20a16 16 0 0 1 0 32H22a16 16 0 0 1 0-32z" fill="none" stroke="#475569" stroke-width="3" stroke-dasharray="4 4"/>
+                <circle cx="22" cy="28" r="11" fill="#cbd5e1" stroke="#475569" stroke-width="2.5"/>
+                <circle cx="22" cy="28" r="4" fill="#334155"/>
+                <circle cx="42" cy="28" r="11" fill="#cbd5e1" stroke="#475569" stroke-width="2.5"/>
+                <circle cx="42" cy="28" r="4" fill="#334155"/>
+              </g>
+            </svg>
+          }
+
+          @case ('filters') {
+            <svg viewBox="0 0 64 64" class="clay-icon" aria-label="Filters">
+              <defs>
+                <linearGradient id="fl-frame" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="#e8eef3"/><stop offset="100%" stop-color="#9aa8b5"/>
+                </linearGradient>
+                <filter id="fl-sh" x="-10%" y="-10%" width="120%" height="130%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.22"/>
+                </filter>
+              </defs>
+              <g filter="url(#fl-sh)">
+                <rect x="6" y="16" width="52" height="32" rx="6" fill="url(#fl-frame)" stroke="#475569" stroke-width="2.5"/>
+                <path d="M12 44l5-24 5 24 5-24 5 24 5-24 5 24 5-24 5 24" fill="none" stroke="#e2b168" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+                <rect x="6" y="16" width="52" height="6" rx="3" fill="#64748b"/>
+                <rect x="6" y="42" width="52" height="6" rx="3" fill="#64748b"/>
+              </g>
+            </svg>
+          }
+
           @default {
             <!-- 3D Professional Mechanics Chrome & Blue Torque Wrench -->
             <svg viewBox="0 0 64 64" class="clay-icon" aria-label="General Maintenance">
@@ -555,8 +879,14 @@ import { CommonModule } from '@angular/common';
 
     /* Clean, soft-shadowed white clay pill card matching the attached design samples */
     .icon-frame {
-      width: 62px;
-      height: 62px;
+      /* Fills whatever the host is given rather than pinning 62px, so a
+         surface that wants the drawing bigger -- the booking-in sheet
+         asks for 82 -- actually gets a bigger drawing instead of the same
+         tile floating in more space. */
+      width: 100%;
+      height: 100%;
+      max-width: 96px;
+      max-height: 96px;
       border-radius: 20px;
       background: #ffffff;
       border: 1.5px solid #e2e8f0;

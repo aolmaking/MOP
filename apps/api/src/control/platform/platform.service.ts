@@ -545,6 +545,24 @@ export class PlatformService {
         });
 
       return { tenant, steps, inviteExpiresAt };
+    },
+    {
+      /*
+        Creating a workshop is a big transaction on purpose -- a tenant,
+        its branches, warehouses, capabilities, policies, staff, the whole
+        master catalogue with its stock balances and opening movements,
+        and the audit row, all or nothing. Prisma's default interactive
+        budget is five seconds, and this legitimately exceeded it under
+        load: "5008 ms passed since the start of the transaction", after
+        which the provisioning step failed mid-way and the whole workshop
+        rolled back with a 500.
+
+        Raised rather than split, because splitting it is the wrong fix:
+        a half-created workshop is exactly what the transaction exists to
+        prevent.
+      */
+      timeout: 60_000,
+      maxWait: 10_000,
     });
   }
 
