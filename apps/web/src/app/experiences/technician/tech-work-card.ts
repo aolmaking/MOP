@@ -37,6 +37,7 @@ import {
 import { formatMoney } from '../../ui/money';
 import { Car3dViewerComponent } from '../../shared/components/car-3d/car-3d-viewer.component';
 import { AnimatedPartIconComponent } from '../../shared/components/animated-part/animated-part-icon.component';
+import { CAR_SUBSYSTEMS } from '../../shared/components/car-3d/car-subsystems';
 import { VehicleMark } from '../../ui/vehicle-mark/vehicle-mark';
 import { MECHANIC_HERO_IMG } from '../../shared/components/car-3d/car-studio-assets';
 
@@ -260,17 +261,70 @@ export class TechWorkCard {
    * finding somebody has to approve before the customer is charged --
    * and it lands in the same queue.
    */
+  /**
+   * The parts of a car, in the words the front desk already uses.
+   *
+   * The same `CAR_SUBSYSTEMS` the operator's intake sheet reads, on
+   * purpose: a finding raised in the bay and a complaint taken at the
+   * counter should name the same thing the same way, or the report the
+   * operator approves describes a part they cannot match to the one the
+   * technician meant.
+   */
+  protected readonly allSubsystems = CAR_SUBSYSTEMS;
+
+  /** Which part the finding is about. One, because a finding is one thing. */
+  protected readonly foundPart = signal<string | null>(null);
+
+  /** True once the technician has asked to write their own words. */
+  protected readonly ownFinding = signal(false);
+
+  protected readonly foundSubsystem = computed(() =>
+    CAR_SUBSYSTEMS.find((sub) => sub.id === this.foundPart()) ?? null,
+  );
+
+  protected chooseFoundPart(id: string): void {
+    // Choosing a different part abandons words that described the old one.
+    if (this.foundPart() !== id) {
+      this.faultText.set('');
+      this.ownFinding.set(false);
+    }
+    this.foundPart.set(id);
+  }
+
+  protected useSuggestion(text: string): void {
+    this.faultText.set(text);
+    this.ownFinding.set(false);
+  }
+
+  protected writeOwnFinding(): void {
+    this.ownFinding.set(true);
+    // A suggestion already chosen stays in the box as a starting point
+    // rather than being wiped when the technician asks to edit it.
+  }
+
+  /** A report needs a part and words; severity always has a value. */
+  protected canSendFinding(): boolean {
+    return this.foundPart() !== null && this.faultText().trim().length > 0;
+  }
+
   protected sendExtraWork(): void {
     const text = this.faultText().trim();
-    if (!text || this.busy() !== null) return;
+    if (!this.canSendFinding() || this.busy() !== null) return;
+
+    // The part is named in the sentence the operator reads, because the
+    // contract carries a description and not a subsystem field, and a
+    // finding that does not say which part is one the counter has to ring
+    // the bay about.
+    const sub = this.foundSubsystem();
+    const described = sub ? `${sub.nameEn}: ${text}` : text;
 
     this.busy.set('fault');
     this.actionError.set(null);
     this.api
       .raiseExtraWork(this.id(), {
-        description: text,
+        description: described,
         severity: this.faultSeverity(),
-        recommendedService: text.slice(0, 200),
+        recommendedService: described.slice(0, 200),
       })
       .subscribe({
         next: () => {
@@ -278,6 +332,8 @@ export class TechWorkCard {
           this.panel.set('none');
           this.faultText.set('');
           this.faultSeverity.set('MEDIUM');
+          this.foundPart.set(null);
+          this.ownFinding.set(false);
           this.load();
         },
         error: (err: PresentedError) => {

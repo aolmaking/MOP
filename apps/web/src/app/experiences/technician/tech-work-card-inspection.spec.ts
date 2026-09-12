@@ -366,7 +366,18 @@ describe('the repair side stays honest about what is holding the job', () => {
     (element.querySelector('#btn-bay-found') as HTMLButtonElement).click();
     fixture.detectChanges();
 
-    // Typed the way a technician types it, through the field itself.
+    // Point at the part first, the way the front desk's intake sheet asks
+    // it. The words only appear once a part is chosen, because a finding
+    // that does not say which part is one the counter has to ring back
+    // about.
+    (element.querySelector('#found-part-brakes') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    // Written rather than picked from the suggestions: the lists are the
+    // common findings and a bay regularly turns up a sixth.
+    (element.querySelector('#btn-found-else') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
     const what = element.querySelector('#found-what') as HTMLTextAreaElement;
     what.value = 'The caliper is seized';
     what.dispatchEvent(new Event('input'));
@@ -379,11 +390,62 @@ describe('the repair side stays honest about what is holding the job', () => {
 
     (element.querySelector('#btn-send-front-desk') as HTMLButtonElement).click();
 
+    // The part is named in the sentence the operator reads.
     expect(api.raiseExtraWork).toHaveBeenCalledWith('wo1', {
-      description: 'The caliper is seized',
+      description: 'Brake System & ABS: The caliper is seized',
       severity: 'HIGH',
-      recommendedService: 'The caliper is seized',
+      recommendedService: 'Brake System & ABS: The caliper is seized',
     });
+  });
+
+  /**
+   * The suggestions are the point of the picker: a technician in gloves
+   * should be able to file a finding without typing a word.
+   */
+  it('files a finding from the suggestions without typing', async () => {
+    const { api, fixture, element } = await render(card({ status: 'IN_PROGRESS' }));
+
+    (element.querySelector('#btn-bay-found') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    (element.querySelector('#found-part-brakes') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const suggestions = element.querySelectorAll('.bay-sugg-btn');
+    // The part's own list, plus the "Something else" escape hatch.
+    expect(suggestions.length).toBeGreaterThan(1);
+
+    const first = suggestions[0] as HTMLButtonElement;
+    const words = first.textContent?.replace(/^\s*\+\s*/, '').trim() ?? '';
+    first.click();
+    fixture.detectChanges();
+
+    (element.querySelector('#btn-send-front-desk') as HTMLButtonElement).click();
+
+    expect(api.raiseExtraWork).toHaveBeenCalledWith(
+      'wo1',
+      expect.objectContaining({ description: `Brake System & ABS: ${words}` }),
+    );
+  });
+
+  /**
+   * A part with no words is half a report, and the front desk cannot
+   * approve half a report.
+   */
+  it('will not send a part with nothing said about it', async () => {
+    const { api, fixture, element } = await render(card({ status: 'IN_PROGRESS' }));
+
+    (element.querySelector('#btn-bay-found') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    (element.querySelector('#found-part-brakes') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const send = element.querySelector('#btn-send-front-desk') as HTMLButtonElement;
+    expect(send.disabled).toBe(true);
+
+    send.click();
+    expect(api.raiseExtraWork).not.toHaveBeenCalled();
   });
 
   it('refuses to send an empty finding', async () => {

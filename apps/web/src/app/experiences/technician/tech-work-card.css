@@ -5392,3 +5392,88 @@
   font-size: var(--tech-text-sm);
   line-height: var(--leading-tight);
 }
+
+/* ── Pointing at the part that is wrong ───────────────────────────── */
+
+/*
+  The same grid the front desk uses at intake, at the bay's tap size.
+  Fills whatever width the panel has rather than stepping at a
+  breakpoint, so it works on the tablet and on the office monitor.
+*/
+.bay-parts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(116px, 11vw, 150px), 1fr));
+  gap: clamp(var(--space-2), 1vw, var(--space-3));
+  margin-block-end: var(--space-4);
+}
+
+.bay-part {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--tap);
+  padding: var(--space-3) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+
+/* Chosen: an edge and a fill, never colour on its own. */
+.bay-part--on {
+  border-color: var(--accent);
+  border-width: 2px;
+  background: var(--accent-muted);
+}
+
+.bay-part app-animated-part-icon {
+  inline-size: 46px;
+  block-size: 46px;
+}
+
+.bay-part-word {
+  font-size: var(--tech-text-sm);
+  line-height: var(--leading-tight);
+}
+
+/* ── What is wrong with it ────────────────────────────────────────── */
+
+.bay-sugg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-end: var(--space-3);
+}
+
+.bay-sugg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--tap);
+  padding-inline: var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--tech-text-sm);
+  text-align: start;
+  cursor: pointer;
+}
+
+.bay-sugg-btn--on {
+  border-color: var(--accent);
+  border-width: 2px;
+  background: var(--accent-muted);
+  font-weight: 700;
+}
+
+/* The escape hatch reads as one: dashed, not another suggestion. */
+.bay-sugg-btn--else {
+  border-style: dashed;
+  color: var(--text-muted);
+}

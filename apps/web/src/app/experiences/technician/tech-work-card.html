@@ -1100,15 +1100,76 @@
 
           @if (panel() === 'fault') {
             <div class="bay-found">
-              <label class="bay-label" for="found-what">What did you find?</label>
-              <textarea
-                id="found-what"
-                class="bay-field"
-                rows="2"
-                placeholder="The caliper is seized"
-                [value]="faultText()"
-                (input)="faultText.set($any($event.target).value)"
-              ></textarea>
+              <!--
+                Point at it, then pick the words.
+
+                Typing a finding into an empty box asks a technician in
+                gloves to spell a subsystem they know by sight. This is the
+                same picker and the same suggestion lists the front desk
+                uses at intake -- one vocabulary across the two ends of the
+                job, so what arrives at the counter reads like the reports
+                already do.
+              -->
+              <p class="bay-label">Which part?</p>
+              <div class="bay-parts">
+                @for (part of allSubsystems; track part.id) {
+                  <button
+                    type="button"
+                    class="bay-part"
+                    [class.bay-part--on]="foundPart() === part.id"
+                    (click)="chooseFoundPart(part.id)"
+                    [id]="'found-part-' + part.id"
+                  >
+                    <app-animated-part-icon [part]="part.id" />
+                    <span class="bay-part-word">{{ part.nameEn }}</span>
+                  </button>
+                }
+              </div>
+
+              @if (foundSubsystem(); as sub) {
+                <p class="bay-label">What is wrong with the {{ sub.nameEn }}?</p>
+                <div class="bay-sugg">
+                  @for (symptom of sub.symptoms; track symptom.en) {
+                    <button
+                      type="button"
+                      class="bay-sugg-btn"
+                      [class.bay-sugg-btn--on]="faultText().trim() === symptom.en"
+                      (click)="useSuggestion(symptom.en)"
+                    >
+                      <span aria-hidden="true">{{ faultText().trim() === symptom.en ? '✓' : '+' }}</span>
+                      <span>{{ symptom.en }}</span>
+                    </button>
+                  }
+
+                  <!--
+                    The lists are the common findings, and a bay regularly
+                    turns up a sixth. Without this the technician picks the
+                    nearest wrong one, and the front desk approves work for
+                    something nobody found.
+                  -->
+                  <button
+                    type="button"
+                    class="bay-sugg-btn bay-sugg-btn--else"
+                    [class.bay-sugg-btn--on]="ownFinding()"
+                    (click)="writeOwnFinding()"
+                    id="btn-found-else"
+                  >
+                    <span aria-hidden="true">✎</span>
+                    <span>Something else</span>
+                  </button>
+                </div>
+
+                @if (ownFinding()) {
+                  <textarea
+                    id="found-what"
+                    class="bay-field"
+                    rows="2"
+                    placeholder="The caliper is seized"
+                    [value]="faultText()"
+                    (input)="faultText.set($any($event.target).value)"
+                  ></textarea>
+                }
+              }
 
               <p class="bay-label">How bad is it?</p>
               <div class="bay-sev">
@@ -1128,7 +1189,7 @@
               <button
                 type="button"
                 class="bay-send"
-                [disabled]="busy() !== null || !faultText().trim()"
+                [disabled]="busy() !== null || !canSendFinding()"
                 (click)="sendExtraWork()"
                 id="btn-send-front-desk"
               >
