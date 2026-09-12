@@ -173,6 +173,36 @@ export class TechnicianWorkService {
    * decides that, and only once every task is accounted for.
    */
   /**
+   * Why the workshop will not let work start yet, or null when it will.
+   *
+   * Lives here, beside the write path that enforces it, and is read by the
+   * technician's card so the screen can say "not yet" before a tap instead
+   * of after one. Two copies of this rule is how a card ends up offering a
+   * Start button the server then refuses with a 409 -- which is what it
+   * did: the button fired, the API said no, and the refusal appeared in a
+   * banner at the top of a page the technician had already scrolled past.
+   *
+   * Only the workshops that asked for it are held: `UNAPPROVED_WORK_EXECUTION`
+   * is a policy, and a shop that allows work to run ahead of the customer's
+   * answer is not blocked here at all.
+   */
+  async unapprovedWorkBlockReason(workOrderId: string, tenantId: string): Promise<string | null> {
+    const executionPolicy = await this.policies.resolveValue(tenantId, "UNAPPROVED_WORK_EXECUTION");
+    if (executionPolicy !== "BLOCKED") return null;
+
+    const pendingApproval = await this.prisma.customerDecisionRequest.count({
+      where: {
+        workOrderId,
+        status: { in: ["SENT", "VIEWED", "PARTIALLY_RESPONDED"] },
+      },
+    });
+
+    return pendingApproval > 0
+      ? "Customer approval is pending for this job. Work cannot start until customer approval is granted."
+      : null;
+  }
+
+  /**
    * A technician picks the task up.
    *
    * Task status only -- this deliberately does NOT move the work order.
@@ -197,20 +227,9 @@ export class TechnicianWorkService {
     // startable through the change.
     await this.lifecycle.assertOperationalWorkAuthorized(task.workOrderId, task.tenantId);
 
-    const executionPolicy = await this.policies.resolveValue(task.tenantId, "UNAPPROVED_WORK_EXECUTION");
-    if (executionPolicy === "BLOCKED") {
-      const pendingApproval = await this.prisma.customerDecisionRequest.count({
-        where: {
-          workOrderId: task.workOrderId,
-          status: { in: ["SENT", "VIEWED", "PARTIALLY_RESPONDED"] },
-        },
-      });
-      if (pendingApproval > 0) {
-        throw new ConflictException({
-          code: "work_not_authorized",
-          message: "Customer approval is pending for this job. Work cannot start until customer approval is granted.",
-        });
-      }
+    const awaitingCustomer = await this.unapprovedWorkBlockReason(task.workOrderId, task.tenantId);
+    if (awaitingCustomer !== null) {
+      throw new ConflictException({ code: "work_not_authorized", message: awaitingCustomer });
     }
 
     const openBlockers = await this.prisma.taskBlocker.count({

@@ -486,6 +486,52 @@ describe("UNAPPROVED_WORK_EXECUTION runtime enforcement", () => {
     const started = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
     expect(started.status).toBe("IN_PROGRESS");
   });
+
+  /**
+   * The refusal above has to be knowable BEFORE the technician presses
+   * Start, not only after.
+   *
+   * It was not: the card mirrored the lifecycle guard alone, so on a job
+   * whose lifecycle was fine but whose customer had an unanswered request
+   * the button rendered enabled, the press returned 409, and the sentence
+   * landed in a banner at the top of a card the technician had scrolled
+   * past. This asserts the one rule both paths now read.
+   */
+  it("says why work cannot start before the button is pressed, and only where the policy asks", async () => {
+    const wo = await prisma.workOrder.create({
+      data: { tenantId, branchId, customerId, assetId, status: "IN_PROGRESS" },
+    });
+
+    await prisma.customerDecisionRequest.create({
+      data: {
+        tenantId,
+        workOrderId: wo.id,
+        customerId,
+        status: "SENT",
+        secureToken: `tok-${wo.id}`,
+        createdById: "tech-1",
+      },
+    });
+
+    await policies.set(tenantId, "UNAPPROVED_WORK_EXECUTION", "BLOCKED", PLATFORM_ACTOR, "PLATFORM", "Customer must approve first");
+
+    // The card can say "not yet" without anything being pressed, and says
+    // it in the same words the write path would have refused with.
+    await expect(techWork.unapprovedWorkBlockReason(wo.id, tenantId)).resolves.toContain(
+      "Customer approval is pending",
+    );
+
+    // A workshop that lets the agreed scope proceed is not held at all.
+    await policies.set(
+      tenantId,
+      "UNAPPROVED_WORK_EXECUTION",
+      "ALLOWED_INITIAL_ONLY",
+      PLATFORM_ACTOR,
+      "PLATFORM",
+      "Agreed scope may proceed",
+    );
+    await expect(techWork.unapprovedWorkBlockReason(wo.id, tenantId)).resolves.toBeNull();
+  });
 });
 
 describe("PROMISED_TIME_VISIBILITY customer portal enforcement", () => {

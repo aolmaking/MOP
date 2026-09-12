@@ -1183,40 +1183,17 @@
                 </section>
               }
 
-              <!-- ── Finish ───────────────────────────────────────── -->
-              @if (c.finish.available) {
-                <section class="bay-card">
-                  <h2 class="bay-card-title">
-                    <span aria-hidden="true">🏁</span>
-                    <span>Finish</span>
-                  </h2>
-
-                  <ul class="bay-checks">
-                    @for (condition of c.finish.conditions; track condition.text) {
-                      <li class="check bay-check" [class.bay-check--bad]="!condition.satisfied">
-                        <span class="check-mark" aria-hidden="true">{{ condition.satisfied ? '✓' : '✕' }}</span>
-                        <span>{{ condition.text }}</span>
-                      </li>
-                    }
-                  </ul>
-
-                  @if (!c.finish.passed) {
-                    <p class="bay-hint">Clear the items above first.</p>
-                  }
-
-                  <button
-                    type="button"
-                    class="bay-send"
-                    [disabled]="busy() !== null || !c.finish.passed"
-                    (click)="finish()"
-                  >
-                    {{ busy() === 'finish' ? '…' : 'Hand it over' }}
-                  </button>
-                </section>
-              }
             </div>
 
-            <!-- ── What am I doing right now ──────────────────────── -->
+            <!--
+              What am I doing, and what is left — one card.
+
+              These were two boxes in two columns, and the technician had to
+              read across the page to learn that the job they just finished
+              still could not be handed over. Doing the work and closing it
+              are one thought, so they are now one card: the jobs at the
+              top, the way out at the bottom, in the order they happen.
+            -->
             <aside class="bay-right">
               <section class="bay-card bay-card--tasks">
                 <h2 class="bay-card-title">
@@ -1255,9 +1232,19 @@
                           [disabled]="busy() !== null || c.repairLocked"
                           (click)="start(task)"
                         >
-                          <span aria-hidden="true">▶</span>
+                          <span aria-hidden="true">{{ c.repairLocked ? '🔒' : '▶' }}</span>
                           <span>{{ busy() === 'start-' + task.id ? '…' : 'Start' }}</span>
                         </button>
+
+                        <!--
+                          The reason sits under the button it disables. It
+                          was only ever shown in the banner at the top of
+                          the page, which on a long card is somewhere the
+                          technician has already scrolled past.
+                        -->
+                        @if (c.repairLocked) {
+                          <p class="bay-task-why">{{ c.repairLockReason }}</p>
+                        }
                       } @else if (task.status === 'IN_PROGRESS') {
                         @if (c.timeTracking !== 'OFF') {
                           <label class="bay-minutes">
@@ -1285,6 +1272,79 @@
                     </li>
                   }
                 </ul>
+
+                <!--
+                  The way out of the job, in the same card and below the
+                  jobs, because it is what happens after them.
+                -->
+                @if (c.finish.available) {
+                  <div class="bay-finish">
+                    <h3 class="bay-finish-title">
+                      <span aria-hidden="true">🏁</span>
+                      <span>Finish</span>
+                    </h3>
+
+                    @if (c.finish.passed) {
+                      <p class="bay-finish-ok">
+                        <span class="check-mark" aria-hidden="true">✓</span>
+                        <span>Everything is clear. This car can go.</span>
+                      </p>
+                    } @else {
+                      <!--
+                        Only what is still in the way. The satisfied
+                        conditions were the majority of the list and said
+                        nothing a technician needed to act on; they are
+                        behind a disclosure so the blocking ones are read
+                        first rather than found.
+                      -->
+                      <ul class="bay-checks">
+                        @for (condition of blockingConditions(); track condition.text) {
+                          <li class="check bay-check bay-check--bad">
+                            <span class="check-mark" aria-hidden="true">✕</span>
+                            <span>{{ condition.text }}</span>
+                          </li>
+                        }
+                      </ul>
+
+                      <!--
+                        Why the button below is dead. Obvious from the list
+                        to someone reading it closely; this is for the
+                        technician who is not.
+                      -->
+                      <p class="bay-hint">Clear the items above first.</p>
+                    }
+
+                    <!--
+                      The conditions already met stay reachable in both
+                      states rather than disappearing once they pass. They
+                      are folded away because they need no action, not
+                      because they stop being true.
+                    -->
+                    @if (clearedConditions().length > 0) {
+                      <details class="bay-cleared">
+                        <summary>{{ clearedConditions().length }} already done</summary>
+                        <ul class="bay-checks">
+                          @for (condition of clearedConditions(); track condition.text) {
+                            <li class="check bay-check">
+                              <span class="check-mark" aria-hidden="true">✓</span>
+                              <span>{{ condition.text }}</span>
+                            </li>
+                          }
+                        </ul>
+                      </details>
+                    }
+
+                    <button
+                      type="button"
+                      class="bay-send"
+                      [disabled]="busy() !== null || !c.finish.passed"
+                      (click)="finish()"
+                      id="btn-finish"
+                    >
+                      {{ busy() === 'finish' ? '…' : 'Hand it over' }}
+                    </button>
+                  </div>
+                }
               </section>
             </aside>
           </div>

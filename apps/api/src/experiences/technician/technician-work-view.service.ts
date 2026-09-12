@@ -13,6 +13,7 @@ import { PrismaService } from "../../runtime/database/prisma.service";
 import { CapabilityResolutionService } from "../../control/capabilities/capability-resolution.service";
 import { PolicyResolutionService } from "../../control/policies/policy-resolution.service";
 import { WorkOrderLifecycleService } from "../../systems/operations/work-order-lifecycle.service";
+import { TechnicianWorkService } from "../../systems/operations/technician-work.service";
 import { AssetHistoryService } from "../../systems/operations/vehicle-history/asset-history.service";
 import { WorkshopHistoryService } from "../../systems/operations/history/workshop-history.service";
 import type { TechnicianHistoryBrief } from "../../systems/operations/history/workshop-history.types";
@@ -790,6 +791,10 @@ export class TechnicianWorkViewService {
     private readonly specialization?: SpecializationService,
     private readonly inspectionRepo?: InspectionRepository,
     private readonly prices?: PriceCatalogService,
+    // Optional like its neighbours so the many `new TechnicianWorkViewService(...)`
+    // call sites in the suite keep working; when it is absent the card
+    // simply falls back to the lifecycle answer it always had.
+    private readonly technicianWork?: TechnicianWorkService,
   ) {}
 
   async myWork(staffUserId: string, tenantId: string): Promise<readonly TechnicianJob[]> {
@@ -1707,7 +1712,6 @@ export class TechnicianWorkViewService {
   private async repairLockReason(workOrderId: string, tenantId: string): Promise<string | null> {
     try {
       await this.lifecycle.assertOperationalWorkAuthorized(workOrderId, tenantId);
-      return null;
     } catch (error) {
       const response = (error as { response?: { code?: string; message?: string } }).response;
       if (response?.code === "work_not_authorized" || response?.code === "work_order_closed") {
@@ -1715,6 +1719,12 @@ export class TechnicianWorkViewService {
       }
       throw error;
     }
+
+    // The lifecycle guard is not the only thing `startTask` asks. A shop
+    // that blocks work while the customer has an unanswered request
+    // refuses there too, and mirroring only the first check left the card
+    // offering Start on a job the server would reject.
+    return this.technicianWork?.unapprovedWorkBlockReason(workOrderId, tenantId) ?? null;
   }
 
   /**

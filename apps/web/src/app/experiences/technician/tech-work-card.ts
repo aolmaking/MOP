@@ -510,6 +510,23 @@ export class TechWorkCard {
   protected readonly customServiceName = signal<string>('');
   protected readonly customServicePrice = signal<string>('');
 
+  /**
+   * What is still in the way of handing this car over.
+   *
+   * The finish list showed every condition, satisfied or not, and the
+   * satisfied ones were the majority -- a technician scanning it had to
+   * find the two red lines among seven green ones. These two signals split
+   * the list so the blocking items are read first and the rest sit behind
+   * a disclosure.
+   */
+  protected readonly blockingConditions = computed(() =>
+    (this.card()?.finish.conditions ?? []).filter((condition) => !condition.satisfied)
+  );
+
+  protected readonly clearedConditions = computed(() =>
+    (this.card()?.finish.conditions ?? []).filter((condition) => condition.satisfied)
+  );
+
   // Pieces shelf drawings computation for Repair stage
   protected readonly repairPieces = computed(() => {
     const c = this.card();
