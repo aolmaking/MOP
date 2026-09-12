@@ -187,6 +187,58 @@ describe('TechNow', () => {
   });
 
   /**
+   * The grouping has to MOVE, or it is decoration.
+   *
+   * A car whose inspection has just gone to the customer sits in
+   * `WAITING_CUSTOMER`, and that status was missing from the old waiting
+   * list -- so it stayed under "Start these" with nothing startable about
+   * it, which is exactly what made the three groups look broken. The
+   * cases below are the journey a technician actually watches: send the
+   * inspection and the car drops to the bottom; the desk approves it and
+   * it comes back to the middle.
+   */
+  it.each([
+    ['WAITING_CUSTOMER', 'the inspection has gone to the customer'],
+    ['AWAITING_CUSTOMER_APPROVAL', 'the customer owes an answer'],
+    ['READY_FOR_QC', 'QC has it'],
+    ['READY_FOR_TEAM_REVIEW', 'the team leader has it'],
+    ['WAITING_PARTS', 'the store owes a part'],
+  ])('puts %s under "Waiting on someone else" (%s)', async (status) => {
+    const { element } = await renderTechNow({
+      jobs: [makeJob({ workOrderId: 'wo1', active: false, status })],
+    });
+
+    expect(text(element, '.group-head')).toContain('Waiting on someone else');
+    expect(text(element, '.group-head')).not.toContain('Start these');
+  });
+
+  it.each([
+    ['APPROVED_FOR_WORK', 'the front desk approved it'],
+    ['IN_PROGRESS', 'it is already under way'],
+    ['QC_FAILED', 'rework belongs to the bay'],
+  ])('puts %s under "Start these" (%s)', async (status) => {
+    const { element } = await renderTechNow({
+      jobs: [makeJob({ workOrderId: 'wo1', active: false, status })],
+    });
+
+    expect(text(element, '.group-head')).toContain('Start these');
+    expect(text(element, '.group-head')).not.toContain('Waiting on someone else');
+  });
+
+  /**
+   * A status this file has never heard of must read as somebody else's,
+   * not as startable. Sending a technician to a car they cannot touch is
+   * the more expensive of the two mistakes.
+   */
+  it('treats an unknown status as waiting rather than as startable', async () => {
+    const { element } = await renderTechNow({
+      jobs: [makeJob({ workOrderId: 'wo1', active: false, status: 'SOME_FUTURE_STATUS' })],
+    });
+
+    expect(text(element, '.group-head')).toContain('Waiting on someone else');
+  });
+
+  /**
    * Migrated from the deleted "My work" page, which held this guarantee
    * on its own: every assigned job is present, including the ones nobody
    * can move today. A queue that quietly drops the waiting jobs tells a

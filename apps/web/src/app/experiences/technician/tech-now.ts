@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Identifier } from '../../ui/identifier/identifier';
 import { VehicleMark } from '../../ui/vehicle-mark/vehicle-mark';
@@ -6,6 +6,16 @@ import type { PresentedError } from '../../runtime/http/error.interceptor';
 import { TechnicianApi, type TechnicianJob } from './technician.api';
 
 type State = 'loading' | 'idle' | 'forbidden' | 'error';
+
+/**
+ * How often the queue re-reads itself.
+ *
+ * The same twenty seconds the journey poller uses, for the same reason:
+ * one answer to "how live is live" rather than a different number per
+ * screen. A job changes hands in minutes, so polling faster would cost
+ * queries without telling the technician anything new.
+ */
+const REFRESH_MS = 20_000;
 
 /** What the technician does with a job, which is the only grouping that helps them. */
 type GroupKey = 'start' | 'wait';
@@ -40,6 +50,7 @@ interface QueueGroup {
 })
 export class TechNow {
   private readonly api = inject(TechnicianApi);
+  private readonly destroyRef = inject(DestroyRef);
 
   protected readonly queue = signal<readonly TechnicianJob[]>([]);
   protected readonly state = signal<State>('loading');
@@ -59,23 +70,38 @@ export class TechNow {
       null,
   );
 
-  /** True when the technician cannot move this job themselves. */
+  /**
+   * True when the technician cannot move this job themselves.
+   *
+   * Stated as the short list of statuses they CAN act on, and everything
+   * else waits. The inverse was tried and drifted: it named seven waiting
+   * statuses out of sixteen and silently missed `WAITING_CUSTOMER`, so a
+   * car whose inspection had just gone to the customer stayed sitting
+   * under "Start these" with nothing startable about it -- which is the
+   * whole reason the grouping looked like it did not work. It also listed
+   * `WAITING_ON_PARTS`, which is not a status this product has.
+   *
+   * Written this way round because the failure modes are not equal. A
+   * status added later and forgotten here now reads as "someone else has
+   * it", which is merely unhelpful; under the old list it read as "start
+   * this", which sends a technician to a car they cannot touch.
+   */
   private waiting(job: TechnicianJob): boolean {
-    return (
-      job.blocked ||
-      [
-        'BLOCKED',
-        'WAITING_PARTS',
-        'WAITING_ON_PARTS',
-        'AWAITING_CUSTOMER_APPROVAL',
-        'READY_FOR_TEAM_REVIEW',
-        // Money and handover are the front desk's, not the bay's. These
-        // sat under "Start these" reading "payment pending", which is not
-        // a thing a technician can start.
-        'PAYMENT_PENDING',
-        'READY_FOR_DELIVERY',
-      ].includes(job.status)
-    );
+    if (job.blocked) return true;
+
+    const technicianCanAct = [
+      // Booked in and not yet looked at: theirs to inspect.
+      'REGISTERED',
+      'UNDER_INSPECTION',
+      // The front desk said yes. This is the moment a job should appear
+      // back under "Start these" on its own.
+      'APPROVED_FOR_WORK',
+      'IN_PROGRESS',
+      // QC sent it back, and rework is the bay's.
+      'QC_FAILED',
+    ].includes(job.status);
+
+    return !technicianCanAct;
   }
 
   protected readonly groups = computed<readonly QueueGroup[]>(() => {
@@ -93,8 +119,31 @@ export class TechNow {
 
   constructor() {
     this.load();
+
+    // The queue re-reads itself, because the three groups are only
+    // truthful if they move. A technician who finishes an inspection
+    // expects that car to leave the top and appear under "Waiting on
+    // someone else", and to come back to "Start these" when the front
+    // desk approves it -- without knowing that a page can be reloaded.
+    const timer = setInterval(() => this.refresh(), REFRESH_MS);
+
+    // Twenty seconds is a long time to stare at a stale list after
+    // walking back to the tablet, so returning to the page reads now
+    // rather than waiting for the next tick.
+    const onVisible = (): void => {
+      if (document.visibilityState === 'visible') this.refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+
+    this.destroyRef.onDestroy(() => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    });
   }
 
+  /** The first read, which is allowed to show the page as loading. */
   protected load(): void {
     this.state.set('loading');
     this.api.myWork().subscribe({
@@ -103,6 +152,27 @@ export class TechNow {
         this.state.set('idle');
       },
       error: (err: PresentedError) => this.state.set(err.httpStatus === 403 ? 'forbidden' : 'error'),
+    });
+  }
+
+  /**
+   * A background read.
+   *
+   * Deliberately quieter than `load()`: it never returns the page to the
+   * loading state, so the list does not blink every twenty seconds, and
+   * it swallows its errors so a dropped request costs freshness rather
+   * than replacing a working screen with an error page. The next tick
+   * will try again.
+   */
+  private refresh(): void {
+    if (this.state() === 'forbidden') return;
+
+    this.api.myWork().subscribe({
+      next: ({ jobs }) => {
+        this.queue.set(jobs);
+        this.state.set('idle');
+      },
+      error: () => undefined,
     });
   }
 
